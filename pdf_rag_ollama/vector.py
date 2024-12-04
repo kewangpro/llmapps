@@ -1,4 +1,3 @@
-import streamlit as st
 import chromadb
 from chromadb.utils.embedding_functions.ollama_embedding_function import OllamaEmbeddingFunction
 from langchain_core.documents import Document
@@ -31,8 +30,6 @@ def add_to_vector_collection(all_splits: list[Document], file_name: str):
         metadatas=metadatas,
         ids=ids,
     )
-
-    st.write(f"{file_name} added to the vector store!")
 
 def query_collection(prompt: str, n_results: int = 10):
     collection = get_vector_collection()

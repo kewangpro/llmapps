@@ -11,7 +11,6 @@ from llm import call_llm
 from vector import add_to_vector_collection, query_collection
 from ranker import rerank_cross_encoders
 
-
 def process_document(uploaded_file: UploadedFile) -> list[Document]:
     # Store uploaded file as a temp file
     temp_file = tempfile.NamedTemporaryFile("wb", suffix=".pdf", delete=False)
@@ -44,6 +43,7 @@ if __name__ == "__main__":
             )
             all_splits = process_document(uploaded_file)
             add_to_vector_collection(all_splits, normalized_uploaded_file_name)
+            st.write(f"{uploaded_file.name} added to the vector store!")
 
     st.title("💬 PDF Understanding QnA")
 
