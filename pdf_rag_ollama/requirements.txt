@@ -4,3 +4,4 @@ sentence-transformers
 streamlit
 pymupdf
 langchain-community
+unstructured
