@@ -1,17 +1,26 @@
-from langchain import hub
+from langchain.agents import ConversationalChatAgent, AgentExecutor
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_openai import ChatOpenAI
-from langgraph.prebuilt import create_react_agent
+from langchain.memory import ConversationBufferMemory
+from langchain_community.chat_message_histories import StreamlitChatMessageHistory
 
-# Get the prompt to use - you can modify this!
-prompt = hub.pull("ih/ih-react-agent-executor")
-prompt.pretty_print()
-
-# Choose the LLM that will drive the agent
-llm = ChatOpenAI(model_name="llama3.2", base_url="http://localhost:11434/v1", openai_api_key="ollama")
+llm = ChatOpenAI(model_name="llama3.2", base_url="http://localhost:11434/v1", openai_api_key="ollama", disable_streaming=False)
 tools = [DuckDuckGoSearchRun(name="Search")]
-agent_executor = create_react_agent(llm, tools, state_modifier=prompt)
-response = agent_executor.invoke({"messages": [("user", "who is the current US president-elect?")]})
+chat_agent = ConversationalChatAgent.from_llm_and_tools(llm=llm, tools=tools)
 
-import pprint
-pprint.pprint(response)
+msgs = StreamlitChatMessageHistory()
+memory = ConversationBufferMemory(
+    chat_memory=msgs, return_messages=True, memory_key="chat_history", output_key="output"
+)
+
+executor = AgentExecutor.from_agent_and_tools(
+    agent=chat_agent,
+    tools=tools,
+    memory=memory,
+    return_intermediate_steps=True,
+    handle_parsing_errors=True,
+)
+
+#response = executor.invoke({"input": "Who is the current president-elect?", "chat_history": []})
+#import pprint
+#pprint.pprint(response)

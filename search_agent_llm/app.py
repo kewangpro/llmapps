@@ -1,20 +1,14 @@
 from langchain.agents import ConversationalChatAgent, AgentExecutor
-from langchain.memory import ConversationBufferMemory
 from langchain_community.callbacks import StreamlitCallbackHandler
-from langchain_community.chat_message_histories import StreamlitChatMessageHistory
 from langchain_community.tools import DuckDuckGoSearchRun
-from langchain_community.chat_models import ChatOllama
+from langchain_openai import ChatOpenAI
 from langchain_core.runnables import RunnableConfig
-
+from agent import msgs, executor
 import streamlit as st
 
 st.set_page_config(page_title="Chat with search", page_icon="🦜")
 st.title("🦜 Chat with search")
 
-msgs = StreamlitChatMessageHistory()
-memory = ConversationBufferMemory(
-    chat_memory=msgs, return_messages=True, memory_key="chat_history", output_key="output"
-)
 if len(msgs.messages) == 0 or st.sidebar.button("Reset chat history"):
     msgs.clear()
     msgs.add_ai_message("How can I help you?")
@@ -35,16 +29,6 @@ for idx, msg in enumerate(msgs.messages):
 if prompt := st.chat_input(placeholder="What's your question?"):
     st.chat_message("user").write(prompt)
 
-    llm = ChatOllama(base_url="http://localhost:11434", model="llama3.2", disable_streaming=False)
-    tools = [DuckDuckGoSearchRun(name="Search")]
-    chat_agent = ConversationalChatAgent.from_llm_and_tools(llm=llm, tools=tools)
-    executor = AgentExecutor.from_agent_and_tools(
-        agent=chat_agent,
-        tools=tools,
-        memory=memory,
-        return_intermediate_steps=True,
-        handle_parsing_errors=True,
-    )
     with st.chat_message("assistant"):
         st_cb = StreamlitCallbackHandler(st.container(), expand_new_thoughts=False)
         cfg = RunnableConfig()
