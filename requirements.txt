@@ -1,0 +1,5 @@
+langchain-community
+duckduckgo-search
+langchain-openai
+langgraph
+langchain-experimental
