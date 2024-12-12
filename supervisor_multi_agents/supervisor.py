@@ -1,4 +1,5 @@
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import AIMessage
 from langgraph.graph import MessagesState, END
 from langgraph.types import Command
 from typing import Literal
@@ -7,11 +8,11 @@ from typing_extensions import TypedDict
 def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> str:
     #options = ["FINISH"] + members
     system_prompt = (
-        "You are a supervisor tasked with managing a conversation between the"
+        "You are a supervisor tasked with managing a conversation with the"
         f" following workers: {members}. "
-        " Given the following user request, respond with which worker to act next."
-        " Each worker will perform a task and respond with their results and status."
-        " When finished, respond with FINISH."
+        " Given the user request, respond with which worker to act next."
+        " Each worker will respond with their results and status. Given the their response, decide if the user request is finished."
+        " When finished, respond with FINISH as next; otherwise respond with which worker to act next."
     )
 
     class Router(TypedDict):
@@ -28,10 +29,18 @@ def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> str:
         ] + state["messages"]
         response = llm.with_structured_output(Router).invoke(messages)
         print(response)
-        goto = response["next"]
-        if goto == "FINISH":
+        if response is None or response["next"] == "FINISH":
             goto = END
+        else:
+            goto = response["next"]
 
-        return Command(goto=goto)
+        return Command(
+            update={
+                "messages": [
+                    AIMessage(content=response["next"], name="supervisor")
+                ]
+            },
+
+            goto=goto)
 
     return supervisor_node
