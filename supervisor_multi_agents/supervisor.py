@@ -27,8 +27,10 @@ def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> str:
         messages = [
             {"role": "system", "content": system_prompt},
         ] + state["messages"]
+
         response = llm.with_structured_output(Router).invoke(messages)
         print(response)
+        
         if response is None or response["next"] == "FINISH":
             goto = END
         else:
@@ -40,7 +42,6 @@ def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> str:
                     AIMessage(content=response["next"], name="supervisor")
                 ]
             },
-
             goto=goto)
 
     return supervisor_node
