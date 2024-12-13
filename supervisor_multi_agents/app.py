@@ -1,5 +1,3 @@
-from langchain_core.runnables import RunnableConfig
-from langchain_community.callbacks import StreamlitCallbackHandler
 from langgraph.graph import StateGraph, MessagesState, START
 from supervisor import make_supervisor_node
 from agents import search_node, web_scraper_node, code_node, llm
@@ -31,14 +29,10 @@ if prompt := st.chat_input(placeholder="What's your question?"):
     st.chat_message("user").write(prompt)
     st.session_state.messages.append({"role": "user", "content": prompt})
 
+    config = {"recursion_limit": 50}
     inputs = {"messages": [("user", f"{prompt}")]}
 
     with st.chat_message("assistant"):
-        st_cb = StreamlitCallbackHandler(st.container(), expand_new_thoughts=False)
-        cfg = RunnableConfig()
-        cfg["callbacks"] = [st_cb]
-        cfg["recursion_limit"] = 50
-
-        for response in research_graph.stream(inputs, config=cfg):
+        for response in research_graph.stream(inputs, config=config):
             st.write(response)
             st.session_state.messages.append({"role": "assistant", "content": response})
