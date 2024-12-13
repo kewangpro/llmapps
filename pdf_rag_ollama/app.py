@@ -33,51 +33,58 @@ def process_url(url: str) -> list[Document]:
     docs = loader.load()
     return text_spliter.split_documents(docs)
 
-if __name__ == "__main__":
-    with st.sidebar:
-        st.set_page_config(page_title="QnA")
-        st.header("Sources")
-        uploaded_file = st.file_uploader("** Upload PDF files for QnA **", type=["pdf"], accept_multiple_files=False)
-        upload = st.button("Upload")
+with st.sidebar:
+    st.set_page_config(page_title="QnA")
 
-        web_url = st.text_input("** Web URL for QnA **")
-        process = st.button("Process")
-
-        if upload and uploaded_file:
-            normalized_uploaded_file_name = uploaded_file.name.translate(
-                str.maketrans({"-": "_", ".": "_", " ": "_"})
-            )
-            all_splits = process_pdf(uploaded_file)
-            add_to_vector_collection(all_splits, normalized_uploaded_file_name)
-            st.write(f"{uploaded_file.name} added to the vector store!")
-            
-        if process and web_url:
-            all_splits = process_url(web_url)
-            add_to_vector_collection(all_splits, web_url)
-            st.write(f"{web_url} added to the vector store!")       
-
-    st.title("💬 PDF Understanding QnA")
-
-    if "messages" not in st.session_state:
+    if "messages" not in st.session_state or st.sidebar.button("Reset chat history"):
         st.session_state["messages"] = [{"role": "assistant", "content": "How can I help you?"}]
 
-    for msg in st.session_state.messages:
-        st.chat_message(msg["role"]).write(msg["content"])
+    st.header("Sources")
+    uploaded_file = st.file_uploader("** Upload PDF files for QnA **", type=["pdf"], accept_multiple_files=False)
+    upload = st.button("Upload")
 
-    if prompt := st.chat_input("Your question?"):
-        st.chat_message("user").write(prompt)
-        st.session_state.messages.append({"role": "user", "content": prompt})
+    web_url = st.text_input("** Web URL for QnA **")
+    process = st.button("Process")
 
+    if upload and uploaded_file:
+        normalized_uploaded_file_name = uploaded_file.name.translate(
+            str.maketrans({"-": "_", ".": "_", " ": "_"})
+        )
+        all_splits = process_pdf(uploaded_file)
+        add_to_vector_collection(all_splits, normalized_uploaded_file_name)
+        st.write(f"{uploaded_file.name} added to the vector store!")
+        
+    if process and web_url:
+        normalized_url = web_url.translate(
+            str.maketrans({"/": "_", ".": "_", ":": "_"})
+        )
+        all_splits = process_url(web_url)
+        add_to_vector_collection(all_splits, normalized_url)
+        st.write(f"{web_url} added to the vector store!")       
+
+st.title("💬 PDF Understanding QnA")
+
+for msg in st.session_state.messages:
+    st.chat_message(msg["role"]).write(msg["content"])
+
+if prompt := st.chat_input("Your question?"):
+    st.chat_message("user").write(prompt)
+    st.session_state.messages.append({"role": "user", "content": prompt})
+
+    with st.spinner("Retriving"):
         results = query_collection(prompt)
         documents = results.get("documents")[0]
         context, relevant_doc_ids = rerank_cross_encoders(prompt, documents)
 
+    with st.spinner("Thinking"):
         stream_response = call_llm(context, prompt)
 
-        response = st.chat_message("assistant").write_stream(stream_response)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+    response = st.chat_message("assistant").write_stream(stream_response)
+    st.session_state.messages.append({"role": "assistant", "content": response})
 
-        with st.expander("See retrieved document ids"):
-            st.write(results.get("ids")[0])
-            st.write("Most relevant:")
-            st.write(relevant_doc_ids)
+    with st.expander("See retrieved document ids"):
+        st.write(results.get("ids")[0])
+        st.write("Most relevant:")
+        st.write(relevant_doc_ids)
+        st.write("Context:")
+        st.write(context)
