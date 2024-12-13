@@ -1,6 +1,9 @@
 from langgraph.graph import StateGraph, START, END
 from steps import PlanExecute, plan_step, execute_step, replan_step, should_end
-import asyncio
+import streamlit as st
+
+st.set_page_config(page_title="Chat with planner", page_icon="🦜")
+st.title("🦜 Chat with planner")
 
 workflow = StateGraph(PlanExecute)
 
@@ -30,25 +33,31 @@ workflow.add_conditional_edges(
 # meaning you can use it as you would any other runnable
 app = workflow.compile()
 
-config = {"recursion_limit": 50}
-inputs = {"input": "what is the hometown of the 2024 US president-elect?"}
+with st.sidebar:
+    st.image(app.get_graph().draw_mermaid_png())
 
-async def run_app_workflow():
-    async for event in app.astream(inputs, config=config):
-        for k, v in event.items():
-            if k != "__end__":
-                print(v)
-#Output:
-#{'plan': ['Identify the 2024 US presidential election winner.', 'Determine the hometown of the 2024 US president-elect by researching their biography or profile.']}
-#{'executed': [('Identify the 2024 US presidential election winner.', 'The winner of the 2024 US presidential election is Donald J. Trump.')]}
-#{'plan': ['Determine the hometown of Donald J. Trump by researching his biography or profile.']}
-#{'executed': [('Determine the hometown of Donald J. Trump by researching his biography or profile.', 'Donald J. Trump was born in Queens, New York City, New York. Therefore, his hometown is Queens, New York.')]}
-#{'response': 'The hometown of the 2024 US president-elect, Donald J. Trump, is Queens, New York, as determined by researching his biography.'}
 
-def main():
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(run_app_workflow())
-    loop.close()
+if "messages" not in st.session_state or st.sidebar.button("Reset chat history"):
+    st.session_state["messages"] = [{"role": "assistant", "content": "How can I help you?"}]
 
-if __name__ == '__main__':
-    main()
+for msg in st.session_state.messages:
+    st.chat_message(msg["role"]).write(msg["content"])
+
+if prompt := st.chat_input(placeholder="What's your question?"):
+    st.chat_message("user").write(prompt)
+    st.session_state.messages.append({"role": "user", "content": prompt})
+
+    config = {"recursion_limit": 50}
+    inputs = {"input": f"{prompt}"}
+
+    with st.spinner("Planning and executing..."):
+        with st.expander("See plan details"):
+            for event in app.stream(inputs, config=config):
+                st.write(event)
+                last_response = event
+
+    with st.chat_message("assistant"):
+        for k, v in last_response.items():
+            st.write(v["response"])
+            st.session_state.messages.append({"role": "assistant", "content": v["response"]})
+            break
