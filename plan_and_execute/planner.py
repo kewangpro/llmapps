@@ -57,7 +57,8 @@ Your original plan was this:
 You have currently done the follow steps:
 {executed}
 
-If no more steps are needed and you can return to the user, then respond to user with that. Do not return previously done steps as part of the plan."""
+If no more steps are needed and you can return to the user, then respond with that.
+Otherwise, Update your plan accordingly. Do not return previously done steps as part of the plan."""
 )
 #replanner_prompt.pretty_print()
 replanner = replanner_prompt | llm.with_structured_output(Act)
