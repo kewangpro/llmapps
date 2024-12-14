@@ -5,10 +5,10 @@ st.set_page_config(page_title="Chat with planner", page_icon="🦜")
 st.title("🦜 Chat with planner")
 
 with st.sidebar:
-    st.image(agents_graph.get_graph().draw_mermaid_png())
+    if "messages" not in st.session_state or st.button("Reset chat history"):
+        st.session_state["messages"] = [{"role": "assistant", "content": "How can I help you?"}]
 
-if "messages" not in st.session_state or st.sidebar.button("Reset chat history"):
-    st.session_state["messages"] = [{"role": "assistant", "content": "How can I help you?"}]
+    st.image(agents_graph.get_graph().draw_mermaid_png())
 
 for msg in st.session_state.messages:
     st.chat_message(msg["role"]).write(msg["content"])
