@@ -1,7 +1,6 @@
 from typing_extensions import TypedDict
 from typing import Annotated, List, Tuple, Union, Literal
-from executor import agent_executor
-from planner import planner, replanner, Response
+from planner import agent_executor, planner, replanner, Response
 from langgraph.graph import END
 import operator
 
@@ -11,7 +10,7 @@ class PlanExecute(TypedDict):
     executed: Annotated[List[Tuple], operator.add]
     response: str
 
-def execute_step(state: PlanExecute):
+def agent_step(state: PlanExecute):
     plan = state["plan"]
     plan_str = "\n".join(f"{i+1}. {step}" for i, step in enumerate(plan))
     task = plan[0]

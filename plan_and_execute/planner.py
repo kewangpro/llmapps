@@ -1,7 +1,30 @@
+from langchain import hub
+from langchain_openai import ChatOpenAI
+from langchain_community.tools import DuckDuckGoSearchRun
+from langgraph.prebuilt import create_react_agent
 from pydantic import BaseModel, Field
 from typing import Annotated, List, Tuple, Union, Literal
 from langchain_core.prompts import ChatPromptTemplate
-from executor import llm
+import os
+
+# Get the prompt to use - you can modify this!
+prompt = hub.pull("ih/ih-react-agent-executor")
+#prompt.pretty_print()
+
+openai_api_key = os.environ["OPENAI_API_KEY"]
+# Choose the LLM that will drive the agent
+llm = ChatOpenAI(model_name="gpt-4o-mini", openai_api_key=openai_api_key)
+#llm = ChatOpenAI(model_name="llama3.2", base_url="http://localhost:11434/v1", openai_api_key="ollama")
+tools = [DuckDuckGoSearchRun(name="Search")]
+agent_executor = create_react_agent(llm, tools, state_modifier=prompt)
+#response = agent_executor.invoke(
+#    {
+#        "messages": [
+#            ("user", "who is the current US president-elect?")
+#        ]
+#    })
+#print(response)
+
 
 class Plan(BaseModel):
     """Plan to follow in future"""
