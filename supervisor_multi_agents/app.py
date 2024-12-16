@@ -2,6 +2,7 @@ from langgraph.graph import StateGraph, MessagesState, START
 from supervisor import make_supervisor_node
 from agents import search_node, web_scraper_node, code_node, llm
 import streamlit as st
+import json
 
 st.set_page_config(page_title="Chat with agents", page_icon="🦜")
 st.title("🦜 Chat with agents")
@@ -32,7 +33,15 @@ if prompt := st.chat_input(placeholder="What's your question?"):
     config = {"recursion_limit": 50}
     inputs = {"messages": [("user", f"{prompt}")]}
 
+    with st.spinner("Agents are executing..."):
+        with st.expander("See agents details"):
+            for response in research_graph.stream(inputs, config=config):
+                st.write(response)
+
     with st.chat_message("assistant"):
-        for response in research_graph.stream(inputs, config=config):
-            st.write(response)
-            st.session_state.messages.append({"role": "assistant", "content": response})
+        for k, v in response.items():
+            json_data = json.loads(v["messages"][-1].content)
+            answer = json_data["response"]
+            st.write(answer)
+            st.session_state.messages.append({"role": "assistant", "content": answer})
+            break

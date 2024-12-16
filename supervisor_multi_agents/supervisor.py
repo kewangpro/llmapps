@@ -4,6 +4,7 @@ from langgraph.graph import MessagesState, END
 from langgraph.types import Command
 from typing import Literal
 from typing_extensions import TypedDict
+import json
 
 def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> str:
     #options = ["FINISH"] + members
@@ -12,7 +13,7 @@ def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> str:
         f" following workers: {members}. "
         " Given the user request, respond with which worker to act next."
         " Each worker will respond with their results and status. Given the their response, decide if the user request is finished."
-        " When finished, respond with FINISH as next; otherwise respond with which worker to act next."
+        " When finished, respond with FINISH as next and final answer as response. otherwise respond with which worker to act next."
     )
 
     class Router(TypedDict):
@@ -20,6 +21,9 @@ def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> str:
 
         #next: Literal[*options]
         next: Literal["search", "web_scraper", "coder", "FINISH"]
+
+        """Response to user."""
+        response: str
 
     #def supervisor_node(state: MessagesState) -> Command[Literal[*members, "__end__"]]:
     def supervisor_node(state: MessagesState) -> Command[Literal["search", "web_scraper", "coder", "__end__"]]:
@@ -29,8 +33,7 @@ def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> str:
         ] + state["messages"]
 
         response = llm.with_structured_output(Router).invoke(messages)
-        print(response)
-        
+  
         if response is None or response["next"] == "FINISH":
             goto = END
         else:
@@ -39,7 +42,7 @@ def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> str:
         return Command(
             update={
                 "messages": [
-                    AIMessage(content=response["next"], name="supervisor")
+                    AIMessage(content=json.dumps(response), name="supervisor")
                 ]
             },
             goto=goto)
