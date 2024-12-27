@@ -53,7 +53,7 @@ planner = planner_prompt | llm.with_structured_output(Plan)
 #print(response)
 
 
-class Response(BaseModel):
+class Answer(BaseModel):
     """Response to user."""
 
     response: str
@@ -61,8 +61,8 @@ class Response(BaseModel):
 class Act(BaseModel):
     """Action to perform."""
 
-    action: Union[Response, Plan] = Field(
-        description="Action to perform. If you want to respond to user, use Response. "
+    action: Union[Answer, Plan] = Field(
+        description="Action to perform. If you want to respond to user, use Answer. "
         "If you need to further use tools to get the answer, use Plan."
     )
 
@@ -84,4 +84,12 @@ If no more steps are needed and you can return to the user, then respond with th
 Otherwise, Update your plan accordingly. Do not return previously done steps as part of the plan."""
 )
 #replanner_prompt.pretty_print()
+
 replanner = replanner_prompt | llm.with_structured_output(Act)
+#response = replanner.invoke(
+#    {
+#        "input": "what is the hometown of the current US president-elect?",
+#        "plan": "['Find out who the current US President-Elect is', 'Check their official biography or news articles to find their hometown']",
+#        "executed": "'Who is the current US president-elect?'",
+#    })
+#print(response)
