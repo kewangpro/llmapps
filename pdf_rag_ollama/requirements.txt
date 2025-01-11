@@ -2,6 +2,7 @@ ollama
 chromadb
 sentence-transformers
 streamlit
-pymupdf
+pdfplumber
 langchain-community
 unstructured
+rapidocr-onnxruntime
