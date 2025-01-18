@@ -3,7 +3,7 @@ import tempfile
 import streamlit as st
 
 from streamlit.runtime.uploaded_file_manager import UploadedFile
-from langchain_community.document_loaders import PDFPlumberLoader, UnstructuredURLLoader
+from langchain_community.document_loaders import UnstructuredPDFLoader, UnstructuredURLLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 
@@ -22,7 +22,7 @@ def process_pdf(uploaded_file: UploadedFile) -> list[Document]:
     temp_file = tempfile.NamedTemporaryFile("wb", suffix=".pdf", delete=False)
     temp_file.write(uploaded_file.read())
 
-    loader = PDFPlumberLoader(temp_file.name, extract_images=True, dedupe=True)
+    loader = UnstructuredPDFLoader(temp_file.name)
     docs = loader.load()
     os.unlink(temp_file.name) # Delete the temp file
     

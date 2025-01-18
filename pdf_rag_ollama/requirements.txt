@@ -2,7 +2,5 @@ ollama
 chromadb
 sentence-transformers
 streamlit
-pdfplumber
 langchain-community
-unstructured
-rapidocr-onnxruntime
+unstructured[local-inference]
