@@ -8,7 +8,8 @@ from langchain_core.prompts import ChatPromptTemplate
 import os
 
 # Get the prompt to use - you can modify this!
-prompt = hub.pull("ih/ih-react-agent-executor")
+#prompt = hub.pull("ih/ih-react-agent-executor")
+prompt = "You are a helpful assistant."
 #prompt.pretty_print()
 
 openai_api_key = os.environ["OPENAI_API_KEY"]
