@@ -37,6 +37,12 @@ A Python implementation of the Model Control Protocol client that integrates wit
    - Processes user queries
    - Manages conversation flow
 
+4. **Web Interface** (`app.py`)
+   - Streamlit-based chat interface
+   - Real-time message updates
+   - Modern, responsive design
+   - Server status monitoring
+
 ## Features
 
 - 🤖 AI-powered tool usage with Ollama
@@ -45,6 +51,8 @@ A Python implementation of the Model Control Protocol client that integrates wit
 - 🧪 Comprehensive test suite
 - 🔄 Asynchronous operations
 - 📝 Natural language responses
+- 🌐 Web-based chat interface
+- 💬 Real-time conversation flow
 
 ## Installation
 
@@ -98,12 +106,26 @@ Create a `config.json` file:
 
 ## Usage
 
-1. Start the client:
+### Web Interface
+Start the Streamlit web app:
+```bash
+streamlit run app.py
+```
+
+The web interface provides:
+- Real-time chat with the AI
+- Server status monitoring
+- Chat history
+- Clear chat functionality
+- Modern, responsive design
+
+### Command Line Interface
+Start the CLI client:
 ```bash
 python mcp_ollama.py
 ```
 
-2. Available commands:
+Available commands:
 - Ask questions (uses web search)
 - Get current time
 - Echo messages
