@@ -27,7 +27,7 @@ ollama_client = Client(host="http://localhost:11434")
 
 def call_llm(context: str, prompt: str):
     response = ollama_client.chat(
-        model="mistral:latest", #"llama3.2:latest",
+        model="gemma3:latest", #"llama3.2:latest",
         stream=True,
         messages=[
             {

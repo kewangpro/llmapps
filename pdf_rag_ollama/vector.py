@@ -35,3 +35,17 @@ def query_collection(prompt: str, n_results: int = 10):
     collection = get_vector_collection()
     results = collection.query(query_texts=[prompt], n_results=n_results)
     return results
+
+def get_file_names_from_ids():
+    collection = get_vector_collection()
+
+    # Fetch all entries (default includes IDs)
+    results = collection.get()
+    # Extract IDs from result
+    all_ids = results["ids"]
+
+    # Extract and deduplicate "{file_name}_{idx}"
+    file_names = set(id.rsplit("_", 1)[0] for id in all_ids)
+
+    # Return the unique file_names
+    return sorted(file_names)

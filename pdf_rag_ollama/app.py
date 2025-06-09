@@ -1,6 +1,7 @@
 import os
 import tempfile
 import streamlit as st
+import json
 
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 from langchain_community.document_loaders import UnstructuredPDFLoader, UnstructuredURLLoader
@@ -8,7 +9,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 
 from llm import call_llm
-from vector import add_to_vector_collection, query_collection
+from vector import add_to_vector_collection, query_collection, get_file_names_from_ids
 from ranker import rerank_cross_encoders
 
 text_spliter = RecursiveCharacterTextSplitter(
@@ -40,6 +41,11 @@ with st.sidebar:
         st.session_state["messages"] = [{"role": "assistant", "content": "How can I help you?"}]
 
     st.header("Sources")
+    source_files = get_file_names_from_ids()
+    source_files_str = json.dumps(source_files, indent=2)
+    ##st.text_area("Files", source_files_str, height=300)
+    st.code(source_files_str, language="json")
+
     uploaded_file = st.file_uploader("** Upload PDF files for QnA **", type=["pdf"], accept_multiple_files=False)
     upload = st.button("Upload")
 
