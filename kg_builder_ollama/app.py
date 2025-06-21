@@ -7,12 +7,6 @@ This project converts text paragraphs into knowledge graphs using multiple appro
 2. spaCy for NLP preprocessing and named entity recognition
 3. NetworkX for graph visualization and analysis
 4. Optional: OpenIE for triple extraction
-
-Requirements:
-pip install requests spacy networkx matplotlib plotly pandas ollama
-python -m spacy download en_core_web_sm
-
-Make sure Ollama is running locally with a model (e.g., llama2, mistral)
 """
 
 import json
@@ -20,8 +14,6 @@ import re
 import requests
 import networkx as nx
 import matplotlib.pyplot as plt
-import plotly.graph_objects as go
-import plotly.express as px
 from typing import List, Dict, Tuple, Set, Optional
 from dataclasses import dataclass
 from collections import defaultdict
@@ -385,98 +377,6 @@ class KnowledgeGraphExtractor:
         
         plt.show()
     
-    def visualize_graph_plotly(self, save_path: str = None):
-        """Create interactive visualization using Plotly"""
-        if len(self.graph.nodes()) == 0:
-            print("No graph to visualize. Extract triples first.")
-            return
-        
-        # Get positions
-        pos = nx.spring_layout(self.graph, k=2, iterations=50)
-        
-        # Extract edges
-        edge_x = []
-        edge_y = []
-        edge_info = []
-        
-        for edge in self.graph.edges():
-            x0, y0 = pos[edge[0]]
-            x1, y1 = pos[edge[1]]
-            edge_x.extend([x0, x1, None])
-            edge_y.extend([y0, y1, None])
-            
-            relation = self.graph[edge[0]][edge[1]].get('relation', '')
-            edge_info.append(f"{edge[0]} —{relation}→ {edge[1]}")
-        
-        # Create edge trace
-        edge_trace = go.Scatter(
-            x=edge_x, y=edge_y,
-            line=dict(width=2, color='gray'),
-            hoverinfo='none',
-            mode='lines'
-        )
-        
-        # Extract nodes
-        node_x = []
-        node_y = []
-        node_text = []
-        node_info = []
-        
-        for node in self.graph.nodes():
-            x, y = pos[node]
-            node_x.append(x)
-            node_y.append(y)
-            node_text.append(node)
-            
-            # Get connections info
-            connections = list(self.graph.neighbors(node))
-            node_info.append(f"Node: {node}<br>Connections: {len(connections)}")
-        
-        # Create node trace
-        node_trace = go.Scatter(
-            x=node_x, y=node_y,
-            mode='markers+text',
-            hoverinfo='text',
-            text=node_text,
-            hovertext=node_info,
-            textposition="middle center",
-            marker=dict(
-                size=30,
-                color='lightblue',
-                line=dict(width=2, color='darkblue')
-            )
-        )
-        
-        # Create figure
-        fig = go.Figure(
-            data=[edge_trace, node_trace],
-            layout=go.Layout(
-                title='Interactive Knowledge Graph',
-                titlefont_size=16,
-                showlegend=False,
-                hovermode='closest',
-                margin=dict(b=20,l=5,r=5,t=40),
-                annotations=[
-                    dict(
-                        text="Hover over nodes for details",
-                        showarrow=False,
-                        xref="paper", yref="paper",
-                        x=0.005, y=-0.002,
-                        xanchor="left", yanchor="bottom",
-                        font=dict(color="gray", size=12)
-                    )
-                ],
-                xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                plot_bgcolor='white'
-            )
-        )
-        
-        if save_path:
-            fig.write_html(save_path)
-        
-        fig.show()
-    
     def analyze_graph(self) -> Dict:
         """Analyze graph properties and statistics"""
         if len(self.graph.nodes()) == 0:
@@ -652,7 +552,6 @@ def main():
         print("\n🎨 Creating visualizations...")
         try:
             extractor.visualize_graph_matplotlib()
-            extractor.visualize_graph_plotly()
         except Exception as e:
             print(f"   ⚠️ Visualization failed: {e}")
         
