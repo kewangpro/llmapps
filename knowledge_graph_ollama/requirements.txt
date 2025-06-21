@@ -1,5 +1,0 @@
-spacy
-networkx
-matplotlib
-plotly
-pandas
