@@ -1,0 +1,3 @@
+Alice works for Acme Corp. Charlie founded Acme Corp. Alice reports to Charlie.
+Bob works for Globex. Alice knows Bob.
+Globex acquired Acme Corp. Bob reports to Charlie.
