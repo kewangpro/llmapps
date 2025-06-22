@@ -261,32 +261,74 @@ class EnhancedKnowledgeGraphRAG:
         except Exception as e:
             logger.error(f"❌ Failed to build indices: {e}")
             raise
-    
+
     def _build_networkx_graph(self):
         """Build NetworkX graph for advanced analysis and visualization."""
         try:
             self.networkx_graph = nx.Graph()
             
             if self.graph_store:
-                triplets = self.graph_store.get_triplets()
-                
-                for subject, predicate, obj in triplets:
-                    # Add nodes with metadata
-                    self.networkx_graph.add_node(subject, type='entity')
-                    self.networkx_graph.add_node(obj, type='entity')
+                # Get all triplets from the graph store
+                try:
+                    # LlamaIndex SimpleGraphStore stores data differently
+                    if hasattr(self.graph_store, 'graph_dict') and self.graph_store.graph_dict:
+                        triplets = []
+                        for subject, relations in self.graph_store.graph_dict.items():
+                            for relation, objects in relations.items():
+                                if isinstance(objects, list):
+                                    for obj in objects:
+                                        triplets.append((subject, relation, obj))
+                                else:
+                                    triplets.append((subject, relation, objects))
                     
-                    # Add edge with relationship type
-                    self.networkx_graph.add_edge(
-                        subject, obj, 
-                        relation=predicate,
-                        weight=1.0
-                    )
-            
-            logger.info(f"📊 NetworkX graph built: {len(self.networkx_graph.nodes)} nodes, {len(self.networkx_graph.edges)} edges")
+                    elif hasattr(self.graph_store, 'get_triplets'):
+                        triplets = self.graph_store.get_triplets()
+                    
+                    else:
+                        # Try to extract from index directly
+                        if self.kg_index and hasattr(self.kg_index, 'get_networkx_graph'):
+                            nx_graph = self.kg_index.get_networkx_graph()
+                            if nx_graph:
+                                self.networkx_graph = nx_graph
+                                logger.info(f"📊 NetworkX graph loaded: {len(self.networkx_graph.nodes)} nodes, {len(self.networkx_graph.edges)} edges")
+                                return
+                        
+                        logger.warning("⚠️ Cannot access graph data from graph store")
+                        return
+                    
+                    if triplets:
+                        for subject, predicate, obj in triplets:
+                            # Clean and add nodes
+                            subject_clean = str(subject).strip()
+                            obj_clean = str(obj).strip()
+                            predicate_clean = str(predicate).strip()
+                            
+                            if subject_clean and obj_clean:
+                                self.networkx_graph.add_node(subject_clean, type='entity')
+                                self.networkx_graph.add_node(obj_clean, type='entity')
+                                
+                                # Add edge with relationship type
+                                self.networkx_graph.add_edge(
+                                    subject_clean, obj_clean, 
+                                    relation=predicate_clean,
+                                    weight=1.0
+                                )
+                        
+                        logger.info(f"📊 NetworkX graph built: {len(self.networkx_graph.nodes)} nodes, {len(self.networkx_graph.edges)} edges")
+                    else:
+                        logger.warning("⚠️ No triplets found in graph store")
+                        
+                except Exception as e:
+                    logger.error(f"❌ Error extracting triplets: {e}")
+                    
+            else:
+                logger.warning("⚠️ Graph store not initialized")
             
         except Exception as e:
             logger.error(f"❌ Failed to build NetworkX graph: {e}")
-    
+            # Create empty graph as fallback
+            self.networkx_graph = nx.Graph()
+
     def load_existing_indices(self) -> bool:
         """Load existing knowledge graph and vector indices."""
         try:
@@ -300,24 +342,136 @@ class EnhancedKnowledgeGraphRAG:
                 vector_store=self.vector_store
             )
             
-            # Load indices
-            self.kg_index = load_index_from_storage(storage_context, index_id="kg_index")
+            # Check what indices are available
+            index_store = storage_context.index_store
             
+            # Handle different index_structs formats
+            index_ids = []
             try:
-                self.vector_index = load_index_from_storage(storage_context, index_id="vector_index")
-            except:
+                # index_structs is a method that returns the actual structures
+                if hasattr(index_store, 'index_structs'):
+                    structs = index_store.index_structs()
+                    if isinstance(structs, dict):
+                        index_ids = list(structs.keys())
+                    elif isinstance(structs, list):
+                        # Extract index_id from each index struct object
+                        for struct in structs:
+                            if hasattr(struct, 'index_id'):
+                                index_ids.append(struct.index_id)
+                            else:
+                                # Fallback to position-based ID
+                                index_ids.append(f"index_{len(index_ids)}")
+                    else:
+                        logger.warning("⚠️ Unexpected index_structs format, using fallback")
+                        index_ids = ['default']
+                else:
+                    logger.warning("⚠️ No index_structs method found, using fallback")
+                    index_ids = ['default']
+            except Exception as e:
+                logger.warning(f"⚠️ Error accessing index_structs: {e}, using fallback")
+                index_ids = ['default']
+            
+            logger.info(f"Found {len(index_ids)} indices: {index_ids}")
+            
+            # Load knowledge graph index
+            kg_loaded = False
+            for index_id in index_ids:
+                try:
+                    # Always specify index_id when loading to avoid ambiguity
+                    if index_id != 'default':
+                        index = load_index_from_storage(storage_context, index_id=index_id)
+                    else:
+                        # For fallback case, try to get the first index from the store
+                        if len(index_ids) == 1:
+                            # Only one index, safe to load without specifying ID
+                            index = load_index_from_storage(storage_context)
+                        else:
+                            # Skip default when multiple indices exist
+                            continue
+                    
+                    # Check if this is a knowledge graph index
+                    if (hasattr(index, 'graph_store') or 
+                        'knowledge' in str(index_id).lower() or 
+                        'kg' in str(index_id).lower() or
+                        hasattr(index, '_graph_store')):
+                        
+                        self.kg_index = index
+                        self.graph_store = getattr(index, 'graph_store', getattr(index, '_graph_store', None))
+                        kg_loaded = True
+                        logger.info(f"✅ Loaded knowledge graph index: {index_id}")
+                        break
+                        
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to load index {index_id}: {e}")
+                    continue
+            
+            # If no specific KG index found, try loading the first available index with explicit ID
+            if not kg_loaded and index_ids:
+                for index_id in index_ids:
+                    if index_id == 'default':
+                        continue  # Skip default when multiple indices exist
+                    try:
+                        self.kg_index = load_index_from_storage(storage_context, index_id=index_id)
+                        self.graph_store = getattr(self.kg_index, 'graph_store', getattr(self.kg_index, '_graph_store', None))
+                        kg_loaded = True
+                        logger.info(f"✅ Loaded index as knowledge graph: {index_id}")
+                        break
+                    except Exception as e:
+                        logger.warning(f"⚠️ Failed to load index {index_id}: {e}")
+                        continue
+                
+                # Final fallback for single index case
+                if not kg_loaded and len(index_ids) == 1 and index_ids[0] == 'default':
+                    try:
+                        self.kg_index = load_index_from_storage(storage_context)
+                        self.graph_store = getattr(self.kg_index, 'graph_store', getattr(self.kg_index, '_graph_store', None))
+                        kg_loaded = True
+                        logger.info("✅ Loaded single default index as knowledge graph")
+                    except Exception as e:
+                        logger.error(f"❌ Failed to load default index: {e}")
+                        return False
+                
+                if not kg_loaded:
+                    logger.error("❌ Failed to load any knowledge graph index")
+                    return False
+            
+            # Try to load vector index (if different from KG index)
+            if len(index_ids) > 1:
+                for index_id in index_ids:
+                    try:
+                        # Skip the already loaded KG index and default entries
+                        if (index_id == getattr(self.kg_index, 'index_id', None) or 
+                            index_id == 'default'):
+                            continue
+                        
+                        # Always specify index_id to avoid ambiguity
+                        vector_index = load_index_from_storage(storage_context, index_id=index_id)
+                        
+                        # Check if this looks like a vector index
+                        if (hasattr(vector_index, 'vector_store') or 
+                            'vector' in str(index_id).lower() or
+                            not hasattr(vector_index, 'graph_store')):  # If it's not a KG index, likely vector
+                            self.vector_index = vector_index
+                            logger.info(f"✅ Loaded vector index: {index_id}")
+                            break
+                            
+                    except Exception as e:
+                        logger.warning(f"⚠️ Failed to load vector index {index_id}: {e}")
+                        continue
+            
+            if not self.vector_index:
                 logger.warning("⚠️ Vector index not found, will create if needed")
             
-            self.graph_store = storage_context.graph_store
+            # Build NetworkX graph from the loaded data
             self._build_networkx_graph()
             
             logger.info("✅ Existing indices loaded successfully!")
-            return True
+            return kg_loaded
             
         except Exception as e:
             logger.error(f"❌ Failed to load existing indices: {e}")
             return False
-    
+ 
     def setup_hybrid_query_engine(
         self, 
         kg_similarity_top_k: int = 3,
@@ -642,9 +796,14 @@ class EnhancedKnowledgeGraphRAG:
             save_path: Path to save the visualization
         """
         try:
-            if not self.networkx_graph:
-                raise ValueError("NetworkX graph not available")
-            
+            if not self.networkx_graph or len(self.networkx_graph.nodes()) == 0:
+                # Try to rebuild the graph
+                logger.info("🔄 Attempting to rebuild NetworkX graph...")
+                self._build_networkx_graph()
+                
+                if not self.networkx_graph or len(self.networkx_graph.nodes()) == 0:
+                    raise ValueError("No graph data available for visualization. Please build the knowledge graph first.")
+
             G = self.networkx_graph
             
             # Limit nodes for performance
@@ -676,7 +835,7 @@ class EnhancedKnowledgeGraphRAG:
                 
                 # Get edge information
                 edge_data = G.get_edge_data(edge[0], edge[1])
-                relation = edge_data.get('relation', 'connected')
+                relation = edge_data.get('relation', 'connected') if edge_data else 'connected'
                 edge_info.append(f"{edge[0]} -> {relation} -> {edge[1]}")
             
             # Create edge trace
@@ -684,7 +843,8 @@ class EnhancedKnowledgeGraphRAG:
                 x=edge_x, y=edge_y,
                 line=dict(width=0.5, color='#888'),
                 hoverinfo='none',
-                mode='lines'
+                mode='lines',
+                name='Relationships'
             )
             
             # Extract nodes
@@ -693,6 +853,7 @@ class EnhancedKnowledgeGraphRAG:
             node_text = []
             node_colors = []
             node_sizes = []
+            node_hover_text = []
             
             for node in G.nodes():
                 x, y = pos[node]
@@ -701,52 +862,93 @@ class EnhancedKnowledgeGraphRAG:
                 
                 # Node information
                 adjacencies = list(G.neighbors(node))
-                node_info = f'{node}<br># of connections: {len(adjacencies)}'
-                node_text.append(node_info)
+                degree = len(adjacencies)
                 
-                # Color nodes
+                # Create hover text
+                hover_info = f'<b>{node}</b><br>'
+                hover_info += f'Connections: {degree}<br>'
+                if adjacencies:
+                    hover_info += f'Connected to: {", ".join(adjacencies[:3])}'
+                    if len(adjacencies) > 3:
+                        hover_info += f' and {len(adjacencies) - 3} more...'
+                
+                node_hover_text.append(hover_info)
+                
+                # Set node text for labels
+                node_text.append(node if show_labels else '')
+                
+                # Color and size nodes based on degree and highlights
                 if highlight_entities and node in highlight_entities:
-                    node_colors.append('red')
-                    node_sizes.append(20)
+                    node_colors.append('#ff4444')  # Red for highlighted
+                    node_sizes.append(max(15, min(30, degree * 2)))
                 else:
-                    node_colors.append('lightblue')
-                    node_sizes.append(10)
+                    # Color based on degree (more connections = darker)
+                    intensity = min(degree / 10.0, 1.0)  # Normalize degree
+                    node_colors.append(f'rgba(100, 149, 237, {0.3 + 0.7 * intensity})')
+                    node_sizes.append(max(8, min(20, degree + 5)))
             
             # Create node trace
             node_trace = go.Scatter(
                 x=node_x, y=node_y,
                 mode='markers+text' if show_labels else 'markers',
                 hoverinfo='text',
-                text=[node for node in G.nodes()] if show_labels else None,
+                text=node_text,
                 textposition="middle center",
-                hovertext=node_text,
+                textfont=dict(size=8, color='black'),
+                hovertext=node_hover_text,
                 marker=dict(
                     size=node_sizes,
                     color=node_colors,
-                    line=dict(width=2, color='white')
-                )
+                    line=dict(width=1, color='white'),
+                    opacity=0.8
+                ),
+                name='Entities'
             )
             
             # Create figure
             fig = go.Figure(
                 data=[edge_trace, node_trace],
                 layout=go.Layout(
-                    title=f'Knowledge Graph Visualization ({len(G.nodes())} nodes, {len(G.edges())} edges)',
-                    titlefont_size=16,
-                    showlegend=False,
+                    title=dict(
+                        text=f'Knowledge Graph Visualization ({len(G.nodes())} nodes, {len(G.edges())} edges)',
+                        font=dict(size=16)
+                    ),
+                    showlegend=True,
                     hovermode='closest',
-                    margin=dict(b=20,l=5,r=5,t=40),
-                    annotations=[ dict(
-                        text="Knowledge Graph - Interactive visualization",
-                        showarrow=False,
-                        xref="paper", yref="paper",
-                        x=0.005, y=-0.002,
-                        xanchor='left', yanchor='bottom',
-                        font=dict(color="grey", size=12)
-                    )],
-                    xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                    yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
+                    margin=dict(b=20, l=5, r=5, t=60),
+                    annotations=[
+                        dict(
+                            text="Interactive Knowledge Graph - Hover over nodes for details",
+                            showarrow=False,
+                            xref="paper", yref="paper",
+                            x=0.005, y=-0.002,
+                            xanchor='left', yanchor='bottom',
+                            font=dict(color="grey", size=10)
+                        )
+                    ],
+                    xaxis=dict(
+                        showgrid=False, 
+                        zeroline=False, 
+                        showticklabels=False,
+                        scaleanchor="y",
+                        scaleratio=1
+                    ),
+                    yaxis=dict(
+                        showgrid=False, 
+                        zeroline=False, 
+                        showticklabels=False
+                    ),
+                    plot_bgcolor='white',
+                    paper_bgcolor='white',
+                    font=dict(size=12)
                 )
+            )
+            
+            # Add some styling for better appearance
+            fig.update_layout(
+                width=1000,
+                height=800,
+                dragmode='pan'
             )
             
             # Save if requested
@@ -765,7 +967,7 @@ class EnhancedKnowledgeGraphRAG:
         try:
             metrics = self.get_graph_analytics()
             
-            # Create subplots
+            # Create subplots with mixed subplot types
             fig = make_subplots(
                 rows=2, cols=2,
                 subplot_titles=(
@@ -774,63 +976,154 @@ class EnhancedKnowledgeGraphRAG:
                     'Top Entities by Centrality',
                     'Community Sizes'
                 ),
-                specs=[[{"type": "indicator"}, {"type": "histogram"}],
-                       [{"type": "bar"}, {"type": "pie"}]]
+                specs=[[{"type": "xy"}, {"type": "xy"}],
+                    [{"type": "xy"}, {"type": "domain"}]]  # Changed last one to domain for pie chart
             )
             
-            # Graph overview indicators
+            # 1. Graph Overview (Key Metrics as Bar Chart)
+            overview_metrics = ['Entities', 'Relationships', 'Communities', 'Avg Degree']
+            overview_values = [
+                metrics.node_count, 
+                metrics.edge_count, 
+                len(metrics.communities), 
+                round(metrics.avg_degree, 1)
+            ]
+            
             fig.add_trace(
-                go.Indicator(
-                    mode="number+delta",
-                    value=metrics.node_count,
-                    title={"text": "Total Entities"},
-                ), row=1, col=1
+                go.Bar(
+                    x=overview_metrics,
+                    y=overview_values,
+                    name="Graph Metrics",
+                    marker_color=['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']
+                ),
+                row=1, col=1
             )
             
-            # Degree distribution
-            if self.networkx_graph:
+            # 2. Degree distribution
+            if self.networkx_graph and len(self.networkx_graph.nodes()) > 0:
                 degrees = [d for n, d in self.networkx_graph.degree()]
                 fig.add_trace(
-                    go.Histogram(x=degrees, name="Degree Distribution"),
+                    go.Histogram(
+                        x=degrees, 
+                        name="Degree Distribution",
+                        nbinsx=min(20, max(degrees) + 1) if degrees else 10,
+                        marker_color='#ff7f0e'
+                    ),
+                    row=1, col=2
+                )
+            else:
+                # Empty placeholder
+                fig.add_trace(
+                    go.Bar(x=['No Data'], y=[0], name="No Data Available"),
                     row=1, col=2
                 )
             
-            # Top entities by centrality
-            if metrics.centrality_scores.get('pagerank'):
+            # 3. Top entities by centrality
+            if metrics.centrality_scores.get('pagerank') and len(metrics.centrality_scores['pagerank']) > 0:
                 top_entities = sorted(
                     metrics.centrality_scores['pagerank'].items(),
                     key=lambda x: x[1],
                     reverse=True
                 )[:10]
                 
-                entities, scores = zip(*top_entities)
+                if top_entities:
+                    entities, scores = zip(*top_entities)
+                    
+                    # Truncate long entity names for display
+                    display_entities = [
+                        entity[:20] + '...' if len(entity) > 20 else entity 
+                        for entity in entities
+                    ]
+                    
+                    fig.add_trace(
+                        go.Bar(
+                            x=display_entities, 
+                            y=list(scores), 
+                            name="PageRank Centrality",
+                            marker_color='#2ca02c',
+                            hovertext=[f"{entity}: {score:.4f}" for entity, score in zip(entities, scores)],
+                            hoverinfo='text'
+                        ),
+                        row=2, col=1
+                    )
+                else:
+                    fig.add_trace(
+                        go.Bar(x=['No Data'], y=[0], name="No Centrality Data"),
+                        row=2, col=1
+                    )
+            else:
                 fig.add_trace(
-                    go.Bar(x=list(entities), y=list(scores), name="PageRank Centrality"),
+                    go.Bar(x=['No Data'], y=[0], name="No Centrality Data"),
                     row=2, col=1
                 )
             
-            # Community sizes
-            if metrics.communities:
+            # 4. Community sizes - Now using pie chart in domain subplot
+            if metrics.communities and len(metrics.communities) > 0:
                 community_sizes = [len(community) for community in metrics.communities]
                 community_labels = [f"Community {i+1}" for i in range(len(community_sizes))]
                 
+                # Only show if we have meaningful communities
+                if max(community_sizes) > 1:
+                    fig.add_trace(
+                        go.Pie(
+                            labels=community_labels, 
+                            values=community_sizes, 
+                            name="Communities",
+                            hoverinfo='label+value+percent'
+                        ),
+                        row=2, col=2
+                    )
+                else:
+                    # Use bar chart instead for single nodes
+                    fig.add_trace(
+                        go.Bar(x=['Single Nodes'], y=[len(community_sizes)], name="No Communities"),
+                        row=2, col=2
+                    )
+            else:
+                # Use bar chart for no community data
                 fig.add_trace(
-                    go.Pie(labels=community_labels, values=community_sizes, name="Communities"),
+                    go.Bar(x=['No Communities'], y=[0], name="No Community Data"),
                     row=2, col=2
                 )
             
-            # Update layout
+            # Update layout with proper title formatting
             fig.update_layout(
-                title_text="Knowledge Graph Analytics Dashboard",
+                title=dict(
+                    text="Knowledge Graph Analytics Dashboard",
+                    font=dict(size=20)
+                ),
                 showlegend=False,
-                height=800
+                height=800,
+                width=1200,
+                plot_bgcolor='white',
+                paper_bgcolor='white'
+            )
+            
+            # Update x-axis labels for readability
+            fig.update_xaxes(tickangle=45, row=2, col=1)  # Rotate entity names
+            
+            # Add some spacing between subplots
+            fig.update_layout(
+                margin=dict(t=80, b=50, l=50, r=50)
             )
             
             return fig
             
         except Exception as e:
             logger.error(f"❌ Failed to create analytics dashboard: {e}")
-            raise
+            # Return a simple error figure
+            fig = go.Figure()
+            fig.add_annotation(
+                text=f"Error creating dashboard: {str(e)}",
+                xref="paper", yref="paper",
+                x=0.5, y=0.5, showarrow=False,
+                font=dict(size=16, color="red")
+            )
+            fig.update_layout(
+                title="Analytics Dashboard - Error",
+                width=800, height=400
+            )
+            return fig
     
     def interactive_chat_enhanced(self):
         """Enhanced interactive chat with advanced features."""

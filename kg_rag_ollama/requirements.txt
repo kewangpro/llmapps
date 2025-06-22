@@ -19,6 +19,7 @@ plotly>=5.17.0
 networkx>=3.2.0
 pandas>=2.1.0
 kaleido>=0.2.1
+spicy
 
 # Optional: Enhanced NLP
 spacy>=3.7.0
