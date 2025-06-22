@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 MCP Client that connects with Ollama
 """

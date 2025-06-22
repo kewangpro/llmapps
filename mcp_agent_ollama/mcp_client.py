@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 MCP Client implementation
 """
@@ -7,11 +6,9 @@ MCP Client implementation
 import argparse
 import asyncio
 import json
-import os
 import socket
 import subprocess
 import sys
-import time
 from typing import Dict, Any, Optional, List, Tuple
 
 

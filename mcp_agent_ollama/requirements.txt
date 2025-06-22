@@ -1,16 +1,11 @@
-# HTTP and Networking
-requests==2.31.0
-urllib3==2.1.0
-
 # Web Scraping and Search
-googlesearch-python==1.2.3
-beautifulsoup4==4.12.2
+duckduckgo_search
 
 # Testing
-pytest==7.4.3
-pytest-asyncio==0.23.2
+pytest
+pytest-asyncio
 
 # Web Interface
-streamlit==1.32.0
+streamlit
 
 # Note: asyncio is part of Python's standard library since Python 3.4

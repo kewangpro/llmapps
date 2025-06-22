@@ -1,23 +1,15 @@
-#!/usr/bin/env python3
 """
 Basic MCP Server implementation
 """
-
 # Standard library imports
-import asyncio
 import json
-import sys
-import threading
 from dataclasses import dataclass
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Any, Dict, List, Optional
-from urllib.parse import quote_plus, parse_qs
 
 # Third-party imports
-import requests
-from bs4 import BeautifulSoup
-from googlesearch import search
+from duckduckgo_search import DDGS
 
 
 @dataclass
@@ -157,45 +149,16 @@ class MCPServer:
             return {"error": f"Internal error: {str(e)}"}
     
     def search_web(self, query: str, num_results: int = 3) -> Dict[str, Any]:
-        """Search the web using Google Search API"""
+        """Search the web using DuckDuckGo Search API"""
         try:
-            # Get search results
             results = []
-            search_urls = list(search(query, num_results=num_results))
-            
-            # Fetch and parse each result
-            for url in search_urls:
-                try:
-                    # Fetch the page content
-                    response = requests.get(url, timeout=5)
-                    response.raise_for_status()
-                    
-                    # Parse the HTML
-                    soup = BeautifulSoup(response.text, 'html.parser')
-                    
-                    # Extract title and content
-                    title = soup.title.string if soup.title else url
-                    # Get first paragraph or meta description
-                    content = ""
-                    meta_desc = soup.find('meta', attrs={'name': 'description'})
-                    if meta_desc and meta_desc.get('content'):
-                        content = meta_desc['content']
-                    else:
-                        # Try to get first paragraph
-                        first_p = soup.find('p')
-                        if first_p:
-                            content = first_p.get_text()[:200] + "..."  # Limit content length
-                    
+            with DDGS() as ddgs:
+                for r in ddgs.text(query, max_results=num_results):
                     results.append({
-                        "title": title,
-                        "content": content or "No content available",
-                        "source": url
+                        "title": r.get("title"),
+                        "content": r.get("body"),
+                        "source": r.get("href")
                     })
-                except Exception as e:
-                    print(f"Error fetching result {url}: {e}")
-                    continue
-            
-            # If no results found, provide a helpful message
             if not results:
                 return {
                     "content": [{
@@ -205,12 +168,11 @@ class MCPServer:
                             "results": [{
                                 "title": "No Direct Results",
                                 "content": "I couldn't find specific information about this query. You might want to try rephrasing your question or being more specific.",
-                                "source": "Google Search"
+                                "source": "DuckDuckGo Search"
                             }]
                         })
                     }]
                 }
-            
             return {
                 "content": [{
                     "type": "text",
@@ -220,7 +182,6 @@ class MCPServer:
                     })
                 }]
             }
-            
         except Exception as e:
             print(f"Error in search_web: {str(e)}")
             return {

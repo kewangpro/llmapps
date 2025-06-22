@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import requests
 
 def test_ollama():
@@ -62,7 +61,7 @@ if __name__ == '__main__':
     
     if success:
         print("\n✓ Ollama is working correctly!")
-        print("You can now run the MCP client.")
+        print("You can now test the MCP client.")
     else:
         print("\n❌ Ollama setup incomplete.")
         print("Steps to fix:")
