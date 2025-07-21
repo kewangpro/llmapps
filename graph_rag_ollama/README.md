@@ -104,11 +104,11 @@ Data Flow:
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd kg_rag_ollama
+cd graph_rag_ollama
 
 # Create virtual environment
-python -m venv myvenv
-source myvenv/bin/activate  # On Windows: myvenv\Scripts\activate
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
@@ -145,7 +145,7 @@ python -m spacy download en_core_web_sm
 ## 📂 Project Structure
 
 ```
-kg_rag_ollama/
+graph_rag_ollama/
 ├── 🌐 User Interfaces
 │   ├── app.py                   # Streamlit web application (⭐ RECOMMENDED)
 │   ├── main.py                  # Enhanced CLI interface (refactored)
@@ -175,7 +175,7 @@ kg_rag_ollama/
 │
 ├── ⚙️ Configuration
 │   ├── requirements.txt        # Python dependencies
-│   └── myvenv/                 # Virtual environment
+│   └── .venv/                  # Virtual environment
 ```
 
 ## 🚀 Quick Start
@@ -486,7 +486,7 @@ The project has been refactored into a clean, modular architecture:
 
 - **`app.py`**: Modern Streamlit web application with intuitive UI
 - **`main.py`**: Refactored CLI using the modular architecture
-- **`simple_converter.py`**: Standalone converter for basic use cases
+- **`demo.py`**: Standalone demonstration script for basic functionality
 
 ### ✨ Benefits of New Architecture
 
