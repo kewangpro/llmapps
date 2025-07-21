@@ -23,71 +23,136 @@ This repository contains three main interfaces:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                   Modular Knowledge Graph RAG System                   │
+│            Knowledge Graph RAG System - Workflow Architecture          │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
 │  ┌─────────────────────────────────────────────────────────────────────┐
-│  │                        User Interfaces                             │
+│  │                      1. USER INTERFACES                            │
 │  │  ┌────────────┐   ┌────────────┐   ┌────────────┐                   │
 │  │  │ Streamlit  │   │    CLI     │   │    Demo    │                   │
 │  │  │  Web App   │   │ Interface  │   │   Script   │                   │
 │  │  │   (app.py) │   │ (main.py)  │   │ (demo.py)  │                   │
-│  │  └────────────┘   └────────────┘   └────────────┘                   │
-│  └─────────────────────────────────────────────────────────────────────┘
-│                                    │                                   │
-│                                    ▼                                   │
+│  │  └─────┬──────┘   └─────┬──────┘   └─────┬──────┘                   │
+│  └────────┼────────────────┼────────────────┼────────────────────────────┘
+│           │                │                │                          │
+│           └────────────────┼────────────────┘                          │
+│                            ▼                                           │
 │  ┌─────────────────────────────────────────────────────────────────────┐
-│  │                      Core Module Layer                             │
+│  │                2. CONFIGURATION & LLM SETUP                        │
 │  │                                                                     │
-│  │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐             │
-│  │  │   Models    │    │   Storage   │    │ LLM Setup   │             │
-│  │  │ (models.py) │◄──►│(storage.py) │◄──►│(llm_setup.py│             │
-│  │  │             │    │             │    │             │             │
-│  │  │• Config     │    │• Document   │    │• Ollama     │             │
-│  │  │• Filters    │    │• Loader     │    │• Models     │             │
-│  │  │• Metrics    │    │• Vector DB  │    │• Embeddings │             │
-│  │  │• Results    │    │• Persistence│    │             │             │
-│  │  └─────────────┘    └─────────────┘    └─────────────┘             │
-│  │                                                                     │
-│  │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐             │
-│  │  │Graph Builder│    │Query Engine │    │ Analytics   │             │
-│  │  │(graph_      │◄──►│(query_      │◄──►│(analytics.py│             │
-│  │  │builder.py)  │    │engine.py)   │    │             │             │
-│  │  │             │    │             │    │             │             │
-│  │  │• KG Build   │    │• Hybrid     │    │• Metrics    │             │
-│  │  │• NetworkX   │    │• Retrieval  │    │• Centrality │             │
-│  │  │• Extraction │    │• Filtering  │    │• Communities│             │
-│  │  └─────────────┘    └─────────────┘    └─────────────┘             │
-│  │                                                                     │
-│  │  ┌─────────────┐    ┌─────────────┐                                 │
-│  │  │Visualization│    │   Export    │                                 │
-│  │  │(visualization│◄──►│(export_     │                                 │
-│  │  │.py)         │    │utils.py)    │                                 │
-│  │  │             │    │             │                                 │
-│  │  │• Plotly     │    │• JSON       │                                 │
-│  │  │• NetworkX   │    │• CSV        │                                 │
-│  │  │• Dashboards │    │• GEXF       │                                 │
-│  │  └─────────────┘    └─────────────┘                                 │
-│  └─────────────────────────────────────────────────────────────────────┘
-│                                    │                                   │
-│                                    ▼                                   │
+│  │  ┌─────────────┐    ┌──────────────────────────────────────────┐    │
+│  │  │   Models    │───▶│            OLLAMA SERVER                │    │
+│  │  │ (models.py) │    │         (localhost:11434)               │    │
+│  │  │             │    │                                          │    │
+│  │  │• Config     │    │  ┌─────────────┐  ┌─────────────────┐   │    │
+│  │  │• Filters    │    │  │ LLM Models  │  │ Embedding Models│   │    │
+│  │  │• QueryTypes │    │  │             │  │                 │   │    │
+│  │  └─────────────┘    │  │• llama3.2   │  │• nomic-embed-   │   │    │
+│           │             │  │• llama3.1   │  │  text           │   │    │
+│           │             │  │• codellama  │  │• mxbai-embed-   │   │    │
+│           │             │  └─────────────┘  │  large          │   │    │
+│           │             └──────────────────┴─────────────────────┘    │
+│           │                              ▲                           │
+│           │             ┌────────────────┴─────────────────┐          │
+│           │             │       LLM Setup (llm_setup.py)  │          │
+│           │             │                                  │          │
+│           │             │ • Ollama LLM Integration        │          │
+│           │             │ • Embedding Model Setup        │          │
+│           │             │ • Connection Testing            │          │
+│           │             │ • Model Configuration           │          │
+│           │             └──────────────────────────────────┘          │
+│           ▼                              │                           │
 │  ┌─────────────────────────────────────────────────────────────────────┐
-│  │                      Data Storage Layer                            │
+│  │               3. DOCUMENT PROCESSING & STORAGE                     │
+│  │                                                                     │
+│  │  ┌─────────────┐     ┌─────────────┐      ┌──────────────────────┐ │
+│  │  │ Documents   │────▶│   Storage   │─────▶│    Document Parsing  │ │
+│  │  │   Input     │     │ Manager     │      │                      │ │
+│  │  │             │     │(storage.py) │      │ • SentenceSplitter   │ │
+│  │  │• PDF, TXT   │     │             │      │ • Chunk Creation     │ │
+│  │  │• MD, DOCX   │     │• File Load  │      │ • Metadata Extract   │ │
+│  │  │• Directories│     │• Format     │      └──────────────────────┘ │
+│  │  └─────────────┘     │• Validation │               │               │
+│  │                      └─────────────┘               ▼               │
+│  └────────────────────────────────────────────────────────────────────┘
+│                                                       │               │
+│                                                       ▼               │
+│  ┌─────────────────────────────────────────────────────────────────────┐
+│  │              4. KNOWLEDGE EXTRACTION & GRAPH BUILDING              │
+│  │                                                                     │
+│  │  ┌──────────────────────┐       ┌─────────────────────────────────┐ │
+│  │  │   Graph Builder      │◄─────▶│         OLLAMA PROCESSING       │ │
+│  │  │  (graph_builder.py)  │       │                                 │ │
+│  │  │                      │       │  ┌─────────────────────────────┐ │ │
+│  │  │ • KG Index Creation  │       │  │     Entity Extraction       │ │ │
+│  │  │ • Vector Index Build │       │  │   (Subject-Predicate-Obj)   │ │ │
+│  │  │ • NetworkX Graph     │       │  │                             │ │ │
+│  │  │ • Triplet Extraction │       │  │ • Named Entity Recognition  │ │ │
+│  │  └──────────────────────┘       │  │ • Relationship Detection    │ │ │
+│  │              │                  │  │ • Confidence Scoring        │ │ │
+│  │              ▼                  │  └─────────────────────────────┘ │ │
+│  │  ┌──────────────────────┐       │  ┌─────────────────────────────┐ │ │
+│  │  │    Storage Layer     │       │  │      Text Embeddings        │ │ │
+│  │  │                      │       │  │                             │ │ │
+│  │  │ • Knowledge Graph    │       │  │ • Semantic Vector Creation  │ │ │
+│  │  │   (enhanced_kg_      │       │  │ • Similarity Computation    │ │ │
+│  │  │   storage/)          │       │  │ • Clustering & Indexing     │ │ │
+│  │  │ • Vector Database    │       │  └─────────────────────────────┘ │ │
+│  │  │   (Chroma/Qdrant)    │       └─────────────────────────────────┘ │
+│  │  └──────────────────────┘                                         │
+│  └─────────────────────────────────────────────────────────────────────┘
+│                                     │                                 │
+│                                     ▼                                 │
+│  ┌─────────────────────────────────────────────────────────────────────┐
+│  │                5. QUERY PROCESSING & RETRIEVAL                     │
+│  │                                                                     │
+│  │  ┌─────────────┐    ┌──────────────────────────────────────────┐   │
+│  │  │   Query     │───▶│         HYBRID RETRIEVAL                 │   │
+│  │  │  Engine     │    │                                          │   │
+│  │  │(query_      │    │  ┌─────────────┐  ┌──────────────────┐   │   │
+│  │  │engine.py)   │    │  │Knowledge    │  │   Vector Search  │   │   │
+│  │  │             │    │  │Graph Query  │  │                  │   │   │
+│  │  │• Question   │    │  │             │  │ • Semantic       │   │   │
+│  │  │  Processing │    │  │• Triplet    │  │   Similarity     │   │   │
+│  │  │• Filter     │    │  │  Matching   │  │ • Embedding      │   │   │
+│  │  │  Application│    │  │• Path       │  │   Search         │   │   │
+│  │  │• Response   │    │  │  Finding    │  │ • Top-K Results  │   │   │
+│  │  │  Generation │    │  │• Entity     │  │                  │   │   │
+│  │  └─────────────┘    │  │  Relations  │  │                  │   │   │
+│  │         │            │  └─────────────┘  └──────────────────┘   │   │
+│  │         │            └────────────────┬─────────────────────────┘   │
+│  │         │                             │                             │
+│  │         │            ┌────────────────▼─────────────────┐           │
+│  │         │            │         OLLAMA LLM               │           │
+│  │         │            │                                  │           │
+│  │         │            │ • Context Understanding         │           │
+│  │         │            │ • Response Generation           │           │
+│  │         │            │ • Answer Synthesis              │           │
+│  │         │            │ • Source Attribution            │           │
+│  │         │            └──────────────────────────────────┘           │
+│  │         ▼                                                           │
+│  └─────────────────────────────────────────────────────────────────────┘
+│                                     │                                 │
+│                                     ▼                                 │
+│  ┌─────────────────────────────────────────────────────────────────────┐
+│  │              6. ANALYTICS & VISUALIZATION                          │
 │  │                                                                     │
 │  │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐             │
-│  │  │ Documents   │    │ Knowledge   │    │   Vector    │             │
-│  │  │   (data/)   │───▶│   Graph     │───▶│  Database   │             │
-│  │  │             │    │ (enhanced_  │    │ (vector_db/)│             │
-│  │  │• PDF, TXT   │    │ kg_storage/)│    │             │             │
-│  │  │• MD, DOCX   │    │             │    │• Chroma     │             │
-│  │  │• Multi-doc  │    │• Persistent │    │• Qdrant     │             │
-│  │  └─────────────┘    │• Index      │    │• Embeddings │             │
-│  │                     └─────────────┘    └─────────────┘             │
+│  │  │ Analytics   │    │Visualization│    │   Export    │             │
+│  │  │(analytics.py│    │(visualization    │(export_utils│             │
+│  │  │             │    │.py)         │    │.py)         │             │
+│  │  │• Graph      │    │             │    │             │             │
+│  │  │  Metrics    │    │• Interactive│    │• JSON       │             │
+│  │  │• Centrality │    │  Plotly     │    │• CSV        │             │
+│  │  │• Communities│    │• NetworkX   │    │• GEXF       │             │
+│  │  │• Statistics │    │• Dashboards │    │• Reports    │             │
+│  │  └─────────────┘    └─────────────┘    └─────────────┘             │
 │  └─────────────────────────────────────────────────────────────────────┘
 └─────────────────────────────────────────────────────────────────────────┘
 
-Data Flow:
-Documents ──▶ Storage ──▶ Processing ──▶ Graph Building ──▶ Query & Analytics ──▶ Visualization
+WORKFLOW:
+User Input → Config/LLM Setup → Document Processing → Ollama Extraction → 
+Graph Building → Storage → Query Processing → Ollama Response → Analytics → Visualization
 ```
 
 ## ✨ Features
