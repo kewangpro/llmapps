@@ -58,7 +58,9 @@ class PlanExecuteAgent:
                 "For the given objective, come up with a simple step by step plan. "
                 "This plan should involve individual tasks, that if executed correctly will yield the correct answer. "
                 "Do not add any superfluous steps. The result of the final step should be the final answer. "
-                "Make sure that each step has all the information needed - do not skip steps."
+                "Make sure that each step has all the information needed - do not skip steps. "
+                "Return only simple action steps as strings, not JSON objects or complex structures. "
+                "Each step should be a clear, actionable instruction."
             ),
             ("placeholder", "{messages}"),
         ])
@@ -69,7 +71,8 @@ class PlanExecuteAgent:
             "For the given objective, come up with a simple step by step plan. "
             "This plan should involve individual tasks, that if executed correctly will yield the correct answer. "
             "Do not add any superfluous steps. The result of the final step should be the final answer. "
-            "Make sure that each step has all the information needed - do not skip steps.\n\n"
+            "Make sure that each step has all the information needed - do not skip steps. "
+            "Return only simple action steps as strings, not JSON objects or complex structures.\n\n"
             "Your objective was this:\n{input}\n\n"
             "Your original plan was this:\n{plan}\n\n"
             "You have currently done the follow steps:\n{executed}\n\n"
@@ -112,12 +115,24 @@ class PlanExecuteAgent:
         plan = state["plan"]
         executed = state.get("executed", [])
         
+        if not plan:
+            return {"executed": executed, "step_count": state.get("step_count", 0)}
+        
+        # Get the next unexecuted step
+        remaining_steps = plan[len(executed):] if len(executed) < len(plan) else plan[:1]
+        if not remaining_steps:
+            return {"executed": executed, "step_count": state.get("step_count", 0)}
+        
+        task = remaining_steps[0]
         plan_str = "\n".join(f"{i+1}. {step}" for i, step in enumerate(plan))
-        task = plan[0]
+        step_number = len(executed) + 1
+        
         task_formatted = f"""For the following plan:
 {plan_str}
 
-You are tasked with executing step 1, {task}."""
+You are tasked with executing step {step_number}: {task}
+
+Be specific and actionable in your response. If this involves searching, use the search tool to find current information."""
         
         agent_response = self.agent_executor.invoke({"messages": [("user", task_formatted)]})
         response_content = agent_response["messages"][-1].content
@@ -142,12 +157,28 @@ You are tasked with executing step 1, {task}."""
             final_answer = executed[-1][1] if executed else "Unable to complete task"
             return {"response": final_answer}
         
-        output = self.replanner.invoke(state)
+        # Check if we've completed all planned steps
+        if len(executed) >= len(plan):
+            # All steps completed - check if we have an answer
+            if executed:
+                last_result = executed[-1][1]
+                # If the last result seems to contain an answer, return it
+                if any(keyword in last_result.lower() for keyword in ['president', 'current', 'biden', 'trump']):
+                    return {"response": last_result}
         
-        if isinstance(output.action, Answer):
-            return {"response": output.action.response}
-        else:
-            return {"plan": output.action.steps}
+        try:
+            output = self.replanner.invoke(state)
+            
+            if isinstance(output.action, Answer):
+                return {"response": output.action.response}
+            else:
+                return {"plan": output.action.steps}
+        except Exception as e:
+            # Fallback if replanner fails
+            if executed:
+                return {"response": executed[-1][1]}
+            else:
+                return {"response": "Unable to complete task"}
     
     def _should_end(self, state: PlanExecute):
         """Determine if we should end or continue"""

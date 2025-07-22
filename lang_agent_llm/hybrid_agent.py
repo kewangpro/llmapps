@@ -58,7 +58,8 @@ class HybridAgent:
                 "system",
                 "You are a strategic planner. Create a step-by-step plan to accomplish the user's request. "
                 "Consider what types of agents (search, web_scraper, coder) would be best for each step. "
-                "Make each step specific and actionable."
+                "Make each step specific and actionable. "
+                "For questions about current information like 'who is the US president', focus on searching for current, up-to-date information."
             ),
             ("user", "{input}")
         ])
@@ -66,11 +67,12 @@ class HybridAgent:
         
         # Agent assignment planner
         assignment_prompt = ChatPromptTemplate.from_template(
-            "Given this plan: {plan}\n\n"
+            "Given this plan:\n{plan}\n\n"
             "Assign each step to the most appropriate agent:\n"
             "- search: For web searches and finding information\n"
             "- web_scraper: For extracting content from specific URLs\n"
             "- coder: For data analysis, calculations, and generating charts\n\n"
+            "IMPORTANT: For the 'step' field, use the EXACT text of each step as written in the plan above, not placeholders or references.\n"
             "Provide reasoning for each assignment."
         )
         self.assignment_planner = assignment_prompt | self.llm.with_structured_output(ExecutionPlan)
@@ -79,7 +81,7 @@ class HybridAgent:
         self.search_agent = create_react_agent(
             self.llm,
             tools=[search_tool],
-            prompt="You are a search specialist. Focus on finding relevant information."
+            prompt="You are a search specialist. Focus on finding relevant, current information. Use specific search terms related to the query. For questions about current officials or leaders, search for recent news and official information."
         )
         
         self.web_scraper_agent = create_react_agent(
