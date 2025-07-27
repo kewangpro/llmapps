@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 import logging
 import time
 import random
+from data_store import get_data_store
 
 logger = logging.getLogger(__name__)
 
@@ -52,10 +53,13 @@ class StockFetcher(BaseTool):
                     logger.info(f"Retry attempt {attempt + 1}, waiting {delay:.1f} seconds...")
                     time.sleep(delay)
                 
+                logger.info(f"Creating yfinance ticker for {symbol.upper()}")
                 ticker = yf.Ticker(symbol.upper())
                 
                 # Get historical data with timeout
+                logger.info(f"Fetching history for {symbol} with period {period}")
                 hist = ticker.history(period=period, timeout=30)
+                logger.info(f"Successfully fetched {len(hist)} records for {symbol}")
                 
                 if hist.empty:
                     logger.warning(f"No historical data found for symbol {symbol}")
@@ -74,8 +78,8 @@ class StockFetcher(BaseTool):
                         "trailingPE": "N/A"
                     }
                 
-                # Prepare data for LSTM
-                data = {
+                # Prepare full data for internal storage
+                full_data = {
                     "symbol": symbol.upper(),
                     "company_name": info.get("longName", "Unknown"),
                     "current_price": info.get("currentPrice", hist['Close'].iloc[-1]),
@@ -87,8 +91,23 @@ class StockFetcher(BaseTool):
                     "total_records": len(hist)
                 }
                 
-                logger.info(f"Successfully fetched data for {symbol}: {data['total_records']} records from {data['data_range']}")
-                return data
+                # Store full data internally
+                data_store = get_data_store()
+                data_store.store_stock_data(symbol, full_data)
+                
+                # Return only summary to agent (no raw historical data)
+                agent_summary = {
+                    "symbol": symbol.upper(),
+                    "company_name": info.get("longName", "Unknown"),
+                    "current_price": float(hist['Close'].iloc[-1]),
+                    "data_range": f"{hist.index[0].strftime('%Y-%m-%d')} to {hist.index[-1].strftime('%Y-%m-%d')}",
+                    "total_records": len(hist),
+                    "status": "success",
+                    "message": f"Successfully fetched {len(hist)} records of historical data for {symbol.upper()}"
+                }
+                
+                logger.info(f"Successfully fetched data for {symbol}: {full_data['total_records']} records from {full_data['data_range']}")
+                return agent_summary
                 
             except Exception as e:
                 error_msg = str(e)

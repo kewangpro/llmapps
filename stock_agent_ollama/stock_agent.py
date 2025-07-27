@@ -3,8 +3,10 @@ from langchain.prompts import PromptTemplate
 from langchain_community.llms import Ollama
 from langchain.memory import ConversationBufferMemory
 from langchain_core.callbacks import BaseCallbackHandler
+from langchain.agents.output_parsers import ReActSingleInputOutputParser
 from typing import List, Dict, Any
 import logging
+import re
 
 from stock_fetcher import StockFetcher
 from lstm_predictor import LSTMPredictor
@@ -13,13 +15,148 @@ from visualizer import StockVisualizer
 logger = logging.getLogger(__name__)
 
 
+class CleanOutputParser(ReActSingleInputOutputParser):
+    """Custom parser to clean markdown formatting from LLM output"""
+    
+    def __init__(self):
+        super().__init__()
+        # Use a class variable to store fallback symbol and period
+        CleanOutputParser._fallback_symbol = "AAPL"
+        CleanOutputParser._fallback_period = "2y"
+    
+    def set_fallback_symbol(self, symbol: str):
+        """Set the fallback symbol to use when parsing fails"""
+        CleanOutputParser._fallback_symbol = symbol if symbol else "AAPL"
+    
+    def set_fallback_period(self, period: str):
+        """Set the fallback period to use when parsing fails"""
+        CleanOutputParser._fallback_period = period if period else "2y"
+    
+    @property
+    def fallback_symbol(self):
+        return getattr(CleanOutputParser, '_fallback_symbol', 'AAPL')
+    
+    @property
+    def fallback_period(self):
+        return getattr(CleanOutputParser, '_fallback_period', '2y')
+    
+    def parse(self, text: str):
+        logger.info(f"Parsing LLM output: {text[:200]}...")
+        
+        # Clean any markdown formatting
+        cleaned_text = re.sub(r'```+.*?```+', '', text, flags=re.DOTALL)
+        cleaned_text = re.sub(r'`+', '', cleaned_text)
+        
+        # First try standard parsing which handles Final Answer
+        try:
+            result = super().parse(cleaned_text)
+            logger.info("Standard parsing successful")
+            return result
+        except Exception as e:
+            logger.warning(f"Standard parsing failed: {e}")
+            
+            # Check if this is a Final Answer (agent is done)
+            if "Final Answer:" in cleaned_text:
+                logger.info("Found Final Answer in text")
+                from langchain.schema import AgentFinish
+                final_answer = cleaned_text.split("Final Answer:")[-1].strip()
+                return AgentFinish(
+                    return_values={"output": final_answer},
+                    log=cleaned_text
+                )
+            
+            # Look for Action and Action Input patterns more flexibly
+            action_pattern = r'Action:\s*([^\n]+)'
+            input_pattern = r'Action Input:\s*(\{[^}]*\})'
+            
+            action_match = re.search(action_pattern, cleaned_text, re.IGNORECASE)
+            input_match = re.search(input_pattern, cleaned_text)
+            
+            if action_match and input_match:
+                from langchain.schema import AgentAction
+                tool_name = action_match.group(1).strip()
+                tool_input = input_match.group(1)
+                logger.info(f"Parsed action: {tool_name}, input: {tool_input}")
+                return AgentAction(
+                    tool=tool_name,
+                    tool_input=tool_input,
+                    log=cleaned_text
+                )
+            
+            # If no clear action found, try to infer based on content and fallback
+            if any(phrase in cleaned_text.lower() for phrase in ["fetch", "get data", "historical"]):
+                logger.warning("Inferring stock_fetcher action from text content")
+                from langchain.schema import AgentAction
+                return AgentAction(
+                    tool="stock_fetcher",
+                    tool_input=f'{{"symbol": "{self.fallback_symbol}", "period": "{self.fallback_period}"}}',
+                    log=f"Inferred action from content: {cleaned_text[:100]}"
+                )
+            
+            # Last resort: force a stock_fetcher action
+            logger.warning("Using fallback stock_fetcher action")
+            from langchain.schema import AgentAction
+            return AgentAction(
+                tool="stock_fetcher",
+                tool_input=f'{{"symbol": "{self.fallback_symbol}", "period": "{self.fallback_period}"}}',
+                log=f"Fallback action due to parse failure: {str(e)}"
+            )
+
+
 class AgentLoggingCallback(BaseCallbackHandler):
     """Custom callback to log agent thoughts and actions"""
     
+    def __init__(self, progress_callback=None, period="2y"):
+        self.progress_callback = progress_callback
+        self.period = period
+        # Convert period to readable format
+        period_text = {"5y": "5 years", "2y": "2 years", "1y": "1 year", "6mo": "6 months", "3mo": "3 months", "1mo": "1 month"}.get(period, f"{period}")
+        self.step_mapping = {
+            'stock_fetcher': f'📊 Fetching {period_text} of historical data...',
+            'lstm_predictor': '🧠 Training LSTM ensemble models & predicting...',
+            'stock_visualizer': '📈 Creating interactive charts & visualizations...'
+        }
+        self.tools_used = []
+        self.current_step = 0
+    
+    def update_period(self, period):
+        """Update the period and regenerate step mapping"""
+        self.period = period
+        period_text = {"5y": "5 years", "2y": "2 years", "1y": "1 year", "6mo": "6 months", "3mo": "3 months", "1mo": "1 month"}.get(period, f"{period}")
+        self.step_mapping = {
+            'stock_fetcher': f'📊 Fetching {period_text} of historical data...',
+            'lstm_predictor': '🧠 Training LSTM ensemble models & predicting...',
+            'stock_visualizer': '📈 Creating interactive charts & visualizations...'
+        }
+    
     def on_agent_action(self, action, **kwargs):
+        print(f"\n🤖 AGENT ACTION:")
+        print(f"   Tool: {action.tool}")
+        print(f"   Input: {action.tool_input}")
         logger.info(f"🤖 AGENT ACTION:")
         logger.info(f"   Tool: {action.tool}")
         logger.info(f"   Input: {action.tool_input}")
+        
+        # Track tools used dynamically
+        if action.tool not in self.tools_used:
+            self.tools_used.append(action.tool)
+            self.current_step = len(self.tools_used)
+        
+        # Update progress if callback provided
+        if self.progress_callback and action.tool in self.step_mapping:
+            progress_text = self.step_mapping[action.tool]
+            # Estimate total steps based on available tools (max 3, but could be fewer)
+            estimated_total_steps = min(3, len(self.step_mapping))
+            current_step = self.current_step
+            
+            logger.info(f"Calling progress callback: step {current_step}/{estimated_total_steps}, tool: {action.tool}")
+            try:
+                self.progress_callback(current_step, estimated_total_steps, progress_text)
+                logger.info(f"Progress callback completed successfully")
+            except Exception as e:
+                logger.error(f"Progress callback failed: {e}")
+        else:
+            logger.info(f"Progress callback not called: callback={self.progress_callback is not None}, tool_in_mapping={action.tool in self.step_mapping}, tool={action.tool}")
         if hasattr(action, 'log') and action.log:
             # Extract the thought/reasoning part from the log
             log_lines = action.log.split('\n')
@@ -28,15 +165,20 @@ class AgentLoggingCallback(BaseCallbackHandler):
                 if line and not line.startswith('Action') and not line.startswith('Observation'):
                     # Show the agent's thinking process
                     if line.startswith('Thought:'):
+                        print(f"   💭 {line}")
                         logger.info(f"   💭 {line}")
                     elif 'think' in line.lower() or 'need' in line.lower() or 'should' in line.lower():
+                        print(f"   💭 REASONING: {line}")
                         logger.info(f"   💭 REASONING: {line}")
                     else:
+                        print(f"   💭 {line}")
                         logger.info(f"   💭 {line}")
     
     def on_agent_finish(self, finish, **kwargs):
-        logger.info(f"🎯 AGENT FINISH:")
+        print(f"\n🎯 AGENT FINISH:")
         output = finish.return_values.get('output', '')
+        print(f"   Final Answer: {output[:300]}{'...' if len(output) > 300 else ''}")
+        logger.info(f"🎯 AGENT FINISH:")
         logger.info(f"   Final Answer: {output[:300]}{'...' if len(output) > 300 else ''}")
     
     def on_tool_start(self, serialized, input_str, **kwargs):
@@ -57,20 +199,27 @@ class AgentLoggingCallback(BaseCallbackHandler):
             if clean_text and len(clean_text) > 3:  # Avoid logging very short text
                 # Highlight different types of reasoning
                 if clean_text.startswith('Thought:'):
+                    print(f"💭 {clean_text}")
                     logger.info(f"💭 {clean_text}")
                 elif clean_text.startswith('I need to') or clean_text.startswith('I should'):
+                    print(f"🧠 PLANNING: {clean_text}")
                     logger.info(f"🧠 PLANNING: {clean_text}")
                 elif 'analyze' in clean_text.lower() or 'fetch' in clean_text.lower():
+                    print(f"📊 STRATEGY: {clean_text}")
                     logger.info(f"📊 STRATEGY: {clean_text}")
                 else:
+                    print(f"💭 REASONING: {clean_text}")
                     logger.info(f"💭 REASONING: {clean_text}")
     
     def on_agent_start(self, serialized, inputs, **kwargs):
-        logger.info(f"🚀 AGENT STARTING: Analyzing query...")
+        print(f"\n🚀 AGENT STARTING: Analyzing query...")
         query = inputs.get('input', 'Unknown query')[:100]
+        print(f"   Query: {query}{'...' if len(str(inputs.get('input', ''))) > 100 else ''}")
+        logger.info(f"🚀 AGENT STARTING: Analyzing query...")
         logger.info(f"   Query: {query}{'...' if len(str(inputs.get('input', ''))) > 100 else ''}")
     
     def on_llm_start(self, serialized, prompts, **kwargs):
+        print(f"🤖 LLM THINKING: Processing agent reasoning...")
         logger.info(f"🤖 LLM THINKING: Processing agent reasoning...")
     
     def on_llm_end(self, response, **kwargs):
@@ -96,35 +245,28 @@ class StockAnalysisAgent:
             StockVisualizer()
         ]
         
-        # Create agent prompt
+        # Create agent prompt that lets the agent reason about the user's question
         self.prompt = PromptTemplate.from_template(
-            """You are a stock market analysis expert with access to powerful tools for fetching data, 
-            making predictions, and creating visualizations. Your role is to help users analyze stocks 
-            and provide insights about trends and future predictions.
+            """You are a financial analysis agent. Plan and execute actions to answer the user's question.
 
             Available tools:
+            {tool_names}
+
             {tools}
 
-            Use the following format EXACTLY:
+            Use this format:
+            Thought: [Analyze the user's request and plan what to do]
+            Action: [Choose appropriate tool]
+            Action Input: {{"symbol": "SYMBOL", "other_params": "as_needed"}}
+            Observation: [Tool result will appear here]
+            ... (repeat Thought/Action/Observation as needed)
+            Thought: I now have enough information to answer
+            Final Answer: [Your comprehensive response to the user]
 
-            Question: the input question you must answer
-            Thought: you should always think about what to do
-            Action: the action to take, should be one of [{tool_names}]
-            Action Input: the input to the action
-            Observation: the result of the action
-            ... (this Thought/Action/Action Input/Observation can repeat N times)
-            Thought: I now know the final answer
-            Final Answer: the final answer to the original input question
-
-            IMPORTANT: 
-            - Always follow Thought with Action and Action Input
-            - Never provide Final Answer until you have used tools to gather information
-            - Use JSON format for Action Input like: {{"symbol": "AAPL", "period": "2y"}}
-            - Be precise with the format - each line must start with the exact keywords
+            Begin!
 
             Question: {input}
-            Thought: {agent_scratchpad}
-            """
+            {agent_scratchpad}"""
         )
         
         # Create memory
@@ -145,8 +287,11 @@ class StockAnalysisAgent:
             logger.error(f"Failed to create ReAct agent: {e}")
             raise
         
-        # Create callback handler for detailed logging
+        # Create callback handler for detailed logging (progress callback set later)
         self.callback_handler = AgentLoggingCallback()
+        
+        # Create custom output parser for handling markdown formatting
+        self.output_parser = CleanOutputParser()
         
         # Create agent executor
         self.agent_executor = AgentExecutor(
@@ -154,18 +299,75 @@ class StockAnalysisAgent:
             tools=self.tools,
             memory=self.memory,
             verbose=True,  # Enable to capture agent reasoning
-            handle_parsing_errors="Check your output and make sure it conforms to the format instructions!",
-            max_iterations=5,  # Reduce to prevent infinite loops
+            handle_parsing_errors=self._handle_parsing_errors,  # Use custom error handler
+            max_iterations=6,  # Limit iterations for stability
             return_intermediate_steps=False,  # Set to False to avoid the multiple keys issue
-            callbacks=[self.callback_handler]
+            callbacks=[self.callback_handler],
+            early_stopping_method="force"  # Stop when max iterations reached
         )
         logger.info("StockAnalysisAgent initialization completed")
+    
+    def set_progress_callback(self, callback):
+        """Set progress callback for the agent"""
+        self.callback_handler.progress_callback = callback
+        # Also pass the callback to the LSTM predictor tool
+        for tool in self.tools:
+            if hasattr(tool, 'name') and tool.name == 'lstm_predictor':
+                tool.set_progress_callback(callback)
+    
+    def _handle_parsing_errors(self, error) -> str:
+        """Custom error handler that tries to clean and reparse LLM output"""
+        error_msg = str(error)
+        logger.warning(f"Parsing error encountered: {error_msg}")
+        
+        # Try to extract the original text that failed to parse
+        if hasattr(error, 'llm_output'):
+            original_text = error.llm_output
+        else:
+            # Extract from error message if possible
+            original_text = error_msg
+        
+        try:
+            # Use our custom parser to clean the text
+            cleaned_result = self.output_parser.parse(original_text)
+            logger.info("Successfully cleaned and reparsed LLM output")
+            
+            # If we got a valid action, execute it
+            if hasattr(cleaned_result, 'tool') and hasattr(cleaned_result, 'tool_input'):
+                return f"Action: {cleaned_result.tool}\nAction Input: {cleaned_result.tool_input}"
+            else:
+                return "I'll analyze the stock data systematically using my tools."
+        except Exception as parse_error:
+            logger.error(f"Custom parsing also failed: {parse_error}")
+            return f"Action: stock_fetcher\nAction Input: {{\"symbol\": \"{self.output_parser.fallback_symbol}\", \"period\": \"{self.output_parser.fallback_period}\"}}"
     
     def analyze_stock(self, query: str) -> Dict[str, Any]:
         """
         Main method to analyze stocks based on user query
         """
         logger.info(f"Agent analyzing query: '{query[:100]}{'...' if len(query) > 100 else ''}'")
+        
+        # Extract symbol and period from query and set as fallback for parser
+        from utils import extract_stock_symbols
+        symbols = extract_stock_symbols(query)
+        if symbols:
+            self.output_parser.set_fallback_symbol(symbols[0])
+            logger.info(f"Set fallback symbol to: {symbols[0]}")
+        else:
+            # Fallback to basic pattern if app extraction fails
+            symbol_match = re.search(r'\b([A-Z]{3,5})\b', query.upper())
+            if symbol_match:
+                self.output_parser.set_fallback_symbol(symbol_match.group(1))
+                logger.info(f"Set fallback symbol to: {symbol_match.group(1)}")
+        
+        # Extract period from query
+        period_match = re.search(r'using (\d+y)', query.lower())
+        if period_match:
+            period = period_match.group(1)
+            self.output_parser.set_fallback_period(period)
+            logger.info(f"Set fallback period to: {period}")
+        else:
+            self.output_parser.set_fallback_period("2y")  # Default fallback
         
         try:
             # Execute the agent with error handling
@@ -231,252 +433,6 @@ class StockAnalysisAgent:
         return self.memory.chat_memory.messages
 
 
-class StockWorkflow:
-    """Complete workflow for stock analysis"""
-    
-    def __init__(self, agent: StockAnalysisAgent):
-        self.agent = agent
-        self.stock_fetcher = StockFetcher()
-        self.lstm_predictor = LSTMPredictor()
-        self.visualizer = StockVisualizer()
-    
-    def complete_analysis_with_progress(self, symbol: str, update_progress_callback, start_step: int, total_steps: int, period: str = "2y") -> Dict[str, Any]:
-        """
-        Perform complete stock analysis workflow with progress updates
-        """
-        logger.info(f"Starting complete analysis workflow for {symbol} with period {period}")
-        
-        current_step = start_step
-        
-        try:
-            # Step 1: Fetch stock data
-            update_progress_callback(current_step + 1, total_steps, f"Fetching {symbol} historical data...")
-            stock_data = self.stock_fetcher._run(symbol=symbol, period=period)
-            
-            if "error" in stock_data:
-                logger.error(f"Stock data fetch failed: {stock_data['error']}")
-                return {"error": stock_data["error"]}
-            
-            logger.info(f"Fetched {stock_data['total_records']} records for {symbol}")
-            
-            # Step 2: Generate predictions
-            update_progress_callback(current_step + 2, total_steps, f"Training LSTM model for {symbol}...")
-            prediction_result = self.lstm_predictor._run(
-                data=stock_data["data"],
-                symbol=symbol,
-                prediction_days=30
-            )
-            
-            if "error" in prediction_result:
-                logger.error(f"LSTM prediction failed: {prediction_result['error']}")
-                return {"error": prediction_result["error"]}
-            
-            logger.info("LSTM predictions generated successfully")
-            
-            # Step 3: Create visualizations
-            update_progress_callback(current_step + 3, total_steps, f"Creating {symbol} charts and visualizations...")
-            visualization_result = self.visualizer._run(
-                historical_data=stock_data["data"],
-                predictions=prediction_result["predictions"],
-                future_dates=prediction_result["future_dates"],
-                symbol=symbol,
-                trend_analysis=prediction_result["trend_analysis"]
-            )
-            
-            if "error" in visualization_result:
-                logger.error(f"Visualization creation failed: {visualization_result['error']}")
-                return {"error": visualization_result["error"]}
-            
-            logger.info("Visualizations created successfully")
-            
-            # Step 4: Generate AI analysis
-            update_progress_callback(current_step + 4, total_steps, f"Generating AI analysis for {symbol}...")
-            analysis_prompt = f"""Based on the following stock analysis data for {symbol}:
-
-**Company Information:**
-- Name: {stock_data.get('company_name', 'Unknown')}
-- Current Price: ${stock_data.get('current_price', 'N/A')}
-- Market Cap: {stock_data.get('market_cap', 'N/A')}
-- P/E Ratio: {stock_data.get('pe_ratio', 'N/A')}
-- Historical Data: {stock_data.get('total_records', 0)} records
-
-**LSTM Prediction Results:**
-- Trend Direction: {prediction_result['trend_analysis']['direction']}
-- Current Price: ${prediction_result['trend_analysis']['current_price']:.2f}
-- Predicted 30-day Price: ${prediction_result['trend_analysis']['predicted_price_30d']:.2f}
-- Expected Change: {prediction_result['trend_analysis']['percentage_change']:.2f}%
-- Price Change: ${prediction_result['trend_analysis']['price_change']:.2f}
-- Model Confidence: {prediction_result['prediction_confidence']}
-
-Please provide a comprehensive stock analysis including:
-1. **Current Market Position**: Evaluate the stock's current valuation and market standing
-2. **Trend Analysis**: Interpret the predicted trend and what it means for investors
-3. **Risk Assessment**: Analyze potential risks and volatility factors
-4. **Investment Insights**: Provide educational insights (not financial advice)
-
-Keep the analysis professional, informative, and include relevant context about the company and market conditions."""
-
-            try:
-                ai_analysis = self.agent.llm.invoke(analysis_prompt)
-                logger.info("AI analysis generated successfully using direct LLM call")
-            except Exception as llm_error:
-                logger.warning(f"Direct LLM analysis failed: {llm_error}")
-                ai_analysis = f"""**Stock Analysis for {symbol} ({stock_data.get('company_name', 'Unknown')})**
-
-**Current Status:**
-- Current Price: ${prediction_result['trend_analysis']['current_price']:.2f}
-- Market Position: Based on {stock_data.get('total_records', 0)} days of data
-
-**LSTM Predictions:**
-- 30-day Forecast: ${prediction_result['trend_analysis']['predicted_price_30d']:.2f}
-- Trend Direction: {prediction_result['trend_analysis']['direction']}
-- Expected Change: {prediction_result['trend_analysis']['percentage_change']:.2f}%
-- Model Confidence: {prediction_result['prediction_confidence']}
-
-**Key Insights:**
-The LSTM model predicts a {prediction_result['trend_analysis']['direction'].lower()} trend with {prediction_result['prediction_confidence'].lower()} confidence. The forecasted price movement represents a {abs(prediction_result['trend_analysis']['percentage_change']):.1f}% change over the next 30 days.
-
-*Note: This analysis is for educational purposes only and should not be considered financial advice.*"""
-            
-            result = {
-                "success": True,
-                "stock_data": stock_data,
-                "predictions": prediction_result,
-                "visualizations": visualization_result,
-                "ai_analysis": ai_analysis,
-                "summary": {
-                    "symbol": symbol,
-                    "company_name": stock_data.get('company_name', 'Unknown'),
-                    "current_price": stock_data.get('current_price', 0),
-                    "predicted_price": prediction_result['trend_analysis']['predicted_price_30d'],
-                    "trend_direction": prediction_result['trend_analysis']['direction'],
-                    "confidence": prediction_result['prediction_confidence'],
-                    "percentage_change": prediction_result['trend_analysis']['percentage_change']
-                }
-            }
-            
-            logger.info(f"Complete analysis workflow finished successfully for {symbol}")
-            return result
-            
-        except Exception as e:
-            logger.error(f"Workflow error for {symbol}: {str(e)}")
-            return {"error": f"Workflow error: {str(e)}"}
-
-    def complete_analysis(self, symbol: str, period: str = "2y") -> Dict[str, Any]:
-        """
-        Perform complete stock analysis workflow
-        """
-        logger.info(f"Starting complete analysis workflow for {symbol} with period {period}")
-        
-        try:
-            # Step 1: Fetch stock data
-            stock_data = self.stock_fetcher._run(symbol=symbol, period=period)
-            
-            if "error" in stock_data:
-                logger.error(f"Stock data fetch failed: {stock_data['error']}")
-                return {"error": stock_data["error"]}
-            
-            logger.info(f"Fetched {stock_data['total_records']} records for {symbol}")
-            
-            # Step 2: Generate predictions
-            prediction_result = self.lstm_predictor._run(
-                data=stock_data["data"],
-                symbol=symbol,
-                prediction_days=30
-            )
-            
-            if "error" in prediction_result:
-                logger.error(f"LSTM prediction failed: {prediction_result['error']}")
-                return {"error": prediction_result["error"]}
-            
-            logger.info("LSTM predictions generated successfully")
-            
-            # Step 3: Create visualizations
-            visualization_result = self.visualizer._run(
-                historical_data=stock_data["data"],
-                predictions=prediction_result["predictions"],
-                future_dates=prediction_result["future_dates"],
-                symbol=symbol,
-                trend_analysis=prediction_result["trend_analysis"]
-            )
-            
-            if "error" in visualization_result:
-                logger.error(f"Visualization creation failed: {visualization_result['error']}")
-                return {"error": visualization_result["error"]}
-            
-            logger.info("Visualizations created successfully")
-            
-            # Step 4: Generate AI analysis using Ollama directly (no tools needed)
-            analysis_prompt = f"""Based on the following stock analysis data for {symbol}:
-
-**Company Information:**
-- Name: {stock_data.get('company_name', 'Unknown')}
-- Current Price: ${stock_data.get('current_price', 'N/A')}
-- Market Cap: {stock_data.get('market_cap', 'N/A')}
-- P/E Ratio: {stock_data.get('pe_ratio', 'N/A')}
-- Historical Data: {stock_data.get('total_records', 0)} records
-
-**LSTM Prediction Results:**
-- Trend Direction: {prediction_result['trend_analysis']['direction']}
-- Current Price: ${prediction_result['trend_analysis']['current_price']:.2f}
-- Predicted 30-day Price: ${prediction_result['trend_analysis']['predicted_price_30d']:.2f}
-- Expected Change: {prediction_result['trend_analysis']['percentage_change']:.2f}%
-- Price Change: ${prediction_result['trend_analysis']['price_change']:.2f}
-- Model Confidence: {prediction_result['prediction_confidence']}
-
-Please provide a comprehensive stock analysis including:
-1. **Current Market Position**: Evaluate the stock's current valuation and market standing
-2. **Trend Analysis**: Interpret the predicted trend and what it means for investors
-3. **Risk Assessment**: Analyze potential risks and volatility factors
-4. **Investment Insights**: Provide educational insights (not financial advice)
-
-Keep the analysis professional, informative, and include relevant context about the company and market conditions."""
-
-            try:
-                ai_analysis = self.agent.llm.invoke(analysis_prompt)
-                logger.info("AI analysis generated successfully using direct LLM call")
-            except Exception as llm_error:
-                logger.warning(f"Direct LLM analysis failed: {llm_error}")
-                ai_analysis = f"""**Stock Analysis for {symbol} ({stock_data.get('company_name', 'Unknown')})**
-
-**Current Status:**
-- Current Price: ${prediction_result['trend_analysis']['current_price']:.2f}
-- Market Position: Based on {stock_data.get('total_records', 0)} days of data
-
-**LSTM Predictions:**
-- 30-day Forecast: ${prediction_result['trend_analysis']['predicted_price_30d']:.2f}
-- Trend Direction: {prediction_result['trend_analysis']['direction']}
-- Expected Change: {prediction_result['trend_analysis']['percentage_change']:.2f}%
-- Model Confidence: {prediction_result['prediction_confidence']}
-
-**Key Insights:**
-The LSTM model predicts a {prediction_result['trend_analysis']['direction'].lower()} trend with {prediction_result['prediction_confidence'].lower()} confidence. The forecasted price movement represents a {abs(prediction_result['trend_analysis']['percentage_change']):.1f}% change over the next 30 days.
-
-*Note: This analysis is for educational purposes only and should not be considered financial advice.*"""
-            
-            result = {
-                "success": True,
-                "stock_data": stock_data,
-                "predictions": prediction_result,
-                "visualizations": visualization_result,
-                "ai_analysis": ai_analysis,
-                "summary": {
-                    "symbol": symbol,
-                    "company_name": stock_data.get('company_name', 'Unknown'),
-                    "current_price": stock_data.get('current_price', 0),
-                    "predicted_price": prediction_result['trend_analysis']['predicted_price_30d'],
-                    "trend_direction": prediction_result['trend_analysis']['direction'],
-                    "confidence": prediction_result['prediction_confidence'],
-                    "percentage_change": prediction_result['trend_analysis']['percentage_change']
-                }
-            }
-            
-            logger.info(f"Complete analysis workflow finished successfully for {symbol}")
-            return result
-            
-        except Exception as e:
-            logger.error(f"Workflow error for {symbol}: {str(e)}")
-            return {"error": f"Workflow error: {str(e)}"}
 
 
 # Pre-defined query templates for common analysis types

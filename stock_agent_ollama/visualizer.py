@@ -7,34 +7,103 @@ from typing import Dict, Any, List
 from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 import streamlit as st
+from data_store import get_data_store
 
 
 class VisualizerInput(BaseModel):
-    historical_data: List[Dict] = Field(description="Historical stock data")
-    predictions: List[float] = Field(description="Predicted prices")
-    future_dates: List[str] = Field(description="Future prediction dates")
     symbol: str = Field(description="Stock symbol")
-    trend_analysis: Dict = Field(description="Trend analysis data")
 
 
 class StockVisualizer(BaseTool):
     name = "stock_visualizer"
     description = """Creates interactive visualizations for stock trends and predictions.
-    Input should be JSON format: {"historical_data": [...], "predictions": [...], "future_dates": [...], "symbol": "AAPL", "trend_analysis": {...}}"""
+    Input should be JSON format: {"symbol": "AAPL"}"""
     args_schema = VisualizerInput
     
-    def _run(self, historical_data: List[Dict], predictions: List[float], 
-             future_dates: List[str], symbol: str, trend_analysis: Dict) -> Dict[str, Any]:
+    def _run(self, symbol: str) -> Dict[str, Any]:
+        # Handle case where agent passes JSON string instead of parsed args
+        if isinstance(symbol, str) and symbol.startswith('{'):
+            import json
+            try:
+                parsed = json.loads(symbol)
+                if 'symbol' in parsed:
+                    symbol = parsed['symbol']
+            except json.JSONDecodeError:
+                return {"error": f"Invalid symbol format: {symbol}"}
+        
         try:
+            # Get data from store
+            data_store = get_data_store()
+            
+            import logging
+            logger = logging.getLogger(__name__)
+            
+            # Get historical data
+            stock_data = data_store.get_stock_data(symbol)
+            if not stock_data:
+                return {"error": f"No historical data found for {symbol}. Please fetch data first."}
+            
+            historical_data = stock_data['data']
+            
+            # Get LSTM predictions from store
+            prediction_key = f"{symbol}_predictions"
+            predictions_data = data_store.get_stock_data(prediction_key)
+            logger.info(f"Prediction data found: {predictions_data is not None}")
+            if predictions_data:
+                logger.info(f"Prediction data keys: {list(predictions_data.keys())}")
+            
             # Convert historical data to DataFrame
             df_hist = pd.DataFrame(historical_data)
-            df_hist['Date'] = pd.to_datetime(df_hist['Date'])
             
-            # Create predictions DataFrame
-            df_pred = pd.DataFrame({
-                'Date': pd.to_datetime(future_dates),
-                'Predicted_Close': predictions
-            })
+            # Debug: Check what columns we have
+            logger.info(f"Historical data columns: {df_hist.columns.tolist()}")
+            logger.info(f"Historical data shape: {df_hist.shape}")
+            
+            # Handle different possible date column names
+            date_column = None
+            for col in ['Date', 'date', 'Datetime', 'datetime']:
+                if col in df_hist.columns:
+                    date_column = col
+                    break
+            
+            if date_column is None:
+                # If no date column found, create one from index if possible
+                if hasattr(df_hist, 'index') and len(df_hist) > 0:
+                    df_hist = df_hist.reset_index()
+                    if 'Date' in df_hist.columns:
+                        date_column = 'Date'
+                    else:
+                        # Create a synthetic date column
+                        logger.warning("No date column found, creating synthetic dates")
+                        df_hist['Date'] = pd.date_range(start='2023-01-01', periods=len(df_hist), freq='D')
+                        date_column = 'Date'
+                else:
+                    return {"error": "No date information found in historical data"}
+            
+            df_hist['Date'] = pd.to_datetime(df_hist[date_column])
+            
+            # Check if we have predictions
+            if predictions_data and 'predictions' in predictions_data:
+                predictions = predictions_data['predictions']
+                future_dates = predictions_data['future_dates']
+                trend_analysis = predictions_data.get('trend_analysis', {})
+                
+                logger.info(f"Found {len(predictions)} predictions for {len(future_dates)} dates")
+                
+                # Create predictions DataFrame
+                df_pred = pd.DataFrame({
+                    'Date': pd.to_datetime(future_dates),
+                    'Predicted_Close': predictions
+                })
+                logger.info(f"Prediction DataFrame shape: {df_pred.shape}")
+                logger.info(f"Prediction DataFrame columns: {df_pred.columns.tolist()}")
+            else:
+                # No predictions available yet
+                logger.warning("No predictions data available for visualization")
+                predictions = []
+                future_dates = []
+                trend_analysis = {}
+                df_pred = pd.DataFrame()
             
             # Create main price chart
             fig_main = go.Figure()
@@ -49,15 +118,16 @@ class StockVisualizer(BaseTool):
                 hovertemplate='Date: %{x}<br>Price: $%{y:.2f}<extra></extra>'
             ))
             
-            # Add predictions
-            fig_main.add_trace(go.Scatter(
-                x=df_pred['Date'],
-                y=df_pred['Predicted_Close'],
-                mode='lines',
-                name='Predicted Price',
-                line=dict(color='red', width=2, dash='dash'),
-                hovertemplate='Date: %{x}<br>Predicted Price: $%{y:.2f}<extra></extra>'
-            ))
+            # Add predictions if available
+            if not df_pred.empty and 'Date' in df_pred.columns and 'Predicted_Close' in df_pred.columns:
+                fig_main.add_trace(go.Scatter(
+                    x=df_pred['Date'],
+                    y=df_pred['Predicted_Close'],
+                    mode='lines',
+                    name='Predicted Price',
+                    line=dict(color='red', width=2, dash='dash'),
+                    hovertemplate='Date: %{x}<br>Predicted Price: $%{y:.2f}<extra></extra>'
+                ))
             
             # Add connection point
             if len(df_hist) > 0 and len(df_pred) > 0:
@@ -117,11 +187,15 @@ class StockVisualizer(BaseTool):
                 z = np.polyfit(x_numeric, recent_data['Close'], 1)
                 p = np.poly1d(z)
                 
+                # Calculate actual trend direction from slope
+                slope = z[0]  # First coefficient is the slope
+                actual_trend_direction = "Upward" if slope > 0 else "Downward"
+                
                 fig_trend.add_trace(go.Scatter(
                     x=recent_data['Date'],
                     y=p(x_numeric),
                     mode='lines',
-                    name=f'Trend Line ({trend_analysis["direction"]})',
+                    name=f'Trend Line ({actual_trend_direction.lower()})',
                     line=dict(color='purple', width=2, dash='dot')
                 ))
             
@@ -147,7 +221,7 @@ class StockVisualizer(BaseTool):
                          'green' if percentage_change > 0 else 'red']
             }
             
-            return {
+            visualization_result = {
                 "main_chart": fig_main.to_json(),
                 "volume_chart": fig_volume.to_json() if fig_volume else None,
                 "trend_chart": fig_trend.to_json(),
@@ -160,7 +234,24 @@ class StockVisualizer(BaseTool):
                 }
             }
             
+            # Store visualization results in data store for app access
+            viz_key = f"{symbol}_visualizations"
+            data_store.store_stock_data(viz_key, visualization_result)
+            logger.info(f"Stored visualization data for {symbol}")
+            
+            return {
+                "symbol": symbol,
+                "status": "success",
+                "message": f"Interactive charts and visualizations created for {symbol}",
+                "insights_count": len(visualization_result["insights"]),
+                "charts_created": ["main_chart", "volume_chart", "trend_chart"]
+            }
+            
         except Exception as e:
+            logger.error(f"Visualization error: {str(e)}")
+            logger.error(f"Error type: {type(e)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return {"error": f"Error creating visualizations: {str(e)}"}
     
     def _generate_insights(self, trend_analysis: Dict, symbol: str) -> List[str]:

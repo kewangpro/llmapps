@@ -7,28 +7,18 @@ from datetime import datetime
 # Add the project root to the Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from stock_agent import StockAnalysisAgent, StockWorkflow, QUERY_TEMPLATES
+from stock_agent import StockAnalysisAgent, QUERY_TEMPLATES
 from visualizer import display_charts
 from config import get_config
+from utils import extract_stock_symbols, extract_stock_symbol
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler('stock_analysis.log')
-    ]
-)
+from config import setup_logging, get_logger
 
-# Set specific loggers to reduce noise
-logging.getLogger("urllib3").setLevel(logging.WARNING)
-logging.getLogger("yfinance").setLevel(logging.WARNING)
-logging.getLogger("peewee").setLevel(logging.WARNING)
-logging.getLogger("absl").setLevel(logging.WARNING)
-logging.getLogger("tensorflow").setLevel(logging.WARNING)
+# Setup logging first, before any other imports that might create loggers
+setup_logging()
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Page configuration
 config = get_config()
@@ -70,16 +60,20 @@ def initialize_session_state():
             logger.error(f"Failed to create StockAnalysisAgent: {e}")
             raise
     
-    if "workflow" not in st.session_state:
-        try:
-            st.session_state.workflow = StockWorkflow(st.session_state.agent)
-            logger.info("StockWorkflow created successfully")
-        except Exception as e:
-            logger.error(f"Failed to create StockWorkflow: {e}")
-            raise
     
     if "analysis_results" not in st.session_state:
         st.session_state.analysis_results = {}
+    
+    if "processing" not in st.session_state:
+        st.session_state.processing = False
+    
+    if "progress_data" not in st.session_state:
+        st.session_state.progress_data = {
+            "step": 0,
+            "total": 0,
+            "message": "",
+            "training_info": None
+        }
 
 def display_chat_message(message: dict):
     """Display a chat message using Streamlit's chat message component"""
@@ -90,79 +84,6 @@ def display_chat_message(message: dict):
         with st.chat_message("assistant"):
             st.write(message["content"])
 
-def extract_stock_symbols(query: str) -> list:
-    """Extract all stock symbols from user query, including comparisons"""    
-    import re
-    
-    symbols = []
-    
-    # Check for comparison patterns first (vs, versus, compared to)
-    comparison_patterns = [
-        r'COMPARE\s+([A-Z]{2,5})\s+VS\s+([A-Z]{2,5})',
-        r'([A-Z]{2,5})\s+VS\s+([A-Z]{2,5})',
-        r'COMPARE\s+([A-Z]{2,5})\s+VERSUS\s+([A-Z]{2,5})',
-        r'([A-Z]{2,5})\s+VERSUS\s+([A-Z]{2,5})',
-        r'COMPARE\s+([A-Z]{2,5})\s+AND\s+([A-Z]{2,5})',
-    ]
-    
-    for pattern in comparison_patterns:
-        matches = re.findall(pattern, query.upper())
-        for match in matches:
-            if isinstance(match, tuple):
-                symbols.extend([s for s in match if len(s) >= 2 and len(s) <= 5 and s.isalpha()])
-            else:
-                if len(match) >= 2 and len(match) <= 5 and match.isalpha():
-                    symbols.append(match)
-    
-    # If we found comparison symbols, return them
-    if symbols:
-        return list(set(symbols))  # Remove duplicates
-    
-    # Single symbol patterns
-    symbol_patterns = [
-        r'(?:investing in|analyze|analysis of|forecast for|predict|evaluate)\s+([A-Z]{2,5})(?:\s+stock|\b)',
-        r'\b([A-Z]{2,5})\s+(?:stock|analysis|company|share|price|trends|predictions)',
-        r'(?:symbol|ticker)\s+([A-Z]{2,5})\b',
-        r'\b([A-Z]{2,5})\s+(?:based on|with|data|information)\b',
-        # Match well-known symbols
-        r'\b(AAPL|GOOGL|MSFT|TSLA|AMZN|NVDA|META|NFLX|CRM|ORCL|IBM|INTC|AMD|QCOM|ADBE|PYPL|NDAQ|COST|AVGO|TXN|HON|UNP|V|MA|JPM|BAC|WFC|GS|MS|C|AXP|BRK|JNJ|PFE|UNH|ABBV|MRK|LLY|TMO|DHR|GILD|BIIB|VRTX|REGN|CELG|XOM|CVX|COP|SLB|HAL|EOG|PXD|MPC|VLO|PSX|KMI|OKE|ENB|TRP|WMB|AMGN|MMM|CAT|DE|BA|LMT|RTX|NOC|GD|LHX|SPGI|MCO|BLK|SCHW|TFC|USB|PNC|COF|CME|ICE|CBOE)\b'
-    ]
-    
-    # Try each pattern for single symbols
-    for pattern in symbol_patterns:
-        match = re.search(pattern, query.upper())
-        if match:
-            symbol = match.group(1)
-            if len(symbol) >= 2 and len(symbol) <= 5 and symbol.isalpha():
-                return [symbol]
-    
-    # Fallback: look for any potential symbols
-    exclude_words = {
-        'THE', 'AND', 'OR', 'OF', 'TO', 'FOR', 'WITH', 'IN', 'ON', 'AT', 'A', 'AN',
-        'STOCK', 'STOCKS', 'ANALYSIS', 'ANALYZE', 'PRICE', 'TREND', 'PREDICT', 'FORECAST',
-        'COMPANY', 'MARKET', 'TRADING', 'INVESTMENT', 'SHARE', 'SHARES', 'DATA', 'CHART',
-        'FUTURE', 'PAST', 'CURRENT', 'TODAY', 'TOMORROW', 'WEEK', 'MONTH', 'YEAR', 'DAY',
-        'BUY', 'SELL', 'HOLD', 'PERFORMANCE', 'VALUE', 'GROWTH', 'EARNINGS', 'REVENUE',
-        'COMPREHENSIVE', 'PROVIDE', 'GIVE', 'SHOW', 'TELL', 'WHAT', 'HOW', 'WHEN', 'WHERE',
-        'INCLUDING', 'TRENDS', 'PREDICTIONS', 'INSIGHTS', 'RECOMMENDATION', 'ADVICE',
-        'RISK', 'RISKS', 'PROFILE', 'ASSESSMENT', 'EVALUATE', 'EVALUATION', 'BASED', 
-        'HISTORICAL', 'INVESTING', 'INVESTOR', 'INVESTORS', 'COMPARE', 'COMPARISON'
-    }
-    
-    words = query.upper().split()
-    for word in words:
-        clean_word = ''.join(c for c in word if c.isalpha())
-        if (len(clean_word) >= 2 and len(clean_word) <= 5 and 
-            clean_word.isalpha() and 
-            clean_word not in exclude_words):
-            return [clean_word]
-    
-    return []
-
-def extract_stock_symbol(query: str) -> str:
-    """Extract single stock symbol from user query (for backward compatibility)"""
-    symbols = extract_stock_symbols(query)
-    return symbols[0] if symbols else None
 
 def process_user_query_with_progress(prompt: str, update_progress_callback) -> str:
     """Process a user query with progress updates"""
@@ -194,19 +115,20 @@ def process_user_query_with_progress(prompt: str, update_progress_callback) -> s
             
             logger.info(f"🔧 Running analysis for {sym}")
             try:
-                # Create a custom workflow call with progress updates
+                # Use agent for comparison analysis
                 current_step += 1
-                update_progress_callback(current_step, total_steps, f"Training LSTM model for {sym}...")
+                update_progress_callback(current_step, total_steps, f"Agent analyzing {sym}...")
                 
-                workflow_results = st.session_state.workflow.complete_analysis(sym)
+                agent_query = f"Analyze {sym} stock with historical data, LSTM predictions, and visualizations"
+                agent_results = st.session_state.agent.analyze_stock(agent_query)
                 
                 current_step += 1  
-                update_progress_callback(current_step, total_steps, f"Generating {sym} predictions and charts...")
+                update_progress_callback(current_step, total_steps, f"Processing {sym} results...")
                 
-                if workflow_results.get("success"):
-                    comparison_results[sym] = workflow_results
-                    summary = workflow_results["summary"]
-                    comparison_responses.append(f"""**{sym}**: ${summary.get('current_price', 0):.2f} → ${summary.get('predicted_price', 0):.2f} ({summary.get('percentage_change', 0):+.2f}%)""")
+                if agent_results.get("success"):
+                    # Store agent response for comparison
+                    comparison_results[sym] = {"ai_analysis": agent_results["response"], "success": True}
+                    comparison_responses.append(f"""**{sym}**: Agent analysis completed""")
                 else:
                     comparison_responses.append(f"**{sym}**: Analysis failed")
             except Exception as e:
@@ -226,9 +148,8 @@ def process_user_query_with_progress(prompt: str, update_progress_callback) -> s
 {comparison_responses[0]}
 {comparison_responses[1]}
 
-**Performance Comparison:**
-- **{sym1}**: {r1['summary']['trend_direction']} trend ({r1['summary']['confidence']} confidence)
-- **{sym2}**: {r2['summary']['trend_direction']} trend ({r2['summary']['confidence']} confidence)
+**Agent Analysis Results:**
+Both stocks have been analyzed using AI agent orchestration with LSTM predictions and technical analysis.
 
 📈 Detailed analysis for each stock is available below."""
             
@@ -242,51 +163,99 @@ def process_user_query_with_progress(prompt: str, update_progress_callback) -> s
             response = f"❌ **Comparison Failed**\n\nCould only analyze {len(comparison_results)} of {len(symbols)} requested stocks."
             
     elif symbol and has_analysis_keyword:
-        logger.info(f"Starting comprehensive analysis for {symbol}")
+        logger.info(f"Starting agent-only analysis for {symbol}")
         
-        total_steps = 5
+        total_steps = 3
         current_step = 0
         
-        # Try agent first (to show agent thoughts), then fallback to workflow
-        agent_response = None
-        try:
-            # Skip agent analysis for now due to ReAct parsing issues
-            # The workflow provides comprehensive analysis with LSTM predictions
-            logger.info("Skipping agent analysis - using workflow for reliable results")
-            
-        except Exception as agent_error:
-            logger.warning(f"⚠️ Agent setup failed: {agent_error}")
+        # Agent-only orchestration
+        logger.info(f"🤖 Using AI agent to orchestrate analysis of {symbol}")
+        print(f"\n🤖 AI AGENT ORCHESTRATING ANALYSIS FOR {symbol}")
+        print("="*60)
+        print("🧠 Agent will decide the sequence and call tools as needed...")
+        print("="*60)
         
-        # Always run workflow for charts and data (essential functionality)
-        current_step += 1
-        update_progress_callback(current_step, total_steps, f"Fetching {symbol} historical data...")
+        # Agent will handle all progress updates during execution
         
-        logger.info(f"🔧 Running workflow analysis for {symbol}")
         try:
-            workflow_results = st.session_state.workflow.complete_analysis_with_progress(symbol, update_progress_callback, current_step, total_steps)
+            print(f"\n🎯 AGENT STARTING ANALYSIS")
+            print("="*50)
+            print(f"🧠 Agent will reason about: '{prompt}'")
+            print("="*50)
             
-            if workflow_results.get("success"):
-                st.session_state.analysis_results = workflow_results
-                workflow_response = workflow_results["ai_analysis"]
-                logger.info("✅ Workflow analysis completed successfully")
+            # Set progress callback for the agent
+            st.session_state.agent.set_progress_callback(update_progress_callback)
+            
+            # Get the current sidebar period selection (if available)
+            period_from_sidebar = getattr(st.session_state, 'current_period', None)
+            if period_from_sidebar:
+                st.session_state.agent.output_parser.set_fallback_period(period_from_sidebar)
+                st.session_state.agent.callback_handler.update_period(period_from_sidebar)
+                logger.info(f"Using sidebar period selection: {period_from_sidebar}")
+            
+            # Let agent reason about the user's actual question and decide what to do
+            agent_result = st.session_state.agent.analyze_stock(prompt)
+            
+            if agent_result.get("success"):
+                agent_response = agent_result["response"]
+                logger.info("✅ Agent orchestration completed successfully")
+                print(f"\n✅ AGENT ORCHESTRATION COMPLETED")
+                print("="*50)
                 
-                # Create a concise chat response, detailed analysis goes in expander
-                summary = workflow_results["summary"]
-                response = f"""✅ **Analysis Complete for {symbol}**
-
-📊 **Key Metrics:**
-- Current Price: ${summary.get('current_price', 0):.2f}
-- 30-Day Prediction: ${summary.get('predicted_price', 0):.2f}
-- Expected Change: {summary.get('percentage_change', 0):.2f}%
-- Trend: {summary.get('trend_direction', 'Unknown')} ({summary.get('confidence', 'Unknown')} confidence)
-
-📈 Interactive charts and detailed AI analysis are available below."""
+                # Update progress to completion
+                update_progress_callback(total_steps, total_steps, f"✅ {symbol} analysis complete!")
                 
-                logger.info("Using concise summary response")
-                    
+                # Get visualization results from data store if available
+                from data_store import get_data_store
+                data_store = get_data_store()
+                
+                # Get prediction data for summary metrics (try both key formats)
+                prediction_key = f"{symbol}_PREDICTIONS"
+                predictions_data = data_store.get_stock_data(prediction_key)
+                if not predictions_data:
+                    prediction_key = f"{symbol}_predictions"
+                    predictions_data = data_store.get_stock_data(prediction_key)
+                
+                # Try to get visualization data (try both key formats)
+                viz_key = f"{symbol}_VISUALIZATIONS"
+                viz_data = data_store.get_stock_data(viz_key)
+                if not viz_data:
+                    viz_key = f"{symbol}_visualizations"
+                    viz_data = data_store.get_stock_data(viz_key)
+                
+                # Build summary from prediction data
+                summary = {
+                    "symbol": symbol,
+                    "analysis_type": "Agent Orchestrated",
+                    "confidence": "Agent Determined"
+                }
+                
+                if predictions_data and 'trend_analysis' in predictions_data:
+                    trend = predictions_data['trend_analysis']
+                    summary.update({
+                        "current_price": trend.get('current_price', 0),
+                        "predicted_price": trend.get('predicted_price_30d', 0),
+                        "percentage_change": trend.get('percentage_change', 0),
+                        "confidence": predictions_data.get('prediction_confidence', 'Unknown')
+                    })
+                
+                # Store results for display
+                st.session_state.analysis_results = {
+                    "success": True,
+                    "agent_orchestrated": True,
+                    "ai_analysis": agent_response,
+                    "summary": summary,
+                    "visualizations": viz_data  # Include visualization data
+                }
+                
+                # Create response for chat
+                response = f"✅ **{symbol} Analysis Complete**\n\n{agent_response}"
+                
             else:
-                error_msg = workflow_results.get('error', 'Unknown error')
-                logger.error(f"Workflow failed: {error_msg}")
+                logger.error(f"❌ Agent orchestration failed: {agent_result.get('error', 'Unknown error')}")
+                print(f"\n❌ AGENT ORCHESTRATION FAILED")
+                
+                error_msg = agent_result.get('error', 'Unknown error')
                 
                 # Provide helpful error message
                 if "No data found" in error_msg:
@@ -304,10 +273,9 @@ I couldn't find data for this symbol. This could be because:
                 else:
                     response = f"❌ **Analysis Error for {symbol}**\n\n{error_msg}"
                         
-        except Exception as workflow_error:
-            logger.error(f"Workflow exception: {workflow_error}")
-            
-            response = f"❌ **Analysis Error for {symbol}**\n\nI encountered an error while analyzing the stock: {str(workflow_error)}"
+        except Exception as agent_error:
+            logger.error(f"Agent exception: {agent_error}")
+            response = f"❌ **Analysis Error for {symbol}**\n\nI encountered an error while analyzing the stock: {str(agent_error)}"
     elif has_analysis_keyword and not symbol:
         # User wants analysis but we couldn't extract a symbol
         response = """I can see you want a stock analysis, but I couldn't identify a specific stock symbol in your query.
@@ -374,11 +342,12 @@ def process_user_query(prompt: str) -> str:
         for sym in symbols[:2]:  # Limit to 2 stocks for comparison
             logger.info(f"🔧 Running analysis for {sym}")
             try:
-                workflow_results = st.session_state.workflow.complete_analysis(sym)
-                if workflow_results.get("success"):
-                    comparison_results[sym] = workflow_results
-                    summary = workflow_results["summary"]
-                    comparison_responses.append(f"""**{sym}**: ${summary.get('current_price', 0):.2f} → ${summary.get('predicted_price', 0):.2f} ({summary.get('percentage_change', 0):+.2f}%)""")
+                # Use agent to analyze each stock in the comparison
+                agent_query = f"Analyze {sym} stock performance, trends, and predictions"
+                agent_results = st.session_state.agent.analyze_stock(agent_query)
+                if agent_results.get("success"):
+                    comparison_results[sym] = {"ai_analysis": agent_results["response"], "success": True}
+                    comparison_responses.append(f"""**{sym}**: Agent analysis completed""")
                 else:
                     comparison_responses.append(f"**{sym}**: Analysis failed")
             except Exception as e:
@@ -395,9 +364,8 @@ def process_user_query(prompt: str) -> str:
 {comparison_responses[0]}
 {comparison_responses[1]}
 
-**Performance Comparison:**
-- **{sym1}**: {r1['summary']['trend_direction']} trend ({r1['summary']['confidence']} confidence)
-- **{sym2}**: {r2['summary']['trend_direction']} trend ({r2['summary']['confidence']} confidence)
+**Agent Analysis Results:**
+Both stocks have been analyzed using AI agent orchestration with LSTM predictions and technical analysis.
 
 📈 Detailed analysis for each stock is available below."""
             
@@ -411,50 +379,45 @@ def process_user_query(prompt: str) -> str:
             response = f"❌ **Comparison Failed**\n\nCould only analyze {len(comparison_results)} of {len(symbols)} requested stocks."
             
     elif symbol and has_analysis_keyword:
-        logger.info(f"Starting comprehensive analysis for {symbol}")
+        logger.info(f"Starting agent-only analysis for {symbol}")
         
-        # Try agent first (to show agent thoughts), then fallback to workflow
-        agent_response = None
-        logger.info(f"🚀 Attempting agent analysis for {symbol} (agent thoughts will be visible)")
-        
-        # Create a simple query that's more likely to work with ReAct format
-        simple_query = f"What can you tell me about {symbol} stock?"
+        # Agent-only orchestration
+        logger.info(f"🤖 Using AI agent to orchestrate analysis of {symbol}")
         
         try:
-            # Skip agent analysis for now due to ReAct parsing issues
-            # The workflow provides comprehensive analysis with LSTM predictions
-            logger.info("Skipping agent analysis - using workflow for reliable results")
+            # Get the current sidebar period selection (if available)
+            period_from_sidebar = getattr(st.session_state, 'current_period', None)
+            if period_from_sidebar:
+                st.session_state.agent.output_parser.set_fallback_period(period_from_sidebar)
+                st.session_state.agent.callback_handler.update_period(period_from_sidebar)
+                logger.info(f"Using sidebar period selection: {period_from_sidebar}")
             
-        except Exception as agent_error:
-            logger.warning(f"⚠️ Agent setup failed: {agent_error}")
-        
-        # Always run workflow for charts and data (essential functionality)
-        logger.info(f"🔧 Running workflow analysis for {symbol}")
-        try:
-            workflow_results = st.session_state.workflow.complete_analysis(symbol)
+            # Let agent reason about the user's actual question and decide what to do
+            agent_result = st.session_state.agent.analyze_stock(prompt)
             
-            if workflow_results.get("success"):
-                st.session_state.analysis_results = workflow_results
-                workflow_response = workflow_results["ai_analysis"]
-                logger.info("✅ Workflow analysis completed successfully")
+            if agent_result.get("success"):
+                agent_response = agent_result["response"]
+                logger.info("✅ Agent orchestration completed successfully")
                 
-                # Create a concise chat response, detailed analysis goes in expander
-                summary = workflow_results["summary"]
-                response = f"""✅ **Analysis Complete for {symbol}**
-
-📊 **Key Metrics:**
-- Current Price: ${summary.get('current_price', 0):.2f}
-- 30-Day Prediction: ${summary.get('predicted_price', 0):.2f}
-- Expected Change: {summary.get('percentage_change', 0):.2f}%
-- Trend: {summary.get('trend_direction', 'Unknown')} ({summary.get('confidence', 'Unknown')} confidence)
-
-📈 Interactive charts and detailed AI analysis are available below."""
+                # Store results for display
+                st.session_state.analysis_results = {
+                    "success": True,
+                    "agent_orchestrated": True,
+                    "ai_analysis": agent_response,
+                    "summary": {
+                        "symbol": symbol,
+                        "analysis_type": "Agent Orchestrated",
+                        "confidence": "Agent Determined"
+                    }
+                }
                 
-                logger.info("Using concise summary response")
-                    
+                # Create response for chat
+                response = f"✅ **{symbol} Analysis Complete**\n\n{agent_response}"
+                
             else:
-                error_msg = workflow_results.get('error', 'Unknown error')
-                logger.error(f"Workflow failed: {error_msg}")
+                logger.error(f"❌ Agent orchestration failed: {agent_result.get('error', 'Unknown error')}")
+                
+                error_msg = agent_result.get('error', 'Unknown error')
                 
                 # Provide helpful error message
                 if "No data found" in error_msg:
@@ -472,10 +435,9 @@ I couldn't find data for this symbol. This could be because:
                 else:
                     response = f"❌ **Analysis Error for {symbol}**\n\n{error_msg}"
                         
-        except Exception as workflow_error:
-            logger.error(f"Workflow exception: {workflow_error}")
-            
-            response = f"❌ **Analysis Error for {symbol}**\n\nI encountered an error while analyzing the stock: {str(workflow_error)}"
+        except Exception as agent_error:
+            logger.error(f"Agent exception: {agent_error}")
+            response = f"❌ **Analysis Error for {symbol}**\n\nI encountered an error while analyzing the stock: {str(agent_error)}"
     elif has_analysis_keyword and not symbol:
         # User wants analysis but we couldn't extract a symbol
         response = """I can see you want a stock analysis, but I couldn't identify a specific stock symbol in your query.
@@ -530,16 +492,26 @@ def main():
     
     # Sidebar
     with st.sidebar:
-        st.header("🛠️ Analysis Tools")
-        
         # Quick analysis options
         st.subheader("Quick Analysis")
         quick_symbol = st.text_input("Stock Symbol", placeholder="e.g., AAPL, GOOGL, TSLA")
         
+        # Analysis parameters
+        col1, col2 = st.columns(2)
+        with col1:
+            past_data_period = st.selectbox("Past Data", ["2y", "5y"], index=0)
+        with col2:
+            future_prediction = st.selectbox("Prediction", ["30 days", "1 week"], index=0)
+        
+        # Store the selected period in session state for agent access
+        st.session_state.current_period = past_data_period
+        
         if st.button("🔍 Quick Analysis", use_container_width=True):
             if quick_symbol:
                 logger.info(f"Quick analysis requested for symbol: {quick_symbol}")
-                query = f"Analyze {quick_symbol.upper()} stock with trends and predictions"
+                # Convert future prediction to days
+                prediction_days = 30 if future_prediction == "30 days" else 7
+                query = f"Analyze {quick_symbol.upper()} stock using {past_data_period} of historical data and predict {prediction_days} days ahead"
                 st.session_state.messages.append({"role": "user", "content": query})
                 st.rerun()
             else:
@@ -572,34 +544,149 @@ def main():
     # Check if there are unprocessed messages (from button clicks)
     if len(st.session_state.messages) > 0:
         last_message = st.session_state.messages[-1]
-        if last_message["role"] == "user":
+        if last_message["role"] == "user" and not st.session_state.processing:
             # There's an unprocessed user message, process it
-            # Create a progress container
-            progress_container = st.empty()
+            message_content = last_message["content"]
+            symbols = extract_stock_symbols(message_content)
+            analysis_keywords = ['analyze', 'analysis', 'predict', 'forecast', 'trend', 'future', 'compare', 'comparison', 'vs', 'versus']
+            has_analysis_keyword = any(keyword in message_content.lower() for keyword in analysis_keywords)
+            valid_symbol = symbols and has_analysis_keyword and len(symbols[0]) >= 2 and len(symbols[0]) <= 5 and symbols[0].isalpha()
+            symbol_display = f" for {symbols[0]}" if valid_symbol else ""
             
-            with progress_container.container():
-                st.info("🤔 **Analyzing stock data and generating predictions...**")
-                progress_bar = st.progress(0)
-                status_text = st.empty()
-                
-                # Update progress during processing
-                def update_progress(step, total_steps, message):
-                    progress = step / total_steps
-                    progress_bar.progress(progress)
-                    status_text.text(f"Step {step}/{total_steps}: {message}")
-                
-                # Process the query with progress updates
-                response = process_user_query_with_progress(last_message["content"], update_progress)
+            # Set processing flag
+            st.session_state.processing = True
             
-            # Clear the progress display
-            progress_container.empty()
+            # Add immediate "thinking" message with detailed progress
+            thinking_message = f"""🤔 **Analyzing{symbol_display}...**
+
+**Expected Steps:**
+1. 📊 Fetch historical stock data
+2. 🧠 Train LSTM ensemble models (this takes 3-5 minutes)
+3. 📈 Create interactive visualizations
+4. 💡 Generate AI analysis
+
+⏳ **Status:** Starting analysis...
+
+*Please wait while the AI agent works...*"""
+            st.session_state.messages.append({"role": "assistant", "content": thinking_message})
             
-            # Add assistant response
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            logger.info("Analysis completed and response added")
-            
-            # Rerun to update the display
+            # Show the thinking message immediately
             st.rerun()
+            
+        elif st.session_state.processing and len(st.session_state.messages) > 1:
+            # Continue processing the last user message
+            message_content = None
+            for msg in reversed(st.session_state.messages):
+                if msg["role"] == "user":
+                    message_content = msg["content"]
+                    break
+            
+            if message_content:
+                # Create dedicated progress containers BEFORE processing starts
+                progress_container = st.container()
+                
+                with progress_container:
+                    st.markdown("### 🔄 Analysis in Progress")
+                    
+                    # Create progress elements that can be updated
+                    progress_bar = st.progress(0, text="Initializing...")
+                    status_text = st.empty()
+                    step_details = st.empty()
+                    
+                    # Training progress (shown when LSTM starts)
+                    training_container = st.container()
+                    training_progress = None
+                    training_status = None
+                
+                def update_progress_ui(step, total, message):
+                    """Update the progress UI elements"""
+                    nonlocal training_progress, training_status
+                    
+                    # Determine step name and details
+                    if step == 1:
+                        step_name = "📊 Fetching Historical Data"
+                        progress_text = "Downloading stock data from yfinance..."
+                    elif step == 2:
+                        step_name = "🧠 LSTM Neural Network Training"
+                        progress_text = "Training ensemble models for price prediction..."
+                    elif step == 3:
+                        step_name = "📈 Creating Visualizations"
+                        progress_text = "Generating interactive charts and analysis..."
+                    else:
+                        step_name = "🔄 Processing"
+                        progress_text = "Working on your analysis..."
+                    
+                    # Update main progress bar with detailed info
+                    progress_value = step / total if total > 0 else 0
+                    progress_bar.progress(progress_value, text=f"{step_name} ({step}/{total})")
+                    
+                    # Update status with more context
+                    status_text.markdown(f"**{step_name}**")
+                    
+                    # Show detailed current activity
+                    step_details.markdown(f"💡 {progress_text}")
+                    
+                    # Show training progress when LSTM training starts
+                    if "Training" in message and training_progress is None:
+                        with training_container:
+                            st.markdown("**🧠 LSTM Ensemble Training Details:**")
+                            training_progress = st.progress(0, text="Initializing neural networks...")
+                            training_status = st.empty()
+                    
+                    # Update training progress with detailed info
+                    if training_progress and ("Model" in message or "Epoch" in message):
+                        # Parse training details
+                        model_info = ""
+                        loss_info = ""
+                        
+                        if "Model" in message:
+                            model_part = message.split("Model")[1].split("•")[0].strip()
+                            model_info = f"🔬 **Ensemble Model {model_part}**"
+                        
+                        if "Loss:" in message and "Val Loss:" in message:
+                            loss_part = message.split("Loss:")[1].split("•")[0].strip()
+                            val_loss_part = message.split("Val Loss:")[1].strip()
+                            loss_info = f"📉 Training Loss: {loss_part} | Validation Loss: {val_loss_part}"
+                        
+                        training_status.markdown(f"{model_info}\n\n{loss_info}")
+                        
+                        # Update epoch progress bar
+                        if "Epoch" in message and "/" in message:
+                            try:
+                                parts = message.split("Epoch")[-1].strip()
+                                if "/" in parts:
+                                    current = int(parts.split("/")[0].strip())
+                                    total_epochs = int(parts.split("/")[1].split("•")[0].strip())
+                                    epoch_progress = current / total_epochs
+                                    
+                                    # Calculate overall training progress (across all 3 models)
+                                    if "Model 1/3" in message:
+                                        overall_progress = epoch_progress / 3
+                                    elif "Model 2/3" in message:
+                                        overall_progress = (1 + epoch_progress) / 3
+                                    elif "Model 3/3" in message:
+                                        overall_progress = (2 + epoch_progress) / 3
+                                    else:
+                                        overall_progress = epoch_progress
+                                    
+                                    training_progress.progress(overall_progress, text=f"Epoch {current}/{total_epochs} - Overall Training: {overall_progress*100:.1f}%")
+                            except:
+                                pass
+                
+                # Process the query with real progress updates
+                response = process_user_query_with_progress(message_content, update_progress_ui)
+                
+                # Clear progress displays and show completion
+                progress_container.empty()
+                st.success("✅ Analysis completed successfully!")
+                
+                # Replace thinking message with actual response
+                st.session_state.messages[-1] = {"role": "assistant", "content": response}
+                st.session_state.processing = False
+                logger.info("Analysis completed and response added")
+                
+                # Rerun to update the display
+                st.rerun()
     
     # Main chat interface
     chat_container = st.container()
@@ -612,73 +699,66 @@ def main():
         # Display analysis results if available
         if st.session_state.analysis_results:
             st.divider()
-            st.subheader("📊 Analysis Results")
             
             results = st.session_state.analysis_results
             
-            # Check if this is comparison mode
-            if results.get("comparison_mode"):
-                # Display comparison results for both stocks
-                stocks = results["stocks"]
-                symbols = results["symbols"]
+            # Put analysis results and charts in an expander
+            with st.expander("📊 Analysis Results & Charts", expanded=True):
                 
-                # Create tabs for each stock
-                tab1, tab2 = st.tabs([f"📈 {symbols[0]}", f"📈 {symbols[1]}"])
+                # Check if this is comparison mode
+                if results.get("comparison_mode"):
+                    # Display comparison results for both stocks
+                    stocks = results["stocks"]
+                    symbols = results["symbols"]
                 
-                for i, (tab, symbol) in enumerate(zip([tab1, tab2], symbols)):
-                    with tab:
-                        stock_results = stocks[symbol]
-                        
-                        # Display summary metrics for this stock
-                        if "summary" in stock_results:
-                            summary = stock_results["summary"]
-                            col1, col2, col3, col4 = st.columns(4)
-                            
-                            with col1:
-                                st.metric("Current Price", f"${summary.get('current_price', 0):.2f}")
-                            with col2:
-                                st.metric("Predicted Price", f"${summary.get('predicted_price', 0):.2f}")
-                            with col3:
-                                change = summary.get('percentage_change', 0)
-                                st.metric("Expected Change", f"{change:.2f}%", delta=f"{change:.2f}%")
-                            with col4:
-                                st.metric("Confidence", summary.get('confidence', 'Unknown'))
-                        
-                        # Display visualizations for this stock
-                        if "visualizations" in stock_results and "chart_objects" in stock_results["visualizations"]:
-                            st.subheader(f"📈 {symbol} Price Charts")
-                            display_charts(stock_results["visualizations"])
-                        
-                        # Display AI insights for this stock
-                        if "ai_analysis" in stock_results:
-                            with st.expander(f"🤖 {symbol} AI Analysis", expanded=False):
-                                st.markdown(stock_results["ai_analysis"])
-            else:
-                # Single stock mode (existing logic)
-                # Display summary metrics
-                if "summary" in results:
-                    summary = results["summary"]
-                    col1, col2, col3, col4 = st.columns(4)
+                    # Create tabs for each stock
+                    tab1, tab2 = st.tabs([f"📈 {symbols[0]}", f"📈 {symbols[1]}"])
                     
-                    with col1:
-                        st.metric("Current Price", f"${summary.get('current_price', 0):.2f}")
-                    with col2:
-                        st.metric("Predicted Price", f"${summary.get('predicted_price', 0):.2f}")
-                    with col3:
-                        change = summary.get('percentage_change', 0)
-                        st.metric("Expected Change", f"{change:.2f}%", delta=f"{change:.2f}%")
-                    with col4:
-                        st.metric("Confidence", summary.get('confidence', 'Unknown'))
-                
-                # Display visualizations
-                if "visualizations" in results and "chart_objects" in results["visualizations"]:
-                    st.subheader("📈 Price Charts")
-                    display_charts(results["visualizations"])
-                
-                # Display AI insights
-                if "ai_analysis" in results:
-                    with st.expander("🤖 AI Analysis", expanded=False):
-                        st.markdown(results["ai_analysis"])
+                    for i, (tab, symbol) in enumerate(zip([tab1, tab2], symbols)):
+                        with tab:
+                            stock_results = stocks[symbol]
+                            
+                            # Display summary metrics for this stock
+                            if "summary" in stock_results:
+                                summary = stock_results["summary"]
+                                col1, col2, col3, col4 = st.columns(4)
+                                
+                                with col1:
+                                    st.metric("Current Price", f"${summary.get('current_price', 0):.2f}")
+                                with col2:
+                                    st.metric("Predicted Price", f"${summary.get('predicted_price', 0):.2f}")
+                                with col3:
+                                    change = summary.get('percentage_change', 0)
+                                    st.metric("Expected Change", f"{change:.2f}%", delta=f"{change:.2f}%")
+                                with col4:
+                                    st.metric("Confidence", summary.get('confidence', 'Unknown'))
+                            
+                            # Display visualizations for this stock
+                            if "visualizations" in stock_results and "chart_objects" in stock_results["visualizations"]:
+                                st.subheader(f"📈 {symbol} Price Charts")
+                                display_charts(stock_results["visualizations"])
+                            
+                else:
+                    # Single stock mode (existing logic)
+                    # Display summary metrics
+                    if "summary" in results:
+                        summary = results["summary"]
+                        col1, col2, col3, col4 = st.columns(4)
+                        
+                        with col1:
+                            st.metric("Current Price", f"${summary.get('current_price', 0):.2f}")
+                        with col2:
+                            st.metric("Predicted Price", f"${summary.get('predicted_price', 0):.2f}")
+                        with col3:
+                            change = summary.get('percentage_change', 0)
+                            st.metric("Expected Change", f"{change:.2f}%", delta=f"{change:.2f}%")
+                        with col4:
+                            st.metric("Confidence", summary.get('confidence', 'Unknown'))
+                    
+                    # Display visualizations
+                    if "visualizations" in results and results["visualizations"] and "chart_objects" in results["visualizations"]:
+                        st.subheader("📈 Price Charts")
+                        display_charts(results["visualizations"])
     
     # Chat input
     if prompt := st.chat_input("Ask about any stock (e.g., 'Analyze AAPL stock' or 'Compare TSLA vs NVDA')"):
