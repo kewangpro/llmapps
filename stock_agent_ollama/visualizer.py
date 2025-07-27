@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List
 from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
-import streamlit as st
 from data_store import get_data_store
 
 
@@ -152,20 +151,33 @@ class StockVisualizer(BaseTool):
             # Create volume chart if available
             fig_volume = None
             if 'Volume' in df_hist.columns:
-                fig_volume = go.Figure()
-                fig_volume.add_trace(go.Bar(
-                    x=df_hist['Date'],
-                    y=df_hist['Volume'],
-                    name='Volume',
-                    marker_color='lightblue'
-                ))
-                fig_volume.update_layout(
-                    title=f'{symbol} Trading Volume',
-                    xaxis_title='Date',
-                    yaxis_title='Volume',
-                    template='plotly_white',
-                    height=300
-                )
+                # Check if volume data has meaningful values
+                volume_data = df_hist['Volume']
+                non_zero_volume = volume_data[volume_data > 0]
+                logger.info(f"Volume data: total rows={len(volume_data)}, non-zero rows={len(non_zero_volume)}, max volume={volume_data.max()}")
+                
+                if len(non_zero_volume) > 0:
+                    fig_volume = go.Figure()
+                    fig_volume.add_trace(go.Bar(
+                        x=df_hist['Date'],
+                        y=df_hist['Volume'],
+                        name='Volume',
+                        marker_color='#1f77b4',
+                        marker_line=dict(width=1, color='#1f77b4'),
+                        opacity=1.0
+                    ))
+                    fig_volume.update_layout(
+                        title=f'{symbol} Trading Volume',
+                        xaxis_title='Date',
+                        yaxis_title='Volume',
+                        template='plotly_white',
+                        height=300
+                    )
+                    logger.info(f"Created volume chart for {symbol}")
+                else:
+                    logger.warning(f"No meaningful volume data found for {symbol}")
+            else:
+                logger.warning(f"No Volume column found in data for {symbol}. Available columns: {df_hist.columns.tolist()}")
             
             # Create trend analysis chart
             fig_trend = go.Figure()
@@ -284,36 +296,17 @@ class StockVisualizer(BaseTool):
         return self._run(historical_data, predictions, future_dates, symbol, trend_analysis)
 
 
-# Utility functions for Streamlit integration
-def display_charts(visualization_data: Dict):
-    """Display charts in Streamlit"""
+# Utility functions for Panel integration
+def get_chart_objects(visualization_data: Dict):
+    """Get chart objects for Panel display"""
     if "chart_objects" in visualization_data:
-        charts = visualization_data["chart_objects"]
-        
-        # Main chart
-        if charts.get("main"):
-            st.plotly_chart(charts["main"], use_container_width=True)
-        
-        # Volume chart
-        if charts.get("volume"):
-            st.plotly_chart(charts["volume"], use_container_width=True)
-        
-        # Trend chart
-        if charts.get("trend"):
-            st.plotly_chart(charts["trend"], use_container_width=True)
+        return visualization_data["chart_objects"]
+    return {}
 
-def display_summary_metrics(summary_data: Dict):
-    """Display summary metrics in Streamlit"""
-    if summary_data:
-        col1, col2, col3, col4 = st.columns(4)
-        cols = [col1, col2, col3, col4]
-        
-        for i, (metric, value, color) in enumerate(zip(
-            summary_data['Metric'], 
-            summary_data['Value'], 
-            summary_data['Color']
-        )):
-            with cols[i]:
-                st.metric(label=metric, value=value)
+def get_summary_metrics(visualization_data: Dict):
+    """Get summary metrics for Panel display"""
+    if "summary_metrics" in visualization_data:
+        return visualization_data["summary_metrics"]
+    return {}
 
 import numpy as np

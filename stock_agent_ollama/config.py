@@ -20,10 +20,10 @@ CONFIG = {
         "default_period": "2y",
         "supported_periods": ["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"]
     },
-    "streamlit": {
-        "page_title": "Stock Analysis AI",
-        "page_icon": "📈",
-        "layout": "wide"
+    "panel": {
+        "port": 5007,
+        "title": "Stock Analysis AI",
+        "autoreload": True
     }
 }
 

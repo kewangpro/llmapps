@@ -1,17 +1,17 @@
 # Stock Analysis AI 📈
 
-A comprehensive stock analysis system powered by **Ollama (Gemma3)**, **LangChain ReAct agents**, **LSTM ensemble neural networks**, and **Streamlit** for intelligent stock prediction and analysis with real-time progress tracking.
+A comprehensive stock analysis system powered by **Ollama (Gemma3)**, **LangChain ReAct agents**, **LSTM ensemble neural networks**, and **Panel** for intelligent stock prediction and analysis with real-time progress tracking.
 
 ## Features
 
 🤖 **Intelligent ReAct Agent**: LangChain ReAct agent with Gemma3 that plans and executes analysis tasks  
 🧠 **LSTM Ensemble Models**: 3-model ensemble for robust 30-day stock price forecasting  
-📈 **Interactive Visualizations**: Dynamic charts with historical data, predictions, and volume analysis  
-💬 **Chat Interface**: Natural language interaction with real-time progress updates  
-⚡ **Real-Time Progress**: Live training progress with epoch updates and loss tracking  
+📈 **Interactive Visualizations**: Dynamic Plotly charts with historical data, predictions, and volume analysis  
+💬 **Modern UI Interface**: Panel-based web application with real-time updates and responsive design  
+⚡ **Real-Time Progress**: Live training progress with epoch-by-epoch loss tracking and visualization  
 🎯 **Smart Query Processing**: Automatic stock symbol extraction and intelligent tool selection  
 📊 **Comprehensive Analysis**: Complete metrics, trend analysis, and confidence scores  
-🎛️ **Organized UI**: Expandable results section with metrics and interactive charts  
+🎛️ **Three-Column Layout**: Input controls, chat interface, and analysis results with interactive charts  
 
 ## Architecture
 
@@ -45,19 +45,19 @@ The system uses a **ReAct (Reasoning + Acting) agent** that intelligently plans 
 ### Data Flow
 
 ```
-User Query → Streamlit Chat Interface → Symbol Extraction
+User Input → Panel Interface → Symbol Extraction
                     ↓
     ReAct Agent (Gemma3) → Query Analysis → Tool Planning
                     ↓
-         Dynamic Tool Execution with Progress Tracking
+         Dynamic Tool Execution with Real-Time Progress
                     ↓
     [Stock Fetcher] → [LSTM Ensemble] → [Visualizer]
          ↓               ↓                ↓
-    Data Store    → Predictions    → Charts & Insights
+    Data Store    → Predictions    → Interactive Charts
                     ↓
          Agent Reasoning & Response Generation
                     ↓
-    Chat Response + Expandable Analysis Results
+    Chat Response + Real-Time Results Display + Loss Plots
 ```
 
 ## Prerequisites
@@ -104,13 +104,13 @@ pip install -r requirements.txt
 
 ## Usage
 
-### Start the Streamlit App
+### Start the Panel Application
 ```bash
 source .venv/bin/activate  # Activate virtual environment
-streamlit run app.py
+panel serve panel_app.py --port 5007 --show --autoreload
 ```
 
-The app will open in your browser at `http://localhost:8501`
+The app will open in your browser at `http://localhost:5007`
 
 ### Example Queries
 
@@ -134,31 +134,30 @@ The app will open in your browser at `http://localhost:8501`
 - "Compare GOOGL vs MSFT"
 - "Which is better investment: TSLA vs RIVN?"
 
-### Quick Analysis Features
+### Application Interface
 
-**Sidebar Tools:**
-- **Quick Analysis**: Enter any stock symbol for instant comprehensive analysis with 2-year default period
-- **Period Selection**: Choose between 2y (default) or 5y historical data
-- **Analysis Templates**: Pre-built queries for common analysis types (Basic Analysis, Trend Analysis, Risk Assessment)
+**Left Sidebar - Input Controls:**
+- **Chat Input**: Natural language queries with auto-scroll chat window
+- **Quick Analysis**: Enter stock symbols for instant analysis with customizable periods (2y/5y)
+- **Analysis Templates**: Pre-built analysis types (Basic, Trend, Risk Assessment)
 
-**Chat Interface:**
-- Natural language processing with ReAct agent reasoning
-- Dynamic tool selection based on query analysis
-- Real-time progress tracking with detailed step updates
-- LSTM training progress with epoch and loss monitoring
+**Middle Column - Conversation:**
+- Real-time chat interface with AI assistant responses
+- Progress updates showing analysis steps and completion status
+- Clean, focused conversation flow with automatic scrolling
 
-**Analysis Results:**
-- Expandable results section with organized metrics
-- Interactive charts with zoom, hover, and filtering
-- Comprehensive trend analysis and confidence scores
-- Data store architecture for efficient information sharing
+**Right Column - Analysis Results:**
+- **Real-Time Progress**: Live training progress with loss/epoch visualization
+- **Interactive Charts**: Price predictions, volume analysis, and trend charts
+- **Metrics Dashboard**: Current price, predictions, trends with color-coded indicators
+- **Expandable Results**: Organized display of comprehensive analysis data
 
 
 ## File Structure
 
 ```
 stock_agent_ollama/
-├── app.py                 # Streamlit chat interface with real-time progress
+├── panel_app.py           # Panel web application with three-column layout
 ├── stock_agent.py         # ReAct agent with dynamic tool orchestration
 ├── stock_fetcher.py       # yfinance data fetching with data store integration
 ├── lstm_predictor.py      # LSTM ensemble training with progress callbacks
@@ -195,20 +194,21 @@ def get_config():
             "default_period": "2y",
             "supported_periods": ["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"]
         },
-        "streamlit": {
-            "page_title": "Stock Analysis AI",
-            "page_icon": "📈",
-            "layout": "wide"
+        "panel": {
+            "port": 5007,
+            "title": "Stock Analysis AI",
+            "autoreload": True
         }
     }
 ```
 
 ## Key Dependencies
 
-- **streamlit** (1.29.0): Web interface framework
+- **panel** (1.3.8): Modern web application framework with reactive components
 - **langchain** (0.1.0): Agent orchestration and LLM integration
-- **yfinance**: Stock data fetching with improved rate limiting
-- **tensorflow** (2.15.0): LSTM neural network training
-- **plotly**: Interactive data visualization
-- **pandas/numpy**: Data processing and analysis
+- **ollama** (0.1.7): Local LLM integration for Gemma3 model
+- **yfinance** (0.2.58): Stock data fetching with rate limiting
+- **tensorflow** (2.15.0): LSTM neural network training and ensemble modeling
+- **plotly** (5.17.0): Interactive data visualization and real-time charts
+- **pandas/numpy**: Data processing, analysis, and numerical computations
 

@@ -145,9 +145,13 @@ class AgentLoggingCallback(BaseCallbackHandler):
         # Update progress if callback provided
         if self.progress_callback and action.tool in self.step_mapping:
             progress_text = self.step_mapping[action.tool]
-            # Estimate total steps based on available tools (max 3, but could be fewer)
-            estimated_total_steps = min(3, len(self.step_mapping))
+            # Use actual current step and estimate total based on tools used so far
             current_step = self.current_step
+            
+            # Fixed total steps estimation - always expect 3 steps for stock analysis:
+            # 1. stock_fetcher (data), 2. lstm_predictor (prediction), 3. stock_visualizer (charts)
+            # For queries without prediction, we still have fetcher + visualizer = 2 steps
+            estimated_total_steps = 3  # Always assume full workflow to avoid inconsistency
             
             logger.info(f"Calling progress callback: step {current_step}/{estimated_total_steps}, tool: {action.tool}")
             try:
@@ -254,6 +258,11 @@ class StockAnalysisAgent:
 
             {tools}
 
+            IMPORTANT: For stock analysis questions, you MUST follow this sequence:
+            1. First use stock_fetcher to get historical data
+            2. If prediction is requested, use lstm_predictor to generate forecasts
+            3. ALWAYS use stock_visualizer to create charts and visualizations
+            
             Use this format:
             Thought: [Analyze the user's request and plan what to do]
             Action: [Choose appropriate tool]
