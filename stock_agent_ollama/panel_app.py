@@ -333,11 +333,21 @@ class ProgressTracker:
     
     def reset_progress(self):
         """Reset all progress tracking for a new analysis session"""
+        logger.info("Resetting progress tracker - clearing completion messages")
         # Reset main progress
         self.main_progress.value = 0
         self.main_progress.visible = False
         self.step_indicator.object = "Ready to start analysis..."
         self.step_details.object = ""
+        self.step_details.visible = False  # Hide the details component entirely during reset
+        
+        # Force UI update to ensure reset is applied
+        try:
+            self.step_details.param.trigger('object')
+            self.step_details.param.trigger('visible')
+            self.step_indicator.param.trigger('object')
+        except:
+            pass  # Ignore any trigger errors
         
         # Reset training progress
         self.training_progress.value = 0
@@ -383,28 +393,19 @@ class ProgressTracker:
         try:
             progress_value = int((step / total) * 100) if total > 0 else 0
             self.main_progress.value = progress_value
+            self.main_progress.visible = True  # Ensure progress bar is visible when updating
             
-            # Step names and descriptions
-            step_names = {
-                1: "📊 Fetching Historical Data",
-                2: "🧠 LSTM Neural Network Training", 
-                3: "📈 Creating Visualizations"
-            }
-            
-            step_details = {
-                1: "Downloading stock data from yfinance...",
-                2: "Training ensemble models for price prediction...",
-                3: "Generating interactive charts and analysis..."
-            }
-            
-            step_name = step_names.get(step, "🔄 Processing")
-            step_detail = step_details.get(step, "Working on your analysis...")
+            # Use the actual message from the agent instead of hardcoded descriptions
+            if message:
+                step_name = message  # Use the actual agent message
+            else:
+                step_name = f"🔄 Processing Step {step}"
             
             self.step_indicator.object = f"**{step_name}** ({step}/{total})"
-            self.step_details.object = f"💡 {step_detail}"
+            self.step_details.object = ""  # Clear details since message is self-descriptive
             
-            # Show training progress when LSTM starts
-            if step == 2 and not self.training_started:
+            # Show training progress when LSTM starts (detect by message content)
+            if message and ("Training LSTM" in message or "🧠" in message) and not self.training_started:
                 self.training_container.visible = True
                 self.training_started = True
                 self.training_progress.value = 0
@@ -512,9 +513,11 @@ class ProgressTracker:
     
     def complete_progress(self, message="Analysis completed successfully!"):
         """Mark progress as complete"""
+        logger.info(f"Setting completion message: {message}")
         self.main_progress.value = 100
         self.step_indicator.object = f"✅ **{message}**"
         self.step_details.object = "All steps completed successfully!"
+        self.step_details.visible = True  # Make details visible for completion message
         
         # Don't automatically set training to 100% - let training completion handle that
         # Training progress should only be completed when we actually finish all 3 models
@@ -846,6 +849,8 @@ class ChatInterface:
             self.external_results_display.hide_results()
         
         if hasattr(self, 'external_progress_tracker') and self.external_progress_tracker:
+            # Reset BEFORE showing to ensure clean state
+            self.external_progress_tracker.reset_progress()
             self.external_progress_tracker.show_progress()
         
         # Start analysis
@@ -854,10 +859,6 @@ class ChatInterface:
     def start_analysis(self, query):
         """Start analysis with progress tracking"""
         self.analysis_running = True
-        
-        # Reset progress tracking for new session
-        if hasattr(self, 'external_progress_tracker'):
-            self.external_progress_tracker.reset_progress()
         
         # Add initializing message to chat
         self.add_assistant_message("🔄 **Initializing analysis...** Please wait while I process your request.")
@@ -919,12 +920,14 @@ class ChatInterface:
             
             # Always update external progress tracker (for right sidebar)
             if hasattr(self, 'external_progress_tracker') and self.external_progress_tracker:
-                self.external_progress_tracker.update_main_progress(step, total, message)
-                
-                # Update training progress if this is detailed LSTM training
+                # Only send high-level step messages to main progress, detailed training to training progress
                 if is_detailed_training:
+                    # Send detailed training info only to training progress tracker
                     self.external_progress_tracker.update_training_progress(message)
                     logger.debug(f"Routing detailed training message: {message}")
+                else:
+                    # Send high-level step messages to main progress tracker
+                    self.external_progress_tracker.update_main_progress(step, total, message)
                 
         except Exception as e:
             logger.error(f"Progress UI update failed: {e}")
@@ -938,16 +941,29 @@ class ChatInterface:
                 response = result.get("response", "Analysis completed successfully.")
                 self.add_assistant_message(response)
                 
-                # Complete progress and show results via external components
+                # Handle progress completion based on query type
                 if hasattr(self, 'external_progress_tracker') and self.external_progress_tracker:
-                    self.external_progress_tracker.complete_progress("Analysis completed!")
+                    # Check if this was a general question (no stock symbols in query)
+                    from utils import extract_stock_symbols
+                    symbols = extract_stock_symbols(query)
+                    is_general_question = len(symbols) == 0
                     
-                    # Auto-hide progress after delay
-                    def hide_progress_delayed():
-                        time.sleep(3)
-                        self.external_progress_tracker.hide_progress()
-                    
-                    threading.Thread(target=hide_progress_delayed, daemon=True).start()
+                    if is_general_question:
+                        # For general questions, just hide progress without showing completion
+                        def hide_progress_delayed():
+                            time.sleep(1)  # Shorter delay for general questions
+                            self.external_progress_tracker.hide_progress()
+                        
+                        threading.Thread(target=hide_progress_delayed, daemon=True).start()
+                    else:
+                        # For stock analysis, show completion then hide
+                        self.external_progress_tracker.complete_progress("Analysis completed!")
+                        
+                        def hide_progress_delayed():
+                            time.sleep(3)
+                            self.external_progress_tracker.hide_progress()
+                        
+                        threading.Thread(target=hide_progress_delayed, daemon=True).start()
                 
                 if hasattr(self, 'external_results_display') and self.external_results_display:
                     self.external_results_display.show_results(query)

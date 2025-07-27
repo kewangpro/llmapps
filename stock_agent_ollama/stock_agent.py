@@ -11,6 +11,7 @@ import re
 from stock_fetcher import StockFetcher
 from lstm_predictor import LSTMPredictor
 from visualizer import StockVisualizer
+from general_assistant import GeneralAssistant
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +115,8 @@ class AgentLoggingCallback(BaseCallbackHandler):
         self.step_mapping = {
             'stock_fetcher': f'📊 Fetching {period_text} of historical data...',
             'lstm_predictor': '🧠 Training LSTM ensemble models & predicting...',
-            'stock_visualizer': '📈 Creating interactive charts & visualizations...'
+            'stock_visualizer': '📈 Creating interactive charts & visualizations...',
+            'general_assistant': '🤖 Providing general information and assistance...'
         }
         self.tools_used = []
         self.current_step = 0
@@ -131,7 +133,8 @@ class AgentLoggingCallback(BaseCallbackHandler):
         self.step_mapping = {
             'stock_fetcher': f'📊 Fetching {period_text} of historical data...',
             'lstm_predictor': '🧠 Training LSTM ensemble models & predicting...',
-            'stock_visualizer': '📈 Creating interactive charts & visualizations...'
+            'stock_visualizer': '📈 Creating interactive charts & visualizations...',
+            'general_assistant': '🤖 Providing general information and assistance...'
         }
     
     def on_agent_action(self, action, **kwargs):
@@ -155,10 +158,19 @@ class AgentLoggingCallback(BaseCallbackHandler):
             # Use actual current step and estimate total based on tools used so far
             current_step = self.current_step
             
-            # Fixed total steps estimation - always expect 3 steps for stock analysis:
-            # 1. stock_fetcher (data), 2. lstm_predictor (prediction), 3. stock_visualizer (charts)
-            # For queries without prediction, we still have fetcher + visualizer = 2 steps
-            estimated_total_steps = 3  # Always assume full workflow to avoid inconsistency
+            # Dynamic total steps estimation based on workflow type:
+            # Once a general_assistant tool is used, lock into general mode (1/1)
+            if 'general_assistant' in self.tools_used:
+                # General questions are single-step - stay in this mode
+                estimated_total_steps = 1
+                current_step = 1  # Always step 1 for general questions
+            elif action.tool == 'general_assistant':
+                # First time using general_assistant
+                estimated_total_steps = 1
+                current_step = 1
+            else:
+                # Stock analysis workflow: fetcher → lstm_predictor → visualizer
+                estimated_total_steps = 3
             
             logger.info(f"Calling progress callback: step {current_step}/{estimated_total_steps}, tool: {action.tool}")
             try:
@@ -253,7 +265,8 @@ class StockAnalysisAgent:
         self.tools = [
             StockFetcher(),
             LSTMPredictor(),
-            StockVisualizer()
+            StockVisualizer(),
+            GeneralAssistant()
         ]
         
         # Create agent prompt that lets the agent reason about the user's question
@@ -265,11 +278,25 @@ class StockAnalysisAgent:
 
             {tools}
 
-            IMPORTANT: For stock analysis questions, you MUST follow this sequence:
+            IMPORTANT: Choose the appropriate workflow based on the user's question:
+
+            FOR SPECIFIC STOCK ANALYSIS (questions with specific stock symbols like AAPL, GOOGL, TSLA):
             1. First use stock_fetcher to get historical data
             2. If prediction is requested, use lstm_predictor to generate forecasts
             3. ALWAYS use stock_visualizer to create charts and visualizations
+            Examples: "Analyze AAPL stock", "Predict GOOGL price", "Show TSLA charts"
+
+            FOR GENERAL MARKET QUESTIONS (about markets, comparisons, concepts, strategies):
+            - Use ONLY general_assistant tool - NO OTHER TOOLS
+            - After general_assistant responds, IMMEDIATELY go to Final Answer
+            - Do NOT use stock_fetcher, lstm_predictor, or stock_visualizer for general questions
+            - Examples: "Which stock is most valuable?", "What is compound interest?", "How do bonds work?", "Best performing sector?", "How to calculate stock rating?"
             
+            CRITICAL RULE: For general questions, use ONLY general_assistant then STOP.
+            Do NOT call any other tools after general_assistant responds.
+            If you use general_assistant, you MUST immediately proceed to Final Answer.
+            NEVER use stock_fetcher, lstm_predictor, or stock_visualizer after general_assistant.
+
             Use this format:
             Thought: [Analyze the user's request and plan what to do]
             Action: [Choose appropriate tool]
