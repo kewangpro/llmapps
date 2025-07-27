@@ -17,6 +17,8 @@ A comprehensive stock analysis system powered by **Ollama (Gemma3)**, **LangChai
 
 The system uses a **ReAct (Reasoning + Acting) agent** that intelligently plans and executes analysis tasks using specialized tools:
 
+### Components
+
 1. **ReAct Agent** (`stock_agent.py`)
    - LangChain ReAct agent powered by Ollama Gemma3
    - Analyzes user queries and plans appropriate tool sequence
@@ -39,6 +41,24 @@ The system uses a **ReAct (Reasoning + Acting) agent** that intelligently plans 
    - Historical price trends with prediction overlays
    - Volume analysis and trend indicators
    - Comprehensive market insights generation
+
+### Data Flow
+
+```
+User Query → Streamlit Chat Interface → Symbol Extraction
+                    ↓
+    ReAct Agent (Gemma3) → Query Analysis → Tool Planning
+                    ↓
+         Dynamic Tool Execution with Progress Tracking
+                    ↓
+    [Stock Fetcher] → [LSTM Ensemble] → [Visualizer]
+         ↓               ↓                ↓
+    Data Store    → Predictions    → Charts & Insights
+                    ↓
+         Agent Reasoning & Response Generation
+                    ↓
+    Chat Response + Expandable Analysis Results
+```
 
 ## Prerequisites
 
@@ -133,23 +153,6 @@ The app will open in your browser at `http://localhost:8501`
 - Comprehensive trend analysis and confidence scores
 - Data store architecture for efficient information sharing
 
-## System Architecture
-
-```
-User Query → Streamlit Chat Interface → Symbol Extraction
-                    ↓
-    ReAct Agent (Gemma3) → Query Analysis → Tool Planning
-                    ↓
-         Dynamic Tool Execution with Progress Tracking
-                    ↓
-    [Stock Fetcher] → [LSTM Ensemble] → [Visualizer]
-         ↓               ↓                ↓
-    Data Store    → Predictions    → Charts & Insights
-                    ↓
-         Agent Reasoning & Response Generation
-                    ↓
-    Chat Response + Expandable Analysis Results
-```
 
 ## File Structure
 
