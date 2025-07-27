@@ -301,12 +301,13 @@ class ProgressTracker:
             value=0,
             width=500,
             visible=False,
-            bar_color="info"
+            bar_color="info",
+            margin=(0, 0)  # Remove default margins
         )
         
         # Step indicator and details
-        self.step_indicator = pn.pane.Markdown("Ready to start analysis...")
-        self.step_details = pn.pane.Markdown("")
+        self.step_indicator = pn.pane.Markdown("Ready to start analysis...", margin=(0, 0))
+        self.step_details = pn.pane.Markdown("", margin=(0, 0))
         
         # LSTM training progress section
         self.training_header = pn.pane.Markdown("**🧠 LSTM Ensemble Training:**")
@@ -366,14 +367,21 @@ class ProgressTracker:
     
     def create_layout(self):
         """Create progress layout"""
-        self.layout = pn.Column(
-            self.progress_header,
+        # Group progress bar and status together with no spacing
+        progress_group = pn.Column(
             self.main_progress,
             self.step_indicator,
             self.step_details,
-            pn.Spacer(height=10),
+            margin=(0, 0)
+        )
+        
+        self.layout = pn.Column(
+            self.progress_header,
+            progress_group,
+            pn.Spacer(height=8),  # Small separation before training details
             self.training_container,
-            visible=False
+            visible=False,
+            margin=(0, 0)
         )
     
     def show_progress(self):
@@ -726,10 +734,29 @@ class StockSidebar:
     
     def on_quick_analysis(self, event):
         """Handle quick analysis button click"""
-        symbol = self.quick_symbol.value.strip() if self.quick_symbol.value else ""
+        # Enhanced debugging
+        logger.info(f"Widget object: {self.quick_symbol}")
+        logger.info(f"Widget attributes: {dir(self.quick_symbol)}")
         
-        # Debug logging
-        logger.info(f"Quick analysis clicked. Symbol input value: '{symbol}'")
+        raw_value = self.quick_symbol.value
+        logger.info(f"Raw quick_symbol.value: {repr(raw_value)}")
+        logger.info(f"quick_symbol.value type: {type(raw_value)}")
+        
+        # Try multiple ways to get the value
+        try:
+            alt_value = getattr(self.quick_symbol, '_value', None)
+            logger.info(f"Alternative _value: {repr(alt_value)}")
+        except:
+            pass
+            
+        try:
+            param_value = self.quick_symbol.param.value
+            logger.info(f"Param value: {repr(param_value)}")
+        except:
+            pass
+        
+        symbol = raw_value.strip() if raw_value else ""
+        logger.info(f"Processed symbol: '{symbol}'")
         
         if symbol:
             past_data = self.past_data_period.value

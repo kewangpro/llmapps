@@ -155,6 +155,25 @@ class AgentLoggingCallback(BaseCallbackHandler):
         # Update progress if callback provided
         if self.progress_callback and action.tool in self.step_mapping:
             progress_text = self.step_mapping[action.tool]
+            
+            # Make progress text dynamic for stock_fetcher based on actual period used
+            if action.tool == 'stock_fetcher' and hasattr(action, 'tool_input'):
+                try:
+                    import json
+                    # Parse the tool input to extract period
+                    if isinstance(action.tool_input, str):
+                        tool_input = json.loads(action.tool_input)
+                    else:
+                        tool_input = action.tool_input
+                    
+                    if 'period' in tool_input:
+                        period = tool_input['period']
+                        period_text = {"5y": "5 years", "2y": "2 years", "1y": "1 year", "6mo": "6 months", "3mo": "3 months", "1mo": "1 month"}.get(period, f"{period}")
+                        progress_text = f'📊 Fetching {period_text} of historical data...'
+                except Exception as e:
+                    logger.debug(f"Could not parse tool input for dynamic progress: {e}")
+                    # Fall back to default progress text
+                    pass
             # Use actual current step and estimate total based on tools used so far
             current_step = self.current_step
             
