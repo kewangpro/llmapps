@@ -286,11 +286,11 @@ class StockAnalysisAgent:
             3. ALWAYS use stock_visualizer to create charts and visualizations
             Examples: "Analyze AAPL stock", "Predict GOOGL price", "Show TSLA charts"
 
-            FOR GENERAL MARKET QUESTIONS (about markets, comparisons, concepts, strategies):
+            FOR GENERAL QUESTIONS (market knowledge, concepts, company info, strategies):
             - Use ONLY general_assistant tool - NO OTHER TOOLS
             - After general_assistant responds, IMMEDIATELY go to Final Answer
             - Do NOT use stock_fetcher, lstm_predictor, or stock_visualizer for general questions
-            - Examples: "Which stock is most valuable?", "What is compound interest?", "How do bonds work?", "Best performing sector?", "How to calculate stock rating?"
+            - Examples: "Which stock is most valuable?", "What is the stock symbol for Nvidia?", "What company does TSLA represent?", "What is compound interest?", "How do bonds work?", "Best performing sector?", "How to calculate stock rating?"
             
             CRITICAL RULE: For general questions, use ONLY general_assistant then STOP.
             Do NOT call any other tools after general_assistant responds.
