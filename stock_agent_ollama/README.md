@@ -1,17 +1,18 @@
 # Stock Analysis AI 📈
 
-A comprehensive stock analysis system powered by **Ollama (Gemma3)**, **LangChain ReAct agents**, **LSTM ensemble neural networks**, and **Panel** for intelligent stock prediction and analysis with real-time progress tracking.
+A comprehensive stock analysis system powered by **Ollama (Gemma3)**, **LangChain ReAct agents**, **LSTM ensemble neural networks**, and **Panel** for intelligent stock prediction and analysis with real-time progress tracking. Features dual-mode operation supporting both specific stock analysis and general finance knowledge assistance.
 
 ## Features
 
-🤖 **Intelligent ReAct Agent**: LangChain ReAct agent with Gemma3 that plans and executes analysis tasks  
+🤖 **Dual-Mode Intelligence**: LangChain ReAct agent supporting both specific stock analysis and general finance assistance  
 🧠 **LSTM Ensemble Models**: 3-model ensemble for robust 30-day stock price forecasting  
 📈 **Interactive Visualizations**: Dynamic Plotly charts with historical data, predictions, and volume analysis  
 💬 **Modern UI Interface**: Panel-based web application with real-time updates and responsive design  
 ⚡ **Real-Time Progress**: Live training progress with epoch-by-epoch loss tracking and visualization  
-🎯 **Smart Query Processing**: Automatic stock symbol extraction and intelligent tool selection  
+🎯 **Smart Query Processing**: Automatic routing between stock analysis and general assistance modes  
 📊 **Comprehensive Analysis**: Complete metrics, trend analysis, and confidence scores  
 🎛️ **Three-Column Layout**: Input controls, chat interface, and analysis results with interactive charts  
+💡 **General Knowledge**: Finance concepts, investment strategies, and market education via general assistant  
 
 ## Architecture
 
@@ -42,22 +43,31 @@ The system uses a **ReAct (Reasoning + Acting) agent** that intelligently plans 
    - Volume analysis and trend indicators
    - Comprehensive market insights generation
 
+5. **General Assistant Tool** (`general_assistant.py`)
+   - LLM-powered finance knowledge assistant
+   - Answers general market questions and concepts
+   - Investment strategies and educational content
+   - Finance terminology and calculation explanations
+
 ### Data Flow
 
 ```
-User Input → Panel Interface → Symbol Extraction
+User Input → Panel Interface → Query Analysis
                     ↓
-    ReAct Agent (Gemma3) → Query Analysis → Tool Planning
+    ReAct Agent (Gemma3) → Intelligent Routing
                     ↓
-         Dynamic Tool Execution with Real-Time Progress
-                    ↓
-    [Stock Fetcher] → [LSTM Ensemble] → [Visualizer]
-         ↓               ↓                ↓
-    Data Store    → Predictions    → Interactive Charts
-                    ↓
+         /                    \
+    Stock Analysis           General Questions
+         ↓                        ↓
+Dynamic Tool Execution    General Assistant (LLM)
+         ↓                        ↓
+[Fetcher]→[LSTM]→[Visualizer]   Finance Knowledge
+    ↓        ↓        ↓             ↓
+Data Store→Predictions→Charts   Educational Content
+                    ↓                ↓
          Agent Reasoning & Response Generation
                     ↓
-    Chat Response + Real-Time Results Display + Loss Plots
+    Chat Response + Real-Time Results + Interactive Charts
 ```
 
 ## Prerequisites
@@ -134,6 +144,14 @@ The app will open in your browser at `http://localhost:5007`
 - "Compare GOOGL vs MSFT"
 - "Which is better investment: TSLA vs RIVN?"
 
+**General Finance Questions:**
+- "Which stock is most valuable?"
+- "What is compound interest?"
+- "How do bonds work?"
+- "What are the best investment strategies?"
+- "Explain Mean Squared Error in trading models"
+- "How to calculate stock ratings?"
+
 ### Application Interface
 
 **Left Sidebar - Input Controls:**
@@ -158,10 +176,11 @@ The app will open in your browser at `http://localhost:5007`
 ```
 stock_agent_ollama/
 ├── panel_app.py           # Panel web application with three-column layout
-├── stock_agent.py         # ReAct agent with dynamic tool orchestration
+├── stock_agent.py         # ReAct agent with intelligent routing and tool orchestration
 ├── stock_fetcher.py       # yfinance data fetching with data store integration
 ├── lstm_predictor.py      # LSTM ensemble training with progress callbacks
 ├── visualizer.py          # Interactive Plotly charts and insights
+├── general_assistant.py   # LLM-powered general finance knowledge assistant
 ├── data_store.py          # Efficient data sharing between tools
 ├── utils.py               # Utility functions and symbol extraction
 ├── config.py              # Configuration settings
