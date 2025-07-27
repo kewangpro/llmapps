@@ -289,6 +289,7 @@ class ProgressTracker:
     def __init__(self):
         self.create_progress_components()
         self.training_started = False
+        self.create_layout()
     
     def create_progress_components(self):
         """Create progress tracking components"""
@@ -329,8 +330,29 @@ class ProgressTracker:
             self.training_status,
             visible=False
         )
+    
+    def reset_progress(self):
+        """Reset all progress tracking for a new analysis session"""
+        # Reset main progress
+        self.main_progress.value = 0
+        self.main_progress.visible = False
+        self.step_indicator.object = "Ready to start analysis..."
+        self.step_details.object = ""
         
-        self.create_layout()
+        # Reset training progress
+        self.training_progress.value = 0
+        self.training_status.object = ""
+        self.training_started = False
+        self.training_container.visible = False
+        
+        # Reset loss data and chart
+        self.loss_data = {"epochs": [], "train_loss": [], "val_loss": [], "model_num": []}
+        self.current_model = None
+        self.loss_chart = None
+        
+        # Clear any existing loss chart from training container
+        if len(self.training_container.objects) > 3:  # Remove chart if it exists
+            self.training_container.objects = self.training_container.objects[:3]
     
     def create_layout(self):
         """Create progress layout"""
@@ -832,6 +854,10 @@ class ChatInterface:
     def start_analysis(self, query):
         """Start analysis with progress tracking"""
         self.analysis_running = True
+        
+        # Reset progress tracking for new session
+        if hasattr(self, 'external_progress_tracker'):
+            self.external_progress_tracker.reset_progress()
         
         # Add initializing message to chat
         self.add_assistant_message("🔄 **Initializing analysis...** Please wait while I process your request.")

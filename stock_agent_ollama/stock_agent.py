@@ -119,6 +119,11 @@ class AgentLoggingCallback(BaseCallbackHandler):
         self.tools_used = []
         self.current_step = 0
     
+    def reset_progress(self):
+        """Reset progress tracking for a new analysis"""
+        self.tools_used = []
+        self.current_step = 0
+    
     def update_period(self, period):
         """Update the period and regenerate step mapping"""
         self.period = period
@@ -140,7 +145,9 @@ class AgentLoggingCallback(BaseCallbackHandler):
         # Track tools used dynamically
         if action.tool not in self.tools_used:
             self.tools_used.append(action.tool)
-            self.current_step = len(self.tools_used)
+        
+        # Current step is always the position of this tool in the sequence
+        self.current_step = len(self.tools_used)
         
         # Update progress if callback provided
         if self.progress_callback and action.tool in self.step_mapping:
@@ -355,6 +362,9 @@ class StockAnalysisAgent:
         Main method to analyze stocks based on user query
         """
         logger.info(f"Agent analyzing query: '{query[:100]}{'...' if len(query) > 100 else ''}'")
+        
+        # Reset progress tracking for new analysis
+        self.callback_handler.reset_progress()
         
         # Extract symbol and period from query and set as fallback for parser
         from utils import extract_stock_symbols
