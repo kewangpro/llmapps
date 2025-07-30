@@ -631,15 +631,22 @@ class StockSidebar:
         
         self.chat_input = pn.widgets.TextAreaInput(
             name="Your question:",
-            placeholder="e.g., 'Analyze AAPL stock and predict its price for the next 30 days'",
+            placeholder="e.g., 'Analyze AAPL stock...'",
             height=80,
-            width=250
+            sizing_mode='stretch_width'  # Allow to expand within column
         )
+        
+        # Add Enter key support for better UX
+        self.chat_input.param.watch(self._on_chat_enter, 'value')
+        
+        # Add a watcher to track value changes
+        self.chat_input.param.watch(self._on_chat_input_change, 'value')
+        self._last_chat_value = ""
         
         self.send_btn = pn.widgets.Button(
             name="Send",
             button_type="primary",
-            width=250
+            sizing_mode='stretch_width'  # Allow to expand within column
         )
         
         # Divider
@@ -650,8 +657,8 @@ class StockSidebar:
         
         self.quick_symbol = pn.widgets.TextInput(
             name="Stock Symbol",
-            placeholder="e.g., AAPL, GOOGL, TSLA",
-            width=250
+            placeholder="e.g., AAPL",
+            sizing_mode='stretch_width'  # Allow to expand within column
         )
         
         # Analysis parameters
@@ -659,14 +666,14 @@ class StockSidebar:
             name="Past Data",
             options=["2y", "5y"],
             value="2y",
-            width=120
+            width=60  # Reduced for narrow column
         )
         
         self.future_prediction = pn.widgets.Select(
             name="Prediction", 
             options=["30 days", "1 week"],
             value="30 days",
-            width=120
+            width=60  # Reduced for narrow column
         )
         
         self.params_row = pn.Row(
@@ -677,14 +684,14 @@ class StockSidebar:
         self.quick_analysis_btn = pn.widgets.Button(
             name="🔍 Quick Analysis",
             button_type="primary",
-            width=250
+            sizing_mode='stretch_width'  # Allow to expand within column
         )
         
         # Divider
         self.divider2 = pn.pane.HTML("<hr>")
         
         # Analysis Templates section
-        self.templates_header = pn.pane.Markdown("## 📊 Analysis Templates")
+        self.templates_header = pn.pane.Markdown("## 📊 Templates")
         
         self.template_options = {
             "Basic Analysis": "basic_analysis",
@@ -696,19 +703,19 @@ class StockSidebar:
             name="Choose template:",
             options=list(self.template_options.keys()),
             value="Basic Analysis",
-            width=250
+            sizing_mode='stretch_width'  # Allow to expand within column
         )
         
         self.template_symbol = pn.widgets.TextInput(
             name="Symbol for template",
             placeholder="e.g., AAPL",
-            width=250
+            sizing_mode='stretch_width'  # Allow to expand within column
         )
         
         self.template_btn = pn.widgets.Button(
             name="📈 Use Template",
             button_type="primary",
-            width=250
+            sizing_mode='stretch_width'  # Allow to expand within column
         )
         
         # Bind events
@@ -721,14 +728,54 @@ class StockSidebar:
         self.quick_analysis_btn.on_click(self.on_quick_analysis)
         self.template_btn.on_click(self.on_template_analysis)
     
+    def _on_chat_input_change(self, event):
+        """Track chat input changes to handle timing issues"""
+        self._last_chat_value = event.new if event.new else ""
+        logger.info(f"Chat input watcher - value changed to: '{self._last_chat_value}'")
+    
+    def _on_chat_enter(self, event):
+        """Handle Enter key in chat input"""
+        if event.new and event.new.endswith('\n'):
+            # User pressed Enter - strip newline and process
+            message = event.new.rstrip('\n').strip()
+            if message:
+                logger.info(f"Enter key detected, processing: '{message}'")
+                if hasattr(self, 'chat_interface'):
+                    self.chat_interface.process_user_query(message)
+                    self.chat_input.value = ""  # Clear input
+    
     def on_send_message(self, event):
         """Handle send button click"""
-        message = self.chat_input.value.strip()
+        # Enhanced debugging for timing issues
+        raw_value = self.chat_input.value
+        logger.info(f"Send clicked - raw chat_input.value: {repr(raw_value)}")
+        
+        message = raw_value.strip() if raw_value else ""
+        logger.info(f"Processed message: '{message}'")
+        
+        # Retry mechanism for timing issues
+        if not message:
+            # Try to get value again with a longer delay to account for Panel's reactivity
+            try:
+                import time
+                time.sleep(0.2)  # Longer delay - 200ms to allow Panel to sync
+                retry_value = self.chat_input.value
+                logger.info(f"Retry value after delay: {repr(retry_value)}")
+                message = retry_value.strip() if retry_value else ""
+                
+                # Also check the watcher value after the delay
+                if not message and hasattr(self, '_last_chat_value') and self._last_chat_value:
+                    logger.info(f"Using fallback value from watcher after delay: '{self._last_chat_value}'")
+                    message = self._last_chat_value.strip()
+            except:
+                pass
+        
         if message:
             if hasattr(self, 'chat_interface'):
                 self.chat_interface.process_user_query(message)
                 self.chat_input.value = ""  # Clear input
         else:
+            logger.warning(f"No message entered. Final value: '{self.chat_input.value}'")
             if hasattr(self, 'chat_interface'):
                 self.chat_interface.add_system_message("⚠️ Please enter a question first")
     
@@ -739,23 +786,13 @@ class StockSidebar:
         logger.info(f"Widget attributes: {dir(self.quick_symbol)}")
         
         raw_value = self.quick_symbol.value
+        value_input = getattr(self.quick_symbol, 'value_input', '')
+        
         logger.info(f"Raw quick_symbol.value: {repr(raw_value)}")
-        logger.info(f"quick_symbol.value type: {type(raw_value)}")
+        logger.info(f"quick_symbol.value_input: {repr(value_input)}")
         
-        # Try multiple ways to get the value
-        try:
-            alt_value = getattr(self.quick_symbol, '_value', None)
-            logger.info(f"Alternative _value: {repr(alt_value)}")
-        except:
-            pass
-            
-        try:
-            param_value = self.quick_symbol.param.value
-            logger.info(f"Param value: {repr(param_value)}")
-        except:
-            pass
-        
-        symbol = raw_value.strip() if raw_value else ""
+        # Use value_input as fallback if value is empty (race condition fix)
+        symbol = raw_value.strip() if raw_value else value_input.strip() if value_input else ""
         logger.info(f"Processed symbol: '{symbol}'")
         
         if symbol:
@@ -776,7 +813,15 @@ class StockSidebar:
     
     def on_template_analysis(self, event):
         """Handle template analysis button click"""
-        symbol = self.template_symbol.value.strip()
+        # Fix race condition similar to quick analysis
+        raw_value = self.template_symbol.value
+        value_input = getattr(self.template_symbol, 'value_input', '')
+        
+        logger.info(f"Template symbol - raw_value: {repr(raw_value)}, value_input: {repr(value_input)}")
+        
+        # Use value_input as fallback if value is empty (race condition fix)
+        symbol = raw_value.strip() if raw_value else value_input.strip() if value_input else ""
+        
         if symbol:
             template_name = self.selected_template.value
             template_key = self.template_options[template_name]
@@ -800,27 +845,64 @@ class StockSidebar:
         self.chat_interface = chat_interface
     
     def create_layout(self):
-        """Create sidebar layout"""
+        """Create layout components"""
+        # Combined bottom controls - all three sections horizontally (full width distribution)
+        self.bottom_controls = pn.Row(
+            # Ask AI Assistant section
+            pn.Column(
+                self.chat_header,
+                self.chat_input,
+                self.send_btn,
+                margin=(2, 5),
+                sizing_mode='stretch_width'  # Allow to expand within its share
+            ),
+            # Quick Analysis section
+            pn.Column(
+                self.quick_analysis_header,
+                self.quick_symbol,
+                self.params_row,
+                self.quick_analysis_btn,
+                margin=(2, 5),
+                sizing_mode='stretch_width'  # Allow to expand within its share
+            ),
+            # Templates section  
+            pn.Column(
+                self.templates_header,
+                self.selected_template,
+                self.template_symbol,
+                self.template_btn,
+                margin=(2, 5),
+                sizing_mode='stretch_width'  # Allow to expand within its share
+            ),
+            margin=(5, 5),  # Add margin around the entire row
+            sizing_mode='stretch_width'  # Make the row take full width
+        )
+        
+        # Keep separate references for backward compatibility
+        self.top_controls = pn.Spacer()  # Empty spacer since controls moved to bottom
+        self.chat_input_section = pn.Spacer()  # Empty spacer since moved to bottom_controls
+        
+        # For backward compatibility, keep the full layout
         self.layout = pn.Column(
-            self.chat_header,
-            self.chat_input,
-            self.send_btn,
-            self.divider1,
-            self.quick_analysis_header,
-            self.quick_symbol,
-            self.params_row,
-            self.quick_analysis_btn,
-            self.divider2,
-            self.templates_header,
-            self.selected_template,
-            self.template_symbol,
-            self.template_btn,
-            width=280,
-            margin=(10, 10)
+            self.top_controls,
+            self.chat_input_section,
+            width=540
         )
     
     def get_layout(self):
         return self.layout
+    
+    def get_top_controls(self):
+        """Get the top controls (Quick Analysis + Templates)"""
+        return self.top_controls
+    
+    def get_chat_input_section(self):
+        """Get the chat input section"""
+        return self.chat_input_section
+    
+    def get_bottom_controls(self):
+        """Get all bottom controls combined (Ask AI + Quick Analysis + Templates)"""
+        return self.bottom_controls
 
 class ChatInterface:
     """Main chat interface with agent integration"""
@@ -838,10 +920,12 @@ class ChatInterface:
         
         # Chat history container
         self.chat_history = pn.Column(
-            height=500,
-            width=500,
+            height=450,  # Increased from 350 to 450 since title was moved to bottom
             scroll=True,
-            auto_scroll_limit=1  # Auto-scroll to bottom when new content is added
+            auto_scroll_limit=1,  # Auto-scroll when new content is added (changed back to 1)
+            scroll_position=1,  # Start at bottom
+            width_policy='max',  # Allow full width expansion
+            sizing_mode='stretch_width'  # Stretch to container width
         )
         
         # Add initial welcome message
@@ -1029,7 +1113,19 @@ class ChatInterface:
         
         user_msg = pn.pane.Markdown(
             f"**👤 You ({timestamp})**\n\n{message}",
-            styles={'background': '#e3f2fd', 'padding': '10px', 'margin': '5px 0', 'border-radius': '5px'}
+            styles={
+                'background-color': '#e3f2fd',
+                'padding': '10px',
+                'margin': '5px 0', 
+                'border-radius': '5px',
+                'width': '100%',
+                'min-width': '100%',
+                'box-sizing': 'border-box',
+                'display': 'block'
+            },
+            width_policy='max',
+            sizing_mode='stretch_width',
+            margin=(5, 0)
         )
         
         self.chat_history.append(user_msg)
@@ -1039,9 +1135,23 @@ class ChatInterface:
         """Add assistant message to chat"""
         timestamp = datetime.now().strftime("%H:%M:%S")
         
+        # Enhanced styling to ensure consistent background coverage
         assistant_msg = pn.pane.Markdown(
             f"**🤖 Assistant ({timestamp})**\n\n{message}",
-            styles={'background': '#f3e5f5', 'padding': '10px', 'margin': '5px 0', 'border-radius': '5px'}
+            styles={
+                'background-color': '#f3e5f5',
+                'padding': '10px',
+                'margin': '5px 0',
+                'border-radius': '5px',
+                'width': '100%',
+                'min-width': '100%',
+                'box-sizing': 'border-box',
+                'display': 'block',
+                'overflow-wrap': 'break-word'
+            },
+            width_policy='max',
+            sizing_mode='stretch_width',
+            margin=(5, 0)  # Additional margin parameter
         )
         
         self.chat_history.append(assistant_msg)
@@ -1053,7 +1163,19 @@ class ChatInterface:
         
         system_msg = pn.pane.Markdown(
             f"**ℹ️ System ({timestamp})**\n\n{message}",
-            styles={'background': '#fff3e0', 'padding': '10px', 'margin': '5px 0', 'border-radius': '5px'}
+            styles={
+                'background-color': '#fff3e0',
+                'padding': '10px',
+                'margin': '5px 0',
+                'border-radius': '5px',
+                'width': '100%',
+                'min-width': '100%',
+                'box-sizing': 'border-box',
+                'display': 'block'
+            },
+            width_policy='max',
+            sizing_mode='stretch_width',
+            margin=(5, 0)
         )
         
         self.chat_history.append(system_msg)
@@ -1065,7 +1187,8 @@ class ChatInterface:
             pn.pane.Markdown("## 💬 Chat with AI Assistant"),
             self.status,
             self.chat_history,
-            width=550
+            width_policy='max',
+            sizing_mode='stretch_width'
         )
     
     def get_layout(self):
@@ -1104,9 +1227,14 @@ class RightSidebar:
 
 # Create main app function (similar to step5_results.py structure)
 def create_app():
-    # Title area
-    title = pn.pane.Markdown("# 📈 Stock Analysis AI")
-    subtitle = pn.pane.Markdown("*Powered by Ollama (Gemma3) + LangChain ReAct + LSTM Ensemble + Panel*")
+    # Disclaimer at bottom - smaller text, centered across full window
+    disclaimer = pn.pane.Markdown(
+        "**📈 Stock Analysis AI**  \n*Powered by Ollama (Gemma3) + LangChain ReAct + LSTM Ensemble + Panel*",
+        styles={'text-align': 'center', 'font-size': '14px', 'color': '#666666'},
+        margin=(10, 0),
+        width_policy='max',
+        sizing_mode='stretch_width'
+    )
     
     # Create components
     left_sidebar = StockSidebar()
@@ -1120,23 +1248,34 @@ def create_app():
         right_sidebar.get_results_display()
     )
     
-    # 3-column layout
-    app = pn.Row(
-        # Left column - Input controls
-        left_sidebar.get_layout(),
-        pn.Spacer(width=20),
-        
-        # Middle column - Chat interface
-        pn.Column(
-            title,
-            subtitle,
-            pn.Spacer(height=20),
-            chat_interface.get_layout()
+    # Main layout with disclaimer at bottom
+    app = pn.Column(
+        # 2-column layout with equal 50-50 width distribution
+        pn.Row(
+            # Left column - Chat and Input + Controls
+            pn.Column(
+                # Chat interface
+                chat_interface.get_layout(),
+                pn.Spacer(height=15),
+                # Bottom: All three controls horizontally (Ask AI + Quick Analysis + Templates)
+                left_sidebar.get_bottom_controls(),
+                margin=(10, 10),
+                sizing_mode='stretch_width'
+            ),
+            pn.Spacer(width=20),
+            
+            # Right column - Analysis Status & Results only
+            pn.Column(
+                right_sidebar.get_layout(),
+                margin=(10, 10),
+                sizing_mode='stretch_width'
+            ),
+            sizing_mode='stretch_width'
         ),
-        pn.Spacer(width=10),
-        
-        # Right column - Progress and results
-        right_sidebar.get_layout()
+        pn.Spacer(height=20),
+        # Disclaimer at bottom center
+        disclaimer,
+        sizing_mode='stretch_width'
     )
     
     return app

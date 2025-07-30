@@ -110,8 +110,18 @@ class AgentLoggingCallback(BaseCallbackHandler):
     def __init__(self, progress_callback=None, period="2y"):
         self.progress_callback = progress_callback
         self.period = period
+        self.original_query = ""  # Store original query for workflow detection
         # Convert period to readable format
         period_text = {"5y": "5 years", "2y": "2 years", "1y": "1 year", "6mo": "6 months", "3mo": "3 months", "1mo": "1 month"}.get(period, f"{period}")
+        
+        # Tool step numbers for logical sequencing
+        self.tool_step_numbers = {
+            'stock_fetcher': 1,
+            'lstm_predictor': 2, 
+            'stock_visualizer': 3,
+            'general_assistant': 1
+        }
+        
         self.step_mapping = {
             'stock_fetcher': f'📊 Fetching {period_text} of historical data...',
             'lstm_predictor': '🧠 Training LSTM ensemble models & predicting...',
@@ -130,6 +140,15 @@ class AgentLoggingCallback(BaseCallbackHandler):
         """Update the period and regenerate step mapping"""
         self.period = period
         period_text = {"5y": "5 years", "2y": "2 years", "1y": "1 year", "6mo": "6 months", "3mo": "3 months", "1mo": "1 month"}.get(period, f"{period}")
+        
+        # Tool step numbers remain the same
+        self.tool_step_numbers = {
+            'stock_fetcher': 1,
+            'lstm_predictor': 2, 
+            'stock_visualizer': 3,
+            'general_assistant': 1
+        }
+        
         self.step_mapping = {
             'stock_fetcher': f'📊 Fetching {period_text} of historical data...',
             'lstm_predictor': '🧠 Training LSTM ensemble models & predicting...',
@@ -174,8 +193,8 @@ class AgentLoggingCallback(BaseCallbackHandler):
                     logger.debug(f"Could not parse tool input for dynamic progress: {e}")
                     # Fall back to default progress text
                     pass
-            # Use actual current step and estimate total based on tools used so far
-            current_step = self.current_step
+            # Use logical step number based on tool type, not execution order
+            current_step = self.tool_step_numbers.get(action.tool, self.current_step)
             
             # Dynamic total steps estimation based on workflow type:
             # Once a general_assistant tool is used, lock into general mode (1/1)
@@ -188,8 +207,25 @@ class AgentLoggingCallback(BaseCallbackHandler):
                 estimated_total_steps = 1
                 current_step = 1
             else:
-                # Stock analysis workflow: fetcher → lstm_predictor → visualizer
-                estimated_total_steps = 3
+                # Stock analysis workflow: detect workflow type early
+                # Check if this is a risk assessment from the original query
+                if any(keyword in self.original_query.lower() for keyword in ['risk', 'risk profile', 'risk assessment', 'evaluate risk']):
+                    # Risk assessment detected - use 2-step workflow
+                    estimated_total_steps = 2
+                    if action.tool == 'stock_visualizer':
+                        current_step = 2
+                elif (action.tool == 'stock_visualizer' and 
+                      'stock_fetcher' in self.tools_used and 
+                      'lstm_predictor' not in self.tools_used):
+                    # Risk assessment workflow: fetcher → visualizer (2 steps)
+                    estimated_total_steps = 2
+                    current_step = 2
+                elif 'lstm_predictor' in self.tools_used or action.tool == 'lstm_predictor':
+                    # Full analysis workflow: fetcher → lstm_predictor → visualizer (3 steps)
+                    estimated_total_steps = 3
+                else:
+                    # Default to 3 steps for stock analysis
+                    estimated_total_steps = 3
             
             logger.info(f"Calling progress callback: step {current_step}/{estimated_total_steps}, tool: {action.tool}")
             try:
@@ -228,7 +264,10 @@ class AgentLoggingCallback(BaseCallbackHandler):
         logger.info(f"🔧 TOOL START: {tool_name}")
     
     def on_tool_end(self, output, **kwargs):
-        logger.info(f"✅ TOOL COMPLETED")
+        logger.info(f"✅ TOOL COMPLETED - Agent will now process tool output...")
+        # Log the tool output to see what the agent received
+        if isinstance(output, dict) and 'tool_used' in output:
+            logger.info(f"Tool output received: {output.get('tool_used')} - success: {output.get('success')}")
     
     def on_tool_error(self, error, **kwargs):
         logger.error(f"❌ TOOL ERROR: {str(error)}")
@@ -239,19 +278,27 @@ class AgentLoggingCallback(BaseCallbackHandler):
             # Clean up the text and show reasoning
             clean_text = text.strip()
             if clean_text and len(clean_text) > 3:  # Avoid logging very short text
+                # Add timestamp for better tracking of delays
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                
                 # Highlight different types of reasoning
                 if clean_text.startswith('Thought:'):
                     print(f"💭 {clean_text}")
-                    logger.info(f"💭 {clean_text}")
+                    logger.info(f"💭 [{timestamp}] {clean_text}")
+                elif clean_text.startswith('Final Answer:'):
+                    logger.info(f"🎯 [{timestamp}] Agent starting Final Answer generation...")
+                    print(f"🎯 FINAL ANSWER: {clean_text[:100]}...")
+                    logger.info(f"🎯 FINAL ANSWER: {clean_text[:100]}...")
                 elif clean_text.startswith('I need to') or clean_text.startswith('I should'):
                     print(f"🧠 PLANNING: {clean_text}")
-                    logger.info(f"🧠 PLANNING: {clean_text}")
+                    logger.info(f"🧠 [{timestamp}] PLANNING: {clean_text}")
                 elif 'analyze' in clean_text.lower() or 'fetch' in clean_text.lower():
                     print(f"📊 STRATEGY: {clean_text}")
-                    logger.info(f"📊 STRATEGY: {clean_text}")
+                    logger.info(f"📊 [{timestamp}] STRATEGY: {clean_text}")
                 else:
                     print(f"💭 REASONING: {clean_text}")
-                    logger.info(f"💭 REASONING: {clean_text}")
+                    logger.info(f"💭 [{timestamp}] REASONING: {clean_text}")
     
     def on_agent_start(self, serialized, inputs, **kwargs):
         print(f"\n🚀 AGENT STARTING: Analyzing query...")
@@ -261,11 +308,15 @@ class AgentLoggingCallback(BaseCallbackHandler):
         logger.info(f"   Query: {query}{'...' if len(str(inputs.get('input', ''))) > 100 else ''}")
     
     def on_llm_start(self, serialized, prompts, **kwargs):
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
         print(f"🤖 LLM THINKING: Processing agent reasoning...")
-        logger.info(f"🤖 LLM THINKING: Processing agent reasoning...")
+        logger.info(f"🤖 [{timestamp}] LLM START: Processing agent reasoning...")
     
     def on_llm_end(self, response, **kwargs):
-        pass  # Skip LLM end logging to reduce noise
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        logger.info(f"🤖 [{timestamp}] LLM COMPLETED: Agent reasoning finished")
 
 
 class StockAnalysisAgent:
@@ -297,33 +348,63 @@ class StockAnalysisAgent:
 
             {tools}
 
+            DECISION TREE: First determine the question type:
+            - If user asks about "top stocks", "most valuable", "best performing", company information, financial concepts, or market knowledge → use ONLY general_assistant
+            - If user provides specific stock symbols (AAPL, GOOGL, etc.) and wants analysis/prediction/charts → use stock analysis workflow
+            
             IMPORTANT: Choose the appropriate workflow based on the user's question:
 
             FOR SPECIFIC STOCK ANALYSIS (questions with specific stock symbols like AAPL, GOOGL, TSLA):
-            1. First use stock_fetcher to get historical data
-            2. If prediction is requested, use lstm_predictor to generate forecasts
-            3. ALWAYS use stock_visualizer to create charts and visualizations
-            Examples: "Analyze AAPL stock", "Predict GOOGL price", "Show TSLA charts"
-
-            FOR GENERAL QUESTIONS (market knowledge, concepts, company info, strategies):
-            - Use ONLY general_assistant tool - NO OTHER TOOLS
-            - After general_assistant responds, IMMEDIATELY go to Final Answer
-            - Do NOT use stock_fetcher, lstm_predictor, or stock_visualizer for general questions
-            - Examples: "Which stock is most valuable?", "What is the stock symbol for Nvidia?", "What company does TSLA represent?", "What is compound interest?", "How do bonds work?", "Best performing sector?", "How to calculate stock rating?"
             
-            CRITICAL RULE: For general questions, use ONLY general_assistant then STOP.
-            Do NOT call any other tools after general_assistant responds.
-            If you use general_assistant, you MUST immediately proceed to Final Answer.
-            NEVER use stock_fetcher, lstm_predictor, or stock_visualizer after general_assistant.
+            RISK ASSESSMENT queries (contains "risk", "evaluate risk", "risk profile"):
+            1. Use stock_fetcher to get historical data
+            2. Skip lstm_predictor (risk assessment focuses on historical patterns, not predictions)
+            3. Use stock_visualizer to create charts and visualizations
+            Examples: "Evaluate risk profile of TEAM", "Risk assessment for AAPL"
+            
+            PREDICTION/ANALYSIS queries (contains "predict", "forecast", "analyze", "trends"):
+            1. ALWAYS start with stock_fetcher to get historical data (REQUIRED FIRST)
+            2. ONLY after stock_fetcher succeeds, use lstm_predictor to generate forecasts
+            3. ONLY after lstm_predictor succeeds, use stock_visualizer to create charts
+            Examples: "Analyze AAPL stock", "Predict GOOGL price", "Show TSLA trends"
+            
+            CRITICAL: You MUST use stock_fetcher FIRST before any other tool. NEVER use lstm_predictor or stock_visualizer without data from stock_fetcher.
+
+            FOR GENERAL QUESTIONS (market knowledge, concepts, company info, strategies, "top stocks", "most valuable stocks"):
+            - Use ONLY general_assistant tool - NO OTHER TOOLS
+            - IMMEDIATELY use the general_assistant response as your Final Answer
+            - Do NOT add additional reasoning or thoughts after general_assistant
+            - Do NOT use stock_fetcher, lstm_predictor, or stock_visualizer for general questions
+            - Examples: "Which stock is most valuable?", "What are the top 10 most valuable US stocks?", "What is the stock symbol for Nvidia?", "What company does TSLA represent?", "What is compound interest?", "How do bonds work?", "Best performing sector?", "How to calculate stock rating?"
+            
+            CRITICAL RULE: For general questions, use ONLY general_assistant then IMMEDIATELY output Final Answer.
+            Do NOT think or reason after general_assistant responds - just use its response directly.
+            The general_assistant provides complete answers that need no additional processing.
+            
+            IMPORTANT: If any tool fails or times out, proceed to Final Answer with the available information.
+            Do NOT keep retrying failed tools - provide analysis with existing data.
 
             Use this format:
-            Thought: [Analyze the user's request and plan what to do]
-            Action: [Choose appropriate tool]
+            
+            FOR STOCK ANALYSIS:
+            Thought: I need to analyze [SYMBOL] stock. I must start with stock_fetcher to get data first.
+            Action: stock_fetcher
+            Action Input: {{"symbol": "SYMBOL", "period": "2y"}}
+            Observation: [Data fetched successfully]
+            Thought: Now I have the data, I can proceed with [lstm_predictor for predictions OR stock_visualizer for risk assessment]
+            Action: [Next appropriate tool based on query type]
             Action Input: {{"symbol": "SYMBOL", "other_params": "as_needed"}}
             Observation: [Tool result will appear here]
-            ... (repeat Thought/Action/Observation as needed)
+            ... (continue with remaining tools in sequence)
             Thought: I now have enough information to answer
             Final Answer: [Your comprehensive response to the user]
+            
+            FOR GENERAL QUESTIONS:
+            Thought: This is a general question, I'll use general_assistant
+            Action: general_assistant
+            Action Input: {{"question": "user's question"}}
+            Observation: [Tool result will appear here]
+            Final Answer: [Use the general_assistant response directly without modification]
 
             Begin!
 
@@ -362,7 +443,7 @@ class StockAnalysisAgent:
             memory=self.memory,
             verbose=True,  # Enable to capture agent reasoning
             handle_parsing_errors=self._handle_parsing_errors,  # Use custom error handler
-            max_iterations=6,  # Limit iterations for stability
+            max_iterations=4,  # Reduced to prevent infinite loops
             return_intermediate_steps=False,  # Set to False to avoid the multiple keys issue
             callbacks=[self.callback_handler],
             early_stopping_method="force"  # Stop when max iterations reached
@@ -408,6 +489,9 @@ class StockAnalysisAgent:
         Main method to analyze stocks based on user query
         """
         logger.info(f"Agent analyzing query: '{query[:100]}{'...' if len(query) > 100 else ''}'")
+        
+        # Store original query in callback handler for workflow detection
+        self.callback_handler.original_query = query
         
         # Reset progress tracking for new analysis
         self.callback_handler.reset_progress()

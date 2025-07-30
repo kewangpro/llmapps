@@ -28,7 +28,7 @@ class StockVisualizer(BaseTool):
                 if 'symbol' in parsed:
                     symbol = parsed['symbol']
             except json.JSONDecodeError:
-                return {"error": f"Invalid symbol format: {symbol}"}
+                return f"❌ Invalid symbol format: {symbol}"
         
         try:
             # Get data from store
@@ -40,7 +40,7 @@ class StockVisualizer(BaseTool):
             # Get historical data
             stock_data = data_store.get_stock_data(symbol)
             if not stock_data:
-                return {"error": f"No historical data found for {symbol}. Please fetch data first."}
+                return f"❌ No historical data found for {symbol}. Please fetch data first."
             
             historical_data = stock_data['data']
             
@@ -77,7 +77,7 @@ class StockVisualizer(BaseTool):
                         df_hist['Date'] = pd.date_range(start='2023-01-01', periods=len(df_hist), freq='D')
                         date_column = 'Date'
                 else:
-                    return {"error": "No date information found in historical data"}
+                    return f"❌ No date information found in historical data for {symbol}"
             
             df_hist['Date'] = pd.to_datetime(df_hist[date_column])
             
@@ -251,20 +251,21 @@ class StockVisualizer(BaseTool):
             data_store.store_stock_data(viz_key, visualization_result)
             logger.info(f"Stored visualization data for {symbol}")
             
-            return {
-                "symbol": symbol,
-                "status": "success",
-                "message": f"Interactive charts and visualizations created for {symbol}",
-                "insights_count": len(visualization_result["insights"]),
-                "charts_created": ["main_chart", "volume_chart", "trend_chart"]
-            }
+            # Return a string for LangChain compatibility
+            success_msg = f"✅ Successfully created interactive charts and visualizations for {symbol}:\n"
+            success_msg += f"- Generated {len(visualization_result['insights'])} key insights\n"
+            success_msg += f"- Created charts: main stock chart, volume chart, and trend analysis\n"
+            success_msg += f"- All visualization data stored and ready for display\n"
+            success_msg += f"The comprehensive analysis shows {symbol} stock trends, predictions, and technical indicators."
+            
+            return success_msg
             
         except Exception as e:
             logger.error(f"Visualization error: {str(e)}")
             logger.error(f"Error type: {type(e)}")
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
-            return {"error": f"Error creating visualizations: {str(e)}"}
+            return f"❌ Error creating visualizations for {symbol}: {str(e)}"
     
     def _generate_insights(self, trend_analysis: Dict, symbol: str) -> List[str]:
         insights = []
