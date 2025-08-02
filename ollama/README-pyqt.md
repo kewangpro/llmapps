@@ -66,6 +66,34 @@ ollama pull gemma3
 ollama pull llama3.2-vision
 ```
 
+## 📁 File Structure
+
+### PyQt6 Application Files
+
+```
+ollama-pyqt/
+├── 📄 ollama_pyqt.py          # Main PyQt6 application (~1,130 lines)
+├── 📄 requirements-pyqt.txt   # Python dependencies
+└── 📄 README-pyqt.md         # Documentation (this file)
+```
+
+| File | Description | Size | Purpose |
+|------|-------------|------|---------|
+| **`ollama_pyqt.py`** | Main application | ~1,130 lines | Complete desktop chat app with file analysis |
+| **`requirements-pyqt.txt`** | Dependencies | 6 lines | PyQt6, aiohttp, PyPDF2, Pillow, pillow-heif |
+| **`README-pyqt.md`** | Documentation | ~250 lines | Installation guide and usage instructions |
+
+### Dependencies Overview
+
+```python
+# requirements-pyqt.txt
+PyQt6>=6.6.0        # Native GUI framework
+aiohttp>=3.9.0      # Async HTTP client for Ollama API  
+PyPDF2>=3.0.0       # PDF text extraction
+Pillow>=9.0.0       # Image processing
+pillow-heif>=0.10.0 # HEIC/iPhone image support
+```
+
 ## 🏃 Usage
 
 ### Quick Start
