@@ -114,8 +114,11 @@ class OllamaAPI:
                         "error": f"HTTP {response.status}: {error_text}"
                     }
         except Exception as e:
-            logger.error(f"❌ Chat exception: {e}")
-            return {"success": False, "error": str(e)}
+            import traceback
+            error_details = f"{type(e).__name__}: {str(e)}"
+            logger.error(f"❌ Chat exception: {error_details}")
+            logger.error(f"🔍 Full traceback: {traceback.format_exc()}")
+            return {"success": False, "error": error_details}
 
 
 class ChatWorker(QThread):
@@ -150,7 +153,11 @@ class ChatWorker(QThread):
             self.response_received.emit(result)
             
         except Exception as e:
-            self.response_received.emit({"success": False, "error": str(e)})
+            import traceback
+            error_details = f"{type(e).__name__}: {str(e)}"
+            logger.error(f"❌ ChatWorker exception: {error_details}")
+            logger.error(f"🔍 ChatWorker traceback: {traceback.format_exc()}")
+            self.response_received.emit({"success": False, "error": error_details})
 
 
 class ModelLoader(QThread):
