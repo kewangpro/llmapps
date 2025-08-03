@@ -56,7 +56,8 @@ class OllamaAPI:
         """Get available Ollama models"""
         logger.info("🔄 Fetching Ollama models...")
         try:
-            async with self.session.get(f"{self.base_url}/api/tags") as response:
+            timeout = aiohttp.ClientTimeout(total=30)  # 30 second timeout for model list
+            async with self.session.get(f"{self.base_url}/api/tags", timeout=timeout) as response:
                 if response.status == 200:
                     data = await response.json()
                     models = []
@@ -97,7 +98,12 @@ class OllamaAPI:
                 "stream": False
             }
             
-            async with self.session.post(f"{self.base_url}/api/chat", json=payload) as response:
+            # Set timeout - longer for vision models processing images
+            timeout_seconds = 300 if images else 120  # 5 min for images, 2 min for text
+            timeout = aiohttp.ClientTimeout(total=timeout_seconds)
+            logger.info(f"⏱️ Request timeout set to {timeout_seconds} seconds")
+            
+            async with self.session.post(f"{self.base_url}/api/chat", json=payload, timeout=timeout) as response:
                 if response.status == 200:
                     data = await response.json()
                     content = data.get("message", {}).get("content", "")
@@ -113,6 +119,10 @@ class OllamaAPI:
                         "success": False,
                         "error": f"HTTP {response.status}: {error_text}"
                     }
+        except asyncio.TimeoutError:
+            timeout_msg = f"Request timed out after {timeout_seconds} seconds. The model may be taking longer than expected to process this request."
+            logger.error(f"⏱️ Chat timeout: {timeout_msg}")
+            return {"success": False, "error": timeout_msg}
         except Exception as e:
             import traceback
             error_details = f"{type(e).__name__}: {str(e)}"
