@@ -17,16 +17,18 @@ A native desktop chat application for interacting with Ollama models, built with
 - Model refresh functionality
 
 ### 📄 **File Analysis**
-- **Images**: JPG, PNG, GIF, BMP, WebP, SVG, TIFF
+- **Images**: JPG, PNG, GIF, BMP, WebP, SVG, TIFF, HEIC, HEIF, AVIF
+  - HEIC/iPhone image conversion support
   - Base64 encoding for Ollama API
   - Automatic vision model switching
   - Image preview in sidebar
-- **PDFs**: Text extraction with PyPDF2
-  - Handles text-based and image-based PDFs
-  - Page count and content analysis
-- **Text Files**: TXT, MD, PY, JS, HTML, CSS, JSON, XML
+- **Documents**: 
+  - **PDFs**: Text extraction with PyPDF2, handles text-based and image-based PDFs
+  - **Word Documents**: DOCX, DOC text extraction from paragraphs and tables
+  - **Excel Files**: XLSX, XLS, XLSM data extraction from all sheets
+- **Text Files**: TXT, MD, PY, JS, HTML, CSS, JSON, XML, CSV
   - Full content analysis with syntax awareness
-- **Videos**: MP4, MOV, AVI, MKV, WebM, FLV, WMV
+- **Videos**: MP4, MOV, AVI, MKV, WebM, FLV, WMV, M4V
   - Metadata display and general information
 - **Binary Files**: Safe handling with file type identification
 
@@ -49,7 +51,12 @@ Download the `ollama_pyqt.py` file to your desired directory.
 
 ### 2. Install Dependencies
 ```bash
-pip install PyQt6>=6.6.0 aiohttp>=3.9.0 PyPDF2>=3.0.0
+pip install -r requirements.txt
+```
+
+Or install manually:
+```bash
+pip install PyQt6>=6.6.0 aiohttp>=3.9.0 PyPDF2>=3.0.0 Pillow>=9.0.0 pillow-heif>=0.10.0 python-docx>=0.8.11 openpyxl>=3.1.0
 ```
 
 ### 3. Start Ollama
@@ -72,26 +79,28 @@ ollama pull llama3.2-vision
 
 ```
 ollama-pyqt/
-├── 📄 ollama_pyqt.py          # Main PyQt6 application (~1,130 lines)
-├── 📄 requirements-pyqt.txt   # Python dependencies
-└── 📄 README-pyqt.md         # Documentation (this file)
+├── 📄 ollama_pyqt.py          # Main PyQt6 application (~1,300 lines)
+├── 📄 requirements.txt        # Python dependencies
+└── 📄 README.md              # Documentation (this file)
 ```
 
 | File | Description | Size | Purpose |
 |------|-------------|------|---------|
-| **`ollama_pyqt.py`** | Main application | ~1,130 lines | Complete desktop chat app with file analysis |
-| **`requirements-pyqt.txt`** | Dependencies | 6 lines | PyQt6, aiohttp, PyPDF2, Pillow, pillow-heif |
-| **`README-pyqt.md`** | Documentation | ~250 lines | Installation guide and usage instructions |
+| **`ollama_pyqt.py`** | Main application | ~1,300 lines | Complete desktop chat app with file analysis |
+| **`requirements.txt`** | Dependencies | 8 lines | PyQt6, aiohttp, PyPDF2, Pillow, pillow-heif, python-docx, openpyxl |
+| **`README.md`** | Documentation | ~250 lines | Installation guide and usage instructions |
 
 ### Dependencies Overview
 
 ```python
-# requirements-pyqt.txt
+# requirements.txt
 PyQt6>=6.6.0        # Native GUI framework
 aiohttp>=3.9.0      # Async HTTP client for Ollama API  
 PyPDF2>=3.0.0       # PDF text extraction
 Pillow>=9.0.0       # Image processing
 pillow-heif>=0.10.0 # HEIC/iPhone image support
+python-docx>=0.8.11 # Word document parsing
+openpyxl>=3.1.0     # Excel file processing
 ```
 
 ## 🏃 Usage
@@ -129,10 +138,10 @@ python ollama_pyqt.py
 
 | Type | Extensions | Features |
 |------|------------|----------|
-| **Images** | jpg, png, gif, bmp, webp, svg, tiff | Vision model auto-switch, preview |
-| **PDFs** | pdf | Text extraction, page count, content analysis |
-| **Text** | txt, md, py, js, html, css, json, xml | Full content analysis |
-| **Videos** | mp4, mov, avi, mkv, webm, flv, wmv | Metadata and general info |
+| **Images** | jpg, png, gif, bmp, webp, svg, tiff, heic, heif, avif | Vision model auto-switch, HEIC conversion, preview |
+| **Documents** | pdf, docx, doc, xlsx, xls, xlsm | Text/data extraction, content analysis, preview |
+| **Text** | txt, md, py, js, html, css, json, xml, csv | Full content analysis, syntax highlighting |
+| **Videos** | mp4, mov, avi, mkv, webm, flv, wmv, m4v | Metadata and general info |
 | **Binary** | exe, zip, etc. | Safe handling, type identification |
 
 ### Logging and Debugging
@@ -153,7 +162,7 @@ The application provides comprehensive console logging:
 │ Model: [gemma3 (7.4GB)] [🔄]                            │
 ├─────────────────────────────────────────────────────────┤
 │ 📄 File Analysis                                        │
-│ [📄 Select File] Loaded: filename.pdf [🗑️] [👁️]        │
+│ [📄 Select File] Loaded: document.docx [🗑️] [👁️]       │
 ├─────────────────────────────────────────────────────────┤
 │ 💬 File conversation active - Ask follow-up questions!   │
 ├─────────────────────────────────────────────────────────┤
@@ -185,13 +194,15 @@ The application provides comprehensive console logging:
 
 #### Application won't start
 - Check Python version: `python --version` (needs 3.8+)
-- Install dependencies: `pip install PyQt6 aiohttp PyPDF2`
+- Install dependencies: `pip install -r requirements.txt`
 - Check console logs for specific errors
 
 #### File loading issues
 - Verify file permissions and accessibility
 - Check supported file formats
 - For PDFs, ensure file is not corrupted or password-protected
+- For Word/Excel files, ensure python-docx and openpyxl are installed
+- For HEIC images, ensure pillow-heif is installed
 
 #### Chat not working
 - Verify Ollama service is running on port 11434
@@ -221,6 +232,9 @@ The application provides comprehensive console logging:
 - **PyQt6**: Native desktop GUI framework
 - **aiohttp**: Async HTTP client for Ollama API
 - **PyPDF2**: PDF text extraction
+- **python-docx**: Word document parsing
+- **openpyxl**: Excel file processing
+- **Pillow & pillow-heif**: Image processing and HEIC support
 - **Python Standard Library**: File operations, base64, JSON, etc.
 
 ## 🔄 Migration from Electron

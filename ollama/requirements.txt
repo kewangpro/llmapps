@@ -4,3 +4,6 @@ aiohttp>=3.9.0
 PyPDF2>=3.0.0
 Pillow>=9.0.0
 pillow-heif>=0.10.0
+python-docx>=0.8.11
+openpyxl>=3.1.0
+python-pptx>=0.6.0

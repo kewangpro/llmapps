@@ -222,12 +222,33 @@ class FileHandler:
         return Path(file_path).suffix.lower() in text_extensions
     
     @staticmethod
+    def is_word_file(file_path: str) -> bool:
+        """Check if file is a Word document"""
+        word_extensions = {'.docx', '.doc'}
+        return Path(file_path).suffix.lower() in word_extensions
+    
+    @staticmethod
+    def is_excel_file(file_path: str) -> bool:
+        """Check if file is an Excel spreadsheet"""
+        excel_extensions = {'.xlsx', '.xls', '.xlsm'}
+        return Path(file_path).suffix.lower() in excel_extensions
+    
+    @staticmethod
+    def is_powerpoint_file(file_path: str) -> bool:
+        """Check if file is a PowerPoint presentation"""
+        ppt_extensions = {'.pptx', '.ppt'}
+        return Path(file_path).suffix.lower() in ppt_extensions
+    
+    @staticmethod
     def is_binary_file(file_path: str) -> bool:
         """Check if file is binary (fallback for unknown types)"""
         return not (FileHandler.is_image_file(file_path) or 
                    FileHandler.is_video_file(file_path) or 
                    FileHandler.is_pdf_file(file_path) or 
-                   FileHandler.is_text_file(file_path))
+                   FileHandler.is_text_file(file_path) or
+                   FileHandler.is_word_file(file_path) or
+                   FileHandler.is_excel_file(file_path) or
+                   FileHandler.is_powerpoint_file(file_path))
     
     @staticmethod
     def read_image_file(file_path: str) -> Dict[str, Any]:
@@ -346,6 +367,182 @@ class FileHandler:
                 }
             except:
                 return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def read_word_file(file_path: str) -> Dict[str, Any]:
+        """Read Word document and extract text"""
+        logger.info(f"📄 Reading Word file: {file_path}")
+        try:
+            from docx import Document
+            
+            doc = Document(file_path)
+            text_content = ""
+            
+            # Extract text from paragraphs
+            for paragraph in doc.paragraphs:
+                if paragraph.text.strip():
+                    text_content += paragraph.text + "\n"
+            
+            # Extract text from tables
+            for table in doc.tables:
+                for row in table.rows:
+                    row_text = []
+                    for cell in row.cells:
+                        cell_text = cell.text.strip()
+                        if cell_text:
+                            row_text.append(cell_text)
+                    if row_text:
+                        text_content += " | ".join(row_text) + "\n"
+            
+            if text_content.strip():
+                logger.info(f"✅ Word document parsed: {len(text_content.strip())} characters extracted")
+                return {
+                    "success": True,
+                    "content": text_content.strip(),
+                    "paragraphs": len(doc.paragraphs),
+                    "tables": len(doc.tables)
+                }
+            else:
+                return {
+                    "success": True,
+                    "content": "Empty Word document or no extractable text found.",
+                    "paragraphs": len(doc.paragraphs),
+                    "tables": len(doc.tables)
+                }
+                
+        except ImportError:
+            logger.error("❌ python-docx not installed. Install with: pip install python-docx")
+            return {"success": False, "error": "python-docx library not installed"}
+        except Exception as e:
+            logger.error(f"❌ Word file read error: {e}")
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def read_excel_file(file_path: str) -> Dict[str, Any]:
+        """Read Excel file and extract data"""
+        logger.info(f"📊 Reading Excel file: {file_path}")
+        try:
+            from openpyxl import load_workbook
+            
+            workbook = load_workbook(file_path, read_only=True, data_only=True)
+            text_content = ""
+            sheet_info = []
+            
+            for sheet_name in workbook.sheetnames:
+                sheet = workbook[sheet_name]
+                sheet_text = f"Sheet: {sheet_name}\n" + "="*50 + "\n"
+                
+                # Get sheet dimensions
+                max_row = sheet.max_row or 0
+                max_col = sheet.max_column or 0
+                
+                if max_row == 0 or max_col == 0:
+                    sheet_text += "Empty sheet\n\n"
+                else:
+                    # Read data (limit to first 100 rows to avoid huge output)
+                    row_limit = min(max_row, 100)
+                    for row_num in range(1, row_limit + 1):
+                        row_data = []
+                        for col_num in range(1, max_col + 1):
+                            cell = sheet.cell(row=row_num, column=col_num)
+                            if cell.value is not None:
+                                row_data.append(str(cell.value))
+                            else:
+                                row_data.append("")
+                        
+                        # Only add rows that have some content
+                        if any(cell.strip() for cell in row_data):
+                            sheet_text += " | ".join(row_data) + "\n"
+                    
+                    if max_row > 100:
+                        sheet_text += f"\n... [Showing first 100 rows of {max_row} total rows]\n"
+                
+                sheet_text += "\n"
+                text_content += sheet_text
+                
+                sheet_info.append({
+                    "name": sheet_name,
+                    "rows": max_row,
+                    "columns": max_col
+                })
+            
+            workbook.close()
+            
+            logger.info(f"✅ Excel file parsed: {len(workbook.sheetnames)} sheets, {len(text_content)} characters")
+            return {
+                "success": True,
+                "content": text_content.strip() if text_content.strip() else "No data found in Excel file",
+                "sheets": sheet_info,
+                "sheet_count": len(workbook.sheetnames)
+            }
+            
+        except ImportError:
+            logger.error("❌ openpyxl not installed. Install with: pip install openpyxl")
+            return {"success": False, "error": "openpyxl library not installed"}
+        except Exception as e:
+            logger.error(f"❌ Excel file read error: {e}")
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def read_powerpoint_file(file_path: str) -> Dict[str, Any]:
+        """Read PowerPoint file and extract text"""
+        logger.info(f"📊 Reading PowerPoint file: {file_path}")
+        try:
+            from pptx import Presentation
+            
+            presentation = Presentation(file_path)
+            text_content = ""
+            slide_info = []
+            
+            for slide_num, slide in enumerate(presentation.slides, 1):
+                slide_text = f"Slide {slide_num}:\n" + "="*30 + "\n"
+                slide_content = ""
+                
+                # Extract text from all shapes on the slide
+                for shape in slide.shapes:
+                    if hasattr(shape, "text") and shape.text.strip():
+                        slide_content += shape.text.strip() + "\n"
+                    
+                    # Extract text from tables
+                    if shape.has_table:
+                        table = shape.table
+                        for row in table.rows:
+                            row_text = []
+                            for cell in row.cells:
+                                if cell.text.strip():
+                                    row_text.append(cell.text.strip())
+                            if row_text:
+                                slide_content += " | ".join(row_text) + "\n"
+                
+                if slide_content.strip():
+                    slide_text += slide_content + "\n"
+                else:
+                    slide_text += "(No text content)\n\n"
+                
+                text_content += slide_text
+                
+                # Count shapes on slide
+                text_shapes = sum(1 for shape in slide.shapes if hasattr(shape, "text") and shape.text.strip())
+                slide_info.append({
+                    "slide_number": slide_num,
+                    "text_shapes": text_shapes,
+                    "total_shapes": len(slide.shapes)
+                })
+            
+            logger.info(f"✅ PowerPoint parsed: {len(presentation.slides)} slides, {len(text_content)} characters")
+            return {
+                "success": True,
+                "content": text_content.strip() if text_content.strip() else "No text content found in PowerPoint",
+                "slides": slide_info,
+                "slide_count": len(presentation.slides)
+            }
+            
+        except ImportError:
+            logger.error("❌ python-pptx not installed. Install with: pip install python-pptx")
+            return {"success": False, "error": "python-pptx library not installed"}
+        except Exception as e:
+            logger.error(f"❌ PowerPoint file read error: {e}")
+            return {"success": False, "error": str(e)}
 
 
 class OllamaDesktopChat(QMainWindow):
@@ -641,7 +838,7 @@ class OllamaDesktopChat(QMainWindow):
             self,
             "Select File",
             "",
-            "All Files (*);;Images (*.jpg *.jpeg *.png *.gif *.bmp *.webp *.svg *.tiff);;Videos (*.mp4 *.mov *.avi *.mkv *.webm *.flv *.wmv *.m4v);;Documents (*.pdf *.txt *.md *.doc *.docx);;Code Files (*.py *.js *.ts *.html *.css *.json *.xml)"
+            "All Files (*);;Images (*.jpg *.jpeg *.png *.gif *.bmp *.webp *.svg *.tiff *.heic *.heif);;Videos (*.mp4 *.mov *.avi *.mkv *.webm *.flv *.wmv *.m4v);;Documents (*.pdf *.txt *.md);;Word Documents (*.docx *.doc);;Excel Files (*.xlsx *.xls *.xlsm);;PowerPoint Files (*.pptx *.ppt);;Code Files (*.py *.js *.ts *.html *.css *.json *.xml)"
         )
         
         if file_path:
@@ -658,6 +855,9 @@ class OllamaDesktopChat(QMainWindow):
                 'is_image': FileHandler.is_image_file(file_path),
                 'is_pdf': FileHandler.is_pdf_file(file_path),
                 'is_video': FileHandler.is_video_file(file_path),
+                'is_word': FileHandler.is_word_file(file_path),
+                'is_excel': FileHandler.is_excel_file(file_path),
+                'is_powerpoint': FileHandler.is_powerpoint_file(file_path),
                 'is_binary': FileHandler.is_binary_file(file_path),
                 'conversation_history': []
             }
@@ -668,6 +868,12 @@ class OllamaDesktopChat(QMainWindow):
                 file_type = "image"
             elif self.file_context['is_pdf']:
                 file_type = "PDF"
+            elif self.file_context['is_word']:
+                file_type = "Word document"
+            elif self.file_context['is_excel']:
+                file_type = "Excel spreadsheet"
+            elif self.file_context['is_powerpoint']:
+                file_type = "PowerPoint presentation"
             elif FileHandler.is_text_file(file_path):
                 file_type = "text"
             elif self.file_context['is_video']:
@@ -691,6 +897,12 @@ class OllamaDesktopChat(QMainWindow):
                 self.load_image_file(file_path)
             elif self.file_context['is_pdf']:
                 self.load_pdf_file(file_path)
+            elif self.file_context['is_word']:
+                self.load_word_file(file_path)
+            elif self.file_context['is_excel']:
+                self.load_excel_file(file_path)
+            elif self.file_context['is_powerpoint']:
+                self.load_powerpoint_file(file_path)
             elif FileHandler.is_text_file(file_path):
                 self.load_text_file(file_path)
             elif self.file_context['is_video']:
@@ -744,6 +956,43 @@ class OllamaDesktopChat(QMainWindow):
         self.switch_back_to_previous_model()
         self.add_system_message(f"🎥 Video file loaded: {Path(file_path).name}. Note: Video content analysis requires specialized models. You can ask general questions about video files.")
         self.show_video_preview(file_path)
+    
+    def load_word_file(self, file_path: str):
+        """Load Word document"""
+        result = FileHandler.read_word_file(file_path)
+        if result['success']:
+            self.file_context['file_content'] = result['content']
+            self.switch_back_to_previous_model()
+            paragraphs = result.get('paragraphs', 0)
+            tables = result.get('tables', 0)
+            self.add_system_message(f"📄 Word document loaded: {Path(file_path).name} ({paragraphs} paragraphs, {tables} tables). You can now ask questions about this document!")
+            self.show_word_preview(file_path, result)
+        else:
+            QMessageBox.warning(self, "Error", f"Failed to load Word document: {result['error']}")
+    
+    def load_excel_file(self, file_path: str):
+        """Load Excel file"""
+        result = FileHandler.read_excel_file(file_path)
+        if result['success']:
+            self.file_context['file_content'] = result['content']
+            self.switch_back_to_previous_model()
+            sheet_count = result.get('sheet_count', 0)
+            self.add_system_message(f"📊 Excel file loaded: {Path(file_path).name} ({sheet_count} sheets). You can now ask questions about this spreadsheet!")
+            self.show_excel_preview(file_path, result)
+        else:
+            QMessageBox.warning(self, "Error", f"Failed to load Excel file: {result['error']}")
+    
+    def load_powerpoint_file(self, file_path: str):
+        """Load PowerPoint file"""
+        result = FileHandler.read_powerpoint_file(file_path)
+        if result['success']:
+            self.file_context['file_content'] = result['content']
+            self.switch_back_to_previous_model()
+            slide_count = result.get('slide_count', 0)
+            self.add_system_message(f"📊 PowerPoint presentation loaded: {Path(file_path).name} ({slide_count} slides). You can now ask questions about this presentation!")
+            self.show_powerpoint_preview(file_path, result)
+        else:
+            QMessageBox.warning(self, "Error", f"Failed to load PowerPoint file: {result['error']}")
     
     def load_binary_file(self, file_path: str):
         """Load binary file (metadata only)"""
@@ -924,6 +1173,172 @@ class OllamaDesktopChat(QMainWindow):
         self.preview_content.setWidget(widget)
         self.show_file_preview()
     
+    def show_word_preview(self, file_path: str, word_result: Dict):
+        """Show Word document content in preview pane"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # File info
+        file_name = Path(file_path).name
+        file_size = Path(file_path).stat().st_size / 1024  # KB
+        paragraphs = word_result.get('paragraphs', 0)
+        tables = word_result.get('tables', 0)
+        
+        info_text = f"📄 {file_name} ({file_size:.1f} KB)"
+        if paragraphs > 0 or tables > 0:
+            info_text += f" - {paragraphs} paragraphs, {tables} tables"
+        
+        info_label = QLabel(info_text)
+        info_label.setStyleSheet("font-weight: bold; color: #0066cc; padding: 10px;")
+        info_label.setWordWrap(True)
+        layout.addWidget(info_label)
+        
+        # Content preview
+        if word_result.get('success') and word_result.get('content'):
+            content_widget = QTextEdit()
+            content_widget.setReadOnly(True)
+            content = word_result['content']
+            preview_content = content[:3000]  # Show first 3000 chars
+            content_widget.setPlainText(preview_content)
+            
+            if len(content) > 3000:
+                content_widget.append("\n\n... [Content truncated for preview]")
+            
+            layout.addWidget(content_widget)
+        else:
+            # Empty or error case
+            empty_label = QLabel("No content extracted from Word document")
+            empty_label.setStyleSheet("color: gray; font-style: italic; padding: 20px;")
+            empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            layout.addWidget(empty_label)
+        
+        self.preview_content.setWidget(widget)
+        self.show_file_preview()
+    
+    def show_excel_preview(self, file_path: str, excel_result: Dict):
+        """Show Excel file content in preview pane"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # File info
+        file_name = Path(file_path).name
+        file_size = Path(file_path).stat().st_size / 1024  # KB
+        sheet_count = excel_result.get('sheet_count', 0)
+        sheets = excel_result.get('sheets', [])
+        
+        info_text = f"📊 {file_name} ({file_size:.1f} KB, {sheet_count} sheets)"
+        
+        info_label = QLabel(info_text)
+        info_label.setStyleSheet("font-weight: bold; color: #0066cc; padding: 10px;")
+        info_label.setWordWrap(True)
+        layout.addWidget(info_label)
+        
+        # Sheet info
+        if sheets:
+            sheet_info_widget = QWidget()
+            sheet_info_layout = QVBoxLayout(sheet_info_widget)
+            
+            sheet_info_label = QLabel("Sheet Information:")
+            sheet_info_label.setStyleSheet("font-weight: bold; margin: 5px 0;")
+            sheet_info_layout.addWidget(sheet_info_label)
+            
+            for sheet in sheets[:5]:  # Show first 5 sheets
+                sheet_text = f"• {sheet['name']}: {sheet['rows']} rows × {sheet['columns']} columns"
+                sheet_label = QLabel(sheet_text)
+                sheet_label.setStyleSheet("padding-left: 15px; color: #333;")
+                sheet_info_layout.addWidget(sheet_label)
+            
+            if len(sheets) > 5:
+                more_label = QLabel(f"... and {len(sheets) - 5} more sheets")
+                more_label.setStyleSheet("padding-left: 15px; color: gray; font-style: italic;")
+                sheet_info_layout.addWidget(more_label)
+            
+            layout.addWidget(sheet_info_widget)
+        
+        # Content preview
+        if excel_result.get('success') and excel_result.get('content'):
+            content_widget = QTextEdit()
+            content_widget.setReadOnly(True)
+            content = excel_result['content']
+            preview_content = content[:4000]  # Show first 4000 chars
+            content_widget.setPlainText(preview_content)
+            
+            if len(content) > 4000:
+                content_widget.append("\n\n... [Content truncated for preview]")
+            
+            layout.addWidget(content_widget)
+        else:
+            # Empty or error case
+            empty_label = QLabel("No data found in Excel file")
+            empty_label.setStyleSheet("color: gray; font-style: italic; padding: 20px;")
+            empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            layout.addWidget(empty_label)
+        
+        self.preview_content.setWidget(widget)
+        self.show_file_preview()
+
+    def show_powerpoint_preview(self, file_path: str, ppt_result: Dict):
+        """Show PowerPoint presentation content in preview pane"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # File info
+        file_name = Path(file_path).name
+        file_size = Path(file_path).stat().st_size / 1024  # KB
+        slide_count = ppt_result.get('slide_count', 0)
+        slides = ppt_result.get('slides', [])
+        
+        info_text = f"📊 {file_name} ({file_size:.1f} KB, {slide_count} slides)"
+        
+        info_label = QLabel(info_text)
+        info_label.setStyleSheet("font-weight: bold; color: #0066cc; padding: 10px;")
+        info_label.setWordWrap(True)
+        layout.addWidget(info_label)
+        
+        # Slide info
+        if slides:
+            slide_info_widget = QWidget()
+            slide_info_layout = QVBoxLayout(slide_info_widget)
+            
+            slide_info_label = QLabel("Slide Information:")
+            slide_info_label.setStyleSheet("font-weight: bold; margin: 5px 0;")
+            slide_info_layout.addWidget(slide_info_label)
+            
+            for slide in slides[:10]:  # Show first 10 slides
+                slide_text = f"• Slide {slide['slide_number']}: {slide['text_shapes']} text shapes, {slide['total_shapes']} total shapes"
+                slide_label = QLabel(slide_text)
+                slide_label.setStyleSheet("padding-left: 15px; color: #333;")
+                slide_info_layout.addWidget(slide_label)
+            
+            if len(slides) > 10:
+                more_label = QLabel(f"... and {len(slides) - 10} more slides")
+                more_label.setStyleSheet("padding-left: 15px; color: gray; font-style: italic;")
+                slide_info_layout.addWidget(more_label)
+            
+            layout.addWidget(slide_info_widget)
+        
+        # Content preview
+        if ppt_result.get('success') and ppt_result.get('content'):
+            content_widget = QTextEdit()
+            content_widget.setReadOnly(True)
+            content = ppt_result['content']
+            preview_content = content[:4000]  # Show first 4000 chars
+            content_widget.setPlainText(preview_content)
+            
+            if len(content) > 4000:
+                content_widget.append("\n\n... [Content truncated for preview]")
+            
+            layout.addWidget(content_widget)
+        else:
+            # Empty or error case
+            empty_label = QLabel("No text content found in PowerPoint presentation")
+            empty_label.setStyleSheet("color: gray; font-style: italic; padding: 20px;")
+            empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            layout.addWidget(empty_label)
+        
+        self.preview_content.setWidget(widget)
+        self.show_file_preview()
+
     def show_binary_preview(self, file_path: str):
         """Show binary file info in preview pane"""
         widget = QWidget()
@@ -967,6 +1382,9 @@ class OllamaDesktopChat(QMainWindow):
             'is_image': False,
             'is_pdf': False,
             'is_video': False,
+            'is_word': False,
+            'is_excel': False,
+            'is_powerpoint': False,
             'is_binary': False,
             'conversation_history': []
         }
