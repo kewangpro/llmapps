@@ -21,8 +21,191 @@ import os
 # Add the project root to the Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Configure Panel with extensions
+# Configure Panel with extensions and custom CSS
 pn.extension('plotly')
+
+# Suppress noisy Panel/Bokeh warnings about patch dropping
+import logging
+bokeh_logger = logging.getLogger('bokeh')
+bokeh_logger.setLevel(logging.ERROR)  # Only show errors, not warnings
+
+root_logger = logging.getLogger()
+# Filter out the specific "Dropping a patch" warnings
+class PatchWarningFilter(logging.Filter):
+    def filter(self, record):
+        return not ("Dropping a patch because it contains a previously known reference" in record.getMessage())
+
+root_logger.addFilter(PatchWarningFilter())
+
+# Add error suppression via template
+pn.config.template = 'material'
+plotly_error_script = """
+<script>
+// Suppress Plotly resize errors - console override
+(function() {
+    const originalError = console.error;
+    console.error = function() {
+        const message = Array.from(arguments).join(' ');
+        if (!message.includes('Resize must be passed a displayed plot div element')) {
+            originalError.apply(console, arguments);
+        }
+    };
+    
+    // Suppress unhandled promise rejections
+    window.addEventListener('unhandledrejection', function(e) {
+        if (e.reason && e.reason.message && 
+            e.reason.message.includes('Resize must be passed a displayed plot div element')) {
+            e.preventDefault();
+        }
+    });
+})();
+</script>
+"""
+
+# Add to Panel's template
+pn.config.raw_css.append(plotly_error_script)
+
+# Custom CSS for modern, native-like styling
+CUSTOM_CSS = """
+:root {
+    --primary-color: #007AFF;
+    --primary-hover: #0051D5;
+    --success-color: #34C759;
+    --warning-color: #FF9500;
+    --error-color: #FF3B30;
+    --background-color: #F2F2F7;
+    --surface-color: #FFFFFF;
+    --text-primary: #000000;
+    --text-secondary: #6D6D80;
+    --border-color: #E5E5EA;
+    --shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    --border-radius: 12px;
+    --border-radius-small: 8px;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--background-color);
+    color: var(--text-primary);
+}
+
+/* Panel container styling */
+.bk-root .bk {
+    background-color: var(--background-color);
+}
+
+/* Card-like containers */
+.panel-card {
+    background: var(--surface-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border-color);
+    padding: 20px;
+    margin: 10px 0;
+}
+
+/* Modern button styling */
+.bk-btn {
+    background: var(--primary-color) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: var(--border-radius-small) !important;
+    padding: 12px 20px !important;
+    font-weight: 600 !important;
+    transition: all 0.2s ease !important;
+    box-shadow: var(--shadow) !important;
+}
+
+.bk-btn:hover {
+    background: var(--primary-hover) !important;
+    transform: translateY(-1px) !important;
+}
+
+.bk-btn:active {
+    transform: translateY(0) !important;
+}
+
+/* Input styling */
+.bk-input {
+    border: 2px solid var(--border-color) !important;
+    border-radius: var(--border-radius-small) !important;
+    padding: 12px 16px !important;
+    font-size: 16px !important;
+    transition: border-color 0.2s ease !important;
+    background: var(--surface-color) !important;
+}
+
+.bk-input:focus {
+    border-color: var(--primary-color) !important;
+    outline: none !important;
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1) !important;
+}
+
+/* Select dropdown styling */
+.bk-input[readonly] {
+    background: var(--surface-color) !important;
+    cursor: pointer !important;
+}
+
+/* Progress bar styling */
+.bk-progress {
+    background: var(--border-color) !important;
+    border-radius: 10px !important;
+    overflow: hidden !important;
+}
+
+.bk-progress .bk-progress-fill {
+    background: linear-gradient(90deg, var(--primary-color), var(--success-color)) !important;
+    transition: width 0.3s ease !important;
+}
+
+/* Chat message styling */
+.markdown-content {
+    line-height: 1.6;
+    font-size: 15px;
+}
+
+/* Accordion styling */
+.bk-accordion-header {
+    background: var(--surface-color) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: var(--border-radius-small) !important;
+    padding: 16px 20px !important;
+    font-weight: 600 !important;
+    color: var(--text-primary) !important;
+}
+
+.bk-accordion-content {
+    background: var(--surface-color) !important;
+    border: 1px solid var(--border-color) !important;
+    border-top: none !important;
+    border-radius: 0 0 var(--border-radius-small) var(--border-radius-small) !important;
+    padding: 20px !important;
+}
+
+/* Scrollbar styling for webkit browsers */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--background-color);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+"""
+
+# Apply custom CSS
+pn.config.raw_css.append(CUSTOM_CSS)
+
 
 # Import existing components
 from config import setup_logging, get_logger, get_config
@@ -62,11 +245,21 @@ class ResultsDisplay:
             ("📊 Analysis Results & Charts", pn.Column(
                 self.stock_info,
                 self.metrics_section,
-                self.charts_section
+                self.charts_section,
+                styles={
+                    'background': '#FFFFFF',
+                    'padding': '16px',
+                    'border-radius': '12px'
+                }
             )),
             active=[0],  # Expanded by default
-            width=560,
-            visible=False
+            width=640,  # Increased from 560 to 640 to match wider panel
+            visible=False,
+            styles={
+                'border-radius': '12px',
+                'box-shadow': '0 4px 12px rgba(0, 0, 0, 0.15)',
+                'border': '1px solid #E5E5EA'
+            }
         )
     
     def show_results(self, query):
@@ -128,15 +321,24 @@ class ResultsDisplay:
             # Create metric cards
             metrics = []
             
-            # Current price card
+            # Current price card with modern styling
             current_price = stock_data.get('current_price')
             if current_price:
                 price_card = pn.pane.HTML(f"""
-                <div style='background: #e3f2fd; padding: 15px; border-radius: 8px; text-align: center; margin: 5px;'>
-                    <h4>💰 Current Price</h4>
-                    <h3>${current_price:.2f}</h3>
+                <div style='
+                    background: linear-gradient(135deg, #007AFF, #0051D5); 
+                    color: white;
+                    padding: 20px; 
+                    border-radius: 16px; 
+                    text-align: center; 
+                    margin: 8px;
+                    box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+                    border: none;
+                '>
+                    <div style='font-size: 14px; font-weight: 600; margin-bottom: 8px; opacity: 0.9;'>💰 Current Price</div>
+                    <div style='font-size: 28px; font-weight: 700; line-height: 1;'>${current_price:.2f}</div>
                 </div>
-                """, width=150)
+                """, width=160)
                 metrics.append(price_card)
             
             # Percentage change card
@@ -177,17 +379,32 @@ class ResultsDisplay:
                 logger.debug(f"Prediction columns: {predictions.columns.tolist()}")
                 logger.debug(f"Latest prediction data: {predictions.iloc[-1].to_dict()}")
             
-            # Color based on positive/negative change
-            change_color = '#e8f5e8' if percentage_change >= 0 else '#ffebee'
+            # Modern percentage change card with gradient
+            if percentage_change >= 0:
+                change_gradient = 'linear-gradient(135deg, #34C759, #30A14E)'
+                change_shadow = 'rgba(52, 199, 89, 0.3)'
+            else:
+                change_gradient = 'linear-gradient(135deg, #FF3B30, #D70015)'
+                change_shadow = 'rgba(255, 59, 48, 0.3)'
+            
             change_icon = '📈' if percentage_change >= 0 else '📉'
             change_sign = '+' if percentage_change > 0 else ''
             
             change_card = pn.pane.HTML(f"""
-            <div style='background: {change_color}; padding: 15px; border-radius: 8px; text-align: center; margin: 5px;'>
-                <h4>{change_icon} Percentage Change</h4>
-                <h5>{change_sign}{percentage_change:.2f}%</h5>
+            <div style='
+                background: {change_gradient}; 
+                color: white;
+                padding: 20px; 
+                border-radius: 16px; 
+                text-align: center; 
+                margin: 8px;
+                box-shadow: 0 4px 12px {change_shadow};
+                border: none;
+            '>
+                <div style='font-size: 14px; font-weight: 600; margin-bottom: 8px; opacity: 0.9;'>{change_icon} Change</div>
+                <div style='font-size: 24px; font-weight: 700; line-height: 1;'>{change_sign}{percentage_change:.2f}%</div>
             </div>
-            """, width=150)
+            """, width=160)
             metrics.append(change_card)
             
             # Prediction cards
@@ -197,21 +414,39 @@ class ResultsDisplay:
                     pred_price = latest_pred.get('Predicted_Price')
                     if pred_price:
                         pred_card = pn.pane.HTML(f"""
-                        <div style='background: #f1f8e9; padding: 15px; border-radius: 8px; text-align: center; margin: 5px;'>
-                            <h4>🔮 Next Day Prediction</h4>
-                            <h3>${pred_price:.2f}</h3>
+                        <div style='
+                            background: linear-gradient(135deg, #AF52DE, #8E44AD); 
+                            color: white;
+                            padding: 20px; 
+                            border-radius: 16px; 
+                            text-align: center; 
+                            margin: 8px;
+                            box-shadow: 0 4px 12px rgba(175, 82, 222, 0.3);
+                            border: none;
+                        '>
+                            <div style='font-size: 14px; font-weight: 600; margin-bottom: 8px; opacity: 0.9;'>🔮 Prediction</div>
+                            <div style='font-size: 24px; font-weight: 700; line-height: 1;'>${pred_price:.2f}</div>
                         </div>
-                        """, width=150)
+                        """, width=160)
                         metrics.append(pred_card)
                     
-                    # Trend card
+                    # Modern trend card
                     trend = latest_pred.get('Trend', 'N/A')
                     trend_card = pn.pane.HTML(f"""
-                    <div style='background: #fff3e0; padding: 15px; border-radius: 8px; text-align: center; margin: 5px;'>
-                        <h4>📊 Trend</h4>
-                        <h4>{trend}</h4>
+                    <div style='
+                        background: linear-gradient(135deg, #FF9500, #FF7A00); 
+                        color: white;
+                        padding: 20px; 
+                        border-radius: 16px; 
+                        text-align: center; 
+                        margin: 8px;
+                        box-shadow: 0 4px 12px rgba(255, 149, 0, 0.3);
+                        border: none;
+                    '>
+                        <div style='font-size: 14px; font-weight: 600; margin-bottom: 8px; opacity: 0.9;'>📊 Trend</div>
+                        <div style='font-size: 18px; font-weight: 700; line-height: 1;'>{trend}</div>
                     </div>
-                    """, width=150)
+                    """, width=160)
                     metrics.append(trend_card)
                     
                 except Exception as pred_error:
@@ -241,14 +476,24 @@ class ResultsDisplay:
             # Display main price chart
             if 'main' in charts:
                 self.charts_section.append(pn.pane.Markdown("### 📈 Price Chart with Predictions"))
-                chart_pane = pn.pane.Plotly(charts['main'], width=540, height=400)
+                chart_pane = pn.pane.Plotly(
+                    charts['main'], 
+                    width=620, 
+                    height=400,
+                    config={'displayModeBar': True, 'responsive': True}
+                )
                 self.charts_section.append(chart_pane)
                 logger.info(f"Added main chart for {symbol}")
             
             # Display volume chart
             if 'volume' in charts and charts['volume'] is not None:
                 self.charts_section.append(pn.pane.Markdown("### 📊 Volume Analysis"))
-                volume_pane = pn.pane.Plotly(charts['volume'], width=540, height=300)
+                volume_pane = pn.pane.Plotly(
+                    charts['volume'], 
+                    width=620, 
+                    height=300,
+                    config={'displayModeBar': True, 'responsive': True}
+                )
                 self.charts_section.append(volume_pane)
                 logger.info(f"Added volume chart for {symbol}")
             else:
@@ -259,7 +504,12 @@ class ResultsDisplay:
             # Display trend chart
             if 'trend' in charts:
                 self.charts_section.append(pn.pane.Markdown("### 📉 Trend Analysis"))
-                trend_pane = pn.pane.Plotly(charts['trend'], width=540, height=300)
+                trend_pane = pn.pane.Plotly(
+                    charts['trend'], 
+                    width=620, 
+                    height=300,
+                    config={'displayModeBar': True, 'responsive': True}
+                )
                 self.charts_section.append(trend_pane)
                 logger.info(f"Added trend chart for {symbol}")
             
@@ -661,24 +911,26 @@ class StockSidebar:
             sizing_mode='stretch_width'  # Allow to expand within column
         )
         
-        # Analysis parameters
+        # Analysis parameters with responsive sizing
         self.past_data_period = pn.widgets.Select(
             name="Past Data",
             options=["2y", "5y"],
             value="2y",
-            width=60  # Reduced for narrow column
+            sizing_mode='stretch_width'  # Make responsive
         )
         
         self.future_prediction = pn.widgets.Select(
             name="Prediction", 
             options=["30 days", "1 week"],
             value="30 days",
-            width=60  # Reduced for narrow column
+            sizing_mode='stretch_width'  # Make responsive
         )
         
         self.params_row = pn.Row(
             self.past_data_period,
-            self.future_prediction
+            pn.Spacer(width=10),  # Add spacing between dropdowns
+            self.future_prediction,
+            sizing_mode='stretch_width'  # Make the row responsive too
         )
         
         self.quick_analysis_btn = pn.widgets.Button(
@@ -846,36 +1098,59 @@ class StockSidebar:
     
     def create_layout(self):
         """Create layout components"""
-        # Combined bottom controls - all three sections horizontally (full width distribution)
+        # Combined bottom controls with modern card styling
         self.bottom_controls = pn.Row(
             # Ask AI Assistant section
             pn.Column(
                 self.chat_header,
                 self.chat_input,
                 self.send_btn,
-                margin=(2, 5),
-                sizing_mode='stretch_width'  # Allow to expand within its share
+                margin=(10, 10),
+                sizing_mode='stretch_width',
+                styles={
+                    'background': '#FFFFFF',
+                    'border-radius': '12px',
+                    'border': '1px solid #E5E5EA',
+                    'box-shadow': '0 4px 12px rgba(0, 0, 0, 0.15)',
+                    'padding': '20px'
+                }
             ),
+            pn.Spacer(width=15),  # Spacing between cards
             # Quick Analysis section
             pn.Column(
                 self.quick_analysis_header,
                 self.quick_symbol,
                 self.params_row,
                 self.quick_analysis_btn,
-                margin=(2, 5),
-                sizing_mode='stretch_width'  # Allow to expand within its share
+                margin=(10, 10),
+                sizing_mode='stretch_width',
+                styles={
+                    'background': '#FFFFFF',
+                    'border-radius': '12px',
+                    'border': '1px solid #E5E5EA',
+                    'box-shadow': '0 4px 12px rgba(0, 0, 0, 0.15)',
+                    'padding': '20px'
+                }
             ),
+            pn.Spacer(width=15),  # Spacing between cards
             # Templates section  
             pn.Column(
                 self.templates_header,
                 self.selected_template,
                 self.template_symbol,
                 self.template_btn,
-                margin=(2, 5),
-                sizing_mode='stretch_width'  # Allow to expand within its share
+                margin=(10, 10),
+                sizing_mode='stretch_width',
+                styles={
+                    'background': '#FFFFFF',
+                    'border-radius': '12px',
+                    'border': '1px solid #E5E5EA',
+                    'box-shadow': '0 4px 12px rgba(0, 0, 0, 0.15)',
+                    'padding': '20px'
+                }
             ),
-            margin=(5, 5),  # Add margin around the entire row
-            sizing_mode='stretch_width'  # Make the row take full width
+            margin=(15, 15),
+            sizing_mode='stretch_width'
         )
         
         # Keep separate references for backward compatibility
@@ -918,30 +1193,38 @@ class ChatInterface:
         # Status indicator
         self.status = pn.pane.Markdown("")
         
-        # Chat history container
+        # Chat history container with enhanced styling
         self.chat_history = pn.Column(
-            height=450,  # Increased from 350 to 450 since title was moved to bottom
+            height=450,
             scroll=True,
-            auto_scroll_limit=1,  # Auto-scroll when new content is added (changed back to 1)
-            scroll_position=1,  # Start at bottom
-            width_policy='max',  # Allow full width expansion
-            sizing_mode='stretch_width'  # Stretch to container width
+            auto_scroll_limit=1,
+            scroll_position=1,
+            width_policy='max',
+            sizing_mode='stretch_width',
+            styles={
+                'background': '#FFFFFF',
+                'border-radius': '12px',
+                'border': '1px solid #E5E5EA',
+                'box-shadow': '0 4px 12px rgba(0, 0, 0, 0.15)',
+                'padding': '16px',
+                'margin': '8px 0'
+            }
         )
         
         # Add initial welcome message
         self.add_assistant_message(
-            "👋 Hello! I'm your **AI Stock Analysis Assistant** powered by advanced machine learning.\n\n"
-            "**What I can do:**\n"
-            "- 📊 Analyze stocks with real-time data\n"
-            "- 🧠 Generate LSTM price predictions\n"
-            "- 📈 Create interactive charts\n"
-            "- 💡 Provide comprehensive analysis\n"
-            "- 📉 Assess investment risks\n\n"
-            "**Try asking:**\n"
-            "- 'Analyze AAPL stock'\n"
-            "- 'Predict TSLA trends for 30 days'\n"
-            "- 'Compare GOOGL vs MSFT'\n\n"
-            "Use the input controls on the left to get started!"
+            "Hello! I'm your AI Stock Analysis Assistant powered by advanced machine learning.\n\n"
+            "**What I can do:**\n\n"
+            "📊 Analyze stocks with real-time data\n"
+            "🧠 Generate LSTM price predictions\n"
+            "📈 Create interactive charts\n"
+            "💡 Provide comprehensive analysis\n"
+            "📉 Assess investment risks\n\n"
+            "**Try asking:**\n\n"
+            "'Analyze AAPL stock'\n"
+            "'Predict TSLA trends for 30 days'\n"
+            "'Compare GOOGL vs MSFT'\n\n"
+            "Use the input controls below to get started!"
         )
         
         self.create_layout()
@@ -1050,7 +1333,103 @@ class ChatInterface:
             
             if result.get("success", False):
                 response = result.get("response", "Analysis completed successfully.")
+                
+                # Always show the main response in chat
                 self.add_assistant_message(response)
+                
+                # Debug: Log what we actually received
+                logger.info(f"Agent result keys: {list(result.keys())}")
+                logger.info(f"Agent response: {response[:200]}...")
+                
+                # Try to extract insights from the response text itself
+                if "Generated 3 key insights" in response or "key insights" in response.lower():
+                    # Try to get insights from data store
+                    from utils import extract_stock_symbols
+                    symbols = extract_stock_symbols(query)
+                    if symbols:
+                        symbol = symbols[0].upper()
+                        
+                        # Try to get insights from data store
+                        data_store = get_data_store()
+                        
+                        # Look for prediction data
+                        predictions_key = f"{symbol}_predictions"
+                        predictions = data_store.get_stock_data(predictions_key)
+                        
+                        # Look for stock data
+                        stock_data = data_store.get_stock_data(symbol)
+                        
+                        # Create insights from available data
+                        insights_parts = []
+                        
+                        if stock_data:
+                            current_price = stock_data.get('current_price')
+                            if current_price:
+                                insights_parts.append(f"💰 **Current Price**: ${current_price:.2f}")
+                            
+                            company_name = stock_data.get('company_name', symbol)
+                            data_range = stock_data.get('data_range', 'N/A')
+                            insights_parts.append(f"📊 **Analysis Period**: {data_range} of {company_name} data")
+                        
+                        if predictions and hasattr(predictions, 'iloc') and len(predictions) > 0:
+                            try:
+                                latest_pred = predictions.iloc[-1]
+                                pred_price = latest_pred.get('Predicted_Price')
+                                trend = latest_pred.get('Trend', 'N/A')
+                                
+                                if pred_price and current_price:
+                                    change_pct = ((pred_price - current_price) / current_price) * 100
+                                    direction = "📈 Bullish" if change_pct > 0 else "📉 Bearish"
+                                    insights_parts.append(f"🔮 **Prediction**: ${pred_price:.2f} ({change_pct:+.1f}%)")
+                                    insights_parts.append(f"📈 **Trend Analysis**: {direction} momentum detected")
+                                
+                                if trend != 'N/A':
+                                    insights_parts.append(f"🎯 **Technical Trend**: {trend}")
+                                
+                            except Exception as e:
+                                logger.debug(f"Error extracting prediction insights: {e}")
+                        
+                        # If we have insights, display them
+                        if insights_parts:
+                            insights_text = "## 📋 **Key Insights:**\n\n" + "\n".join(insights_parts)
+                            self.add_assistant_message(insights_text)
+                        else:
+                            logger.warning("No insights data found to display")
+                
+                # Legacy support: try to extract insights from result structure
+                insights = result.get("insights", [])
+                analysis_data = result.get("analysis_data", {})
+                
+                # If we have detailed insights, show them
+                if insights and len(insights) > 0:
+                    insights_text = "## 📋 **Key Insights:**\n\n"
+                    for i, insight in enumerate(insights, 1):
+                        insights_text += f"**{i}.** {insight}\n\n"
+                    self.add_assistant_message(insights_text)
+                
+                # If we have analysis data with summary, show it
+                elif analysis_data:
+                    summary_parts = []
+                    
+                    # Extract key metrics if available
+                    if 'current_price' in analysis_data:
+                        summary_parts.append(f"💰 **Current Price**: ${analysis_data['current_price']:.2f}")
+                    
+                    if 'price_change' in analysis_data:
+                        change = analysis_data['price_change']
+                        direction = "📈" if change >= 0 else "📉"
+                        summary_parts.append(f"{direction} **Price Change**: {change:+.2f}%")
+                    
+                    if 'volatility' in analysis_data:
+                        vol = analysis_data['volatility']
+                        summary_parts.append(f"📊 **Volatility**: {vol:.2f}%")
+                    
+                    if 'trend' in analysis_data:
+                        summary_parts.append(f"📈 **Trend**: {analysis_data['trend']}")
+                    
+                    if summary_parts:
+                        summary_text = "## 📊 **Analysis Summary:**\n\n" + "\n".join(summary_parts)
+                        self.add_assistant_message(summary_text)
                 
                 # Handle progress completion based on query type
                 if hasattr(self, 'external_progress_tracker') and self.external_progress_tracker:
@@ -1114,14 +1493,18 @@ class ChatInterface:
         user_msg = pn.pane.Markdown(
             f"**👤 You ({timestamp})**\n\n{message}",
             styles={
-                'background-color': '#e3f2fd',
-                'padding': '10px',
-                'margin': '5px 0', 
-                'border-radius': '5px',
+                'background': 'linear-gradient(135deg, #007AFF, #0051D5)',
+                'color': 'white',
+                'padding': '16px 20px',
+                'margin': '8px 0',
+                'border-radius': '18px 18px 4px 18px',
                 'width': '100%',
                 'min-width': '100%',
                 'box-sizing': 'border-box',
-                'display': 'block'
+                'display': 'block',
+                'box-shadow': '0 2px 8px rgba(0, 122, 255, 0.3)',
+                'font-size': '15px',
+                'line-height': '1.5'
             },
             width_policy='max',
             sizing_mode='stretch_width',
@@ -1135,23 +1518,27 @@ class ChatInterface:
         """Add assistant message to chat"""
         timestamp = datetime.now().strftime("%H:%M:%S")
         
-        # Enhanced styling to ensure consistent background coverage
         assistant_msg = pn.pane.Markdown(
             f"**🤖 Assistant ({timestamp})**\n\n{message}",
             styles={
-                'background-color': '#f3e5f5',
-                'padding': '10px',
-                'margin': '5px 0',
-                'border-radius': '5px',
+                'background': '#F8F9FA',
+                'border': '1px solid #E5E5EA',
+                'padding': '16px 20px',
+                'margin': '8px 0',
+                'border-radius': '18px 18px 18px 4px',
                 'width': '100%',
                 'min-width': '100%',
                 'box-sizing': 'border-box',
                 'display': 'block',
-                'overflow-wrap': 'break-word'
+                'overflow-wrap': 'break-word',
+                'box-shadow': '0 1px 4px rgba(0, 0, 0, 0.1)',
+                'font-size': '15px',
+                'line-height': '1.5',
+                'color': '#1D1D1F'
             },
             width_policy='max',
             sizing_mode='stretch_width',
-            margin=(5, 0)  # Additional margin parameter
+            margin=(5, 0)
         )
         
         self.chat_history.append(assistant_msg)
@@ -1164,14 +1551,19 @@ class ChatInterface:
         system_msg = pn.pane.Markdown(
             f"**ℹ️ System ({timestamp})**\n\n{message}",
             styles={
-                'background-color': '#fff3e0',
-                'padding': '10px',
-                'margin': '5px 0',
-                'border-radius': '5px',
+                'background': 'linear-gradient(135deg, #FF9500, #FF7A00)',
+                'color': 'white',
+                'padding': '12px 16px',
+                'margin': '8px 0',
+                'border-radius': '10px',
                 'width': '100%',
                 'min-width': '100%',
                 'box-sizing': 'border-box',
-                'display': 'block'
+                'display': 'block',
+                'box-shadow': '0 2px 6px rgba(255, 149, 0, 0.3)',
+                'font-size': '14px',
+                'line-height': '1.4',
+                'text-align': 'center'
             },
             width_policy='max',
             sizing_mode='stretch_width',
@@ -1183,13 +1575,30 @@ class ChatInterface:
     
     def create_layout(self):
         """Create chat layout"""
+        # Chat header (will be updated with toggle button in main app)
+        self.header = pn.pane.Markdown("## 💬 Chat with AI Assistant")
+        
         self.layout = pn.Column(
-            pn.pane.Markdown("## 💬 Chat with AI Assistant"),
+            self.header,
             self.status,
             self.chat_history,
             width_policy='max',
             sizing_mode='stretch_width'
         )
+    
+    def set_header_with_toggle(self, toggle_button):
+        """Update header to include toggle button"""
+        self.header_row = pn.Row(
+            pn.pane.Markdown("## 💬 Chat with AI Assistant"),
+            pn.Spacer(sizing_mode='stretch_width'),
+            toggle_button,
+            styles={
+                'align-items': 'center',
+                'margin-bottom': '10px'
+            }
+        )
+        # Replace the header in the layout
+        self.layout[0] = self.header_row
     
     def get_layout(self):
         return self.layout
@@ -1211,8 +1620,15 @@ class RightSidebar:
             self.progress_tracker.get_layout(),
             pn.Spacer(height=20),
             self.results_display.get_layout(),
-            width=580,
-            margin=(5, 5)
+            width=680,  # Increased from 580 to 680
+            margin=(5, 5),
+            styles={
+                'background': '#FFFFFF',
+                'border-radius': '12px',
+                'border': '1px solid #E5E5EA',
+                'box-shadow': '0 4px 12px rgba(0, 0, 0, 0.15)',
+                'padding': '20px'
+            }
         )
     
     def get_layout(self):
@@ -1225,7 +1641,7 @@ class RightSidebar:
         return self.results_display
 
 
-# Create main app function (similar to step5_results.py structure)
+# Create main app function with collapsible right column
 def create_app():
     # Disclaimer at bottom - smaller text, centered across full window
     disclaimer = pn.pane.Markdown(
@@ -1248,30 +1664,69 @@ def create_app():
         right_sidebar.get_results_display()
     )
     
-    # Main layout with disclaimer at bottom
-    app = pn.Column(
-        # 2-column layout with equal 50-50 width distribution
-        pn.Row(
-            # Left column - Chat and Input + Controls
-            pn.Column(
-                # Chat interface
-                chat_interface.get_layout(),
-                pn.Spacer(height=15),
-                # Bottom: All three controls horizontally (Ask AI + Quick Analysis + Templates)
-                left_sidebar.get_bottom_controls(),
-                margin=(10, 10),
-                sizing_mode='stretch_width'
-            ),
-            pn.Spacer(width=20),
-            
-            # Right column - Analysis Status & Results only
-            pn.Column(
-                right_sidebar.get_layout(),
-                margin=(10, 10),
-                sizing_mode='stretch_width'
-            ),
+    # Create collapsible right panel
+    right_panel_visible = pn.widgets.Checkbox(value=True, name="", width=0, height=0, visible=False)
+    
+    # Toggle button for right panel
+    toggle_right_btn = pn.widgets.Button(
+        name="Hide Panel ▶",
+        button_type="light",
+        width=120,
+        height=32,
+        styles={
+            'background': '#F8F9FA',
+            'border': '1px solid #E5E5EA', 
+            'border-radius': '8px',
+            'font-size': '12px',
+            'font-weight': '600'
+        }
+    )
+    
+    # Right column content
+    right_column = pn.Column(
+        right_sidebar.get_layout(),
+        margin=(10, 10),
+        sizing_mode='stretch_width',
+        visible=True
+    )
+    
+    def toggle_right_panel(event):
+        """Toggle right panel visibility"""
+        current_visible = right_column.visible
+        right_column.visible = not current_visible
+        
+        if right_column.visible:
+            toggle_right_btn.name = "Hide Panel ▶"
+        else:
+            toggle_right_btn.name = "◀ Show Panel"
+    
+    toggle_right_btn.on_click(toggle_right_panel)
+    
+    # Add toggle button to chat interface header
+    chat_interface.set_header_with_toggle(toggle_right_btn)
+    
+    # Main layout with collapsible right column
+    main_row = pn.Row(
+        # Left column - Chat and Input + Controls (always visible)
+        pn.Column(
+            # Chat interface with toggle button in header
+            chat_interface.get_layout(),
+            pn.Spacer(height=15),
+            # Bottom: All three controls horizontally
+            left_sidebar.get_bottom_controls(),
+            margin=(10, 10),
             sizing_mode='stretch_width'
         ),
+        pn.Spacer(width=20),
+        
+        # Right column - Analysis Status & Results (collapsible)
+        right_column,
+        sizing_mode='stretch_width'
+    )
+    
+    # Clean main app layout
+    app = pn.Column(
+        main_row,
         pn.Spacer(height=20),
         # Disclaimer at bottom center
         disclaimer,
@@ -1314,6 +1769,9 @@ def create_desktop_app():
             # Window setup
             self.setWindowTitle("Stock Analysis AI")
             self.setGeometry(100, 100, 1600, 1000)
+            
+            # Set custom icon
+            self.set_app_icon()
             
             # Create web view
             self.web_view = QWebEngineView()
@@ -1368,6 +1826,69 @@ def create_desktop_app():
             about_action.triggered.connect(self.show_about)
             help_menu.addAction(about_action)
         
+        def set_app_icon(self):
+            """Set custom app icon for taskbar and dock"""
+            from PyQt6.QtGui import QPixmap, QPainter, QBrush, QFont
+            from PyQt6.QtCore import Qt
+            
+            # Create a custom icon programmatically
+            pixmap = QPixmap(128, 128)
+            pixmap.fill(Qt.GlobalColor.transparent)
+            
+            painter = QPainter(pixmap)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            
+            # Background circle with gradient effect
+            from PyQt6.QtGui import QRadialGradient, QColor
+            gradient = QRadialGradient(64, 64, 60)
+            gradient.setColorAt(0, QColor("#007AFF"))
+            gradient.setColorAt(0.7, QColor("#0051D5"))
+            gradient.setColorAt(1, QColor("#003DA3"))
+            
+            painter.setBrush(QBrush(gradient))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawEllipse(4, 4, 120, 120)
+            
+            # Draw stock chart line
+            from PyQt6.QtGui import QPen
+            pen = QPen(QColor("white"), 4)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            painter.setPen(pen)
+            
+            # Stock chart path (upward trend)
+            from PyQt6.QtCore import QPoint
+            points = [
+                QPoint(25, 85),
+                QPoint(35, 75),
+                QPoint(45, 80),
+                QPoint(55, 60),
+                QPoint(65, 50),
+                QPoint(75, 45),
+                QPoint(85, 35),
+                QPoint(95, 40),
+                QPoint(105, 25)
+            ]
+            
+            for i in range(len(points) - 1):
+                painter.drawLine(points[i], points[i + 1])
+            
+            # Add stock symbol text
+            painter.setPen(QPen(QColor("white"), 1))
+            font = QFont("SF Pro Display", 16, QFont.Weight.Bold)
+            painter.setFont(font)
+            painter.drawText(35, 105, "AI")
+            
+            painter.end()
+            
+            # Set the icon
+            icon = QIcon(pixmap)
+            self.setWindowIcon(icon)
+            
+            # Also set for the application
+            from PyQt6.QtWidgets import QApplication
+            QApplication.instance().setWindowIcon(icon)
+        
         def start_panel_server(self):
             """Start Panel server in background"""
             import threading
@@ -1404,6 +1925,34 @@ def create_desktop_app():
             """Load the Panel app in web view"""
             url = "http://localhost:5007"
             print(f"Loading app from {url}")
+            
+            # Inject JavaScript to suppress Plotly errors in desktop app
+            js_code = """
+            (function() {
+                const originalError = console.error;
+                console.error = function() {
+                    const message = Array.from(arguments).join(' ');
+                    if (!message.includes('Resize must be passed a displayed plot div element')) {
+                        originalError.apply(console, arguments);
+                    }
+                };
+                
+                window.addEventListener('unhandledrejection', function(e) {
+                    if (e.reason && e.reason.message && 
+                        e.reason.message.includes('Resize must be passed a displayed plot div element')) {
+                        e.preventDefault();
+                    }
+                });
+            })();
+            """
+            
+            # Execute JS after page loads
+            def inject_error_handler():
+                self.web_view.page().runJavaScript(js_code)
+            
+            # Connect to loadFinished signal
+            self.web_view.loadFinished.connect(lambda: inject_error_handler())
+            
             self.web_view.load(QUrl(url))
         
         def new_analysis(self):
@@ -1445,6 +1994,7 @@ def create_desktop_app():
     app_qt = QApplication(sys.argv)
     app_qt.setApplicationName("Stock Analysis AI")
     app_qt.setOrganizationName("Stock Analysis AI")
+    app_qt.setApplicationDisplayName("Stock Analysis AI")
     
     # Create main window
     main_window = StockAnalysisDesktopApp()
