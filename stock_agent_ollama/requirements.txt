@@ -22,3 +22,8 @@ plotly==5.17.0
 
 # Utilities
 pydantic==2.4.2
+
+# Desktop App (optional - for native macOS app)
+--no-cache-dir
+PyQt6>=6.6.0
+PyQt6-WebEngine>=6.6.0

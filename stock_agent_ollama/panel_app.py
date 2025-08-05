@@ -1285,6 +1285,194 @@ logger.info("Creating Stock Analysis Panel Application")
 app = create_app()
 app.servable()
 
+# Desktop app functionality
+def create_desktop_app():
+    """Create native macOS desktop app using PyQt6"""
+    try:
+        from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QMenuBar, QMenu
+        from PyQt6.QtWebEngineWidgets import QWebEngineView
+        from PyQt6.QtCore import QUrl, QTimer
+        from PyQt6.QtGui import QAction, QIcon
+        import webbrowser
+        import subprocess
+        import socket
+        import time
+    except ImportError as e:
+        print(f"❌ PyQt6 import failed: {e}")
+        print("Install with: pip install PyQt6 PyQt6-WebEngine")
+        return False
+    
+    class StockAnalysisDesktopApp(QMainWindow):
+        def __init__(self):
+            super().__init__()
+            self.panel_server_process = None
+            self.init_ui()
+            self.start_panel_server()
+        
+        def init_ui(self):
+            """Initialize the native macOS UI"""
+            # Window setup
+            self.setWindowTitle("Stock Analysis AI")
+            self.setGeometry(100, 100, 1600, 1000)
+            
+            # Create web view
+            self.web_view = QWebEngineView()
+            self.setCentralWidget(self.web_view)
+            
+            # Create native macOS menu bar
+            self.create_menu_bar()
+            
+            # Style for native macOS look
+            self.setStyleSheet("""
+                QMainWindow {
+                    background-color: #f0f0f0;
+                }
+            """)
+        
+        def create_menu_bar(self):
+            """Create native macOS menu bar"""
+            menubar = self.menuBar()
+            
+            # File menu
+            file_menu = menubar.addMenu('File')
+            
+            new_analysis = QAction('New Analysis', self)
+            new_analysis.setShortcut('Cmd+N')
+            new_analysis.triggered.connect(self.new_analysis)
+            file_menu.addAction(new_analysis)
+            
+            file_menu.addSeparator()
+            
+            quit_action = QAction('Quit', self)
+            quit_action.setShortcut('Cmd+Q')
+            quit_action.triggered.connect(self.close)
+            file_menu.addAction(quit_action)
+            
+            # View menu
+            view_menu = menubar.addMenu('View')
+            
+            reload_action = QAction('Reload', self)
+            reload_action.setShortcut('Cmd+R')
+            reload_action.triggered.connect(self.reload_page)
+            view_menu.addAction(reload_action)
+            
+            fullscreen_action = QAction('Enter Full Screen', self)
+            fullscreen_action.setShortcut('Cmd+Ctrl+F')
+            fullscreen_action.triggered.connect(self.toggle_fullscreen)
+            view_menu.addAction(fullscreen_action)
+            
+            # Help menu
+            help_menu = menubar.addMenu('Help')
+            
+            about_action = QAction('About Stock Analysis AI', self)
+            about_action.triggered.connect(self.show_about)
+            help_menu.addAction(about_action)
+        
+        def start_panel_server(self):
+            """Start Panel server in background"""
+            import threading
+            import time
+            
+            def run_server():
+                try:
+                    # Check if port is available
+                    port = 5007
+                    if self.is_port_in_use(port):
+                        print(f"Port {port} already in use, trying to connect...")
+                    else:
+                        print(f"Starting Panel server on port {port}...")
+                        # Start server without showing browser
+                        pn.serve(app, port=port, show=False, autoreload=False, 
+                               allow_websocket_origin=[f"localhost:{port}"])
+                    
+                except Exception as e:
+                    print(f"Error starting Panel server: {e}")
+            
+            # Start server in background thread
+            server_thread = threading.Thread(target=run_server, daemon=True)
+            server_thread.start()
+            
+            # Wait for server to start, then load page
+            QTimer.singleShot(2000, self.load_app)  # Wait 2 seconds
+        
+        def is_port_in_use(self, port):
+            """Check if port is already in use"""
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                return s.connect_ex(('localhost', port)) == 0
+        
+        def load_app(self):
+            """Load the Panel app in web view"""
+            url = "http://localhost:5007"
+            print(f"Loading app from {url}")
+            self.web_view.load(QUrl(url))
+        
+        def new_analysis(self):
+            """Handle new analysis menu action"""
+            self.web_view.reload()
+        
+        def reload_page(self):
+            """Reload the current page"""
+            self.web_view.reload()
+        
+        def toggle_fullscreen(self):
+            """Toggle fullscreen mode"""
+            if self.isFullScreen():
+                self.showNormal()
+            else:
+                self.showFullScreen()
+        
+        def show_about(self):
+            """Show about dialog"""
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.about(self, "About Stock Analysis AI", 
+                            "Stock Analysis AI\n\n"
+                            "A comprehensive stock analysis system powered by:\n"
+                            "• Ollama (Gemma3)\n"
+                            "• LangChain ReAct agents\n"
+                            "• LSTM ensemble neural networks\n"
+                            "• Panel web framework\n\n"
+                            "Version 1.0")
+        
+        def closeEvent(self, event):
+            """Handle application close"""
+            print("Closing Stock Analysis AI...")
+            if self.panel_server_process:
+                self.panel_server_process.terminate()
+            event.accept()
+    
+    # Create and run the desktop app
+    import sys
+    app_qt = QApplication(sys.argv)
+    app_qt.setApplicationName("Stock Analysis AI")
+    app_qt.setOrganizationName("Stock Analysis AI")
+    
+    # Create main window
+    main_window = StockAnalysisDesktopApp()
+    main_window.show()
+    
+    print("🚀 Stock Analysis AI desktop app started!")
+    print("💡 Use Cmd+Q to quit, Cmd+R to reload")
+    
+    return app_qt.exec()
+
 # For Panel serve command
 if __name__ == "__main__":
-    pn.serve(app, port=5007, show=True, autoreload=True)
+    import argparse
+    
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Stock Analysis AI')
+    parser.add_argument('--desktop', action='store_true', 
+                       help='Launch as native macOS desktop app')
+    parser.add_argument('--port', type=int, default=5007,
+                       help='Port to run the server on (default: 5007)')
+    
+    args = parser.parse_args()
+    
+    if args.desktop:
+        # Launch desktop app
+        print("🖥️  Launching native macOS desktop app...")
+        create_desktop_app()
+    else:
+        # Launch web version
+        print("🌐 Launching web version...")
+        pn.serve(app, port=args.port, show=True, autoreload=True)

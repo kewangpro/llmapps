@@ -114,13 +114,21 @@ pip install -r requirements.txt
 
 ## Usage
 
-### Start the Panel Application
+### Web Application
 ```bash
 source .venv/bin/activate  # Activate virtual environment
-panel serve panel_app.py --port 5007 --show --autoreload
+python panel_app.py
 ```
 
 The app will open in your browser at `http://localhost:5007`
+
+### Native macOS Desktop App
+```bash
+source .venv/bin/activate  # Activate virtual environment
+python panel_app.py --desktop
+```
+
+Launches a native macOS application with menu bar integration, keyboard shortcuts, and native window controls.
 
 ### Example Queries
 
@@ -230,4 +238,5 @@ def get_config():
 - **tensorflow** (2.15.0): LSTM neural network training and ensemble modeling
 - **plotly** (5.17.0): Interactive data visualization and real-time charts
 - **pandas/numpy**: Data processing, analysis, and numerical computations
+- **PyQt6** (6.6.0+): Native macOS desktop application framework (optional)
 
