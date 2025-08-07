@@ -1295,28 +1295,6 @@ class OllamaDesktopChat(QMainWindow):
         info_label.setWordWrap(True)
         layout.addWidget(info_label)
         
-        # Slide info
-        if slides:
-            slide_info_widget = QWidget()
-            slide_info_layout = QVBoxLayout(slide_info_widget)
-            
-            slide_info_label = QLabel("Slide Information:")
-            slide_info_label.setStyleSheet("font-weight: bold; margin: 5px 0;")
-            slide_info_layout.addWidget(slide_info_label)
-            
-            for slide in slides[:10]:  # Show first 10 slides
-                slide_text = f"• Slide {slide['slide_number']}: {slide['text_shapes']} text shapes, {slide['total_shapes']} total shapes"
-                slide_label = QLabel(slide_text)
-                slide_label.setStyleSheet("padding-left: 15px; color: #333;")
-                slide_info_layout.addWidget(slide_label)
-            
-            if len(slides) > 10:
-                more_label = QLabel(f"... and {len(slides) - 10} more slides")
-                more_label.setStyleSheet("padding-left: 15px; color: gray; font-style: italic;")
-                slide_info_layout.addWidget(more_label)
-            
-            layout.addWidget(slide_info_widget)
-        
         # Content preview
         if ppt_result.get('success') and ppt_result.get('content'):
             content_widget = QTextEdit()

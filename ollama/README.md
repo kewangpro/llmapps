@@ -1,6 +1,6 @@
-# Ollama Desktop Chat - PyQt6 Edition
+# Ollama Desktop Applications
 
-A native desktop chat application for interacting with Ollama models, built with Python and PyQt6. This application provides a clean, modern interface for chatting with local Ollama models and analyzing various file types.
+A collection of native desktop applications and utilities for interacting with Ollama models, built with Python. Includes a comprehensive chat application and specialized document processing tools.
 
 ## 🚀 Features
 
@@ -26,6 +26,7 @@ A native desktop chat application for interacting with Ollama models, built with
   - **PDFs**: Text extraction with PyPDF2, handles text-based and image-based PDFs
   - **Word Documents**: DOCX, DOC text extraction from paragraphs and tables
   - **Excel Files**: XLSX, XLS, XLSM data extraction from all sheets
+  - **PowerPoint**: PPTX, PPT text extraction from slides, shapes, and tables
 - **Text Files**: TXT, MD, PY, JS, HTML, CSS, JSON, XML, CSV
   - Full content analysis with syntax awareness
 - **Videos**: MP4, MOV, AVI, MKV, WebM, FLV, WMV, M4V
@@ -56,7 +57,7 @@ pip install -r requirements.txt
 
 Or install manually:
 ```bash
-pip install PyQt6>=6.6.0 aiohttp>=3.9.0 PyPDF2>=3.0.0 Pillow>=9.0.0 pillow-heif>=0.10.0 python-docx>=0.8.11 openpyxl>=3.1.0
+pip install PyQt6>=6.6.0 aiohttp>=3.9.0 PyPDF2>=3.0.0 Pillow>=9.0.0 pillow-heif>=0.10.0 python-docx>=0.8.11 openpyxl>=3.1.0 python-pptx>=0.6.0
 ```
 
 ### 3. Start Ollama
@@ -73,49 +74,71 @@ ollama pull gemma3
 ollama pull llama3.2-vision
 ```
 
+## 📁 Applications
+
+### Desktop Chat Application
+
+**`ollama_pyqt.py`** - Full-featured PyQt6 desktop chat application with comprehensive file analysis capabilities.
+
+### Document Processing Tools  
+
+**`gen_ppt.py`** - PDF to PowerPoint converter that uses Ollama to generate presentation slides from PDF documents.
+
 ## 📁 File Structure
 
-### PyQt6 Application Files
-
 ```
-ollama-pyqt/
-├── 📄 ollama_pyqt.py          # Main PyQt6 application (~1,300 lines)
+ollama/
+├── 📄 ollama_pyqt.py          # Main PyQt6 chat application (~1,600 lines)
+├── 📄 gen_ppt.py              # PDF to PowerPoint converter (~100 lines)
 ├── 📄 requirements.txt        # Python dependencies
 └── 📄 README.md              # Documentation (this file)
 ```
 
 | File | Description | Size | Purpose |
 |------|-------------|------|---------|
-| **`ollama_pyqt.py`** | Main application | ~1,300 lines | Complete desktop chat app with file analysis |
-| **`requirements.txt`** | Dependencies | 8 lines | PyQt6, aiohttp, PyPDF2, Pillow, pillow-heif, python-docx, openpyxl |
-| **`README.md`** | Documentation | ~250 lines | Installation guide and usage instructions |
+| **`ollama_pyqt.py`** | Chat application | ~1,600 lines | Complete desktop chat app with file analysis |
+| **`gen_ppt.py`** | PPT generator | ~100 lines | Convert PDF documents to PowerPoint presentations |
+| **`requirements.txt`** | Dependencies | 8 lines | PyQt6, aiohttp, PyPDF2, python-pptx, etc. |
+| **`README.md`** | Documentation | ~270 lines | Installation guide and usage instructions |
 
 ### Dependencies Overview
 
 ```python
 # requirements.txt
-PyQt6>=6.6.0        # Native GUI framework
-aiohttp>=3.9.0      # Async HTTP client for Ollama API  
-PyPDF2>=3.0.0       # PDF text extraction
+PyQt6>=6.6.0        # Native GUI framework (desktop chat app)
+aiohttp>=3.9.0      # Async HTTP client for Ollama API
+PyPDF2>=3.0.0       # PDF text extraction (both apps)
 Pillow>=9.0.0       # Image processing
 pillow-heif>=0.10.0 # HEIC/iPhone image support
 python-docx>=0.8.11 # Word document parsing
 openpyxl>=3.1.0     # Excel file processing
+python-pptx>=0.6.0  # PowerPoint processing (both apps)
 ```
 
 ## 🏃 Usage
 
-### Quick Start
+### Desktop Chat Application
 ```bash
 python ollama_pyqt.py
 ```
 
-### First Time Setup
+**First Time Setup:**
 1. **Launch the application** - The interface will open with model selection
 2. **Model Loading** - Models are automatically discovered and loaded
 3. **Start Chatting** - Type messages in the input field
 4. **File Analysis** - Click "Select File" to analyze documents, images, etc.
 5. **Preview Files** - Use the "Preview" button to view file content in the sidebar
+
+### PDF to PowerPoint Converter
+```bash
+python gen_ppt.py --pdf_file path/to/document.pdf
+```
+
+**Features:**
+- Automatically extracts text from PDF documents
+- Uses Ollama to generate structured slide content
+- Creates PowerPoint presentation with titles and bullet points
+- Output filename automatically derived from PDF name
 
 ### File Analysis Workflow
 1. Click **"📄 Select File"** button
@@ -139,7 +162,7 @@ python ollama_pyqt.py
 | Type | Extensions | Features |
 |------|------------|----------|
 | **Images** | jpg, png, gif, bmp, webp, svg, tiff, heic, heif, avif | Vision model auto-switch, HEIC conversion, preview |
-| **Documents** | pdf, docx, doc, xlsx, xls, xlsm | Text/data extraction, content analysis, preview |
+| **Documents** | pdf, docx, doc, xlsx, xls, xlsm, pptx, ppt | Text/data extraction, content analysis, preview |
 | **Text** | txt, md, py, js, html, css, json, xml, csv | Full content analysis, syntax highlighting |
 | **Videos** | mp4, mov, avi, mkv, webm, flv, wmv, m4v | Metadata and general info |
 | **Binary** | exe, zip, etc. | Safe handling, type identification |
@@ -162,7 +185,7 @@ The application provides comprehensive console logging:
 │ Model: [gemma3 (7.4GB)] [🔄]                            │
 ├─────────────────────────────────────────────────────────┤
 │ 📄 File Analysis                                        │
-│ [📄 Select File] Loaded: document.docx [🗑️] [👁️]       │
+│ [📄 Select File] Loaded: presentation.pptx [🗑️] [👁️]   │
 ├─────────────────────────────────────────────────────────┤
 │ 💬 File conversation active - Ask follow-up questions!   │
 ├─────────────────────────────────────────────────────────┤
@@ -201,7 +224,7 @@ The application provides comprehensive console logging:
 - Verify file permissions and accessibility
 - Check supported file formats
 - For PDFs, ensure file is not corrupted or password-protected
-- For Word/Excel files, ensure python-docx and openpyxl are installed
+- For Word/Excel/PowerPoint files, ensure python-docx, openpyxl, and python-pptx are installed
 - For HEIC images, ensure pillow-heif is installed
 
 #### Chat not working
@@ -229,39 +252,31 @@ The application provides comprehensive console logging:
 - **Model Loader**: Async model discovery and loading
 
 ### Dependencies
-- **PyQt6**: Native desktop GUI framework
-- **aiohttp**: Async HTTP client for Ollama API
-- **PyPDF2**: PDF text extraction
-- **python-docx**: Word document parsing
-- **openpyxl**: Excel file processing
-- **Pillow & pillow-heif**: Image processing and HEIC support
+- **PyQt6**: Native desktop GUI framework (chat app only)
+- **aiohttp**: Async HTTP client for Ollama API (both apps)
+- **PyPDF2**: PDF text extraction (both apps)
+- **python-docx**: Word document parsing (chat app)
+- **openpyxl**: Excel file processing (chat app)
+- **python-pptx**: PowerPoint processing (both apps)
+- **Pillow & pillow-heif**: Image processing and HEIC support (chat app)
 - **Python Standard Library**: File operations, base64, JSON, etc.
-
-## 🔄 Migration from Electron
-
-This PyQt6 version maintains feature parity with the original Electron application while providing:
-
-### Advantages
-- **Native Performance**: True native application with better resource usage
-- **System Integration**: Proper system theme support and OS integration  
-- **Memory Efficiency**: Lower memory footprint compared to Electron
-- **Python Ecosystem**: Easy integration with Python libraries and tools
-
-### Feature Parity
-- ✅ All file analysis capabilities
-- ✅ Model management and switching
-- ✅ Chat interface and formatting
-- ✅ File preview functionality
-- ✅ Context management and conversation history
 
 ## 📝 License
 
-This project maintains the same license as the original Electron application.
+This project is open source and available under the MIT License.
 
 ## 🤝 Contributing
 
-Feel free to submit issues, feature requests, or pull requests to improve the application.
+Feel free to submit issues, feature requests, or pull requests to improve the applications.
 
----
+## 🔧 Development
 
-**Note**: This is a native PyQt6 conversion of the original Electron-based Ollama Desktop Chat, providing the same functionality with improved performance and system integration.
+### Adding New Features
+- Both applications use async/await patterns for Ollama API communication
+- The chat app follows PyQt6 MVC architecture patterns
+- File handlers are modular and can be extended for new formats
+
+### Testing
+- Test with various file formats and sizes
+- Verify Ollama model compatibility
+- Check UI responsiveness and error handling
