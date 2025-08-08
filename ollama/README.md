@@ -1,6 +1,6 @@
 # Ollama Desktop Applications
 
-A collection of native desktop applications and utilities for interacting with Ollama models, built with Python. Includes a comprehensive chat application and specialized document processing tools.
+A collection of native desktop applications for interacting with Ollama models, built with Python. Features a comprehensive PyQt6 chat application with multi-format file analysis capabilities and a PDF-to-PowerPoint conversion tool.
 
 ## 🚀 Features
 
@@ -88,18 +88,18 @@ ollama pull llama3.2-vision
 
 ```
 ollama/
-├── 📄 ollama_pyqt.py          # Main PyQt6 chat application (~1,600 lines)
-├── 📄 gen_ppt.py              # PDF to PowerPoint converter (~100 lines)
-├── 📄 requirements.txt        # Python dependencies
-└── 📄 README.md              # Documentation (this file)
+├── 📄 ollama_pyqt.py          # Main PyQt6 chat application (1,572 lines)
+├── 📄 gen_ppt.py              # PDF to PowerPoint converter (269 lines) 
+├── 📄 requirements.txt        # Python dependencies (8 packages)
+└── 📄 README.md               # Documentation (this file)
 ```
 
 | File | Description | Size | Purpose |
 |------|-------------|------|---------|
-| **`ollama_pyqt.py`** | Chat application | ~1,600 lines | Complete desktop chat app with file analysis |
-| **`gen_ppt.py`** | PPT generator | ~100 lines | Convert PDF documents to PowerPoint presentations |
-| **`requirements.txt`** | Dependencies | 8 lines | PyQt6, aiohttp, PyPDF2, python-pptx, etc. |
-| **`README.md`** | Documentation | ~270 lines | Installation guide and usage instructions |
+| **`ollama_pyqt.py`** | Chat application | 1,572 lines | Complete desktop chat app with file analysis |
+| **`gen_ppt.py`** | PPT generator | 269 lines | Convert PDF documents to PowerPoint presentations |
+| **`requirements.txt`** | Dependencies | 8 packages | PyQt6, aiohttp, PyPDF2, python-pptx, etc. |
+| **`README.md`** | Documentation | This file | Installation guide and usage instructions |
 
 ### Dependencies Overview
 
@@ -130,6 +130,13 @@ python ollama_pyqt.py
 5. **Preview Files** - Use the "Preview" button to view file content in the sidebar
 
 ### PDF to PowerPoint Converter
+
+**GUI Mode:**
+```bash
+python gen_ppt.py
+```
+
+**CLI Mode:**
 ```bash
 python gen_ppt.py --pdf_file path/to/document.pdf
 ```
@@ -238,6 +245,12 @@ The application provides comprehensive console logging:
 - **Preview**: Close file preview when not needed for better performance
 - **Chat History**: Clear chat periodically for optimal performance
 
+### Current Project Status
+- **Main Chat App**: Fully functional with comprehensive file support
+- **PDF Converter**: GUI and CLI modes both working
+- **Dependencies**: All required packages specified in requirements.txt
+- **Active Files**: 4 core files in working directory
+
 ## 🏗️ Technical Details
 
 ### Architecture
@@ -280,3 +293,16 @@ Feel free to submit issues, feature requests, or pull requests to improve the ap
 - Test with various file formats and sizes
 - Verify Ollama model compatibility
 - Check UI responsiveness and error handling
+
+## 📊 Project Statistics
+
+- **Total Lines of Code**: ~1,840 lines across all files
+- **Main Application**: 1,572 lines of PyQt6 GUI code
+- **PDF Converter**: 269 lines with GUI and CLI support  
+- **Dependencies**: 8 Python packages for comprehensive functionality
+- **File Format Support**: 20+ file extensions across 5 categories
+- **Logging**: Comprehensive console output with emoji indicators
+
+---
+
+*Complete desktop solution for Ollama model interaction*
