@@ -780,12 +780,16 @@ class OllamaDesktopChat(QMainWindow):
         # Filter out embedding models
         chat_models = [m for m in models if 'embed' not in m['family'] and 'embed' not in m['name']]
         
-        # Find vision model
-        self.vision_model = None
+        # Find vision models (including gemma3 which has vision capabilities)
+        self.vision_models = []
         for model in chat_models:
-            if 'vision' in model['name'].lower() or model['family'] == 'mllama':
-                self.vision_model = model
-                break
+            if ('vision' in model['name'].lower() or 
+                model['family'] == 'mllama' or 
+                'gemma3' in model['name'].lower()):
+                self.vision_models.append(model)
+        
+        # Keep first vision model for backward compatibility
+        self.vision_model = self.vision_models[0] if self.vision_models else None
         
         # Populate combo box
         for model in chat_models:
@@ -793,7 +797,7 @@ class OllamaDesktopChat(QMainWindow):
             size_gb = model['size'] / (1024 * 1024 * 1024)
             display_text = f"{display_name} ({size_gb:.1f}GB)"
             
-            if model == self.vision_model:
+            if model in self.vision_models:
                 display_text += " 👁️"
             
             self.model_combo.addItem(display_text, model)
@@ -1002,8 +1006,15 @@ class OllamaDesktopChat(QMainWindow):
     
     def switch_to_vision_model(self):
         """Switch to vision model for image analysis"""
+        current_model = self.model_combo.currentData()
+        
+        # Check if current model is already vision-capable
+        if current_model and current_model in self.vision_models:
+            # Current model can handle images, no need to switch
+            return
+        
+        # Switch to a vision model
         if self.vision_model:
-            current_model = self.model_combo.currentData()
             if current_model != self.vision_model:
                 self.previous_model = current_model
                 # Find vision model index
@@ -1348,9 +1359,10 @@ class OllamaDesktopChat(QMainWindow):
     
     def clear_file_context(self):
         """Clear file context and reset UI"""
-        # Switch back from vision model if currently using one
+        # Switch back from vision model if currently using one (but only if we switched TO it)
         current_model = self.model_combo.currentData()
-        if current_model and self.vision_model and current_model == self.vision_model and self.previous_model:
+        if (current_model and current_model in self.vision_models and 
+            self.previous_model and current_model == self.vision_model):
             logger.info(f"🔄 Auto-switching back from vision model to previous model")
             self.switch_back_to_previous_model()
         
