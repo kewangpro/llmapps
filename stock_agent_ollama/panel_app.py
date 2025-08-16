@@ -206,6 +206,147 @@ body {
 # Apply custom CSS
 pn.config.raw_css.append(CUSTOM_CSS)
 
+# Add WebSocket keepalive script to prevent connection drops after idle
+keepalive_script = """
+<script>
+(function() {
+    let keepaliveInterval;
+    let reconnectInterval;
+    let isConnected = true;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 10;
+    
+    function startKeepalive() {
+        // Send a ping every 30 seconds to keep connection alive
+        keepaliveInterval = setInterval(function() {
+            try {
+                if (window.Bokeh && window.Bokeh.documents) {
+                    const docs = window.Bokeh.documents;
+                    for (let i = 0; i < docs.length; i++) {
+                        const doc = docs[i];
+                        if (doc.session && doc.session._connection) {
+                            const conn = doc.session._connection;
+                            if (conn.readyState === WebSocket.OPEN) {
+                                // Send a small ping message to keep connection alive
+                                conn.send(JSON.stringify({
+                                    msgtype: 'ping',
+                                    content: {timestamp: Date.now()}
+                                }));
+                                console.debug('[bokeh] keepalive ping sent');
+                                isConnected = true;
+                                reconnectAttempts = 0;
+                            } else if (conn.readyState === WebSocket.CLOSED || 
+                                     conn.readyState === WebSocket.CLOSING) {
+                                console.warn('[bokeh] connection lost, attempting reconnect');
+                                isConnected = false;
+                                attemptReconnect();
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                console.debug('[bokeh] keepalive error:', e);
+            }
+        }, 30000); // 30 seconds
+    }
+    
+    function attemptReconnect() {
+        if (reconnectAttempts >= maxReconnectAttempts) {
+            console.error('[bokeh] max reconnect attempts reached, reloading page');
+            window.location.reload();
+            return;
+        }
+        
+        reconnectAttempts++;
+        console.log(`[bokeh] reconnect attempt ${reconnectAttempts}/${maxReconnectAttempts}`);
+        
+        // Clear existing intervals
+        if (keepaliveInterval) clearInterval(keepaliveInterval);
+        if (reconnectInterval) clearInterval(reconnectInterval);
+        
+        // Try to reconnect after a delay
+        reconnectInterval = setTimeout(function() {
+            try {
+                if (window.Bokeh && window.Bokeh.documents) {
+                    const docs = window.Bokeh.documents;
+                    for (let i = 0; i < docs.length; i++) {
+                        const doc = docs[i];
+                        if (doc.session && doc.session._connection) {
+                            const conn = doc.session._connection;
+                            if (conn.readyState === WebSocket.CLOSED) {
+                                // Force a page reload to re-establish connection
+                                console.log('[bokeh] forcing page reload to reconnect');
+                                window.location.reload();
+                                return;
+                            }
+                        }
+                    }
+                }
+                // Restart keepalive
+                startKeepalive();
+            } catch (e) {
+                console.error('[bokeh] reconnect error:', e);
+                window.location.reload();
+            }
+        }, 2000 * reconnectAttempts); // Exponential backoff
+    }
+    
+    // Start keepalive when Bokeh is ready
+    function initializeKeepalive() {
+        if (window.Bokeh && window.Bokeh.documents && window.Bokeh.documents.length > 0) {
+            console.log('[bokeh] initializing connection keepalive');
+            startKeepalive();
+            
+            // Monitor for connection state changes
+            const docs = window.Bokeh.documents;
+            for (let i = 0; i < docs.length; i++) {
+                const doc = docs[i];
+                if (doc.session && doc.session._connection) {
+                    const conn = doc.session._connection;
+                    
+                    // Override the onclose handler to attempt reconnection
+                    const originalOnClose = conn.onclose;
+                    conn.onclose = function(event) {
+                        console.warn('[bokeh] WebSocket closed:', event);
+                        isConnected = false;
+                        if (originalOnClose) originalOnClose.call(this, event);
+                        attemptReconnect();
+                    };
+                    
+                    // Override the onerror handler
+                    const originalOnError = conn.onerror;
+                    conn.onerror = function(event) {
+                        console.error('[bokeh] WebSocket error:', event);
+                        isConnected = false;
+                        if (originalOnError) originalOnError.call(this, event);
+                    };
+                }
+            }
+        } else {
+            // Retry initialization after a short delay
+            setTimeout(initializeKeepalive, 1000);
+        }
+    }
+    
+    // Start initialization when DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeKeepalive);
+    } else {
+        initializeKeepalive();
+    }
+    
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', function() {
+        if (keepaliveInterval) clearInterval(keepaliveInterval);
+        if (reconnectInterval) clearInterval(reconnectInterval);
+    });
+})();
+</script>
+"""
+
+# Add keepalive script to Panel's template
+pn.config.raw_css.append(keepalive_script)
+
 
 # Import existing components
 from config import setup_logging, get_logger, get_config
@@ -1902,9 +2043,13 @@ def create_desktop_app():
                         print(f"Port {port} already in use, trying to connect...")
                     else:
                         print(f"Starting Panel server on port {port}...")
-                        # Start server without showing browser
+                        # Start server without showing browser with WebSocket optimizations
                         pn.serve(app, port=port, show=False, autoreload=False, 
-                               allow_websocket_origin=[f"localhost:{port}"])
+                               allow_websocket_origin=[f"localhost:{port}"],
+                               websocket_max_message_size=20*1024*1024,  # 20MB max message size
+                               websocket_ping_interval=30,  # Ping every 30 seconds
+                               websocket_ping_timeout=10,   # 10 second timeout for pings
+                               websocket_compression=True)  # Enable compression
                     
                 except Exception as e:
                     print(f"Error starting Panel server: {e}")
@@ -1926,23 +2071,67 @@ def create_desktop_app():
             url = "http://localhost:5007"
             print(f"Loading app from {url}")
             
-            # Inject JavaScript to suppress Plotly errors in desktop app
+            # Inject JavaScript to suppress Plotly errors and handle Bokeh connection issues
             js_code = """
             (function() {
                 const originalError = console.error;
                 console.error = function() {
                     const message = Array.from(arguments).join(' ');
-                    if (!message.includes('Resize must be passed a displayed plot div element')) {
+                    if (!message.includes('Resize must be passed a displayed plot div element') &&
+                        !message.includes('[bokeh] not connected so cannot send')) {
                         originalError.apply(console, arguments);
                     }
                 };
                 
                 window.addEventListener('unhandledrejection', function(e) {
                     if (e.reason && e.reason.message && 
-                        e.reason.message.includes('Resize must be passed a displayed plot div element')) {
+                        (e.reason.message.includes('Resize must be passed a displayed plot div element') ||
+                         e.reason.message.includes('[bokeh] not connected so cannot send'))) {
                         e.preventDefault();
                     }
                 });
+                
+                // Enhanced connection monitoring for desktop app
+                let desktopReconnectAttempts = 0;
+                const maxDesktopReconnectAttempts = 5;
+                
+                function monitorDesktopConnection() {
+                    setInterval(function() {
+                        try {
+                            if (window.Bokeh && window.Bokeh.documents) {
+                                const docs = window.Bokeh.documents;
+                                let hasActiveConnection = false;
+                                
+                                for (let i = 0; i < docs.length; i++) {
+                                    const doc = docs[i];
+                                    if (doc.session && doc.session._connection) {
+                                        const conn = doc.session._connection;
+                                        if (conn.readyState === WebSocket.OPEN) {
+                                            hasActiveConnection = true;
+                                            desktopReconnectAttempts = 0;
+                                            break;
+                                        }
+                                    }
+                                }
+                                
+                                if (!hasActiveConnection) {
+                                    desktopReconnectAttempts++;
+                                    console.warn(`[bokeh] desktop app connection lost, attempt ${desktopReconnectAttempts}/${maxDesktopReconnectAttempts}`);
+                                    
+                                    if (desktopReconnectAttempts >= maxDesktopReconnectAttempts) {
+                                        console.log('[bokeh] desktop app forcing reload due to connection loss');
+                                        window.location.reload();
+                                    }
+                                }
+                            }
+                        } catch (e) {
+                            console.debug('[bokeh] desktop connection monitor error:', e);
+                        }
+                    }, 10000); // Check every 10 seconds
+                }
+                
+                // Start monitoring after page loads
+                setTimeout(monitorDesktopConnection, 5000);
             })();
             """
             
@@ -2025,4 +2214,8 @@ if __name__ == "__main__":
     else:
         # Launch web version
         print("🌐 Launching web version...")
-        pn.serve(app, port=args.port, show=True, autoreload=True)
+        pn.serve(app, port=args.port, show=True, autoreload=True,
+                websocket_max_message_size=20*1024*1024,  # 20MB max message size
+                websocket_ping_interval=30,  # Ping every 30 seconds
+                websocket_ping_timeout=10,   # 10 second timeout for pings
+                websocket_compression=True)  # Enable compression
