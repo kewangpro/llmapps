@@ -46,7 +46,8 @@ class LSTMPredictor:
     def create_lstm_model(self, input_shape: Tuple[int, int]) -> tf.keras.Model:
         """Create a single LSTM model with explicit functions for better serialization"""
         model = tf.keras.Sequential([
-            tf.keras.layers.LSTM(50, return_sequences=True, input_shape=input_shape),
+            tf.keras.layers.Input(shape=input_shape),
+            tf.keras.layers.LSTM(50, return_sequences=True),
             tf.keras.layers.Dropout(0.2),
             tf.keras.layers.LSTM(50, return_sequences=True),
             tf.keras.layers.Dropout(0.2),
@@ -64,6 +65,17 @@ class LSTMPredictor:
         )
         
         return model
+    
+    def _predict_single_model(self, model, X):
+        """Direct model prediction without tf.function wrapper"""
+        # Ensure consistent input tensor format
+        if isinstance(X, np.ndarray):
+            X_tensor = tf.convert_to_tensor(X, dtype=tf.float32)
+        else:
+            X_tensor = tf.cast(X, dtype=tf.float32)
+        
+        # Use direct model call for better performance without retracing
+        return model(X_tensor, training=False)
     
     def prepare_data(self, data: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray, MinMaxScaler]:
         """Prepare data for LSTM training"""
@@ -268,20 +280,23 @@ class LSTMPredictor:
         # Use the last sequence for prediction
         last_sequence = X[-1:, :, :]
         
-        # Generate predictions for each day
+        # Generate predictions for each day with optimized prediction logic
         predictions = []
         prediction_sequences = []
         current_sequence = last_sequence.copy()
+        
+        # Ensure consistent tensor format from the start
+        current_sequence = tf.convert_to_tensor(current_sequence, dtype=tf.float32)
         
         for day in range(days):
             # Get ensemble prediction for current sequence
             day_prediction = self._predict_ensemble(models, current_sequence, scaler)
             predictions.append(day_prediction[0])
-            prediction_sequences.append(current_sequence.copy())
+            prediction_sequences.append(current_sequence.numpy().copy())
             
             # Update sequence for next prediction
             # This is a simplified approach - we use the predicted price to update the sequence
-            new_row = current_sequence[0, -1, :].copy()
+            new_row = current_sequence[0, -1, :].numpy().copy()
             
             # Normalize the predicted price change relative to the previous prediction
             if len(predictions) > 1:
@@ -296,21 +311,29 @@ class LSTMPredictor:
             # Update the close price feature (index 0) in the new row
             new_row[0] = max(0.01, min(0.99, new_row[0] + price_change * 0.1))  # Conservative update
             
-            # Roll the sequence and add the new row
-            current_sequence = np.roll(current_sequence, -1, axis=1)
-            current_sequence[0, -1, :] = new_row
+            # Roll the sequence and add the new row with consistent tensor operations
+            current_sequence_np = current_sequence.numpy()
+            current_sequence_np = np.roll(current_sequence_np, -1, axis=1)
+            current_sequence_np[0, -1, :] = new_row
+            current_sequence = tf.convert_to_tensor(current_sequence_np, dtype=tf.float32)
         
-        # Calculate confidence intervals based on ensemble variance
+        # Calculate confidence intervals based on ensemble variance with optimized prediction
         ensemble_predictions = []
         for model in models:
             model_preds = []
-            seq = last_sequence.copy()
+            # Ensure consistent tensor format for each model
+            seq = tf.convert_to_tensor(last_sequence.copy(), dtype=tf.float32)
+            
             for day in range(days):
-                pred = model.predict(seq, verbose=0)
-                pred_price = self._inverse_transform_predictions(pred.flatten(), scaler)[0]
+                # Use direct model call without tf.function wrapper
+                pred = self._predict_single_model(model, seq)
+                pred_price = self._inverse_transform_predictions(pred.numpy().flatten(), scaler)[0]
                 model_preds.append(pred_price)
-                # Update sequence similar to above
-                new_row = seq[0, -1, :].copy()
+                
+                # Update sequence similar to above with consistent tensor operations
+                seq_np = seq.numpy()
+                new_row = seq_np[0, -1, :].copy()
+                
                 if len(model_preds) > 1:
                     price_change = (pred_price - model_preds[-2]) / model_preds[-2]
                 else:
@@ -318,9 +341,12 @@ class LSTMPredictor:
                         np.array([X[-1, -1, 0]]), scaler
                     )[0]
                     price_change = (pred_price - last_actual_price) / last_actual_price
+                
                 new_row[0] = max(0.01, min(0.99, new_row[0] + price_change * 0.1))
-                seq = np.roll(seq, -1, axis=1)
-                seq[0, -1, :] = new_row
+                seq_np = np.roll(seq_np, -1, axis=1)
+                seq_np[0, -1, :] = new_row
+                seq = tf.convert_to_tensor(seq_np, dtype=tf.float32)
+            
             ensemble_predictions.append(model_preds)
         
         # Calculate statistics across ensemble
@@ -372,13 +398,22 @@ class LSTMPredictor:
         
         return result
     
-    def _predict_ensemble(self, models: list, X: np.ndarray, scaler: MinMaxScaler) -> np.ndarray:
-        """Get ensemble prediction"""
+    def _predict_ensemble(self, models: list, X, scaler: MinMaxScaler) -> np.ndarray:
+        """Get ensemble prediction using direct model calls without tf.function"""
         predictions = []
         
+        # Ensure X is a proper tensor with consistent dtype
+        if isinstance(X, np.ndarray):
+            X_tensor = tf.convert_to_tensor(X, dtype=tf.float32)
+        elif isinstance(X, tf.Tensor):
+            X_tensor = tf.cast(X, dtype=tf.float32)
+        else:
+            X_tensor = tf.convert_to_tensor(X, dtype=tf.float32)
+        
         for model in models:
-            pred = model.predict(X, verbose=0)
-            pred_rescaled = self._inverse_transform_predictions(pred.flatten(), scaler)
+            # Use direct model call for better performance without retracing issues
+            pred = self._predict_single_model(model, X_tensor)
+            pred_rescaled = self._inverse_transform_predictions(pred.numpy().flatten(), scaler)
             predictions.append(pred_rescaled)
         
         # Average ensemble predictions
@@ -840,7 +875,8 @@ class LSTMPredictor:
             # Test with dummy data
             dummy_input = np.zeros((1, self.sequence_length, 5))
             try:
-                prediction = model.predict(dummy_input, verbose=0)
+                # Use direct model call with consistent tensor format
+                prediction = self._predict_single_model(model, dummy_input).numpy()
                 if prediction.shape != (1, 1):
                     logger.warning(f"Model {model_index} for {symbol} has unexpected output shape: {prediction.shape}")
                     return False
@@ -879,7 +915,7 @@ class LSTMPredictor:
                 dummy_input = np.zeros((1, self.sequence_length, 5))
                 
                 # Perform dummy prediction to build metrics and ensure model is functional
-                dummy_output = model.predict(dummy_input, verbose=0)
+                dummy_output = self._predict_single_model(model, dummy_input).numpy()
                 
                 # Verify the output shape is correct
                 if dummy_output.shape == (1, 1):

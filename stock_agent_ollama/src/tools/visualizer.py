@@ -48,7 +48,7 @@ class Visualizer:
             rows=rows,
             cols=1,
             shared_xaxes=True,
-            vertical_spacing=0.1,
+            vertical_spacing=0.15,
             subplot_titles=subplot_titles,
             row_heights=[0.7, 0.3] if include_volume else [1.0]
         )
@@ -163,16 +163,25 @@ class Visualizer:
         # Update layout
         fig.update_layout(
             title=f"{symbol} Stock Analysis",
-            xaxis_title="Date",
-            yaxis_title="Price ($)",
             template="plotly_white",
             showlegend=True,
             hovermode='x unified',
-            height=600 if include_volume else 400
+            height=700 if include_volume else 400,
+            margin=dict(l=60, r=50, t=100, b=80)
         )
         
         # Remove range slider and selector for cleaner look
         fig.update_layout(xaxis_rangeslider_visible=False)
+        
+        # Update y-axis labels for each subplot
+        fig.update_yaxes(title_text="Price ($)", row=1, col=1)
+        if include_volume:
+            fig.update_yaxes(title_text="Volume", row=2, col=1)
+            # Add Date label only to the bottom subplot (volume chart)
+            fig.update_xaxes(title_text="Date", row=2, col=1)
+        else:
+            # Add Date label to the only subplot when no volume chart
+            fig.update_xaxes(title_text="Date", row=1, col=1)
         
         return fig
     
@@ -202,7 +211,8 @@ class Visualizer:
             xaxis_title="Date",
             yaxis_title="Percentage Change (%)",
             template="plotly_white",
-            hovermode='x unified'
+            hovermode='x unified',
+            margin=dict(l=60, r=50, t=100, b=80)
         )
         
         return fig
@@ -220,7 +230,7 @@ class Visualizer:
             rows=3,
             cols=1,
             shared_xaxes=True,
-            vertical_spacing=0.1,
+            vertical_spacing=0.15,
             subplot_titles=[
                 f"{symbol} Price & Moving Averages",
                 "RSI",
@@ -323,14 +333,18 @@ class Visualizer:
         fig.update_layout(
             title=f"{symbol} Technical Analysis",
             template="plotly_white",
-            height=800,
-            showlegend=True
+            height=900,
+            showlegend=True,
+            margin=dict(l=60, r=50, t=100, b=80)
         )
         
         # Update y-axis labels
         fig.update_yaxes(title_text="Price ($)", row=1, col=1)
         fig.update_yaxes(title_text="RSI", row=2, col=1)
         fig.update_yaxes(title_text="MACD", row=3, col=1)
+        
+        # Add Date label only to the bottom subplot (MACD chart)
+        fig.update_xaxes(title_text="Date", row=3, col=1)
         
         return fig
     
@@ -459,7 +473,8 @@ class Visualizer:
             xaxis_title="Date",
             yaxis_title="Price ($)",
             template="plotly_white",
-            hovermode='x unified'
+            hovermode='x unified',
+            margin=dict(l=60, r=50, t=100, b=80)
         )
         
         return fig
