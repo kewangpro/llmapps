@@ -118,6 +118,146 @@ class ModelLoader(QThread):
         except Exception as e:
             self.error_occurred.emit(str(e))
 
+async def process_markdown(markdown_path, model_name='gemma3:latest', slide_layout=1, progress_cb=None):
+    try:
+        with open(markdown_path, 'r', encoding='utf-8') as f:
+            text = f.read()
+    except Exception as e:
+        log_progress(f'❌ Failed to open Markdown file: {e}', progress_cb)
+        return
+
+    debug_text = text[:500] + ("..." if len(text) > 500 else "")
+    log_progress(f'--- Extracted Markdown text (first 500 chars) ---\n{debug_text}\n--- End of extract ---', progress_cb)
+
+    if not text.strip():
+        log_progress('⚠️ Warning: Markdown file is empty.', progress_cb)
+        return
+
+    # Chunking utility for markdown (reuse from PDF processing)
+    def chunk_text(text, max_length=3000):
+        """Splits text into chunks of max_length characters, trying to preserve paragraphs."""
+        paragraphs = text.split('\n')
+        chunks = []
+        current = ''
+        for para in paragraphs:
+            if len(current) + len(para) + 1 > max_length:
+                if current:
+                    chunks.append(current)
+                current = para
+            else:
+                current += ('\n' if current else '') + para
+        if current:
+            chunks.append(current)
+        return chunks
+
+    # If text is too long, chunk it and process each chunk separately
+    max_chunk_length = 3000  # adjust as needed for your LLM
+    text_chunks = chunk_text(text, max_chunk_length)
+    all_slides = []
+    for chunk_idx, chunk in enumerate(text_chunks):
+        chunk_prompt = f'''
+You are a presentation assistant. Your ONLY task is to create a slide outline based on the following markdown instructions.
+
+IMPORTANT: DO NOT provide any commentary, review, explanation, or text before or after the slides. If you do, the user's program will break.
+
+INSTRUCTIONS:
+- Output ONLY slides in the following format. Do NOT add any extra text, commentary, or explanation.
+- Always generate at least 3 slides.
+- Each slide must have a title and 3 to 5 bullet points.
+- Use this exact format (do not change it):
+
+Slide 1:
+Title: <title of slide 1>
+- <bullet point 1>
+- <bullet point 2>
+- <bullet point 3>
+Slide 2:
+Title: <title of slide 2>
+- <bullet point 1>
+- <bullet point 2>
+- <bullet point 3>
+Slide 3:
+Title: <title of slide 3>
+- <bullet point 1>
+- <bullet point 2>
+- <bullet point 3>
+
+Continue for as many slides as needed, but do not add any text outside this format. Do NOT include any summary, review, or extra lines.
+
+Markdown Instructions:
+{chunk}
+'''
+        log_progress(f'⏳ Sending request to LLM for chunk {chunk_idx+1}/{len(text_chunks)}...', progress_cb)
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post('http://localhost:11434/api/generate', json={
+                    'model': model_name,
+                    'prompt': chunk_prompt,
+                    'stream': False
+                }) as resp:
+                    result = await resp.json()
+        except Exception as e:
+            log_progress(f'❌ LLM API error: {e}', progress_cb)
+            return
+
+        if 'response' not in result:
+            log_progress(f'⚠️ Unexpected API response: {result}', progress_cb)
+            return
+
+        outline = result['response']
+        log_progress(f'=== LLM Output Start (chunk {chunk_idx+1}) ===\n' + outline + f'\n=== LLM Output End (chunk {chunk_idx+1}) ===', progress_cb)
+
+        slides_raw = re.split(r'Slide\s*\d+:', outline, flags=re.IGNORECASE)[1:]
+        if not slides_raw or all(not s.strip() for s in slides_raw):
+            log_progress((f"❌ LLM output for chunk {chunk_idx+1} did not contain any slides in the expected format. "
+                   "Please check your LLM prompt and model output.\n"
+                   "First 500 chars of LLM output:\n" + outline[:500] + ("..." if len(outline) > 500 else "")), progress_cb)
+            continue  # skip this chunk
+        all_slides.extend(slides_raw)
+
+    if not all_slides:
+        log_progress(("❌ No valid slides were generated from any chunk. "
+               "Please check your LLM prompt, model, and markdown content."), progress_cb)
+        return
+
+    prs = Presentation()
+    for idx, slide_text in enumerate(all_slides, 1):
+        lines = [line.strip() for line in slide_text.strip().splitlines() if line.strip()]
+        title = None
+        bullets = []
+        for i, line in enumerate(lines):
+            if line.lower().startswith('title:'):
+                title = line[len('title:'):].strip()
+                bullets = [l[1:].strip() for l in lines[i+1:] if l.startswith('-')]
+                break
+        if not title:
+            if lines:
+                title = lines[0]
+                bullets = [l[1:].strip() for l in lines[1:] if l.startswith('-')]
+            else:
+                title = f"Slide {idx}"
+                bullets = []
+        slide = prs.slides.add_slide(prs.slide_layouts[slide_layout])
+        slide.shapes.title.text = title
+        slide.placeholders[1].text = '\n'.join(bullets)
+        log_progress(f'✅ Added Slide {idx}: "{title}" with {len(bullets)} bullet points.', progress_cb)
+
+    md_name = os.path.splitext(os.path.basename(markdown_path))[0]
+    output_file = f'{md_name}_presentation.pptx'
+    
+    prs.save(output_file)
+    
+    abs_output_path = os.path.abspath(output_file)
+    
+    log_progress(f'🎉 Presentation saved as {abs_output_path}', progress_cb)
+    
+    if open_file_location(abs_output_path):
+        log_progress(f'📂 Opened folder: {os.path.dirname(abs_output_path)}', progress_cb)
+    else:
+        log_progress(f'📁 File saved to: {os.path.dirname(abs_output_path)}', progress_cb)
+    
+    return abs_output_path
+
 async def process_pdf(pdf_path, model_name='gemma3:latest', slide_layout=1, progress_cb=None):
     try:
         with open(pdf_path, 'rb') as f:
@@ -268,11 +408,12 @@ class Worker(QThread):
     progress = pyqtSignal(str)
     finished = pyqtSignal(str)
 
-    def __init__(self, pdf_path, model_name, slide_layout):
+    def __init__(self, file_path, model_name, slide_layout, file_type='pdf'):
         super().__init__()
-        self.pdf_path = pdf_path
+        self.file_path = file_path
         self.model_name = model_name
         self.slide_layout = slide_layout
+        self.file_type = file_type
         self.task = None
 
     def run(self):
@@ -293,7 +434,10 @@ class Worker(QThread):
 
     async def _run(self):
         try:
-            await process_pdf(self.pdf_path, self.model_name, self.slide_layout, self.progress.emit)
+            if self.file_type == 'pdf':
+                await process_pdf(self.file_path, self.model_name, self.slide_layout, self.progress.emit)
+            elif self.file_type == 'md':
+                await process_markdown(self.file_path, self.model_name, self.slide_layout, self.progress.emit)
             self.finished.emit("Done")
         except asyncio.CancelledError:
             self.finished.emit("Cancelled")
@@ -485,13 +629,13 @@ class MainWindow(QWidget):
         self.setLayout(main_layout)
         
         # Header section
-        header_label = QLabel("PDF to PowerPoint Converter")
+        header_label = QLabel("PDF/Markdown to PowerPoint Converter")
         header_label.setObjectName("headerLabel")
         header_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(header_label)
         
         # Status label
-        self.status_label = QLabel("Ready to convert your PDF files to presentations")
+        self.status_label = QLabel("Ready to convert your PDF or Markdown files to presentations")
         self.status_label.setObjectName("statusLabel")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(self.status_label)
@@ -561,9 +705,9 @@ class MainWindow(QWidget):
         button_layout = QHBoxLayout()
         button_layout.setSpacing(15)
         
-        self.select_btn = QPushButton("📁 Select PDF File")
+        self.select_btn = QPushButton("📁 Select PDF or Markdown File")
         self.select_btn.setObjectName("primaryButton")
-        self.select_btn.clicked.connect(self.select_pdf)
+        self.select_btn.clicked.connect(self.select_file)
         button_layout.addWidget(self.select_btn)
         
         self.cancel_btn = QPushButton("❌ Cancel Processing")
@@ -656,7 +800,7 @@ class MainWindow(QWidget):
         self.refresh_models_btn.setEnabled(True)
         
         if self.current_model:
-            self.status_label.setText(f"Ready to convert PDFs using {self.current_model['display_name']}")
+            self.status_label.setText(f"Ready to convert PDFs or Markdown files using {self.current_model['display_name']}")
     
     def on_models_error(self, error):
         """Handle model loading error"""
@@ -666,13 +810,13 @@ class MainWindow(QWidget):
         self.refresh_models_btn.setEnabled(True)
         self.status_label.setText("Failed to connect to Ollama. Please ensure Ollama is running.")
 
-    def select_pdf(self):
-        """Select and process PDF file"""
+    def select_file(self):
+        """Select and process PDF or Markdown file"""
         file_path, _ = QFileDialog.getOpenFileName(
             self, 
-            "Select PDF File", 
+            "Select PDF or Markdown File", 
             "", 
-            "PDF Files (*.pdf);;All Files (*)"
+            "All Supported Files (*.pdf *.md);;PDF Files (*.pdf);;Markdown Files (*.md);;All Files (*)"
         )
         if file_path:
             # Validate file exists and is readable
@@ -692,9 +836,13 @@ class MainWindow(QWidget):
                 return
             
             # Check file extension
-            if not file_path.lower().endswith('.pdf'):
-                self.status_label.setText("⚠️ Selected file may not be a PDF.")
-                self.text_edit.append(f"⚠️ Warning: File does not have .pdf extension: {file_path}")
+            file_ext = file_path.lower()
+            if not (file_ext.endswith('.pdf') or file_ext.endswith('.md')):
+                self.status_label.setText("⚠️ Selected file may not be a PDF or Markdown file.")
+                self.text_edit.append(f"⚠️ Warning: File does not have .pdf or .md extension: {file_path}")
+            
+            # Determine file type
+            file_type = 'pdf' if file_ext.endswith('.pdf') else 'md'
             
             # Check if a model is selected
             current_model_data = self.model_combo.currentData()
@@ -717,7 +865,7 @@ class MainWindow(QWidget):
             # Start processing
             model_name = current_model_data['name']
             slide_layout = self.layout_combo.currentIndex()
-            self.worker = Worker(file_path, model_name, slide_layout)
+            self.worker = Worker(file_path, model_name, slide_layout, file_type)
             self.worker.progress.connect(self.append_text)
             self.worker.finished.connect(self.done)
             self.worker.start()
@@ -733,7 +881,7 @@ class MainWindow(QWidget):
             self.worker.stop()
             self.cancel_btn.setEnabled(False)
             self.select_btn.setEnabled(True)
-            self.select_btn.setText("📁 Select PDF File")
+            self.select_btn.setText("📁 Select PDF or Markdown File")
             self.progress_bar.setVisible(False)
             self.status_label.setText("❌ Processing cancelled")
             self.text_edit.append("\n❌ Processing was cancelled by user")
@@ -774,7 +922,7 @@ class MainWindow(QWidget):
         self.progress_bar.setVisible(False)
         self.select_btn.setEnabled(True)
         self.cancel_btn.setEnabled(False)
-        self.select_btn.setText("📁 Select PDF File")
+        self.select_btn.setText("📁 Select PDF or Markdown File")
         
         if msg == "Done":
             self.status_label.setText("✅ Conversion completed successfully!")
@@ -798,26 +946,45 @@ class MainWindow(QWidget):
 
 def main():
     # CLI mode
-    if '--pdf_file' in sys.argv:
-        idx = sys.argv.index('--pdf_file')
-        if idx + 1 < len(sys.argv):
-            pdf_path = sys.argv[idx + 1]
-            model_name = 'gemma3:latest'
-            if '--model' in sys.argv:
-                model_idx = sys.argv.index('--model')
-                if model_idx + 1 < len(sys.argv):
-                    model_name = sys.argv[model_idx + 1]
-            slide_layout = 1
-            if '--slide_layout' in sys.argv:
-                layout_idx = sys.argv.index('--slide_layout')
-                if layout_idx + 1 < len(sys.argv):
-                    try:
-                        slide_layout = int(sys.argv[layout_idx + 1])
-                    except ValueError:
-                        print("Invalid slide layout, using default.")
-            asyncio.run(process_pdf(pdf_path, model_name=model_name, slide_layout=slide_layout))
-        else:
-            print("Usage: python gen_ppt.py --pdf_file <path_to_pdf> [--model <model_name>] [--slide_layout <layout_index>]")
+    if '--pdf_file' in sys.argv or '--md_file' in sys.argv:
+        if '--pdf_file' in sys.argv:
+            idx = sys.argv.index('--pdf_file')
+            if idx + 1 < len(sys.argv):
+                input_path = sys.argv[idx + 1]
+                file_type = 'pdf'
+            else:
+                print("Usage: python gen_ppt.py --pdf_file <path_to_pdf> [--model <model_name>] [--slide_layout <layout_index>]")
+                print("       python gen_ppt.py --md_file <path_to_md> [--model <model_name>] [--slide_layout <layout_index>]")
+                return
+        elif '--md_file' in sys.argv:
+            idx = sys.argv.index('--md_file')
+            if idx + 1 < len(sys.argv):
+                input_path = sys.argv[idx + 1]
+                file_type = 'md'
+            else:
+                print("Usage: python gen_ppt.py --pdf_file <path_to_pdf> [--model <model_name>] [--slide_layout <layout_index>]")
+                print("       python gen_ppt.py --md_file <path_to_md> [--model <model_name>] [--slide_layout <layout_index>]")
+                return
+        
+        model_name = 'gemma3:latest'
+        if '--model' in sys.argv:
+            model_idx = sys.argv.index('--model')
+            if model_idx + 1 < len(sys.argv):
+                model_name = sys.argv[model_idx + 1]
+        
+        slide_layout = 1
+        if '--slide_layout' in sys.argv:
+            layout_idx = sys.argv.index('--slide_layout')
+            if layout_idx + 1 < len(sys.argv):
+                try:
+                    slide_layout = int(sys.argv[layout_idx + 1])
+                except ValueError:
+                    print("Invalid slide layout, using default.")
+        
+        if file_type == 'pdf':
+            asyncio.run(process_pdf(input_path, model_name=model_name, slide_layout=slide_layout))
+        elif file_type == 'md':
+            asyncio.run(process_markdown(input_path, model_name=model_name, slide_layout=slide_layout))
         return
 
     # GUI mode
