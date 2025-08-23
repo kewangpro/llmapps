@@ -216,33 +216,37 @@ class LSTMPredictor:
             dense_units = 25
             dropout_rate = 0.2
         
-        model = tf.keras.Sequential([
-            tf.keras.layers.Input(shape=input_shape),
-            
-            # First LSTM layer with batch normalization
-            tf.keras.layers.LSTM(lstm_units[0], return_sequences=True, 
-                               recurrent_dropout=0.1),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Dropout(dropout_rate),
-            
-            # Second LSTM layer
-            tf.keras.layers.LSTM(lstm_units[1], return_sequences=True,
-                               recurrent_dropout=0.1),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Dropout(dropout_rate),
-            
-            # Third LSTM layer
-            tf.keras.layers.LSTM(lstm_units[2], return_sequences=False,
-                               recurrent_dropout=0.1),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Dropout(dropout_rate),
-            
-            # Dense layers with regularization
-            tf.keras.layers.Dense(dense_units, activation='relu',
-                                kernel_regularizer=tf.keras.regularizers.l2(0.001)),
-            tf.keras.layers.Dropout(0.2),
-            tf.keras.layers.Dense(1)
-        ])
+        inputs = tf.keras.layers.Input(shape=input_shape)
+        
+        # First LSTM layer with batch normalization
+        lstm1 = tf.keras.layers.LSTM(lstm_units[0], return_sequences=True, 
+                                   recurrent_dropout=0.1)(inputs)
+        bn1 = tf.keras.layers.BatchNormalization()(lstm1)
+        drop1 = tf.keras.layers.Dropout(dropout_rate)(bn1)
+        
+        # Second LSTM layer
+        lstm2 = tf.keras.layers.LSTM(lstm_units[1], return_sequences=True,
+                                   recurrent_dropout=0.1)(drop1)
+        bn2 = tf.keras.layers.BatchNormalization()(lstm2)
+        drop2 = tf.keras.layers.Dropout(dropout_rate)(bn2)
+        
+        # Attention Mechanism
+        attention_output = tf.keras.layers.Attention()([drop2, drop2]) # Query and Value from same source
+        attention_dense = tf.keras.layers.Dense(lstm_units[1], activation='relu')(attention_output)
+        
+        # Third LSTM layer (now takes attention output)
+        lstm3 = tf.keras.layers.LSTM(lstm_units[2], return_sequences=False,
+                                   recurrent_dropout=0.1)(attention_dense) # Feed attention output here
+        bn3 = tf.keras.layers.BatchNormalization()(lstm3)
+        drop3 = tf.keras.layers.Dropout(dropout_rate)(bn3)
+        
+        # Dense layers with regularization
+        dense1 = tf.keras.layers.Dense(dense_units, activation='relu',
+                                     kernel_regularizer=tf.keras.regularizers.l2(0.001))(drop3)
+        drop4 = tf.keras.layers.Dropout(0.2)(dense1)
+        outputs = tf.keras.layers.Dense(1)(drop4)
+        
+        model = tf.keras.Model(inputs=inputs, outputs=outputs)
         
         # CRITICAL FIX: Add gradient clipping and improved optimizer
         optimizer = tf.keras.optimizers.Adam(
@@ -420,8 +424,8 @@ class LSTMPredictor:
         
         # Consolidated momentum feature with ultra-aggressive preprocessing
         # Smooth price and volume changes to reduce noise
-        price_change = data['Close'].pct_change().rolling(window=3, min_periods=1).mean()
-        volume_change = data['Volume'].pct_change().rolling(window=3, min_periods=1).mean()
+        price_change = data['Close'].pct_change().clip(lower=-0.1, upper=0.1).rolling(window=3, min_periods=1).mean()
+        volume_change = data['Volume'].pct_change().clip(lower=-0.3, upper=0.3).rolling(window=3, min_periods=1).mean()
         
         # Add a volatility component to momentum score
         price_volatility = data['Close'].pct_change().rolling(window=5, min_periods=1).std().fillna(0) # 5-day rolling std
@@ -439,7 +443,7 @@ class LSTMPredictor:
         # Explicitly use RobustScaler for features known to benefit from it
         if feature_name in ['MACD_Histogram', 'Momentum_Score']:
             logger.debug(f"Explicitly using RobustScaler for {feature_name} (as recommended by logs)")
-            return RobustScaler(quantile_range=(5.0, 95.0))
+            return RobustScaler(quantile_range=(1.0, 99.0)) # More aggressive quantile range
 
         # Features that always need robust scaling due to high variability
         always_robust_features = ['Volume', 'Volume_MA_Ratio', 'MACD', 'MACD_Signal', 'ATR'] # Removed MACD_Histogram, Momentum_Score as they are handled explicitly
@@ -514,7 +518,8 @@ class LSTMPredictor:
                 
                 # Check for high variance (potential scaling issues)
                 coefficient_of_variation = std_val / abs(mean_val) if mean_val != 0 else float('inf')
-                if coefficient_of_variation > 1.5:  # High variability
+                # Exclude MACD_Histogram from this check as it often has high CV due to being centered around zero
+                if coefficient_of_variation > 1.5 and col != 'MACD_Histogram':  # High variability
                     validation_results['scaling_recommendations'][col] = 'RobustScaler recommended (high CV)'
                 
                 # Stricter ratio feature validation
@@ -523,12 +528,22 @@ class LSTMPredictor:
                     q01 = data[col].quantile(0.01)
                     q_range = q99 - q01
                     
-                    # Ratios should be well-behaved
-                    if q99 > 2.5 or q01 < 0.2 or q_range > 2.0:
-                        validation_results['outlier_warnings'].append(
-                            f"{col}: suspicious ratio distribution (Q01: {q01:.3f}, Q99: {q99:.3f}, range: {q_range:.3f})"
-                        )
-                        validation_results['quality_score'] -= 8
+                    # Special handling for Momentum_Score due to its typical range around zero
+                    if col == 'Momentum_Score':
+                        # For Momentum_Score, check if its range is extremely narrow or wide,
+                        # but allow negative Q01 and small Q99
+                        if q_range < 0.001 or q_range > 0.1: # Example thresholds, might need tuning
+                            validation_results['outlier_warnings'].append(
+                                f"{col}: suspicious range for Momentum_Score (Q01: {q01:.3f}, Q99: {q99:.3f}, range: {q_range:.3f})"
+                            )
+                            validation_results['quality_score'] -= 8
+                    else:
+                        # Ratios should be well-behaved
+                        if q99 > 2.5 or q01 < 0.2 or q_range > 2.0:
+                            validation_results['outlier_warnings'].append(
+                                f"{col}: suspicious ratio distribution (Q01: {q01:.3f}, Q99: {q99:.3f}, range: {q_range:.3f})"
+                            )
+                            validation_results['quality_score'] -= 8
                 
                 # Check for inf or nan values
                 inf_count = np.isinf(data[col]).sum()
@@ -579,11 +594,11 @@ class LSTMPredictor:
         feature_quality = self._validate_feature_quality(enhanced_data, symbol)
         logger.info(f"Feature quality score for {symbol}: {feature_quality['quality_score']}/100")
         
-        # Create a composite scaler object that stores individual scalers for backward compatibility
-        composite_scaler = CompositeScaler(enhanced_data.columns, symbol, validation_split)
+        # Use pre_fitted_scaler if provided, otherwise create a new composite scaler
+        composite_scaler = pre_fitted_scaler if pre_fitted_scaler is not None else CompositeScaler(enhanced_data.columns, symbol, validation_split)
 
-        # Use per-feature adaptive scaling, passing the pre_fitted_scaler for overall price range fitting
-        scaled_data = self._apply_adaptive_scaling(enhanced_data, symbol, validation_split, pre_fitted_scaler)
+        # Use per-feature adaptive scaling, passing the composite_scaler for overall price range fitting
+        scaled_data = self._apply_adaptive_scaling(enhanced_data, symbol, validation_split, composite_scaler)
         
         # Create sequences
         X, y = [], []
@@ -608,8 +623,15 @@ class LSTMPredictor:
             val_data = None
         
         # Fit composite_scaler on the original Close price of the training data
+        # This ensures the scaler has proper price range for inverse transforms
         if composite_scaler is not None and 'Close' in data.columns:
-            composite_scaler.fit_transform(data.loc[data.index[:len(train_data)], 'Close'].to_frame())
+            try:
+                # Use training data only to prevent data leakage
+                training_close_data = data.loc[data.index[:len(train_data)], 'Close'].to_frame()
+                composite_scaler.fit_transform(training_close_data)
+                logger.debug(f"CompositeScaler fitted for {symbol} with price range: ${composite_scaler.price_min:.2f} - ${composite_scaler.price_max:.2f}")
+            except Exception as e:
+                logger.warning(f"Failed to fit CompositeScaler for {symbol}: {e}")
         
         # Apply per-feature scaling
         scaled_train_data = np.zeros_like(train_data)
@@ -649,15 +671,9 @@ class LSTMPredictor:
         except:
             pass
         
-        # Use robust method for known problematic symbols
-        problematic_symbols = ['MSFT', 'AMZN', 'GOOGL', 'META']
-        if symbol in problematic_symbols:
-            logger.info(f"Using robust feature preprocessing for {symbol} (known outlier issues)")
-            return self.prepare_enhanced_data_robust(data, symbol, validation_split, pre_fitted_scaler)
-        
-        # Fall back to original method for compatibility
-        logger.debug(f"Using legacy feature preprocessing for {symbol}")
-        return self._prepare_enhanced_data_legacy(data, validation_split)
+        # Always use robust method for all symbols to ensure multivariate forecasting
+        logger.info(f"Using robust enhanced features for {symbol}")
+        return self.prepare_enhanced_data_robust(data, symbol, validation_split, pre_fitted_scaler)
     
     def _prepare_enhanced_data_legacy(self, data: pd.DataFrame, validation_split: float = None) -> Tuple[np.ndarray, np.ndarray, MinMaxScaler]:
         """Legacy enhanced data preparation method"""
@@ -1079,6 +1095,7 @@ class LSTMPredictor:
             # Fallback to the original scaler.transform if CompositeScaler info is missing
             # This should ideally not happen if the model is loaded correctly
             logger.warning("CompositeScaler price_min or data_range not available, falling back to feature scaler transform.")
+            logger.debug(f"Scaler state - price_min: {getattr(scaler, 'price_min', 'N/A')}, data_range: {getattr(scaler, 'data_range', 'N/A')}, fitted: {getattr(scaler, 'fitted', 'N/A')}")
             dummy_for_scaling = np.zeros((1, scaler.n_features_in_))
             dummy_for_scaling[0, 0] = predicted_price
             scaled_pred_price = scaler.transform(dummy_for_scaling)[0, 0]
@@ -1335,6 +1352,65 @@ class LSTMPredictor:
         
         return validation_results
     
+    def check_scaling_health(self, symbol: str) -> Dict[str, Any]:
+        """Check the health of scaling parameters for a trained model"""
+        result = {
+            'symbol': symbol,
+            'scaling_healthy': False,
+            'issues': [],
+            'recommendations': [],
+            'scaler_info': {}
+        }
+        
+        try:
+            # Load scaler
+            scaler_path = self.model_dir / f"{symbol}_scaler.pkl"
+            if not scaler_path.exists():
+                result['issues'].append("Scaler file not found")
+                result['recommendations'].append("Train the model first")
+                return result
+                
+            scaler = joblib.load(scaler_path)
+            result['scaler_info']['type'] = type(scaler).__name__
+            
+            if isinstance(scaler, CompositeScaler):
+                # Check if scaler has price range parameters
+                has_price_params = (scaler.price_min is not None and 
+                                  scaler.price_max is not None and 
+                                  scaler.data_range is not None)
+                
+                result['scaler_info'].update({
+                    'fitted': getattr(scaler, 'fitted', None),
+                    'price_min': getattr(scaler, 'price_min', None),
+                    'price_max': getattr(scaler, 'price_max', None),
+                    'data_range': getattr(scaler, 'data_range', None)
+                })
+                
+                # Check metadata for saved parameters
+                metadata = self.get_model_info(symbol)
+                has_metadata_params = (metadata and 'scaler_info' in metadata and
+                                     metadata['scaler_info'].get('price_min') is not None)
+                
+                if has_price_params:
+                    result['scaling_healthy'] = True
+                    result['recommendations'].append("Scaling parameters are healthy")
+                elif has_metadata_params:
+                    result['issues'].append("Scaler parameters missing but available in metadata")
+                    result['recommendations'].append("Scaler will be auto-restored from metadata on next prediction")
+                else:
+                    result['issues'].append("Missing price range parameters - predictions will be inaccurate")
+                    result['recommendations'].append("Retrain the model to fix scaling issues")
+                    
+            else:
+                result['scaling_healthy'] = True  # MinMaxScaler doesn't have this issue
+                result['recommendations'].append("Using MinMaxScaler - no scaling parameter issues")
+                
+        except Exception as e:
+            result['issues'].append(f"Error checking scaler: {e}")
+            result['recommendations'].append("Check model files or retrain")
+            
+        return result
+    
     def _save_ensemble(self, models: list, scaler: MinMaxScaler, symbol: str, histories: list):
         """Save ensemble models and metadata using modern .keras format"""
         try:
@@ -1441,7 +1517,7 @@ class LSTMPredictor:
                 logger.error(f"Failed to save scaler for {symbol}: {scaler_error}")
                 raise
             
-            # Save metadata with enhanced format information
+            # Save metadata with enhanced format information including scaler parameters
             metadata = {
                 'symbol': symbol,
                 'ensemble_size': len(models),
@@ -1460,6 +1536,14 @@ class LSTMPredictor:
                     'total_params': models[0].count_params() if models else None,
                     'feature_count': models[0].input_shape[2] if models and len(models[0].input_shape) > 2 else 5,
                     'uses_enhanced_features': models[0].input_shape[2] > 5 if models and len(models[0].input_shape) > 2 else False
+                },
+                'scaler_info': {
+                    'scaler_type': type(scaler).__name__,
+                    'fitted': getattr(scaler, 'fitted', None),
+                    'price_min': getattr(scaler, 'price_min', None),
+                    'price_max': getattr(scaler, 'price_max', None),
+                    'data_range': getattr(scaler, 'data_range', None),
+                    'n_features': getattr(scaler, 'n_features_in_', None)
                 }
             }
             
@@ -1480,7 +1564,7 @@ class LSTMPredictor:
             self._cleanup_failed_save(symbol)
             raise
     
-    def _load_ensemble(self, symbol: str) -> Tuple[list, Optional[MinMaxScaler]]:
+    def _load_ensemble(self, symbol: str, data: pd.DataFrame = None) -> Tuple[list, Optional[MinMaxScaler]]:
         """Load ensemble models and scaler with proper error handling and format support"""
         models = []
         scaler = None
@@ -1491,6 +1575,54 @@ class LSTMPredictor:
             if scaler_path.exists():
                 scaler = joblib.load(scaler_path)
                 logger.debug(f"Loaded scaler for {symbol}")
+                # CRITICAL FIX: Ensure scaler is properly restored after loading
+                # This addresses issues with joblib not preserving critical attributes
+                if not scaler.fitted:
+                    scaler.fitted = True
+                    logger.warning(f"Forced scaler fitted state to True for {symbol} after loading.")
+                
+                # ADDITIONAL FIX: Validate that CompositeScaler has required price range data
+                if isinstance(scaler, CompositeScaler):
+                    if scaler.price_min is None or scaler.price_max is None or scaler.data_range is None:
+                        logger.warning(f"CompositeScaler for {symbol} is missing price range data after loading. Attempting to restore...")
+                        
+                        # First, try to restore from saved metadata
+                        metadata = self.get_model_info(symbol)
+                        restored_from_metadata = False
+                        
+                        if metadata and 'scaler_info' in metadata:
+                            scaler_info = metadata['scaler_info']
+                            saved_price_min = scaler_info.get('price_min')
+                            saved_price_max = scaler_info.get('price_max')
+                            
+                            if saved_price_min is not None and saved_price_max is not None:
+                                try:
+                                    scaler.set_scaling_params(saved_price_min, saved_price_max)
+                                    logger.info(f"Restored scaling parameters for {symbol} from metadata: ${scaler.price_min:.2f} - ${scaler.price_max:.2f}")
+                                    # Save the restored scaler back to disk to persist the fix
+                                    joblib.dump(scaler, scaler_path)
+                                    logger.debug(f"Saved restored scaler to disk for {symbol}")
+                                    restored_from_metadata = True
+                                except Exception as e:
+                                    logger.warning(f"Failed to restore scaling parameters from metadata for {symbol}: {e}")
+                        
+                        # If metadata restoration failed, fall back to recent data (less accurate)
+                        if not restored_from_metadata:
+                            if data is not None and len(data) > 0 and 'Close' in data.columns:
+                                try:
+                                    recent_prices = data['Close'].dropna()
+                                    if len(recent_prices) > 0:
+                                        scaler.set_scaling_params(recent_prices.min(), recent_prices.max())
+                                        logger.warning(f"Restored scaling parameters for {symbol} from recent data (may be inaccurate): ${scaler.price_min:.2f} - ${scaler.price_max:.2f}")
+                                        # Save the restored scaler back to disk
+                                        joblib.dump(scaler, scaler_path)
+                                        logger.debug(f"Saved restored scaler (from data) to disk for {symbol}")
+                                    else:
+                                        logger.warning(f"No valid price data available to restore scaling for {symbol}")
+                                except Exception as e:
+                                    logger.warning(f"Failed to restore scaling parameters for {symbol}: {e}")
+                            else:
+                                logger.warning(f"No data provided to restore CompositeScaler parameters for {symbol}")
             else:
                 logger.warning(f"No scaler found for {symbol}")
                 return [], None
@@ -1508,7 +1640,7 @@ class LSTMPredictor:
             
             if len(models) == 0:
                 logger.warning(f"No models found for {symbol}")
-                return [], None
+                return [], scaler  # Return scaler even if no models found (for testing)
             
             # Validate loaded models
             self._validate_loaded_models(models, symbol)
@@ -1526,7 +1658,7 @@ class LSTMPredictor:
         """Load ensemble with automatic fallback and recovery mechanisms"""
         try:
             # First attempt: normal loading
-            models, scaler = self._load_ensemble(symbol)
+            models, scaler = self._load_ensemble(symbol, data)
             if models and len(models) > 0:
                 return models, scaler
                 
@@ -1534,7 +1666,7 @@ class LSTMPredictor:
             
             # Second attempt: try migration and reload
             if self._attempt_model_recovery(symbol):
-                models, scaler = self._load_ensemble(symbol)
+                models, scaler = self._load_ensemble(symbol, data)
                 if models and len(models) > 0:
                     logger.info(f"Successfully recovered {len(models)} models for {symbol}")
                     return models, scaler
@@ -1543,7 +1675,7 @@ class LSTMPredictor:
             if data is not None and len(data) > 100:  # Ensure sufficient data
                 logger.warning(f"Attempting to retrain models for {symbol} due to loading failures")
                 if self.force_retrain_if_broken(symbol, data):
-                    models, scaler = self._load_ensemble(symbol)
+                    models, scaler = self._load_ensemble(symbol, data)
                     if models and len(models) > 0:
                         logger.info(f"Successfully retrained and loaded {len(models)} models for {symbol}")
                         return models, scaler
@@ -2189,11 +2321,27 @@ class LSTMPredictor:
         }
         
         try:
-            # Check if scaler exists
+            # Check if scaler exists and has proper scaling parameters
             scaler_path = self.model_dir / f"{symbol}_scaler.pkl"
             if not scaler_path.exists():
                 diagnosis['issues'].append("Scaler file missing")
                 diagnosis['recommendations'].append("Retrain the model to generate scaler")
+            else:
+                # Check if scaler has proper scaling parameters
+                try:
+                    scaler = joblib.load(scaler_path)
+                    if isinstance(scaler, CompositeScaler):
+                        metadata = self.get_model_info(symbol)
+                        has_metadata_scaling = (metadata and 'scaler_info' in metadata and 
+                                              metadata['scaler_info'].get('price_min') is not None)
+                        has_direct_scaling = (scaler.price_min is not None and scaler.data_range is not None)
+                        
+                        if not has_metadata_scaling and not has_direct_scaling:
+                            diagnosis['issues'].append("CompositeScaler missing price range parameters")
+                            diagnosis['recommendations'].append("Retrain the model to fix scaling issues - this will improve prediction accuracy")
+                except Exception as e:
+                    diagnosis['issues'].append(f"Scaler loading failed: {e}")
+                    diagnosis['recommendations'].append("Retrain the model to regenerate scaler")
             
             # Check model files
             models_found = 0
@@ -2240,7 +2388,7 @@ class LSTMPredictor:
         """Attempt to retrain models if they cannot be loaded"""
         try:
             # First, try to load existing models
-            models, scaler = self._load_ensemble(symbol)
+            models, scaler = self._load_ensemble(symbol, data)
             
             if models and len(models) == self.ensemble_size:
                 logger.info(f"Models for {symbol} loaded successfully, no retraining needed")
