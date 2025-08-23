@@ -1,7 +1,7 @@
 import re
 import asyncio
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import logging
 
 from src.tools.stock_fetcher import StockFetcher
@@ -94,7 +94,7 @@ class QueryProcessor:
                 'query': query
             }
     
-    def _extract_intent_and_entities(self, query: str) -> tuple:
+    def _extract_intent_and_entities(self, query: str) -> Tuple[str, dict]:
         """Extract intent and entities from query using pattern matching"""
         entities = {}
         
@@ -214,28 +214,38 @@ class QueryProcessor:
         period = entities.get('period', '1y')
         
         try:
-            # Fetch stock data
+            logger.info(f"[{symbol}] Starting analysis: fetching stock data.")
             stock_data = self.stock_fetcher.fetch_stock_data(symbol, period)
+            logger.info(f"[{symbol}] Stock data fetched. Rows: {len(stock_data)}")
+
             current_data = self.stock_fetcher.get_real_time_price(symbol)
             stock_info = self.stock_fetcher.get_stock_info(symbol)
+            logger.info(f"[{symbol}] Current price and info fetched.")
             
-            # Perform technical analysis
+            logger.info(f"[{symbol}] Performing technical analysis.")
             technical_analysis = self.technical_analysis.analyze_trends(stock_data)
             trading_signals = self.technical_analysis.generate_trading_signals(technical_analysis)
+            logger.info(f"[{symbol}] Technical analysis complete.")
             
-            # Generate analysis text
+            logger.info(f"[{symbol}] Generating analysis text.")
             analysis_text = self._generate_analysis_text(
                 symbol, stock_info, technical_analysis, trading_signals
             )
-            
-            # Try to generate predictions if model exists
+            logger.info(f"[{symbol}] Analysis text generated.")
+
             predictions = None
+            logger.info(f"[{symbol}] Checking if LSTM model is trained.")
             if self.lstm_predictor.is_model_trained(symbol):
+                logger.info(f"[{symbol}] LSTM model is trained. Attempting prediction.")
                 try:
                     predictions = self.lstm_predictor.predict(symbol, stock_data)
+                    logger.info(f"[{symbol}] LSTM prediction complete.")
                 except Exception as e:
-                    logger.warning(f"Prediction failed for {symbol}: {e}")
+                    logger.warning(f"[{symbol}] Prediction failed: {e}")
+            else:
+                logger.info(f"[{symbol}] LSTM model not trained. Skipping prediction.")
             
+            logger.info(f"[{symbol}] Preparing final analysis result.")
             return {
                 'type': 'stock_analysis',
                 'symbol': symbol,
