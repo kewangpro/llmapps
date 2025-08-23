@@ -1,7 +1,7 @@
 import panel as pn
 import param
 import asyncio
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 import logging
 
 from src.agents.query_processor import QueryProcessor
@@ -97,6 +97,9 @@ class StockAnalysisApp(param.Parameterized):
             self._show_error("Please enter a query")
             return
         
+        # Clear previous results immediately upon new query submission
+        self.results_column.clear()
+        
         # Show loading state
         self._set_loading_state(True)
         
@@ -123,6 +126,7 @@ class StockAnalysisApp(param.Parameterized):
     
     def _handle_query_result(self, result: Dict[str, Any], query: str):
         """Handle query result and update UI"""
+        logger.info(f"Results ready to display for query: '{query}'")
         try:
             # Display results
             self._display_results(result)
@@ -552,13 +556,14 @@ class StockAnalysisApp(param.Parameterized):
         css_pane = pn.pane.HTML(css)
         
         # Header
-        header = pn.pane.HTML("""
+        header_html_content = """
         <div style='background: linear-gradient(90deg, #1f2937 0%, #374151 100%); 
                     color: white; padding: 20px; text-align: center; margin-bottom: 20px; border-radius: 10px;'>
             <h1 style='margin: 0; font-size: 2.5em;'>📈 Stock Analysis AI</h1>
             <p style='margin: 5px 0 0 0; opacity: 0.8;'>Powered by LSTM predictions and technical analysis</p>
         </div>
-        """, sizing_mode="stretch_width")
+        """
+        header = pn.pane.HTML(header_html_content, sizing_mode="stretch_width")
         
         # Query section
         query_section = pn.Column(
