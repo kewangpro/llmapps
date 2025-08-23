@@ -1,0 +1,354 @@
+import numpy as np
+import pandas as pd
+import tensorflow as tf
+import logging
+from typing import Dict, Any, List, Tuple, Optional
+from datetime import datetime
+from pathlib import Path
+
+from src.config import Config
+from src.tools.lstm.model_architecture import create_lstm_model
+from src.tools.lstm.data_pipeline import _prepare_basic_data, prepare_enhanced_data, prepare_enhanced_data_robust
+from src.tools.lstm.model_manager import save_ensemble, load_ensemble_with_fallback, determine_feature_compatibility, get_model_info
+from src.tools.lstm.validation_utils import validate_improvements, check_scaling_health, diagnose_model_issues
+from src.tools.lstm.custom_scalers import CompositeScaler
+from src.tools.lstm.prediction_utils import _predict_single_model, _inverse_transform_predictions, _update_sequence_for_next_prediction, _generate_multi_step_predictions, _generate_ensemble_predictions # Removed _predict_ensemble
+
+logger = logging.getLogger(__name__)
+
+def _ensure_datetime_index(data: pd.DataFrame) -> pd.DataFrame:
+    """Ensure the DataFrame has a proper datetime index"""
+    try:
+        # If index is already datetime, normalize and return
+        if isinstance(data.index, pd.DatetimeIndex):
+            return data
+        
+        # If index is not datetime, try to convert
+        if hasattr(data.index, 'dtype') and data.index.dtype == 'object':
+            # Try to convert string dates
+            data.index = pd.to_datetime(data.index)
+            return data
+        
+        # If index appears to be numeric/positional, create a date range
+        # This is a fallback for data without proper date index
+        logger.warning("Data index is not datetime, creating synthetic datetime index")
+        end_date = pd.Timestamp.now().normalize()
+        start_date = end_date - pd.Timedelta(days=len(data)-1)
+        
+        # Create new DataFrame with datetime index
+        new_index = pd.date_range(start=start_date, end=end_date, periods=len(data))
+        data_with_datetime = data.copy()
+        data_with_datetime.index = new_index
+        
+        return data_with_datetime
+        
+    except Exception as e:
+        logger.warning(f"Failed to ensure datetime index: {e}")
+        # Last resort: create a simple date range
+        end_date = pd.Timestamp.now().normalize()
+        start_date = end_date - pd.Timedelta(days=len(data)-1)
+        new_index = pd.date_range(start=start_date, end=end_date, periods=len(data))
+        
+        data_copy = data.copy()
+        data_copy.index = new_index
+        return data_copy
+
+class LSTMPredictionService:
+    """Core service for training, predicting, and managing LSTM models"""
+    
+    def __init__(self, model_dir: Path = None):
+        self.model_dir = model_dir or Config.MODEL_DIR / "lstm"
+        self.model_dir.mkdir(parents=True, exist_ok=True)
+        
+        self.sequence_length = Config.LSTM_SEQUENCE_LENGTH
+        self.ensemble_size = Config.LSTM_ENSEMBLE_SIZE
+
+    def _predict_ensemble(self, models: list, X, scaler) -> np.ndarray:
+        """Get ensemble prediction using direct model calls without tf.function"""
+        predictions = []
+        
+        # Ensure X is a proper tensor with consistent dtype
+        if isinstance(X, np.ndarray):
+            X_tensor = tf.convert_to_tensor(X, dtype=tf.float32)
+        elif isinstance(X, tf.Tensor):
+            X_tensor = tf.cast(X, dtype=tf.float32)
+        else:
+            X_tensor = tf.convert_to_tensor(X, dtype=tf.float32)
+        
+        for model in models:
+            # Use direct model call for better performance without retracing issues
+            pred = _predict_single_model(model, X_tensor)
+            pred_rescaled = _inverse_transform_predictions(pred.numpy().flatten(), scaler)
+            predictions.append(pred_rescaled)
+        
+        # Average ensemble predictions
+        return np.mean(predictions, axis=0)
+
+    def train_ensemble(
+        self, 
+        data: pd.DataFrame, 
+        symbol: str,
+        validation_split: float = 0.2,
+        epochs: int = None,
+        batch_size: int = None
+    ) -> Dict[str, Any]:
+        """Train ensemble of LSTM models"""
+        
+        epochs = epochs or Config.EPOCHS
+        batch_size = batch_size or Config.BATCH_SIZE
+        
+        logger.info(f"Training LSTM ensemble for {symbol}")
+        
+        # Ensure data has proper datetime index before processing
+        data = _ensure_datetime_index(data)
+        
+        # Prepare data with enhanced features if possible, fallback to basic features
+        try:
+            # Try enhanced features first with symbol parameter
+            if hasattr(prepare_enhanced_data_robust, '__call__') and symbol in ['MSFT', 'AMZN', 'GOOGL', 'META']:
+                logger.info(f"Using robust enhanced features for {symbol} (known outlier issues)")
+                X, y, scaler = prepare_enhanced_data_robust(data, self.sequence_length, symbol, validation_split)
+            else:
+                X, y, scaler = prepare_enhanced_data(data, self.sequence_length, validation_split)
+            logger.info(f"Using enhanced features ({X.shape[2]} features) for training {symbol}")
+        except Exception as e:
+            logger.warning(f"Enhanced features failed for {symbol}: {e}. Falling back to basic features.")
+            X, y, scaler = _prepare_basic_data(data, self.sequence_length, validation_split) # Updated call
+            logger.info(f"Using basic features ({X.shape[2]} features) for training {symbol}")
+        
+        if len(X) < 50:  # Need minimum data for training
+            raise ValueError(f"Insufficient data for training: {len(X)} samples. Need at least 50.")
+        
+        # Data is already split in prepare_data methods, so we need to recreate the split
+        split_index = int(len(X) * (1 - validation_split))
+        X_train, X_val = X[:split_index], X[split_index:]
+        y_train, y_val = y[:split_index], y[split_index:]
+        
+        models = []
+        training_histories = []
+        
+        # Train ensemble
+        for i in range(self.ensemble_size):
+            logger.info(f"Training model {i+1}/{self.ensemble_size}")
+            
+            model = create_lstm_model((X.shape[1], X.shape[2]))
+            
+            # IMPROVED: Enhanced callbacks for better training stability
+            callbacks = [
+                tf.keras.callbacks.EarlyStopping(
+                    monitor='val_loss', 
+                    patience=15,  # Increased patience for stability
+                    restore_best_weights=True,
+                    min_delta=1e-4,  # Minimum improvement threshold
+                    verbose=0
+                ),
+                tf.keras.callbacks.ReduceLROnPlateau(
+                    monitor='val_loss', 
+                    factor=0.7,  # Less aggressive reduction
+                    patience=8,  # More patience before reducing LR
+                    min_lr=1e-7,
+                    verbose=0
+                ),
+                # Add learning rate warmup for first few epochs
+                tf.keras.callbacks.LearningRateScheduler(
+                    lambda epoch: 0.001 * min(1.0, (epoch + 1) / 5.0),
+                    verbose=0
+                )
+            ]
+            
+            # Train the model
+            history = model.fit(
+                X_train, y_train,
+                validation_data=(X_val, y_val),
+                epochs=epochs,
+                batch_size=batch_size,
+                callbacks=callbacks,
+                verbose=0
+            )
+            
+            models.append(model)
+            training_histories.append(history.history)
+        
+        # Save models and metadata
+        save_ensemble(models, scaler, symbol, self.model_dir, self.sequence_length, training_histories)
+        
+        # Calculate validation metrics
+        val_predictions = self._predict_ensemble(models, X_val, scaler) # Updated call
+        actual_prices = _inverse_transform_predictions(y_val, scaler)
+        
+        mse = np.mean((actual_prices - val_predictions)**2)
+        mae = np.mean(np.abs(actual_prices - val_predictions))
+        
+        # Calculate directional accuracy
+        actual_directions = np.diff(actual_prices) > 0
+        pred_directions = np.diff(val_predictions) > 0
+        directional_accuracy = np.mean(actual_directions == pred_directions) * 100
+        
+        metrics = {
+            'symbol': symbol,
+            'mse': float(mse),
+            'mae': float(mae),
+            'rmse': float(np.sqrt(mse)),
+            'directional_accuracy': float(directional_accuracy),
+            'training_samples': len(X_train),
+            'validation_samples': len(X_val),
+            'ensemble_size': self.ensemble_size
+        }
+        
+        logger.info(f"Training completed for {symbol}. RMSE: {metrics['rmse']:.4f}, Directional Accuracy: {directional_accuracy:.1f}%")
+        
+        return metrics
+
+    def predict(
+        self, 
+        symbol: str, 
+        data: pd.DataFrame, 
+        days: int = None,
+        ensemble_size: int = None
+    ) -> Dict[str, Any]:
+        """Generate predictions using trained ensemble with improved error handling"""
+        
+        days = days or Config.PREDICTION_DAYS
+        ensemble_size = ensemble_size or self.ensemble_size
+        
+        try:
+            # Load models with error handling and automatic fallback
+            models, scaler = load_ensemble_with_fallback(symbol, self.model_dir, self.sequence_length, ensemble_size, data)
+            if not models:
+                # Try to diagnose the issue
+                diagnosis = diagnose_model_issues(symbol, self.model_dir)
+                error_msg = f"No trained models found for {symbol}. Issues: {diagnosis['issues']}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            # Always update scaler's price_min and price_max from latest data
+            if scaler is not None and 'Close' in data.columns:
+                close_prices = data['Close'].dropna()
+                if len(close_prices) > 0:
+                    scaler.price_min = float(close_prices.min())
+                    scaler.price_max = float(close_prices.max())
+                    scaler.data_range = scaler.price_max - scaler.price_min
+                    scaler.data_scale = scaler.data_range / (scaler.feature_range[1] - scaler.feature_range[0]) if scaler.data_range > 0 else 0
+                    scaler.fitted = True
+                    logger.info(f"Scaler price_min/max updated from latest data: {scaler.price_min} - {scaler.price_max}")
+        except Exception as load_error:
+            logger.error(f"Failed to load models for {symbol}: {load_error}")
+            # Provide helpful error message with recovery suggestions
+            raise ValueError(
+                f"Could not load models for {symbol}. "
+                f"Error: {str(load_error)}. "
+                f"Try: 1) Retraining the model, 2) Check diagnose_model_issues() output, "
+                f"3) Use force_retrain_if_broken() method."
+            )
+        
+        # Ensure data has proper datetime index before processing
+        data = _ensure_datetime_index(data)
+        
+        # CRITICAL FIX: Use backward compatibility system to determine feature set
+        compatibility_info = determine_feature_compatibility(symbol, self.model_dir)
+        use_enhanced_features = compatibility_info['uses_enhanced_features']
+        
+        logger.info(f"Model for {symbol}: Enhanced features={use_enhanced_features}, "
+                   f"Feature count={compatibility_info['feature_count']}")
+        
+        # Prepare data with matching feature set for backward compatibility
+        try:
+            if use_enhanced_features:
+                X, _, scaler_check = prepare_enhanced_data(data, self.sequence_length, pre_fitted_scaler=scaler)
+                logger.debug(f"Using enhanced features for prediction: {X.shape[2]} features")
+            else:
+                X, _, scaler_check = _prepare_basic_data(data, self.sequence_length, pre_fitted_scaler=scaler) # Updated call
+                logger.debug(f"Using basic features for prediction: {X.shape[2]} features")
+                
+            # Validate feature count matches expected
+            expected_features = compatibility_info['feature_count']
+            if X.shape[2] != expected_features:
+                logger.warning(f"Feature count mismatch: expected {expected_features}, got {X.shape[2]}. "
+                              f"Falling back to basic features.")
+                raise ValueError(f"Feature count mismatch")
+                
+        except Exception as e:
+            logger.warning(f"Feature preparation failed, falling back to basic features: {e}")
+            X, _, scaler_check = _prepare_basic_data(data, self.sequence_length) # Updated call
+            
+            # Update compatibility info for fallback
+            compatibility_info['uses_enhanced_features'] = False
+            compatibility_info['feature_count'] = X.shape[2]
+        
+        if len(X) == 0:
+            raise ValueError("Insufficient data for prediction")
+        
+        # Use the last sequence for prediction
+        last_sequence = X[-1:, :, :]
+        
+        # CRITICAL FIX: Improved multi-step prediction with consistent scaling
+        predictions = _generate_multi_step_predictions(models, scaler, X, days, self._predict_ensemble) # Pass self._predict_ensemble
+        
+        # Calculate confidence intervals with improved ensemble variance
+        ensemble_predictions = _generate_ensemble_predictions(models, scaler, X, days, self._predict_ensemble) # Pass self._predict_ensemble
+        pred_std = np.std(ensemble_predictions, axis=0)
+        
+        # Generate dates for predictions with proper datetime handling
+        last_date = data.index[-1]
+        
+        # Ensure last_date is a proper datetime object
+        if isinstance(last_date, (int, float, str)):
+            # Handle cases where index is not datetime
+            if isinstance(last_date, str):
+                try:
+                    last_date = pd.to_datetime(last_date)
+                except:
+                    # If string conversion fails, use current date
+                    last_date = pd.Timestamp.now().normalize()
+            else:
+                # If it's numeric, assume it's days since some epoch - use current date instead
+                last_date = pd.Timestamp.now().normalize()
+        elif not isinstance(last_date, (pd.Timestamp, datetime)):
+            # Convert to pandas Timestamp for consistency
+            last_date = pd.to_datetime(last_date)
+        
+        # Normalize to remove time component if present
+        if hasattr(last_date, 'normalize'):
+            last_date = last_date.normalize()
+        
+        # Generate prediction dates starting from the next business day
+        # Use proper datetime arithmetic for pandas 2.0+ compatibility
+        start_date = last_date + pd.Timedelta(days=1)
+        prediction_dates = pd.date_range(
+            start=start_date,
+            periods=days,
+            freq='D'
+        )
+        
+        result = {
+            'type': 'prediction',
+            'symbol': symbol,
+            'predictions': predictions,
+            'dates': prediction_dates.strftime('%Y-%m-%d').tolist(),
+            'confidence_upper': [p + 1.96 * s for p, s in zip(predictions, pred_std)],
+            'confidence_lower': [p - 1.96 * s for p, s in zip(predictions, pred_std)],
+            'last_price': float(data['Close'].iloc[-1]),
+            'prediction_period_days': days,
+            'prediction_variance': pred_std.tolist()
+        }
+        
+        return result
+
+    def validate_model(self, data: pd.DataFrame, symbol: str = "TEST") -> Dict[str, Any]:
+        """Comprehensive validation of all LSTM predictor improvements"""
+        return validate_improvements(data, self.sequence_length, symbol)
+
+    def check_scaling_health(self, symbol: str) -> Dict[str, Any]:
+        """Check the health of scaling parameters for a trained model"""
+        return check_scaling_health(symbol, self.model_dir)
+
+    def diagnose_model_issues(self, symbol: str) -> Dict[str, Any]:
+        """Diagnose potential issues with trained models"""
+        return diagnose_model_issues(symbol, self.model_dir)
+
+    def get_model_info(self, symbol: str) -> Dict[str, Any]:
+        """Get metadata for a trained model"""
+        return get_model_info(symbol, self.model_dir)
+
+    def force_retrain_if_broken(self, symbol: str, data: pd.DataFrame) -> bool:
+        """Force retrain if model is broken"""
+        return load_ensemble_with_fallback(symbol, self.model_dir, self.sequence_length, self.ensemble_size, data)[0] is None
