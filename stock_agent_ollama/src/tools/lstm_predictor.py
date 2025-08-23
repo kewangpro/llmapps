@@ -75,8 +75,27 @@ class CompositeScaler:
         return X
     
     def transform(self, X):
-        """Transform data - not used in new implementation but needed for compatibility"""
-        return X
+        """Transform data - scales X using fitted min/max values"""
+        if not self.fitted:
+            logger.warning("Scaler not fitted, cannot transform data accurately.")
+            return X # Or raise an error, depending on desired behavior
+
+        # Ensure X is a numpy array and 2D
+        if isinstance(X, (list, tuple)):
+            X = np.array(X)
+        if len(X.shape) == 1:
+            X = X.reshape(-1, 1)
+
+        # Assuming the first feature is the one to be scaled (e.g., Close price)
+        # This mimics the behavior of inverse_transform
+        scaled_X = X.copy()
+        if self.data_range > 0:
+            scaled_X[:, 0] = (X[:, 0] - self.price_min) / self.data_range
+        else:
+            # Handle cases where data_range is zero (e.g., all prices are the same)
+            scaled_X[:, 0] = 0.0 # Or some other sensible default
+
+        return scaled_X
     
     def inverse_transform(self, X):
         """Inverse transform predictions to original scale - simplified for compatibility"""
@@ -250,7 +269,7 @@ class LSTMPredictor:
         # Use direct model call for better performance without retracing
         return model(X_tensor, training=False)
     
-    def prepare_data(self, data: pd.DataFrame, validation_split: float = None) -> Tuple[np.ndarray, np.ndarray, MinMaxScaler]:
+    def prepare_data(self, data: pd.DataFrame, validation_split: float = None, pre_fitted_scaler: Optional[object] = None) -> Tuple[np.ndarray, np.ndarray, MinMaxScaler]:
         """Prepare data for LSTM training with proper data leakage prevention"""
         # Use multiple features for better predictions
         features = ['Close', 'Volume', 'High', 'Low', 'Open']
@@ -274,16 +293,25 @@ class LSTMPredictor:
             val_data = dataset[split_index:]
             
             # Fit scaler ONLY on training data
-            scaler = MinMaxScaler(feature_range=(0, 1))
-            scaled_train_data = scaler.fit_transform(train_data)
-            scaled_val_data = scaler.transform(val_data)  # Transform validation data using training scaler
+            if pre_fitted_scaler is None:
+                scaler = MinMaxScaler(feature_range=(0, 1))
+                scaled_train_data = scaler.fit_transform(train_data)
+                scaled_val_data = scaler.transform(val_data)  # Transform validation data using training scaler
+            else:
+                scaler = pre_fitted_scaler
+                scaled_train_data = scaler.transform(train_data)
+                scaled_val_data = scaler.transform(val_data)
             
             # Combine scaled data for sequence creation
             scaled_data = np.vstack([scaled_train_data, scaled_val_data])
         else:
             # For prediction only (no validation split)
-            scaler = MinMaxScaler(feature_range=(0, 1))
-            scaled_data = scaler.fit_transform(dataset)
+            if pre_fitted_scaler is None:
+                scaler = MinMaxScaler(feature_range=(0, 1))
+                scaled_data = scaler.fit_transform(dataset)
+            else:
+                scaler = pre_fitted_scaler
+                scaled_data = scaler.transform(dataset)
         
         # Create sequences
         X, y = [], []
@@ -391,10 +419,16 @@ class LSTMPredictor:
         enhanced_data['ATR'] = self._ultra_aggressive_preprocessing(atr_raw, 'ATR')
         
         # Consolidated momentum feature with ultra-aggressive preprocessing
-        price_change = data['Close'].pct_change()
-        volume_change = data['Volume'].pct_change()
-        # Create a momentum score that combines both price and volume momentum
-        momentum_score = (price_change * 0.7) + (volume_change * 0.3)  # Weight price change more heavily
+        # Smooth price and volume changes to reduce noise
+        price_change = data['Close'].pct_change().rolling(window=3, min_periods=1).mean()
+        volume_change = data['Volume'].pct_change().rolling(window=3, min_periods=1).mean()
+        
+        # Add a volatility component to momentum score
+        price_volatility = data['Close'].pct_change().rolling(window=5, min_periods=1).std().fillna(0) # 5-day rolling std
+        
+        # Create a momentum score that combines price change, volume change, and volatility
+        # Adjust weights to give more importance to price change and volatility
+        momentum_score = (price_change * 0.6) + (volume_change * 0.1) + (price_volatility * 0.3) # New weighting
         enhanced_data['Momentum_Score'] = self._ultra_aggressive_preprocessing(momentum_score, 'Momentum_Score')
         # Removed individual Price_Change and Volume_Change to reduce feature count
         
@@ -402,8 +436,13 @@ class LSTMPredictor:
     
     def _create_adaptive_scaler(self, feature_data: np.ndarray, feature_name: str, symbol: str) -> object:
         """Create adaptive scaler with aggressive outlier handling for MSFT"""
+        # Explicitly use RobustScaler for features known to benefit from it
+        if feature_name in ['MACD_Histogram', 'Momentum_Score']:
+            logger.debug(f"Explicitly using RobustScaler for {feature_name} (as recommended by logs)")
+            return RobustScaler(quantile_range=(5.0, 95.0))
+
         # Features that always need robust scaling due to high variability
-        always_robust_features = ['Volume', 'Volume_MA_Ratio', 'MACD', 'MACD_Signal', 'MACD_Histogram', 'ATR', 'Momentum_Score']
+        always_robust_features = ['Volume', 'Volume_MA_Ratio', 'MACD', 'MACD_Signal', 'ATR'] # Removed MACD_Histogram, Momentum_Score as they are handled explicitly
         
         # Ratio features that need robust scaling for better outlier handling
         ratio_features = ['Price_vs_SMA20', 'Price_vs_SMA50']
@@ -523,7 +562,7 @@ class LSTMPredictor:
         
         return validation_results
 
-    def prepare_enhanced_data_robust(self, data: pd.DataFrame, symbol: str = "UNKNOWN", validation_split: float = None) -> Tuple[np.ndarray, np.ndarray, object]:
+    def prepare_enhanced_data_robust(self, data: pd.DataFrame, symbol: str = "UNKNOWN", validation_split: float = None, pre_fitted_scaler: Optional[object] = None) -> Tuple[np.ndarray, np.ndarray, object]:
         """Prepare enhanced data with robust outlier handling and adaptive scaling"""
         logger.info(f"Preparing robust enhanced features for {symbol}")
         
@@ -540,8 +579,11 @@ class LSTMPredictor:
         feature_quality = self._validate_feature_quality(enhanced_data, symbol)
         logger.info(f"Feature quality score for {symbol}: {feature_quality['quality_score']}/100")
         
-        # Use per-feature adaptive scaling
-        scaled_data = self._apply_adaptive_scaling(enhanced_data, symbol, validation_split)
+        # Create a composite scaler object that stores individual scalers for backward compatibility
+        composite_scaler = CompositeScaler(enhanced_data.columns, symbol, validation_split)
+
+        # Use per-feature adaptive scaling, passing the pre_fitted_scaler for overall price range fitting
+        scaled_data = self._apply_adaptive_scaling(enhanced_data, symbol, validation_split, pre_fitted_scaler)
         
         # Create sequences
         X, y = [], []
@@ -549,16 +591,10 @@ class LSTMPredictor:
             X.append(scaled_data[i-self.sequence_length:i])
             y.append(scaled_data[i, 0])  # Predict only the close price (first feature)
         
-        # Create a composite scaler object that stores individual scalers for backward compatibility
-        composite_scaler = CompositeScaler(enhanced_data.columns, symbol, validation_split)
-        
-        # Fit the composite scaler with the enhanced data to enable dynamic scaling
-        composite_scaler.fit_transform(enhanced_data)
-        
         logger.info(f"Prepared {len(X)} sequences with {enhanced_data.shape[1]} robust features for {symbol}")
         return np.array(X), np.array(y), composite_scaler
     
-    def _apply_adaptive_scaling(self, data: pd.DataFrame, symbol: str, validation_split: float = None) -> np.ndarray:
+    def _apply_adaptive_scaling(self, data: pd.DataFrame, symbol: str, validation_split: float = None, composite_scaler: Optional[object] = None) -> np.ndarray:
         """Apply adaptive per-feature scaling with data leakage prevention"""
         dataset = data.values
         
@@ -570,6 +606,10 @@ class LSTMPredictor:
         else:
             train_data = dataset
             val_data = None
+        
+        # Fit composite_scaler on the original Close price of the training data
+        if composite_scaler is not None and 'Close' in data.columns:
+            composite_scaler.fit_transform(data.loc[data.index[:len(train_data)], 'Close'].to_frame())
         
         # Apply per-feature scaling
         scaled_train_data = np.zeros_like(train_data)
@@ -594,7 +634,7 @@ class LSTMPredictor:
         
         return scaled_data
 
-    def prepare_enhanced_data(self, data: pd.DataFrame, validation_split: float = None) -> Tuple[np.ndarray, np.ndarray, MinMaxScaler]:
+    def prepare_enhanced_data(self, data: pd.DataFrame, validation_split: float = None, pre_fitted_scaler: Optional[object] = None) -> Tuple[np.ndarray, np.ndarray, object]:
         """Prepare enhanced data with technical indicators for LSTM training (backward compatibility)"""
         # For backward compatibility, detect symbol from call stack if possible
         symbol = "UNKNOWN"
@@ -613,7 +653,7 @@ class LSTMPredictor:
         problematic_symbols = ['MSFT', 'AMZN', 'GOOGL', 'META']
         if symbol in problematic_symbols:
             logger.info(f"Using robust feature preprocessing for {symbol} (known outlier issues)")
-            return self.prepare_enhanced_data_robust(data, symbol, validation_split)
+            return self.prepare_enhanced_data_robust(data, symbol, validation_split, pre_fitted_scaler)
         
         # Fall back to original method for compatibility
         logger.debug(f"Using legacy feature preprocessing for {symbol}")
@@ -668,16 +708,25 @@ class LSTMPredictor:
             val_data = dataset[split_index:]
             
             # Fit scaler ONLY on training data
-            scaler = MinMaxScaler(feature_range=(0, 1))
-            scaled_train_data = scaler.fit_transform(train_data)
-            scaled_val_data = scaler.transform(val_data)  # Transform validation data using training scaler
+            if pre_fitted_scaler is None:
+                scaler = MinMaxScaler(feature_range=(0, 1))
+                scaled_train_data = scaler.fit_transform(train_data)
+                scaled_val_data = scaler.transform(val_data)  # Transform validation data using training scaler
+            else:
+                scaler = pre_fitted_scaler
+                scaled_train_data = scaler.transform(train_data)
+                scaled_val_data = scaler.transform(val_data)
             
             # Combine scaled data for sequence creation
             scaled_data = np.vstack([scaled_train_data, scaled_val_data])
         else:
             # For prediction only (no validation split)
-            scaler = MinMaxScaler(feature_range=(0, 1))
-            scaled_data = scaler.fit_transform(dataset)
+            if pre_fitted_scaler is None:
+                scaler = MinMaxScaler(feature_range=(0, 1))
+                scaled_data = scaler.fit_transform(dataset)
+            else:
+                scaler = pre_fitted_scaler
+                scaled_data = scaler.transform(dataset)
         
         # Create sequences
         X, y = [], []
@@ -881,10 +930,10 @@ class LSTMPredictor:
         # Prepare data with matching feature set for backward compatibility
         try:
             if use_enhanced_features:
-                X, _, scaler_check = self.prepare_enhanced_data(data)
+                X, _, scaler_check = self.prepare_enhanced_data(data, pre_fitted_scaler=scaler)
                 logger.debug(f"Using enhanced features for prediction: {X.shape[2]} features")
             else:
-                X, _, scaler_check = self.prepare_data(data)
+                X, _, scaler_check = self.prepare_data(data, pre_fitted_scaler=scaler)
                 logger.debug(f"Using basic features for prediction: {X.shape[2]} features")
                 
             # Validate feature count matches expected
@@ -1046,22 +1095,32 @@ class LSTMPredictor:
                 last_actual_price = self._inverse_transform_predictions(
                     np.array([original_X[-1, -1, 0]]), scaler
                 )[0]
-                price_change_ratio = predicted_price / last_actual_price
+                # Add a small epsilon to prevent division by zero or very small numbers
+                epsilon = 1e-6
+                price_change_ratio = predicted_price / (last_actual_price + epsilon)
             
-            # Update volume (index 1) - inverse relationship with price movement
+            # Update volume (index 1) - slight adjustment based on price movement
             if new_row.shape[0] > 1:
-                volume_change = 1.0 / max(0.5, min(2.0, price_change_ratio))
-                new_row[1] = np.clip(seq_np[0, -1, 1] * volume_change, 0.01, 0.99)
+                volume_factor = 1.0 + (price_change_ratio - 1.0) * 0.2 # Adjust volume by 20% of price change
+                new_row[1] = np.clip(seq_np[0, -1, 1] * volume_factor, 0.01, 0.99)
             
-            # Update high/low (indices 2,3) based on predicted close
+            # Update high/low (indices 2,3) based on predicted close and previous day's ratios
             if new_row.shape[0] > 3:
-                new_row[2] = np.clip(new_row[0] * 1.01, new_row[0], 0.99)  # High slightly above close
-                new_row[3] = np.clip(new_row[0] * 0.99, 0.01, new_row[0])  # Low slightly below close
+                prev_scaled_close = seq_np[0, -1, 0]
+                prev_scaled_high = seq_np[0, -1, 2]
+                prev_scaled_low = seq_np[0, -1, 3]
+
+                high_ratio = prev_scaled_high / prev_scaled_close if prev_scaled_close > 0 else 1.01
+                low_ratio = prev_scaled_low / prev_scaled_close if prev_scaled_close > 0 else 0.99
+
+                new_row[2] = np.clip(new_row[0] * high_ratio, new_row[0], 0.99)  # High based on ratio
+                new_row[3] = np.clip(new_row[0] * low_ratio, 0.01, new_row[0])  # Low based on ratio
             
-            # Keep technical indicators relatively stable (small updates)
+            # Keep technical indicators relatively stable (small updates) with even slower decay and less influence from predicted close
             for i in range(5, new_row.shape[0]):
-                momentum = 0.95  # Keep 95% of previous value
-                new_row[i] = seq_np[0, -1, i] * momentum + new_row[0] * (1 - momentum)
+                momentum = 0.99  # Keep 99% of previous value (even slower decay)
+                # Reduce influence of new_row[0] (predicted close) on technical indicators
+                new_row[i] = seq_np[0, -1, i] * momentum + new_row[0] * (1 - momentum) * 0.1 # Reduced influence by 90%
                 new_row[i] = np.clip(new_row[i], 0.01, 0.99)
         
         # Roll the sequence and add the new row
