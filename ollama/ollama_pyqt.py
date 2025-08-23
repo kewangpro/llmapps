@@ -202,7 +202,15 @@ class FileHandler:
     def is_image_file(file_path: str) -> bool:
         """Check if file is an image"""
         image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.tiff', '.ico', '.heic', '.heif', '.avif'}
-        return Path(file_path).suffix.lower() in image_extensions
+        # Handle multiple extensions by checking all suffixes
+        path_obj = Path(file_path)
+        file_lower = file_path.lower()
+        
+        # Check if any image extension is at the end of the filename
+        for ext in image_extensions:
+            if file_lower.endswith(ext):
+                return True
+        return False
     
     @staticmethod
     def is_video_file(file_path: str) -> bool:
@@ -602,8 +610,8 @@ class OllamaDesktopChat(QMainWindow):
         # Right side - File preview (hidden by default)
         self.setup_file_preview(splitter)
         
-        # Set splitter proportions
-        splitter.setSizes([800, 400])
+        # Set splitter proportions (chat area, preview pane)
+        splitter.setSizes([600, 600])
         
     def setup_header(self, parent_layout):
         """Setup header with model selection"""
@@ -842,7 +850,7 @@ class OllamaDesktopChat(QMainWindow):
             self,
             "Select File",
             "",
-            "All Files (*);;Images (*.jpg *.jpeg *.png *.gif *.bmp *.webp *.svg *.tiff *.heic *.heif);;Videos (*.mp4 *.mov *.avi *.mkv *.webm *.flv *.wmv *.m4v);;Documents (*.pdf *.txt *.md);;Word Documents (*.docx *.doc);;Excel Files (*.xlsx *.xls *.xlsm);;PowerPoint Files (*.pptx *.ppt);;Code Files (*.py *.js *.ts *.html *.css *.json *.xml)"
+            "All Files (*);;Images (*.jpg *.jpeg *.png *.gif *.bmp *.webp *.svg *.tiff *.ico *.heic *.heif *.avif);;Videos (*.mp4 *.mov *.avi *.mkv *.webm *.flv *.wmv *.m4v);;Documents (*.pdf *.txt *.md);;Word Documents (*.docx *.doc);;Excel Files (*.xlsx *.xls *.xlsm);;PowerPoint Files (*.pptx *.ppt);;Code Files (*.py *.js *.ts *.html *.css *.json *.xml)"
         )
         
         if file_path:
@@ -1039,9 +1047,120 @@ class OllamaDesktopChat(QMainWindow):
     
     def show_file_preview(self):
         """Show file preview sidebar"""
+        logger.info(f"👁️ show_file_preview called, currently visible: {self.file_preview_widget.isVisible()}")
         if not self.file_preview_widget.isVisible():
             self.file_preview_widget.setVisible(True)
             self.toggle_preview_btn.setChecked(True)
+            logger.info(f"👁️ Preview pane made visible")
+            
+            # Use QTimer to delay the sizing to ensure UI has updated
+            def resize_splitter():
+                splitter = self.file_preview_widget.parent()
+                if isinstance(splitter, QSplitter):
+                    # Set sizes to make both panes visible (60% chat, 40% preview)
+                    total_width = splitter.width()
+                    chat_width = int(total_width * 0.6)
+                    preview_width = int(total_width * 0.4)
+                    splitter.setSizes([chat_width, preview_width])
+                    logger.info(f"👁️ Splitter sizes set to: [{chat_width}, {preview_width}]")
+                    
+                    # Verify the sizes were actually applied and force again if needed
+                    def verify_and_reforce():
+                        actual_sizes = splitter.sizes()
+                        logger.info(f"👁️ Actual splitter sizes after setting: {actual_sizes}")
+                        
+                        # If sizes were overridden (preview pane too narrow), force again with constraints
+                        if len(actual_sizes) >= 2 and actual_sizes[1] < 400:  # Preview pane less than 400px
+                            logger.info(f"⚠️ Preview pane too narrow ({actual_sizes[1]}px), forcing resize with constraints...")
+                            
+                            # Set minimum sizes and stretch factors to force proper proportions
+                            splitter.setMinimumWidth(800)  # Ensure splitter is wide enough
+                            splitter.widget(0).setMinimumWidth(400)  # Chat area min
+                            splitter.widget(1).setMinimumWidth(300)  # Preview area min
+                            
+                            # Set stretch factors (chat:preview = 3:2)
+                            splitter.setStretchFactor(0, 3)  # Chat area
+                            splitter.setStretchFactor(1, 2)  # Preview area
+                            
+                            # Force sizes again
+                            total_width = max(splitter.width(), 800)
+                            chat_width = int(total_width * 0.6)
+                            preview_width = int(total_width * 0.4)
+                            splitter.setSizes([chat_width, preview_width])
+                            logger.info(f"👁️ Applied constraints and forced sizes to: [{chat_width}, {preview_width}]")
+                            
+                            # Final verification with multiple attempts
+                            def final_check():
+                                final_sizes = splitter.sizes()
+                                logger.info(f"👁️ Final splitter sizes: {final_sizes}")
+                                if len(final_sizes) >= 2 and final_sizes[1] < 350:
+                                    logger.error(f"❌ Still too narrow! Trying one more aggressive approach...")
+                                    # Nuclear option: force update and repaint
+                                    splitter.setSizes([600, 400])
+                                    splitter.update()
+                                    splitter.repaint()
+                                    QTimer.singleShot(50, lambda: logger.info(f"👁️ Nuclear option result: {splitter.sizes()}"))
+                            
+                            QTimer.singleShot(100, final_check)
+                    
+                    QTimer.singleShot(50, verify_and_reforce)
+            
+            QTimer.singleShot(10, resize_splitter)
+        else:
+            logger.info(f"👁️ Preview pane already visible")
+            # Force resize even when already visible (fixes .webp file issue)
+            def resize_splitter():
+                splitter = self.file_preview_widget.parent()
+                if isinstance(splitter, QSplitter):
+                    # Set sizes to make both panes visible (60% chat, 40% preview)
+                    total_width = splitter.width()
+                    chat_width = int(total_width * 0.6)
+                    preview_width = int(total_width * 0.4)
+                    splitter.setSizes([chat_width, preview_width])
+                    logger.info(f"👁️ Splitter sizes set to: [{chat_width}, {preview_width}]")
+                    
+                    # Verify the sizes were actually applied and force again if needed
+                    def verify_and_reforce():
+                        actual_sizes = splitter.sizes()
+                        logger.info(f"👁️ Actual splitter sizes after setting: {actual_sizes}")
+                        
+                        # If sizes were overridden (preview pane too narrow), force again with constraints
+                        if len(actual_sizes) >= 2 and actual_sizes[1] < 400:  # Preview pane less than 400px
+                            logger.info(f"⚠️ Preview pane too narrow ({actual_sizes[1]}px), forcing resize with constraints...")
+                            
+                            # Set minimum sizes and stretch factors to force proper proportions
+                            splitter.setMinimumWidth(800)  # Ensure splitter is wide enough
+                            splitter.widget(0).setMinimumWidth(400)  # Chat area min
+                            splitter.widget(1).setMinimumWidth(300)  # Preview area min
+                            
+                            # Set stretch factors (chat:preview = 3:2)
+                            splitter.setStretchFactor(0, 3)  # Chat area
+                            splitter.setStretchFactor(1, 2)  # Preview area
+                            
+                            # Force sizes again
+                            total_width = max(splitter.width(), 800)
+                            chat_width = int(total_width * 0.6)
+                            preview_width = int(total_width * 0.4)
+                            splitter.setSizes([chat_width, preview_width])
+                            logger.info(f"👁️ Applied constraints and forced sizes to: [{chat_width}, {preview_width}]")
+                            
+                            # Final verification with multiple attempts
+                            def final_check():
+                                final_sizes = splitter.sizes()
+                                logger.info(f"👁️ Final splitter sizes: {final_sizes}")
+                                if len(final_sizes) >= 2 and final_sizes[1] < 350:
+                                    logger.error(f"❌ Still too narrow! Trying one more aggressive approach...")
+                                    # Nuclear option: force update and repaint
+                                    splitter.setSizes([600, 400])
+                                    splitter.update()
+                                    splitter.repaint()
+                                    QTimer.singleShot(50, lambda: logger.info(f"👁️ Nuclear option result: {splitter.sizes()}"))
+                            
+                            QTimer.singleShot(100, final_check)
+                    
+                    QTimer.singleShot(50, verify_and_reforce)
+            
+            QTimer.singleShot(10, resize_splitter)
     
     def hide_file_preview(self):
         """Hide file preview sidebar"""
@@ -1057,6 +1176,7 @@ class OllamaDesktopChat(QMainWindow):
     
     def show_image_preview(self, file_path: str, base64_data: str):
         """Show image in preview pane"""
+        logger.info(f"🖼️ Showing image preview for: {Path(file_path).name}")
         widget = QWidget()
         layout = QVBoxLayout(widget)
         
@@ -1074,13 +1194,20 @@ class OllamaDesktopChat(QMainWindow):
             pixmap.loadFromData(image_data)
             
             if not pixmap.isNull():
-                # Scale image to fit preview
-                scaled_pixmap = pixmap.scaled(300, 300, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                logger.info(f"🖼️ Pixmap loaded successfully: {pixmap.width()}x{pixmap.height()}")
+                # Scale image to fit preview (larger size for wider pane)
+                scaled_pixmap = pixmap.scaled(500, 500, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                logger.info(f"🖼️ Scaled to: {scaled_pixmap.width()}x{scaled_pixmap.height()}")
                 
                 image_label = QLabel()
                 image_label.setPixmap(scaled_pixmap)
                 image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 layout.addWidget(image_label)
+            else:
+                logger.error(f"❌ Failed to load pixmap from image data")
+                error_label = QLabel("Failed to load image data into pixmap")
+                error_label.setStyleSheet("color: red; padding: 10px;")
+                layout.addWidget(error_label)
         except Exception as e:
             error_label = QLabel(f"Error displaying image: {str(e)}")
             error_label.setStyleSheet("color: red; padding: 10px;")
@@ -1088,6 +1215,7 @@ class OllamaDesktopChat(QMainWindow):
         
         layout.addStretch()
         self.preview_content.setWidget(widget)
+        logger.info(f"🖼️ Calling show_file_preview() to make preview pane visible")
         self.show_file_preview()
     
     def show_text_preview(self, file_path: str, content: str):
