@@ -29,6 +29,13 @@ class Config:
     BATCH_SIZE = 32
     EPOCHS = 50
     
+    # Ollama configuration
+    OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:latest")
+    OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "30"))
+    OLLAMA_ENABLED = os.getenv("OLLAMA_ENABLED", "true").lower() == "true"
+    OLLAMA_FALLBACK_TO_REGEX = os.getenv("OLLAMA_FALLBACK_TO_REGEX", "true").lower() == "true"
+    
     # Logging
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
     LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
