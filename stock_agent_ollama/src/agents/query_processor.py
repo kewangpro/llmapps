@@ -8,17 +8,25 @@ from src.tools.stock_fetcher import StockFetcher
 from src.tools.lstm_predictor import LSTMPredictor
 from src.tools.visualizer import Visualizer
 from src.tools.technical_analysis import TechnicalAnalysis
+from src.config import Config
 
 logger = logging.getLogger(__name__)
 
 class QueryProcessor:
-    """Process natural language queries about stocks using pattern matching"""
+    """Process natural language queries about stocks using pattern matching
+    
+    Note: This is the legacy query processor. For enhanced functionality with Ollama integration,
+    use HybridQueryProcessor from src.agents.hybrid_query_processor
+    """
     
     def __init__(self):
         self.stock_fetcher = StockFetcher()
         self.lstm_predictor = LSTMPredictor()
         self.visualizer = Visualizer()
         self.technical_analysis = TechnicalAnalysis()
+        
+        # Migration helper for backwards compatibility
+        self.is_hybrid_available = self._check_hybrid_availability()
         
         # Common stock symbols for pattern matching
         self.popular_symbols = self.stock_fetcher.get_available_symbols()
@@ -465,3 +473,59 @@ class QueryProcessor:
         analysis += "\n⚠️ This analysis is for educational purposes only and should not be considered as financial advice."
         
         return analysis
+    
+    def _check_hybrid_availability(self) -> bool:
+        """Check if HybridQueryProcessor is available for migration"""
+        try:
+            from src.agents.hybrid_query_processor import HybridQueryProcessor
+            return True
+        except ImportError:
+            return False
+    
+    def get_hybrid_processor(self):
+        """Get HybridQueryProcessor instance for enhanced functionality"""
+        if not self.is_hybrid_available:
+            logger.warning("HybridQueryProcessor not available. Using legacy QueryProcessor.")
+            return None
+        
+        try:
+            from src.agents.hybrid_query_processor import HybridQueryProcessor
+            return HybridQueryProcessor()
+        except Exception as e:
+            logger.error(f"Failed to create HybridQueryProcessor: {e}")
+            return None
+    
+    @classmethod
+    def create_enhanced_processor(cls):
+        """Factory method to create the best available processor"""
+        try:
+            from src.agents.hybrid_query_processor import HybridQueryProcessor
+            logger.info("Creating HybridQueryProcessor with Ollama integration")
+            return HybridQueryProcessor()
+        except ImportError:
+            logger.info("HybridQueryProcessor not available, using legacy QueryProcessor")
+            return cls()
+        except Exception as e:
+            logger.warning(f"Failed to create HybridQueryProcessor: {e}, falling back to legacy")
+            return cls()
+    
+    def suggest_hybrid_upgrade(self) -> Dict[str, Any]:
+        """Suggest upgrading to hybrid processor for enhanced features"""
+        if not self.is_hybrid_available:
+            return {
+                'upgrade_available': False,
+                'message': 'HybridQueryProcessor not available'
+            }
+        
+        return {
+            'upgrade_available': True,
+            'message': 'Enhanced query processing with Ollama integration is available',
+            'benefits': [
+                'Natural language understanding with AI',
+                'Educational explanations for technical concepts',
+                'Multi-turn conversation support',
+                'Contextual response generation',
+                'Fallback to regex patterns for reliability'
+            ],
+            'usage': 'Use QueryProcessor.create_enhanced_processor() or import HybridQueryProcessor directly'
+        }
