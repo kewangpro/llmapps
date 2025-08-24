@@ -1,324 +1,201 @@
-# 🚀 Advanced Stock Analysis AI Platform
+# 🚀 AI Stock Analysis Platform
 
-A sophisticated financial AI platform that combines **ensemble LSTM neural networks**, **natural language processing**, and **comprehensive technical analysis** to deliver professional-grade stock analysis through an intuitive web interface.
+An intelligent financial analysis platform that combines **LSTM neural networks**, **AI-powered explanations**, and **comprehensive technical analysis** through an intuitive web interface.
 
-![Production Ready](https://img.shields.io/badge/Status-Production%20Ready-success)
-![Python 3.9+](https://img.shields.io/badge/Python-3.9+-blue)
-![LSTM Models](https://img.shields.io/badge/AI-Ensemble%20LSTM-orange)
-![Panel Framework](https://img.shields.io/badge/UI-Panel%20Framework-green)
+![Python](https://img.shields.io/badge/Python-3.8+-blue)
+![AI](https://img.shields.io/badge/AI-Ollama%20%2B%20LSTM-orange)
+![Educational](https://img.shields.io/badge/Purpose-Educational-purple)
+![Status](https://img.shields.io/badge/Status-Production%20Ready-success)
 
-## 🎯 Core Capabilities
+## 🎯 What It Does
 
-### **🗣️ Natural Language Interface**
-- **Intent Recognition**: "Analyze AAPL", "Predict Tesla price", "Compare Apple vs Microsoft"
-- **Entity Extraction**: Automatically identifies stocks, timeframes, and analysis types
-- **Smart Symbol Resolution**: Maps company names to tickers (Apple → AAPL, Google → GOOGL)
+- **🤖 AI Query Processing**: Natural language questions powered by Ollama with gemma3:latest model
+- **🧠 LSTM Predictions**: 30-day stock price forecasts using ensemble neural networks
+- **📊 Technical Analysis**: 17+ indicators including RSI, MACD, Bollinger Bands, and trading signals
+- **💬 Educational Explanations**: AI-generated interpretations of technical concepts
+- **📈 Interactive Charts**: Real-time visualization with Plotly and Panel dashboard
 
-### **🧠 Advanced AI Predictions**
-- **Ensemble LSTM Models**: 3-model ensemble with attention mechanisms for robust forecasting
-- **30-Day Predictions**: Multi-step forecasting with statistical confidence intervals
-- **Enhanced Features**: Volume indicators, price momentum, volatility metrics
-- **Adaptive Architecture**: Model complexity scales with feature richness
+## 🚀 Quick Start
 
-### **📊 Professional Technical Analysis**
-- **17+ Technical Indicators**: RSI, MACD, Bollinger Bands, Stochastic, Williams %R, etc.
-- **Trading Signals**: BUY/SELL/HOLD recommendations with confidence scores
-- **Trend Analysis**: Automated bullish/bearish/neutral trend identification
-- **Support/Resistance**: Dynamic level detection and visualization
-
-### **📈 Interactive Visualizations**
-- **Professional Charts**: Candlestick charts with volume overlays using Plotly
-- **Technical Overlays**: Indicators displayed directly on price charts
-- **Prediction Visualization**: Confidence bands and uncertainty quantification
-- **Comparison Mode**: Side-by-side normalized performance analysis
-
-## 🏗️ Architecture Overview
-
-### **ML Pipeline**
-```
-📊 Raw Data → 🔧 Feature Engineering → 🧠 Ensemble LSTM → 📈 Predictions + Confidence
-     ↓                    ↓                     ↓                    ↓
-Yahoo Finance    Technical Indicators    3-Model Ensemble    Statistical Intervals
-```
-
-### **Technology Stack**
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| **Web Framework** | Panel + Bokeh | Reactive web interface |
-| **AI/ML** | TensorFlow + LSTM | Time series forecasting |
-| **Data Processing** | pandas + numpy | Data manipulation |
-| **Visualization** | Plotly + Bokeh | Interactive charts |
-| **Data Source** | Yahoo Finance | Real-time market data |
-| **Caching** | File-based | Performance optimization |
-| **Configuration** | Python config | Environment management |
-
-### **LSTM Architecture Details**
-- **Adaptive Design**: Layer complexity adjusts based on feature count
-- **Attention Mechanism**: Focuses on relevant temporal patterns
-- **Regularization**: L2 regularization + dropout for generalization
-- **Early Stopping**: Prevents overfitting with patience-based training
-- **Ensemble Strategy**: Combines 3 models for robust predictions
-
-## 🚀 Getting Started
-
-### **System Requirements**
-- **Python**: 3.9+ (3.10+ recommended)
-- **Memory**: 8GB RAM minimum (16GB recommended for training)
-- **Storage**: 2GB free space for models and cache
-- **Network**: Internet connection for market data
-
-### **Quick Installation**
-
-1. **Activate Virtual Environment**
-   ```bash
-   source .venv/bin/activate
-   ```
-
-2. **Install Dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Launch Platform**
-   ```bash
-   python src/main.py
-   ```
-
-4. **Access Interface**
-   Open browser to `http://localhost:5006`
-
-### **First-Time Setup Verification**
+### 1. Install Dependencies
 ```bash
-python verify_setup.py
-```
-This runs comprehensive system checks and validates all components.
-
-## 💬 Natural Language Interface
-
-### **Supported Query Types**
-
-#### **📊 Analysis Queries**
-```
-"Analyze AAPL"                    # Complete technical analysis
-"Show me Apple's performance"      # Historical performance review
-"Technical analysis for Tesla"     # Focus on indicators
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-#### **🔮 Prediction Queries**
-```
-"Predict Google stock price"      # 30-day AI forecast
-"What will MSFT be worth?"        # Price prediction with confidence
-"Forecast Amazon stock"           # Multi-step LSTM prediction
-```
-
-#### **⚖️ Comparison Queries**
-```
-"Compare Apple vs Microsoft"      # Side-by-side analysis
-"AAPL vs GOOGL performance"       # Normalized comparison
-"Show TSLA vs AMZN"              # Dual stock analysis
-```
-
-#### **💰 Market Data Queries**
-```
-"What's Tesla's current price?"   # Real-time price data
-"Show me Bitcoin price"           # Crypto market data
-"SPY current value"               # Index quotes
-```
-
-### **Supported Assets**
-- **Stocks**: AAPL, GOOGL, MSFT, AMZN, TSLA, NVDA, META, NFLX, etc.
-- **Indices**: SPY, QQQ, DIA, IWM, VTI, etc.
-- **Crypto**: BTC-USD, ETH-USD, ADA-USD, etc.
-- **ETFs**: VOO, VEA, VWO, ARKK, etc.
-
-## 🎓 Educational Use Cases
-
-### **Learning Financial AI**
-- **LSTM Implementation**: Study ensemble neural network architecture
-- **Feature Engineering**: Learn technical indicator calculation
-- **Time Series Analysis**: Understand financial forecasting methods
-- **Data Pipeline Design**: Explore caching and validation strategies
-
-### **Research Applications**
-- **Backtesting Strategies**: Validate trading algorithms
-- **Model Performance**: Compare prediction accuracy
-- **Market Behavior**: Analyze technical indicator effectiveness
-- **Risk Assessment**: Study volatility and uncertainty quantification
-
-### **Practical Examples**
-
-#### **Custom Analysis Script**
-```python
-from src.tools.lstm_predictor import LSTMPredictor
-from src.tools.technical_analysis import TechnicalAnalyzer
-
-# Initialize components
-predictor = LSTMPredictor()
-analyzer = TechnicalAnalyzer()
-
-# Analyze and predict
-predictions = predictor.predict("AAPL", days=30)
-indicators = analyzer.calculate_indicators("AAPL")
-```
-
-#### **Batch Analysis**
-```python
-symbols = ["AAPL", "GOOGL", "MSFT", "AMZN"]
-for symbol in symbols:
-    analysis = analyzer.analyze_stock(symbol)
-    prediction = predictor.predict(symbol)
-    print(f"{symbol}: {analysis['recommendation']}")
-```
-
-## 🔧 Advanced Configuration
-
-### **Environment Variables**
+### 2. Setup Ollama (Optional but Recommended)
 ```bash
-# Application Settings
-STOCK_AGENT_LOG_LEVEL=INFO
-STOCK_AGENT_CACHE_TTL=900
-STOCK_AGENT_MODEL_RETRAIN=true
+# Install Ollama from https://ollama.ai
+ollama pull gemma3:latest
+```
 
-# Panel Configuration  
-PANEL_HOST=localhost
+### 3. Launch Platform
+```bash
+python src/main.py
+# Open http://localhost:5006
+```
+
+## 💬 Usage Examples
+
+**Natural Language Queries:**
+```
+"Analyze Apple stock performance"
+"Predict Tesla price for next 30 days"  
+"Compare Microsoft vs Google"
+"Explain what RSI means for beginners"
+```
+
+**Quick Actions:** Click buttons for AAPL, GOOGL, MSFT, TSLA, AMZN analysis
+
+## 🏗️ Architecture
+
+### Data Flow
+```
+User Query → AI Processing (Ollama) → Stock Analysis → LSTM Prediction → Interactive Dashboard
+     ↓              ↓ (fallback)           ↓                ↓                    ↓
+Natural Language → Regex Patterns → Technical Indicators → Charts & Explanations
+```
+
+### Technology Stack
+- **AI**: Ollama (gemma3:latest) with regex fallback
+- **ML**: TensorFlow LSTM ensemble models
+- **Data**: Yahoo Finance API with intelligent caching  
+- **UI**: Panel framework with Plotly visualizations
+- **Backend**: Python with asyncio and aiohttp
+
+## ⚙️ Configuration
+
+### Environment Variables
+```bash
+# Ollama Settings
+OLLAMA_MODEL=gemma3:latest
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_ENABLED=true
+
+# Panel Settings  
 PANEL_PORT=5006
-PANEL_ALLOW_WEBSOCKET_ORIGIN=localhost:5006
-
-# LSTM Training Parameters
-LSTM_EPOCHS=100
-LSTM_BATCH_SIZE=32
-LSTM_VALIDATION_SPLIT=0.2
+PANEL_HOST=localhost
 ```
 
-### **Performance Optimization**
-- **Model Caching**: Trained models cached for reuse
-- **Data Caching**: Real-time data cached for 15 minutes
-- **Historical Caching**: Historical data cached for 24 hours
-- **Memory Management**: Automatic cleanup and garbage collection
-
-## 🧪 Testing & Validation
-
-### **Comprehensive Test Suite**
+### Health Checks
 ```bash
-python verify_setup.py
+# Test core functionality
+source .venv/bin/activate
+python -c "from src.agents.query_processor import QueryProcessor; print('✅ Platform ready')"
+
+# Test Ollama integration
+python -c "
+import asyncio
+from src.agents.ollama_enhancer import OllamaEnhancer
+
+async def test():
+    enhancer = OllamaEnhancer()
+    healthy = await enhancer.health_check()
+    print(f'Ollama: {\"✅ Connected\" if healthy else \"⚠️ Using fallback\"}')
+    await enhancer.close()
+
+asyncio.run(test())
+"
 ```
 
-**Test Coverage:**
-- ✅ Environment validation
-- ✅ Dependency verification
-- ✅ Data pipeline testing
-- ✅ Model loading validation
-- ✅ API connectivity checks
-- ✅ Cache system verification
+## 🎓 Educational Features
 
-### **Manual Testing Examples**
-```bash
-# Test specific functionality
-python -c "from src.tools.stock_fetcher import StockFetcher; print(StockFetcher().get_stock_data('AAPL'))"
-python -c "from src.tools.lstm_predictor import LSTMPredictor; print(LSTMPredictor().predict('AAPL', 5))"
-```
+### Learning Applications
+- **Technical Analysis**: Understand indicators like RSI, MACD, moving averages
+- **Machine Learning**: Explore LSTM neural networks for time series prediction
+- **Financial Concepts**: AI explanations adapted to your knowledge level
+- **Market Analysis**: Learn to interpret trends, signals, and risk factors
 
-## 📁 Project Architecture
+### Pre-trained Models
+Ready-to-use LSTM models available for: **AAPL**, **MSFT**, **AMZN**, **TEAM**
+
+## 📁 Project Structure
 
 ```
 stock_agent_ollama/
-├── 📁 src/                          # Source code
-│   ├── 🎯 main.py                   # Application entry point
-│   ├── ⚙️ config.py                 # Configuration management
-│   ├── 🤖 agents/                   # Natural language processing
-│   │   └── query_processor.py       # Intent recognition & entity extraction
-│   ├── 🛠️ tools/                   # Core business logic
-│   │   ├── 📊 lstm/                 # Deep learning components
-│   │   │   ├── model_architecture.py    # Neural network design
-│   │   │   ├── prediction_service.py    # Ensemble prediction engine
-│   │   │   ├── data_pipeline.py         # Feature engineering
-│   │   │   └── model_manager.py         # Model lifecycle management
-│   │   ├── 📈 stock_fetcher.py      # Market data acquisition
-│   │   ├── 🔍 technical_analysis.py # Indicator calculations
-│   │   ├── 📊 visualizer.py         # Chart generation
-│   │   └── 🔮 lstm_predictor.py     # Main prediction interface
-│   ├── 🖥️ ui/                      # Web interface
-│   │   └── components.py            # Panel UI components
-│   └── 🔧 utils/                    # Shared utilities
-│       └── cache_utils.py           # Intelligent caching system
-├── 📁 data/                         # Data storage
-│   ├── cache/                       # Cached market data
-│   ├── models/                      # Trained LSTM models
-│   └── logs/                        # Application logs
-├── 📄 requirements.txt              # Python dependencies
-└── 🧪 verify_setup.py              # System validation script
+├── src/
+│   ├── main.py                     # Application entry point
+│   ├── agents/                     # AI & NLP processing
+│   │   ├── query_processor.py      # Main query handler
+│   │   ├── hybrid_query_processor.py  # Ollama integration
+│   │   └── ollama_enhancer.py      # AI explanations
+│   ├── tools/                      # Analysis & prediction
+│   │   ├── lstm/                   # Neural network components
+│   │   ├── stock_fetcher.py        # Data acquisition
+│   │   ├── technical_analysis.py   # Indicators & signals
+│   │   └── conversation_manager.py # Session management
+│   └── ui/components.py            # Panel dashboard
+├── data/                           # Runtime data
+│   ├── models/lstm/                # Trained neural networks
+│   ├── cache/                      # Stock data cache
+│   └── conversations/              # Chat sessions
+└── requirements.txt                # Dependencies
 ```
 
 ## 🛠️ Troubleshooting
 
-| Issue | Symptom | Solution |
-|-------|---------|----------|
-| **Import Errors** | Module not found | Activate virtual environment: `source .venv/bin/activate` |
-| **Memory Issues** | Training crashes | Close other applications, ensure 8GB+ available RAM |
-| **Network Errors** | Data fetch fails | Check internet connection, try different stock symbol |
-| **TensorFlow Warnings** | LibreSSL messages | Normal on macOS, doesn't affect functionality |
-| **Port Conflicts** | Address in use | Change port in config: `PANEL_PORT=5007` |
-| **Model Training Slow** | Long processing | Expected for first run, models cached for reuse |
+| Issue | Solution |
+|-------|----------|
+| **Import errors** | Activate virtual environment: `source .venv/bin/activate` |
+| **Ollama unavailable** | Platform works with regex fallback, install Ollama for AI features |
+| **Port 5006 in use** | Set `PANEL_PORT=5007` environment variable |
+| **Memory issues** | Close other applications, LSTM training needs 4GB+ RAM |
+| **No predictions** | LSTM models train automatically on first prediction request |
 
-### **Advanced Diagnostics**
+### Common Commands
 ```bash
-# Check system resources
-python -c "import psutil; print(f'RAM: {psutil.virtual_memory().available//1024**3}GB')"
+# Check if Ollama is running
+curl http://localhost:11434/api/tags
 
-# Validate data pipeline
-python -c "from src.tools.stock_fetcher import StockFetcher; print(StockFetcher().test_connection())"
+# Test Panel interface
+python -c "import panel as pn; print('Panel version:', pn.__version__)"
 
-# Test model prediction
-python -c "from src.tools.lstm_predictor import LSTMPredictor; print(LSTMPredictor().health_check())"
+# View application logs
+tail -f data/logs/app.log
 ```
 
-## 🏆 Key Technical Highlights
+## 🎯 Key Features
 
-### **Production-Ready Features**
-- ✅ **Comprehensive Error Handling**: Graceful degradation and recovery
-- ✅ **Intelligent Caching**: Multi-tier performance optimization
-- ✅ **Async Processing**: Non-blocking UI operations
-- ✅ **Structured Logging**: Professional application monitoring
-- ✅ **Configuration Management**: Environment-based settings
-- ✅ **Resource Management**: Memory and timeout handling
+### Hybrid Intelligence
+- **AI-First**: Ollama processes complex natural language queries
+- **Reliable Fallback**: Regex patterns ensure consistent functionality
+- **Educational**: AI explanations make complex concepts accessible
 
-### **Research-Grade ML**
-- ✅ **Ensemble Architecture**: 3-model prediction system
-- ✅ **Attention Mechanisms**: Advanced neural network techniques
-- ✅ **Confidence Intervals**: Statistical uncertainty quantification
-- ✅ **Feature Engineering**: Enhanced technical indicators
-- ✅ **Model Persistence**: Efficient training and reuse
-- ✅ **Validation Framework**: Robust model evaluation
+### Advanced Analytics
+- **Ensemble LSTM**: Multiple models for robust 30-day predictions
+- **17+ Indicators**: Professional-grade technical analysis
+- **Trading Signals**: BUY/SELL/HOLD recommendations with confidence
+- **Risk Assessment**: Automated trend analysis and factor identification
+
+### User Experience
+- **Interactive Dashboard**: Real-time analysis with visual feedback
+- **Conversation Memory**: Multi-turn educational discussions
+- **Quick Actions**: One-click analysis for popular stocks
+- **Responsive Design**: Works on desktop and tablet devices
 
 ## ⚖️ Educational License & Disclaimer
 
-### **Educational Purpose**
-This platform is designed specifically for **educational and research purposes**. It demonstrates advanced concepts in:
-- Financial machine learning and time series forecasting
-- Natural language processing for financial applications
-- Web application development with reactive frameworks
-- Professional software engineering practices
+### Purpose
+This platform is designed for **educational and research purposes**. It demonstrates:
+- Modern AI techniques in financial analysis
+- LSTM neural networks for time series forecasting  
+- Natural language processing for domain applications
+- Professional software development practices
 
-### **Important Disclaimers**
-- 📚 **Educational Use Only**: Not intended for actual trading decisions
-- ⚠️ **No Financial Advice**: AI predictions are for learning purposes
-- 🔬 **Research Tool**: Designed for academic and educational exploration
-- 📊 **Data Limitations**: Historical performance doesn't guarantee future results
+### Important Disclaimers
+- 📚 **Educational Use Only** - Not for actual trading decisions
+- ⚠️ **No Financial Advice** - AI predictions are for learning purposes
+- 🔬 **Research Tool** - Designed for academic and educational exploration
+- 📊 **Past Performance** - Does not guarantee future results
 
-### **Risk Acknowledgment**
-- All AI predictions are experimental and educational
-- Market conditions can change rapidly and unpredictably  
-- Always consult qualified financial professionals for investment decisions
-- Use paper trading or simulators to test strategies
-
-### **Data Usage Compliance**
-- Ensure compliance with Yahoo Finance terms of service
-- Respect rate limits and data usage policies
-- Educational use falls under fair use provisions
-- Commercial use requires separate data licensing
+### Risk Acknowledgment
+- AI predictions are experimental and educational
+- Markets are unpredictable and can change rapidly
+- Always consult qualified financial professionals
+- Use paper trading to test strategies safely
 
 ---
 
-**Built with 💙 for Financial AI Education**
+**Built for Financial AI Education** 💙
 
-This project showcases modern financial AI techniques and software engineering best practices. Perfect for students, researchers, and developers interested in the intersection of machine learning and finance.
+Perfect for students, researchers, and developers exploring AI applications in finance. Combines cutting-edge machine learning with educational best practices.
