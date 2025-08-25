@@ -1,12 +1,47 @@
 import json
-import pickle
 import time
 from pathlib import Path
 from typing import Any, Optional
 import hashlib
 import logging
+import pandas as pd
+import numpy as np
 
 logger = logging.getLogger(__name__)
+
+class SafeJSONEncoder(json.JSONEncoder):
+    """JSON encoder that can handle numpy arrays and pandas DataFrames"""
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return {'__numpy_array__': obj.tolist()}
+        elif isinstance(obj, pd.DataFrame):
+            return {'__pandas_dataframe__': obj.to_dict('records'), '__pandas_index__': list(obj.index), '__pandas_columns__': list(obj.columns)}
+        elif isinstance(obj, pd.Series):
+            return {'__pandas_series__': obj.to_dict(), '__pandas_index__': list(obj.index)}
+        elif isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif hasattr(obj, '__dict__'):
+            # For custom objects, serialize their dict representation
+            return {'__custom_object__': obj.__class__.__name__, '__data__': obj.__dict__}
+        return super().default(obj)
+
+def safe_json_decode(dct):
+    """JSON decoder that can reconstruct numpy arrays and pandas DataFrames"""
+    if '__numpy_array__' in dct:
+        return np.array(dct['__numpy_array__'])
+    elif '__pandas_dataframe__' in dct:
+        df = pd.DataFrame(dct['__pandas_dataframe__'])
+        if '__pandas_index__' in dct:
+            df.index = dct['__pandas_index__']
+        return df
+    elif '__pandas_series__' in dct:
+        series = pd.Series(dct['__pandas_series__'])
+        if '__pandas_index__' in dct:
+            series.index = dct['__pandas_index__']
+        return series
+    return dct
 
 class FileCache:
     """Simple file-based cache with TTL support"""
@@ -32,16 +67,17 @@ class FileCache:
             cache_path = self._get_cache_path(key)
             meta_path = self._get_metadata_path(key)
             
-            # Store data
-            with open(cache_path, 'wb') as f:
-                pickle.dump(value, f)
+            # Store data using safe JSON serialization
+            with open(cache_path, 'w', encoding='utf-8') as f:
+                json.dump(value, f, cls=SafeJSONEncoder, ensure_ascii=False, indent=2)
             
             # Store metadata
             metadata = {
                 'key': key,
                 'timestamp': time.time(),
                 'ttl': ttl,
-                'expires_at': time.time() + ttl
+                'expires_at': time.time() + ttl,
+                'format': 'json'  # Mark as JSON format for future compatibility
             }
             
             with open(meta_path, 'w') as f:
@@ -49,6 +85,8 @@ class FileCache:
                 
             logger.debug(f"Cached data for key: {key}")
             
+        except (TypeError, ValueError) as e:
+            logger.warning(f"Data not JSON serializable for key {key}: {e}. Skipping cache.")
         except Exception as e:
             logger.error(f"Failed to cache data for key {key}: {e}")
     
@@ -72,15 +110,29 @@ class FileCache:
                 logger.debug(f"Cache expired for key: {key}")
                 return None
             
-            # Load and return data
-            with open(cache_path, 'rb') as f:
-                value = pickle.load(f)
+            # Check format and load accordingly
+            cache_format = metadata.get('format', 'pickle')  # Default to pickle for old files
+            
+            if cache_format == 'json':
+                # Load JSON data (secure)
+                with open(cache_path, 'r', encoding='utf-8') as f:
+                    value = json.load(f, object_hook=safe_json_decode)
+            else:
+                # Old pickle format - for security, we'll remove these files
+                logger.warning(f"Found old pickle cache file for key {key}. Removing for security.")
+                self._cleanup_key(key)
+                return None
                 
             logger.debug(f"Cache hit for key: {key}")
             return value
             
         except Exception as e:
             logger.error(f"Failed to retrieve cached data for key {key}: {e}")
+            # Clean up potentially corrupted cache files
+            try:
+                self._cleanup_key(key)
+            except:
+                pass
             return None
     
     def _cleanup_key(self, key: str) -> None:
@@ -129,5 +181,38 @@ class FileCache:
                 
         except Exception as e:
             logger.error(f"Failed to cleanup expired cache: {e}")
+            
+        return removed_count
+    
+    def remove_pickle_cache_files(self) -> int:
+        """Remove all old pickle cache files for security, return count of removed items"""
+        removed_count = 0
+        try:
+            for meta_file in self.cache_dir.glob("*.meta"):
+                try:
+                    with open(meta_file, 'r') as f:
+                        metadata = json.load(f)
+                    
+                    # Check if this is an old pickle format cache
+                    cache_format = metadata.get('format', 'pickle')  # Default to pickle for old files
+                    if cache_format != 'json':
+                        key = metadata.get('key', '')
+                        logger.info(f"Removing old pickle cache for security: {key}")
+                        self._cleanup_key(key)
+                        removed_count += 1
+                        
+                except Exception as e:
+                    logger.warning(f"Failed to process metadata file {meta_file}: {e}")
+                    # Remove corrupted metadata file
+                    try:
+                        meta_file.unlink(missing_ok=True)
+                    except:
+                        pass
+                    
+            if removed_count > 0:
+                logger.info(f"Removed {removed_count} old pickle cache files for security")
+                
+        except Exception as e:
+            logger.error(f"Failed to remove pickle cache files: {e}")
             
         return removed_count
