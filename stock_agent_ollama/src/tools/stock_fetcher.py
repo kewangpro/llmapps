@@ -1,6 +1,7 @@
 import pandas as pd
 import yfinance as yf
 import time
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Dict, Any, List
@@ -18,6 +19,25 @@ class StockFetcher:
         self.cache_dir = cache_dir or Config.CACHE_DIR / "stock_data"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.cache = FileCache(self.cache_dir)
+    
+    def _validate_symbol(self, symbol: str) -> str:
+        """Validate and sanitize stock symbol to prevent injection attacks"""
+        if not symbol:
+            raise ValueError("Stock symbol cannot be empty")
+        
+        # Convert to string and strip whitespace
+        symbol = str(symbol).strip().upper()
+        
+        # Allow only alphanumeric characters, dots, and hyphens (common in stock symbols)
+        # This prevents path traversal and other injection attacks
+        if not re.match(r'^[A-Z0-9.-]+$', symbol):
+            raise ValueError(f"Invalid stock symbol format: {symbol}")
+        
+        # Limit length to reasonable stock symbol length
+        if len(symbol) > 10:
+            raise ValueError(f"Stock symbol too long: {symbol}")
+        
+        return symbol
         
     def fetch_stock_data(
         self, 
@@ -28,14 +48,17 @@ class StockFetcher:
     ) -> pd.DataFrame:
         """Fetch stock data with caching"""
         
-        # Generate cache key
-        cache_key = f"{symbol}_{period}_{interval}"
+        # Validate and sanitize the symbol
+        validated_symbol = self._validate_symbol(symbol)
+        
+        # Generate cache key using validated symbol
+        cache_key = f"{validated_symbol}_{period}_{interval}"
         
         # Check cache first (unless force refresh)
         if not force_refresh:
             cached_data = self.cache.get(cache_key)
             if cached_data is not None:
-                logger.info(f"Using cached data for {symbol}")
+                logger.info(f"Using cached data for {validated_symbol}")
                 
                 # Handle both old format (list) and new format (dict)
                 if isinstance(cached_data, list):
@@ -68,15 +91,15 @@ class StockFetcher:
         
         # Fetch from yfinance
         try:
-            logger.info(f"Fetching fresh data for {symbol}")
-            ticker = yf.Ticker(symbol)
+            logger.info(f"Fetching fresh data for {validated_symbol}")
+            ticker = yf.Ticker(validated_symbol)
             data = ticker.history(period=period, interval=interval)
             
             if data.empty:
-                raise ValueError(f"No data found for symbol {symbol}")
+                raise ValueError(f"No data found for symbol {validated_symbol}")
             
             # Validate data quality
-            data = self._validate_and_clean_data(data, symbol)
+            data = self._validate_and_clean_data(data, validated_symbol)
             
             # Cache the data with index information preserved
             ttl = Config.STOCK_DATA_TTL if interval in ["1m", "5m"] else Config.HISTORICAL_DATA_TTL
@@ -89,23 +112,26 @@ class StockFetcher:
             return data
             
         except Exception as e:
-            logger.error(f"Failed to fetch data for {symbol}: {e}")
+            logger.error(f"Failed to fetch data for {validated_symbol}: {e}")
             raise
     
     def get_real_time_price(self, symbol: str) -> Dict[str, Any]:
         """Get current price and basic info"""
         try:
-            ticker = yf.Ticker(symbol)
+            # Validate and sanitize the symbol
+            validated_symbol = self._validate_symbol(symbol)
+            
+            ticker = yf.Ticker(validated_symbol)
             info = ticker.info
             
             current_price = info.get('currentPrice') or info.get('regularMarketPrice')
             if current_price is None:
                 # Fallback to latest close from history
-                data = self.fetch_stock_data(symbol, period="5d", interval="1d")
+                data = self.fetch_stock_data(validated_symbol, period="5d", interval="1d")
                 current_price = data['Close'].iloc[-1] if not data.empty else None
             
             return {
-                'symbol': symbol,
+                'symbol': validated_symbol,
                 'current_price': current_price,
                 'market_cap': info.get('marketCap'),
                 'volume': info.get('volume'),
@@ -114,7 +140,7 @@ class StockFetcher:
             }
             
         except Exception as e:
-            logger.error(f"Failed to get real-time price for {symbol}: {e}")
+            logger.error(f"Failed to get real-time price for {validated_symbol}: {e}")
             raise
     
     def get_multiple_stocks(self, symbols: List[str], period: str = "1y") -> Dict[str, pd.DataFrame]:
@@ -122,10 +148,17 @@ class StockFetcher:
         results = {}
         for symbol in symbols:
             try:
-                results[symbol] = self.fetch_stock_data(symbol, period)
+                # Validation is handled in fetch_stock_data
+                validated_symbol = self._validate_symbol(symbol)
+                results[validated_symbol] = self.fetch_stock_data(validated_symbol, period)
             except Exception as e:
                 logger.warning(f"Failed to fetch data for {symbol}: {e}")
-                results[symbol] = pd.DataFrame()  # Empty DataFrame for failed fetches
+                # Use validated symbol for the key if possible
+                try:
+                    validated_symbol = self._validate_symbol(symbol)
+                    results[validated_symbol] = pd.DataFrame()
+                except:
+                    results[symbol] = pd.DataFrame()  # Fallback for invalid symbols
         return results
     
     def _validate_and_clean_data(self, data: pd.DataFrame, symbol: str) -> pd.DataFrame:

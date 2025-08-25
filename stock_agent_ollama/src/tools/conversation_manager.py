@@ -1,5 +1,6 @@
 import json
 import asyncio
+import re
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 import logging
@@ -61,21 +62,43 @@ class ConversationManager:
         if self.persistence_enabled:
             self.storage_path.mkdir(parents=True, exist_ok=True)
     
+    def _validate_session_id(self, session_id: str) -> str:
+        """Validate and sanitize session ID to prevent path traversal"""
+        if not session_id:
+            raise ValueError("Session ID cannot be empty")
+        
+        # Remove any path traversal attempts and invalid characters
+        # Allow only alphanumeric characters, hyphens, and underscores
+        sanitized = re.sub(r'[^a-zA-Z0-9_-]', '_', str(session_id))
+        
+        # Limit length to prevent excessively long filenames
+        sanitized = sanitized[:50]
+        
+        # Ensure it's not empty after sanitization
+        if not sanitized:
+            sanitized = f"session_{hash(session_id) % 1000000}"
+        
+        return sanitized
+    
     def _get_session_file(self, session_id: str) -> Path:
-        """Get file path for session storage"""
-        return self.storage_path / f"session_{session_id}.json"
+        """Get file path for session storage with path traversal protection"""
+        validated_id = self._validate_session_id(session_id)
+        return self.storage_path / f"session_{validated_id}.json"
     
     def start_session(self, session_id: str) -> Dict[str, Any]:
         """Start a new conversation session"""
-        if session_id in self.conversations:
-            self._cleanup_old_turns(session_id)
+        # Validate session ID to prevent path traversal
+        validated_id = self._validate_session_id(session_id)
+        
+        if validated_id in self.conversations:
+            self._cleanup_old_turns(validated_id)
         else:
-            self.conversations[session_id] = []
+            self.conversations[validated_id] = []
             
-        logger.info(f"Started conversation session: {session_id}")
+        logger.info(f"Started conversation session: {validated_id} (original: {session_id})")
         
         return {
-            'session_id': session_id,
+            'session_id': validated_id,
             'status': 'started',
             'available_topics': list(self.learning_topics.keys()),
             'welcome_message': (
@@ -87,23 +110,26 @@ class ConversationManager:
     
     def end_session(self, session_id: str) -> Dict[str, Any]:
         """End a conversation session"""
-        if session_id not in self.conversations:
+        # Validate session ID
+        validated_id = self._validate_session_id(session_id)
+        
+        if validated_id not in self.conversations:
             return {'status': 'error', 'message': 'Session not found'}
         
         # Save session if persistence is enabled
         if self.persistence_enabled:
-            self._save_session(session_id)
+            self._save_session(validated_id)
         
         # Generate session summary
-        summary = self._generate_session_summary(session_id)
+        summary = self._generate_session_summary(validated_id)
         
         # Clean up memory
-        del self.conversations[session_id]
+        del self.conversations[validated_id]
         
-        logger.info(f"Ended conversation session: {session_id}")
+        logger.info(f"Ended conversation session: {validated_id}")
         
         return {
-            'session_id': session_id,
+            'session_id': validated_id,
             'status': 'ended',
             'summary': summary
         }
@@ -116,8 +142,11 @@ class ConversationManager:
         educational_content: Optional[str] = None
     ) -> ConversationTurn:
         """Add a new turn to the conversation"""
-        if session_id not in self.conversations:
-            self.conversations[session_id] = []
+        # Validate session ID
+        validated_id = self._validate_session_id(session_id)
+        
+        if validated_id not in self.conversations:
+            self.conversations[validated_id] = []
         
         # Extract information from result
         symbols = self._extract_symbols_from_result(result)
@@ -135,10 +164,10 @@ class ConversationManager:
         )
         
         # Add to conversation history
-        self.conversations[session_id].append(turn)
-        self._cleanup_old_turns(session_id)
+        self.conversations[validated_id].append(turn)
+        self._cleanup_old_turns(validated_id)
         
-        logger.debug(f"Added turn to session {session_id}: {intent} for {symbols}")
+        logger.debug(f"Added turn to session {validated_id}: {intent} for {symbols}")
         
         return turn
     
@@ -148,10 +177,13 @@ class ConversationManager:
         last_n_turns: int = 5
     ) -> List[Dict[str, Any]]:
         """Get recent conversation context"""
-        if session_id not in self.conversations:
+        # Validate session ID
+        validated_id = self._validate_session_id(session_id)
+        
+        if validated_id not in self.conversations:
             return []
         
-        recent_turns = self.conversations[session_id][-last_n_turns:]
+        recent_turns = self.conversations[validated_id][-last_n_turns:]
         
         # Convert to simplified format for context
         context = []
