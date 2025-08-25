@@ -1,6 +1,7 @@
 import panel as pn
 import param
 import asyncio
+import html
 from typing import Dict, Any, Optional, Tuple
 import logging
 
@@ -133,9 +134,11 @@ class StockAnalysisApp(param.Parameterized):
             
             # Update status
             if result.get('type') == 'error':
-                self.status_bar.object = f"<div class='status-error'>❌ {result.get('message', 'Error occurred')}</div>"
+                error_msg = html.escape(str(result.get('message', 'Error occurred')))
+                self.status_bar.object = f"<div class='status-error'>❌ {error_msg}</div>"
             else:
-                self.status_bar.object = f"<div class='status-success'>✅ Analysis completed: {query}</div>"
+                escaped_query = html.escape(query)
+                self.status_bar.object = f"<div class='status-success'>✅ Analysis completed: {escaped_query}</div>"
                 
         except Exception as e:
             logger.error(f"Result handling failed: {e}")
@@ -179,10 +182,12 @@ class StockAnalysisApp(param.Parameterized):
         current_data = result.get('current_data', {})
         
         # Title and basic info
+        escaped_symbol = html.escape(str(symbol))
+        escaped_name = html.escape(str(stock_info.get('name', symbol)))
         title_html = f"""
         <div class='analysis-header'>
-            <h2>📊 Stock Analysis: {symbol}</h2>
-            <h4>{stock_info.get('name', symbol)}</h4>
+            <h2>📊 Stock Analysis: {escaped_symbol}</h2>
+            <h4>{escaped_name}</h4>
         </div>
         """
         self.results_column.append(pn.pane.HTML(title_html))
@@ -232,7 +237,8 @@ class StockAnalysisApp(param.Parameterized):
         logger.debug(f"Predictions keys: {list(predictions.keys()) if predictions else 'None'}")
         
         # Title
-        title_html = f"<div class='prediction-header'><h2>🔮 Price Prediction: {symbol}</h2></div>"
+        escaped_symbol = html.escape(str(symbol))
+        title_html = f"<div class='prediction-header'><h2>🔮 Price Prediction: {escaped_symbol}</h2></div>"
         self.results_column.append(pn.pane.HTML(title_html))
         
         # Prediction chart
@@ -265,7 +271,8 @@ class StockAnalysisApp(param.Parameterized):
         comparison_data = result.get('comparison_data', {})
         
         # Title
-        title_html = f"<div class='comparison-header'><h2>⚖️ Stock Comparison: {' vs '.join(symbols)}</h2></div>"
+        escaped_symbols = [html.escape(str(sym)) for sym in symbols]
+        title_html = f"<div class='comparison-header'><h2>⚖️ Stock Comparison: {' vs '.join(escaped_symbols)}</h2></div>"
         self.results_column.append(pn.pane.HTML(title_html))
         
         # Comparison chart
@@ -286,7 +293,8 @@ class StockAnalysisApp(param.Parameterized):
         stock_info = result.get('stock_info', {})
         
         # Title
-        title_html = f"<div class='price-header'><h2>💰 Current Price: {symbol}</h2></div>"
+        escaped_symbol = html.escape(str(symbol))
+        title_html = f"<div class='price-header'><h2>💰 Current Price: {escaped_symbol}</h2></div>"
         self.results_column.append(pn.pane.HTML(title_html))
         
         # Price card
@@ -297,10 +305,11 @@ class StockAnalysisApp(param.Parameterized):
         """Display error message"""
         error_message = result.get('message', 'An unknown error occurred')
         
+        escaped_error = html.escape(str(error_message))
         error_html = f"""
         <div class='error-card'>
             <h3>❌ Error</h3>
-            <p>{error_message}</p>
+            <p>{escaped_error}</p>
             <div class='suggestions'>
                 <h4>Try these examples:</h4>
                 <ul>
@@ -319,17 +328,19 @@ class StockAnalysisApp(param.Parameterized):
         message = result.get('message', 'Sorry, I could not process your request.')
         suggestions = result.get('suggestions', [])
         
+        escaped_message = html.escape(str(message))
         response_html = f"""
         <div class='general-response'>
             <h3>💡 How can I help?</h3>
-            <p>{message}</p>
+            <p>{escaped_message}</p>
             <div class='suggestions'>
                 <h4>Try these examples:</h4>
                 <ul>
         """
         
         for suggestion in suggestions:
-            response_html += f"<li>{suggestion}</li>"
+            escaped_suggestion = html.escape(str(suggestion))
+            response_html += f"<li>{escaped_suggestion}</li>"
         
         response_html += """
                 </ul>
@@ -412,7 +423,8 @@ class StockAnalysisApp(param.Parameterized):
         """
         
         for rec in recommendations[:3]:  # Show top 3 recommendations
-            signals_html += f"<li>{rec}</li>"
+            escaped_rec = html.escape(str(rec))
+            signals_html += f"<li>{escaped_rec}</li>"
         
         signals_html += """
                 </ul>
@@ -474,8 +486,9 @@ class StockAnalysisApp(param.Parameterized):
     
     def _create_analysis_card(self, analysis_text: str) -> pn.pane.HTML:
         """Create AI analysis text card"""
-        # Format the analysis text for better display
-        formatted_text = analysis_text.replace('\n', '<br>')
+        # Escape HTML and format the analysis text for better display
+        escaped_text = html.escape(str(analysis_text))
+        formatted_text = escaped_text.replace('\n', '<br>')
         
         analysis_html = f"""
         <div class='analysis-card'>
@@ -518,7 +531,8 @@ class StockAnalysisApp(param.Parameterized):
     
     def _show_error(self, message: str):
         """Show error message"""
-        self.status_bar.object = f"<div class='status-error'>❌ {message}</div>"
+        escaped_message = html.escape(str(message))
+        self.status_bar.object = f"<div class='status-error'>❌ {escaped_message}</div>"
         self._set_loading_state(False)
     
     def create_layout(self):
