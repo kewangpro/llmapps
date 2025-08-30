@@ -13,9 +13,8 @@ import asyncio
 import logging
 import json
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta
 
-from langchain.tools import BaseTool, tool
+from langchain.tools import tool
 from langchain.pydantic_v1 import BaseModel as PydanticV1BaseModel, Field as PydanticV1Field
 
 from services.google_travel_search import GoogleTravelSearch
