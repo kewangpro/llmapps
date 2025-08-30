@@ -94,11 +94,13 @@ Copy `.env.example` to `.env` and add your Google Search credentials for enhance
 ## 📁 Structure
 
 ```
-├── main.py              # FastAPI server
-├── run.py               # CLI tool  
-├── agents/              # AI agent system
-├── mobile_app/          # Flutter web app
-└── services/            # Core services
+├── main.py              # FastAPI server + AI orchestration
+├── run.py               # CLI tool for trip planning
+├── models.py            # Data models & validation
+├── config.py            # Configuration management
+├── agents/              # 5 specialized AI agents  
+├── mobile_app/          # Flutter web interface
+└── services/            # Google Search & utilities
 ```
 
 ## 🧪 Testing
