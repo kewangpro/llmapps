@@ -1,0 +1,41 @@
+# Core web framework and server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# LangChain framework for TRUE agentic behavior
+langchain==0.1.0
+langchain-community==0.0.13
+langchainhub==0.1.15
+
+# Data validation and settings
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# HTTP clients and file handling
+requests==2.31.0
+aiohttp==3.9.1
+aiofiles==23.2.0
+
+# Configuration management
+python-dotenv==1.0.0
+
+# Caching (optional Redis support)
+redis==5.0.1
+hiredis==2.2.3
+
+# Enhanced data structures and algorithms
+numpy==1.24.3
+scipy==1.11.4
+
+# Logging and monitoring
+structlog==23.2.0
+
+# Testing dependencies (optional)
+pytest==7.4.3
+pytest-asyncio==0.21.1
+requests-mock==1.11.0
+
+# Development tools (optional)
+black==23.11.0
+flake8==6.1.0
+mypy==1.7.1
