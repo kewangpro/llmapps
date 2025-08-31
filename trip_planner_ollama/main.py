@@ -22,16 +22,70 @@ async def _extract_trip_plan_data(result, request: TripRequest) -> dict:
     """
     Extracts structured trip plan data from the agent's result.
     """
-    # Extract text from agent result object
-    result_text = str(result.primary_result.get("output", "")) if hasattr(result, 'primary_result') else str(result)
+    # First, check if the agent provided structured trip_plan data
+    structured_trip_plan = None
+    if hasattr(result, 'primary_result') and isinstance(result.primary_result, dict):
+        structured_trip_plan = result.primary_result.get('trip_plan')
     
-    # Debug: Log the actual agent output for debugging
-    logger.info(f"🔍 Agent output for parsing: {result_text[:500]}...")
-    
-    flights = _parse_flights_from_text(result_text, request)
-    hotels = _parse_hotels_from_text(result_text, request)
-    budget_float = _parse_budget_from_text(result_text)
-    estimated_budget = f"${budget_float:.2f}" if budget_float else "$3000.00"
+    if structured_trip_plan and isinstance(structured_trip_plan, dict):
+        logger.info(f"✅ Using structured trip plan with {len(structured_trip_plan.get('flights', []))} flights and {len(structured_trip_plan.get('hotels', []))} hotels")
+        
+        # Use the structured data directly
+        flights = structured_trip_plan.get('flights', [])
+        hotels = structured_trip_plan.get('hotels', [])
+        estimated_budget = structured_trip_plan.get('estimated_budget', "$3000.00")
+        
+        # Convert flights and hotels to proper model format if needed
+        from models import Flight, Hotel
+        formatted_flights = []
+        for f in flights:
+            formatted_flights.append(Flight(
+                from_city=f.get('from_city', ''),
+                to_city=f.get('to_city', ''),
+                date=f.get('date', ''),
+                departure_time=f.get('departure_time', ''),
+                arrival_time=f.get('arrival_time', ''),
+                airline=f.get('airline', ''),
+                estimated_price=f.get('estimated_price', ''),
+                data_source=f.get('data_source', 'langchain_agents'),
+                confidence=f.get('confidence', 0.8)
+            ))
+        
+        formatted_hotels = []
+        for h in hotels:
+            formatted_hotels.append(Hotel(
+                name=h.get('name', ''),
+                city=h.get('city', ''),
+                rating=h.get('rating', 0.0),
+                price_per_night=h.get('price_per_night', ''),
+                amenities=h.get('amenities', []),
+                address=h.get('address', ''),
+                data_source=h.get('data_source', 'langchain_agents'),
+                confidence=h.get('confidence', 0.8)
+            ))
+        
+        flights = formatted_flights
+        hotels = formatted_hotels
+        
+    else:
+        # Extract text from pure LLM agent result
+        result_text = ""
+        if hasattr(result, 'primary_result') and isinstance(result.primary_result, dict):
+            # Old agent system format
+            result_text = str(result.primary_result.get("output", ""))
+        elif isinstance(result, dict) and "output" in result:
+            # Pure LLM agent format - direct output key
+            result_text = str(result["output"])
+        else:
+            # Fallback - convert entire result to string
+            result_text = str(result)
+            
+        logger.info(f"🔍 Agent output for parsing: {result_text[:500]}...")
+        
+        flights = _parse_flights_from_text(result_text, request)
+        hotels = _parse_hotels_from_text(result_text, request)
+        budget_float = _parse_budget_from_text(result_text)
+        estimated_budget = f"${budget_float:.2f}" if budget_float else "$3000.00"
 
     # Create detailed daily plans with activities based on destinations
     daily_plans = []
@@ -302,6 +356,19 @@ async def plan_trip(request: TripRequest, background_tasks: BackgroundTasks):
     request_start_time = datetime.utcnow()
     
     try:
+        # Process destinations - handle comma-separated cities in single strings
+        processed_destinations = []
+        for dest in request.destinations:
+            if ',' in dest:
+                # Split comma-separated cities and strip whitespace
+                split_cities = [city.strip().title() for city in dest.split(',') if city.strip()]
+                processed_destinations.extend(split_cities)
+            else:
+                processed_destinations.append(dest.strip().title())
+        
+        # Update the request with processed destinations
+        request.destinations = processed_destinations
+        
         # Validate request
         await validate_trip_request(request)
         
@@ -687,39 +754,55 @@ async def log_trip_request(
         logger.error(f"Failed to log trip request: {e}")
 
 def _parse_flights_from_text(text: str, request: TripRequest) -> List[Flight]:
-    """Extract flight data from agent's final text output."""
+    """Extract flight data from agent's final text output.""" 
     flights = []
     try:
         import re
-        # Pattern to match standardized format: *   **Seattle to Tokyo:** Alaska Airlines - Depart: 08:00, Arrive: 00:53, Price: $677
-        pattern = r'\*\s+\*\*([^:]+?)\s+to\s+([^:]+?):\*\*\s+([^-]+?)\s*-\s*Depart:\s*([^,]+?),\s*Arrive:\s*([^,]+?),\s*Price:\s*\$(\d+(?:,\d+)?)'
-        matches = re.finditer(pattern, text)
+        # Exact pattern to match the required agent output format: "- Seattle to Tokyo: Alaska Airlines - $500"
+        pattern = r'-\s+([^:]+?)\s+to\s+([^:]+?):\s+([^-]+?)\s*-\s*\$(\d+(?:,\d+)?)'
+        matches = list(re.finditer(pattern, text))
+        
+        logger.info(f"Looking for flight pattern in text: {text[:300]}")
+        logger.info(f"Found {len(matches)} flight matches using exact format pattern")
+        
+        flight_dates = []
+        if len(request.destinations) == 1:
+            # Single destination - outbound and return
+            from datetime import datetime, timedelta
+            start_dt = datetime.strptime(request.start_date, "%Y-%m-%d")
+            flight_dates = [
+                request.start_date,
+                (start_dt + timedelta(days=request.duration_days)).strftime("%Y-%m-%d")
+            ]
+        else:
+            # Multi-city - calculate dates for each segment
+            from datetime import datetime, timedelta
+            start_dt = datetime.strptime(request.start_date, "%Y-%m-%d")
+            days_per_city = request.duration_days // len(request.destinations)
+            current_date = start_dt
+            flight_dates = []
+            
+            # Add dates for each segment
+            for i in range(len(request.destinations) + 1):  # +1 for return flight
+                flight_dates.append(current_date.strftime("%Y-%m-%d"))
+                if i < len(request.destinations):
+                    current_date += timedelta(days=days_per_city)
         
         for i, match in enumerate(matches):
             from_city = match.group(1).strip()
             to_city = match.group(2).strip()
             airline = match.group(3).strip()
-            departure_time = match.group(4).strip()
-            arrival_time = match.group(5).strip() 
-            price = f"${match.group(6)}"
+            price = f"${match.group(4)}"
             
-            # Calculate flight date based on sequence
-            flight_date = request.start_date
-            if i == 1:  # Second flight
-                from datetime import datetime, timedelta
-                start = datetime.strptime(request.start_date, "%Y-%m-%d")
-                flight_date = (start + timedelta(days=5)).strftime("%Y-%m-%d")
-            elif i >= 2:  # Third flight or more
-                from datetime import datetime, timedelta  
-                start = datetime.strptime(request.start_date, "%Y-%m-%d")
-                flight_date = (start + timedelta(days=10)).strftime("%Y-%m-%d")
+            # Use calculated flight date
+            flight_date = flight_dates[i] if i < len(flight_dates) else request.start_date
             
             flight = Flight(
                 from_city=from_city,
                 to_city=to_city,
                 date=flight_date,
-                departure_time=departure_time,
-                arrival_time=arrival_time,
+                departure_time="08:00",  # Default time since not provided in simple format
+                arrival_time="20:00",    # Default time since not provided in simple format
                 airline=airline,
                 estimated_price=price,
                 data_source="langchain_agents_text_extraction",
@@ -739,21 +822,19 @@ def _parse_hotels_from_text(text: str, request: TripRequest) -> List[Hotel]:
     hotels = []
     try:
         import re
-        # Pattern to match standardized hotel format: *   **CityName:** HotelName - $Price/night
-        # This format is now enforced in the agent prompts
-        pattern = r'\*\s+\*\*([A-Za-z\s]+?):\*\*\s+([^-]+?)\s*-\s*\$(\d+(?:,\d+)?)/night(?:,\s*Rating:\s*([0-9.]+))?'
+        # Exact pattern to match required agent output format: "- Tokyo: Hotel Name - $200/night"
+        pattern = r'-\s+([^:]+?):\s+([^-]+?)\s*-\s*\$(\d+(?:,\d+)?)/night'
         matches = list(re.finditer(pattern, text))
         logger.info(f"Found {len(matches)} hotel matches using pattern matching")
         
         for match in matches:
             city = match.group(1).strip()
             name = match.group(2).strip()
-            price = f"${match.group(3)}"
-            # Group 4 might not exist in old format, handle gracefully
-            try:
-                rating = float(match.group(4)) if match.group(4) else 3.7
-            except IndexError:
-                rating = 3.7  # Default rating for old format
+            # Clean up any remaining markdown formatting from the name
+            if name.startswith('*'):
+                name = name.lstrip('* ').strip()
+            price = f"${match.group(3)}/night"
+            rating = 3.8  # Default rating since not in simple format
                 
             hotel = Hotel(
                 name=name,

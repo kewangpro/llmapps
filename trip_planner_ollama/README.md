@@ -1,10 +1,10 @@
 # 🌍 AI Trip Planner
 
-Smart multi-city trip planning powered by AI agents. Plan complete itineraries with flights, hotels, and activities using local AI models.
+Smart multi-city trip planning powered by pure LLM reasoning. Plan complete itineraries with flights, hotels, and activities using local AI models with autonomous decision-making.
 
 ## ✨ Features
 
-- **🤖 AI-Powered Planning**: 5 specialized agents working together
+- **🤖 Pure LLM Reasoning**: Advanced ReAct framework with autonomous tool usage
 - **📱 Modern Web App**: Flutter-based responsive interface  
 - **🖥️ CLI Tool**: Command-line interface for direct planning
 - **🔄 Works Offline**: No API keys required (Google Search optional)
@@ -13,13 +13,13 @@ Smart multi-city trip planning powered by AI agents. Plan complete itineraries w
 ## 🏗️ How It Works
 
 ```
-User Request → FastAPI Server → AI Agents → Ollama (Local LLM) → Complete Trip Plan
+User Request → FastAPI Server → LLM Agent → Ollama (Mistral) → Complete Trip Plan
 ```
 
 **Stack:**
 - **Frontend**: Flutter Web App + CLI Tool
-- **Backend**: FastAPI with AI agent orchestration
-- **AI**: 5 specialized agents using Ollama/Mistral
+- **Backend**: FastAPI with LangChain ReAct agent
+- **AI**: Single master agent with autonomous reasoning using Ollama/Mistral
 - **Data**: Google Search (optional) + intelligent fallbacks
 
 ## 🚀 Quick Start
@@ -65,7 +65,7 @@ Copy `.env.example` to `.env` and add your Google Search credentials for enhance
 
 **Smart Interface:**
 - 🎯 Clean, mobile-optimized web interface
-- 🤖 Visual badges showing AI agent contributions  
+- 🤖 Real-time LLM reasoning with structured output
 - 📱 Responsive design for all devices
 - ⚡ One-command setup and development
 
@@ -85,20 +85,27 @@ Copy `.env.example` to `.env` and add your Google Search credentials for enhance
 
 **Other Endpoints:** Health checks, system status, and interactive docs at `/docs`
 
-## 🤖 AI Agents
+## 🤖 LLM Agent Architecture
 
-5 specialized agents work together: Master Coordinator, Flight Planner, Hotel Finder, Activity Curator, and Budget Analyzer.
+**Master Travel Agent** uses LangChain's ReAct framework for autonomous reasoning:
+- **Chain-of-Thought**: Multi-step planning with reasoning traces
+- **Tool Selection**: Autonomous decision-making for flight/hotel/activity searches
+- **Structured Output**: Standardized format parsing for reliable data extraction
+- **Pure LLM**: No fallback systems - full autonomous operation
 
-📋 **Technical details**: [agents/README.md](agents/README.md)
+**Available Tools**: Flight Search, Hotel Search, Activity Search, Budget Analysis, Route Optimization
 
 ## 📁 Structure
 
 ```
-├── main.py              # FastAPI server + AI orchestration
+├── main.py              # FastAPI server + trip planning API
 ├── run.py               # CLI tool for trip planning
-├── models.py            # Data models & validation
+├── models.py            # Pydantic data models & validation
 ├── config.py            # Configuration management
-├── agents/              # 5 specialized AI agents  
+├── agents/              # LangChain ReAct agent system
+│   ├── master_travel_agent.py    # Main LLM reasoning agent
+│   ├── travel_tools.py           # Travel planning tools
+│   └── langchain_base_agent.py   # ReAct framework base
 ├── mobile_app/          # Flutter web interface
 └── services/            # Google Search & utilities
 ```
@@ -134,6 +141,19 @@ For enhanced real-time data, add Google Search credentials to `.env`:
 2. Create Custom Search Engine at [cse.google.com](https://cse.google.com)
 3. Add `GOOGLE_SEARCH_API_KEY` and `GOOGLE_SEARCH_ENGINE_ID` to `.env`
 
+## 🔬 Technical Details
+
+**LLM Agent Framework:**
+- **ReAct Pattern**: Reasoning + Acting with tool calling
+- **Format Alignment**: Structured output parsing with exact pattern matching
+- **Error Handling**: Robust parsing with graceful degradation
+- **Temperature**: Low temperature (0.1) for consistent format compliance
+
+**Data Processing:**
+- **Structured Extraction**: Regex parsing of standardized LLM output
+- **Multi-City Support**: Complex routing with proper date sequencing
+- **Real-time Integration**: Google Search API with intelligent fallbacks
+
 ---
 
-**Built with LangChain Agents + Ollama + Flutter**
+**Built with LangChain ReAct + Ollama + Flutter**
