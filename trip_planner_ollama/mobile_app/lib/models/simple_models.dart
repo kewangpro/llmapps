@@ -186,7 +186,24 @@ class TripPlan {
     Set<String> processedDates = {};
     Set<String> processedHotels = {};
     
-    for (var flight in sortedFlights) {
+    // Identify return flight (last flight that goes back to origin)
+    Flight? returnFlight;
+    if (sortedFlights.length > 1) {
+      Flight lastFlight = sortedFlights.last;
+      Flight firstFlight = sortedFlights.first;
+      if (lastFlight.to == firstFlight.from) {
+        returnFlight = lastFlight;
+      }
+    }
+    
+    // Process all flights except the return flight
+    List<Flight> arrivalFlights = returnFlight != null 
+        ? sortedFlights.sublist(0, sortedFlights.length - 1)
+        : sortedFlights;
+    
+    for (int i = 0; i < arrivalFlights.length; i++) {
+      var flight = arrivalFlights[i];
+      
       // Add flight card
       items.add(ItineraryItem(
         type: 'flight',
@@ -195,13 +212,11 @@ class TripPlan {
         flight: flight,
       ));
       
-      // Add the best hotel for the destination city (if any) after the arrival flight
-      // Select hotel with best value (highest rating, then lowest price)
+      // Add the best hotel for the destination city
       var cityHotels = hotels.where((hotel) => 
         hotel.city == flight.to && !processedHotels.contains(hotel.name)
       ).toList();
       
-      Hotel cityHotel;
       if (cityHotels.isNotEmpty) {
         // Sort by rating (descending), then by price (ascending for same rating)
         cityHotels.sort((a, b) {
@@ -215,36 +230,44 @@ class TripPlan {
           int numB = int.tryParse(priceB) ?? 0;
           return numA.compareTo(numB); // Lower price first
         });
-        cityHotel = cityHotels.first;
+        
+        var cityHotel = cityHotels.first;
+        items.add(ItineraryItem(
+          type: 'hotel',
+          date: flight.date,
+          title: 'Stay in ${cityHotel.city}',
+          hotel: cityHotel,
+        ));
         
         // Mark ALL hotels in this city as processed to avoid duplicates
         for (var hotel in cityHotels) {
           processedHotels.add(hotel.name);
         }
-      } else {
-        cityHotel = Hotel(name: '', city: '', rating: 0.0, pricePerNight: '', amenities: []);
       }
       
-      if (cityHotel.name.isNotEmpty) {
-        items.add(ItineraryItem(
-          type: 'hotel',
-          date: flight.date, // Use flight date for chronological ordering
-          title: 'Stay in ${cityHotel.city}',
-          hotel: cityHotel,
-        ));
-        processedHotels.add(cityHotel.name);
+      // Find activities for this destination city
+      // For the last arrival flight, include all remaining activities in that city
+      // For other flights, only include activities until the next departure
+      String? nextDepartureDate;
+      if (i + 1 < arrivalFlights.length) {
+        nextDepartureDate = arrivalFlights[i + 1].date;
+      } else if (returnFlight != null) {
+        // For the last city, include activities until the return flight
+        nextDepartureDate = returnFlight.date;
       }
       
-      // Find ALL day plans for the destination city that haven't been processed
       List<DayPlan> cityDays = sortedDays
-          .where((dayPlan) => dayPlan.city == flight.to && 
-                              !processedDates.contains(dayPlan.date))
+          .where((dayPlan) => 
+            dayPlan.city == flight.to && 
+            !processedDates.contains(dayPlan.date) &&
+            (nextDepartureDate == null || dayPlan.date.compareTo(nextDepartureDate) < 0)
+          )
           .toList();
       
-      // Sort city days by day number to maintain order
-      cityDays.sort((a, b) => a.day.compareTo(b.day));
+      // Sort city days by date to maintain chronological order
+      cityDays.sort((a, b) => a.date.compareTo(b.date));
       
-      // Add all days for this destination city after the hotel
+      // Add activities for this city
       for (var dayPlan in cityDays) {
         items.add(ItineraryItem(
           type: 'day',
@@ -255,11 +278,7 @@ class TripPlan {
       }
     }
     
-    // Note: We now select the best hotel per city during flight processing,
-    // so we don't need to add remaining hotels here to avoid duplicates
-    
     // Add any remaining daily plans that weren't processed
-    // (This handles edge cases where cities don't have associated flights)
     for (var day in sortedDays) {
       if (!processedDates.contains(day.date)) {
         items.add(ItineraryItem(
@@ -268,6 +287,16 @@ class TripPlan {
           dayPlan: day,
         ));
       }
+    }
+    
+    // Add the return flight at the very end (after ALL activities)
+    if (returnFlight != null) {
+      items.add(ItineraryItem(
+        type: 'flight',
+        date: returnFlight.date,
+        title: '${returnFlight.from} → ${returnFlight.to}',
+        flight: returnFlight,
+      ));
     }
     
     return items;
