@@ -17,7 +17,7 @@ A Flutter mobile application for smart multi-city round trip planning using pure
 
 - **Frontend**: Flutter (Dart)
 - **Backend API**: FastAPI Python server (../main.py)
-- **AI Engine**: LangChain ReAct + Ollama Mistral
+- **AI Engine**: Dual-mode LangChain ReAct system + Ollama Mistral
 - **Models**: Clean data models with JSON serialization
 - **CLI Tool**: Command-line interface (../run.py) for direct API access
 
@@ -183,8 +183,9 @@ flutter packages pub run build_runner build
 - Departure/arrival time coordination
 
 ### AI-Powered Planning
-- LangChain ReAct framework with autonomous reasoning
-- Single master agent with comprehensive travel planning
+- Dual-mode LangChain ReAct framework with autonomous reasoning
+- Simple mode: Single master agent (25s execution, production-optimized)
+- Comprehensive mode: 5 specialized agents with sequential collaboration  
 - Ollama Mistral local model processing
 - Structured output format with exact pattern matching
 - Smart hotel selection algorithm (rating + price optimization)
@@ -195,7 +196,7 @@ flutter packages pub run build_runner build
 - **Web Support**: Fully functional on Chrome/Safari with automated setup
 - **Hot Reload**: Supports Flutter hot reload for rapid development
 - **API Dependencies**: Requires backend server for full functionality
-- **Local AI**: All AI processing happens locally via Ollama (Mistral model)
+- **Local AI**: All AI processing happens locally via Ollama (Mistral model) with dual collaboration modes
 - **Clean Architecture**: Recent cleanup removed unused test files and dependencies
 - **Hotel Logic**: Implements smart selection - best rating first, then lowest price for ties
 
