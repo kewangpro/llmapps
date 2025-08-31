@@ -1,10 +1,10 @@
 # AI Trip Planner Mobile App
 
-A Flutter mobile application for smart multi-city round trip planning using AI-powered agents with Ollama integration (Mistral model).
+A Flutter mobile application for smart multi-city round trip planning using pure LLM reasoning with Ollama integration (Mistral model).
 
 ## 🎯 Features
 
-- **Smart Trip Planning**: AI-powered multi-city round trip optimization
+- **Smart Trip Planning**: Pure LLM reasoning for multi-city round trip optimization
 - **Unified Itinerary**: Chronological view combining flights and daily activities
 - **Flight Integration**: Realistic airline suggestions with times and pricing
 - **Beautiful UI**: Clean, modern interface with visual distinction between flights and activities
@@ -17,7 +17,7 @@ A Flutter mobile application for smart multi-city round trip planning using AI-p
 
 - **Frontend**: Flutter (Dart)
 - **Backend API**: FastAPI Python server (../main.py)
-- **AI Engine**: LangChain + Ollama Mistral
+- **AI Engine**: LangChain ReAct + Ollama Mistral
 - **Models**: Clean data models with JSON serialization
 - **CLI Tool**: Command-line interface (../run.py) for direct API access
 
@@ -107,7 +107,7 @@ lib/
 
 ### Smart Data Flow
 ```
-User Input → API Request → Ollama Mistral → Structured Response → Hotel Selection Logic → Flutter UI
+User Input → API Request → LLM Agent ReAct → Structured Output → Data Extraction → Flutter UI
 ```
 
 ### Itinerary Model
@@ -183,11 +183,12 @@ flutter packages pub run build_runner build
 - Departure/arrival time coordination
 
 ### AI-Powered Planning
-- LangChain multi-agent system with specialized roles
+- LangChain ReAct framework with autonomous reasoning
+- Single master agent with comprehensive travel planning
 - Ollama Mistral local model processing
-- Structured output format for reliable parsing
+- Structured output format with exact pattern matching
 - Smart hotel selection algorithm (rating + price optimization)
-- Fallback planning for reliable operation
+- Pure LLM reasoning without fallback systems
 
 ## 🚧 Development Notes
 
