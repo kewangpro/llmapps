@@ -7,9 +7,7 @@ using all available tools and can orchestrate complex multi-step travel planning
 
 import asyncio
 import logging
-import json
-from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta
+from typing import List, Dict, Any
 
 from langchain.tools import BaseTool
 
@@ -39,8 +37,8 @@ class MasterTravelAgent(BaseLangChainAgent):
             agent_name="MasterTravelAgent",
             agent_description="Master AI travel planning agent that coordinates comprehensive trip planning using specialized tools and agents for flights, hotels, activities, and budget optimization.",
             model_name=model_name or config.ollama_model,
-            temperature=config.ollama_temperature,
-            max_iterations=15, # Increased for complex multi-leg trips
+            temperature=0.1,  # Very low temperature for better format compliance
+            max_iterations=8,  # Reduced iterations for simpler tasks
             verbose=True
         )
     
@@ -76,124 +74,80 @@ class MasterTravelAgent(BaseLangChainAgent):
         
         # Handle both single and multi-city trips properly
         if len(destinations) == 1:
-            planning_query = f"""Plan a trip from {origin} to {destinations[0]} starting {start_date} for {duration_days} days.
+            from datetime import datetime, timedelta
+            return_date = (datetime.strptime(start_date, "%Y-%m-%d") + timedelta(days=duration_days)).strftime('%Y-%m-%d')
+            planning_query = f"""Plan a round-trip from {origin} to {destinations[0]}.
 
-REQUIRED ACTIONS:
-1. Use flight_search tool to find flights from {origin} to {destinations[0]} on {start_date}
-2. Use hotel_search tool to find hotels in {destinations[0]}
-3. Use budget_analysis tool to analyze the costs
-4. Provide comprehensive trip summary
+Step 1: Search flights from {origin} to {destinations[0]} on {start_date}
+Step 2: Search hotels in {destinations[0]} from {start_date} to {return_date}  
+Step 3: Search return flights from {destinations[0]} to {origin} on {return_date}
 
-OUTPUT FORMAT REQUIREMENTS:
-For flights, use EXACTLY this format:
-**Flights:**
+Budget: ${budget:,.2f} for {duration_days} days
 
-*   **OriginCity to DestinationCity:** AirlineName - Depart: HH:MM, Arrive: HH:MM, Price: $Amount
+IMPORTANT: Your Final Answer must be in EXACTLY this format:
 
-For hotels, use EXACTLY this format:
-**Hotels:**
+Final Answer: FLIGHTS:
+- {origin} to {destinations[0]}: [Airline] - $[Price]
+- {destinations[0]} to {origin}: [Airline] - $[Price]
 
-*   **CityName:** HotelName - $Price/night
+HOTELS:  
+- {destinations[0]}: [Hotel Name] - $[Price]/night
 
-Examples:
-*   **Seattle to Tokyo:** Alaska Airlines - Depart: 08:30, Arrive: 22:26, Price: $937
-*   **Tokyo:** Marriott Tokyo Inn - $184/night
-
-Budget: ${budget:,.2f}, Style: {travel_style}"""
+Use the actual data from your tool searches. Include "Final Answer: " prefix for LangChain parsing."""
         else:
-            # Dynamically construct the multi-city planning query
+            # Multi-city trip - simple step-by-step approach
             from datetime import datetime, timedelta
             start_dt = datetime.strptime(start_date, "%Y-%m-%d")
             days_per_city = duration_days // len(destinations)
-            
             route = [origin] + destinations + [origin]
             
-            steps = []
+            # Create simple, clear steps
+            planning_query = f"""Plan a multi-city trip: {' → '.join(route)}
+
+Search flights and hotels for each segment:
+
+"""
             current_date = start_dt
+            step_num = 1
             
-            # Create flight and hotel steps
+            # Add each flight and hotel step
             for i in range(len(route) - 1):
-                # Add flight search step
-                steps.append(f"STEP {len(steps) + 1}: Find a flight from {route[i]} to {route[i+1]} on or around {current_date.strftime('%Y-%m-%d')}.")
+                flight_date = current_date.strftime('%Y-%m-%d')
+                planning_query += f"Step {step_num}: Search flights from {route[i]} to {route[i+1]} on {flight_date}\n"
+                step_num += 1
                 
-                # Add hotel search step (if it's a destination, not the final return to origin)
+                # Add hotel step if this is a destination (not return leg)
                 if i < len(destinations):
-                    hotel_start_date = current_date
-                    hotel_end_date = current_date + timedelta(days=days_per_city)
-                    steps.append(f"STEP {len(steps) + 1}: Find a hotel in {route[i+1]} from {hotel_start_date.strftime('%Y-%m-%d')} to {hotel_end_date.strftime('%Y-%m-%d')}.")
-                    current_date = hotel_end_date # Next flight departs after the hotel stay
+                    hotel_end = (current_date + timedelta(days=days_per_city)).strftime('%Y-%m-%d')
+                    planning_query += f"Step {step_num}: Search hotels in {route[i+1]} from {flight_date} to {hotel_end}\n"
+                    step_num += 1
+                    current_date += timedelta(days=days_per_city)
             
-            # Add budget analysis step
-            budget_step = f"STEP {len(steps) + 1}: Call the 'budget_analysis' tool. "
-            budget_step += f"Input should be a JSON string with 'flights' (from previous flight_search observations), "
-            budget_step += f"'hotels' (from previous hotel_search observations), "
-            budget_step += f"'duration_days': {duration_days}, and 'budget_style': '{travel_style}'. "
-            budget_step += "Ensure you collect all flight and hotel data from previous steps to pass to this tool."
-            steps.append(budget_step)
+            planning_query += f"\nBudget: ${budget:,.2f} for {duration_days} days\n\n"
+            planning_query += """IMPORTANT: Your Final Answer must be in EXACTLY this format:
 
-            # Final summary step
-            steps.append(f"STEP {len(steps) + 1}: Provide a comprehensive summary of the trip, including all flights and hotels found.")
+Final Answer: FLIGHTS:
+- [Origin] to [Dest1]: [Airline] - $[Price]
+- [Dest1] to [Dest2]: [Airline] - $[Price]  
+- [Dest2] to [Origin]: [Airline] - $[Price]
 
-            trip_description = " → ".join(route)
-            planning_query = f"""Plan a multi-city trip: {trip_description}
+HOTELS:
+- [Dest1]: [Hotel Name] - $[Price]/night
+- [Dest2]: [Hotel Name] - $[Price]/night
 
-BUDGET: ${budget:,.2f}
-INTERESTS: {', '.join(interests)}
-TRAVEL STYLE: {travel_style}
-
-Follow these steps to complete the plan:
-""" + "\n".join(steps) + """
-
-OUTPUT FORMAT REQUIREMENTS:
-For flights, use EXACTLY this format:
-**Flights:**
-
-*   **OriginCity to DestinationCity:** AirlineName - Depart: HH:MM, Arrive: HH:MM, Price: $Amount
-
-For hotels, use EXACTLY this format:
-**Hotels:**
-
-*   **CityName:** HotelName - $Price/night
-
-Examples:
-*   **Seattle to Tokyo:** Alaska Airlines - Depart: 08:30, Arrive: 22:26, Price: $937
-*   **Tokyo:** Marriott Tokyo Inn - $184/night
-
-Ensure all steps are completed before providing the final summary."""
+Use the actual data from your tool searches. Include "Final Answer: " prefix for LangChain parsing."""
         
-        # Use the agent's reasoning capabilities to plan the trip
+        # Use pure LLM agent reasoning - no fallback needed
+        logger.info("🤖 Starting LLM agent reasoning process...")
         result = await self.process_query(planning_query)
         
-        # The agent's response should be a JSON object with the trip plan.
-        # We will parse it and return it as a dictionary.
-        try:
-            trip_plan = json.loads(result["output"])
-        except (json.JSONDecodeError, TypeError):
-            # If the agent did not return a valid JSON, we'll have to rely on the intermediate steps.
-            # This is a fallback within the agent itself.
-            trip_plan = {
-                "flights": [],
-                "hotels": [],
-                "activities": [],
-                "budget": None,
-                "itinerary": None
-            }
-            for step in result.get("intermediate_steps", []):
-                action = step[0]
-                if action.tool == "flight_search":
-                    try:
-                        flights = json.loads(step[1])
-                        trip_plan["flights"].extend(flights)
-                    except json.JSONDecodeError:
-                        # Handle cases where the output is not a valid JSON
-                        pass
-                elif action.tool == "hotel_search":
-                    try:
-                        hotels = json.loads(step[1])
-                        trip_plan["hotels"].extend(hotels)
-                    except json.JSONDecodeError:
-                        # Handle cases where the output is not a valid JSON
-                        pass
+        logger.info("🎯 Agent completed successfully!")
         
-        result["trip_plan"] = trip_plan
+        # Check if the agent produced intermediate steps with tool results
+        if "reasoning_steps" in result and result["reasoning_steps"]:
+            logger.info(f"✅ Agent used {len(result['reasoning_steps'])} tools and provided reasoning")
+        else:
+            logger.info("ℹ️ Agent completed without tool usage - may have used cached knowledge")
+        
         return result
+

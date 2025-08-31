@@ -129,19 +129,48 @@ class BaseLangChainAgent(ABC):
             
         except Exception as e:
             logger.error(f"Failed to create ZERO_SHOT_REACT agent: {e}")
-            # Fallback to standard ReAct if available
+            # Fallback to custom ReAct prompt optimized for Mistral
             try:
-                from langchain import hub
-                prompt = hub.pull("hwchase17/react")
-                agent = create_react_agent(llm=self.llm, tools=self.tools, prompt=prompt)
-                logger.info(f"✅ Fallback to standard ReAct agent for {self.agent_name}")
+                from langchain.prompts import PromptTemplate
+                
+                # Create a more explicit ReAct prompt optimized for Mistral
+                react_prompt = PromptTemplate.from_template("""You are a travel planning assistant. Use tools to find flights and hotels.
+
+Available tools:
+{tools}
+
+FOLLOW THIS EXACT FORMAT:
+
+Thought: [What I need to do next]
+Action: [tool name from the list above]
+Action Input: {{"parameter": "value"}}
+Observation: [Tool result will appear here - DO NOT write this yourself]
+Thought: [What to do with the result]
+Action: [next tool if needed]
+Action Input: {{"parameter": "value"}}  
+Observation: [Next tool result - DO NOT write this yourself]
+Thought: [Final thinking]
+Final Answer: [Summary of what was found]
+
+RULES:
+- Always start each step with "Thought: "
+- Use "Action: " with exact tool name
+- Use "Action Input: " with valid JSON only
+- Never write "Observation: " - wait for the system
+- End with "Final Answer: "
+
+Question: {input}
+{agent_scratchpad}""")
+                
+                agent = create_react_agent(llm=self.llm, tools=self.tools, prompt=react_prompt)
+                logger.info(f"✅ Created custom ReAct agent for {self.agent_name}")
                 
                 return AgentExecutor(
                     agent=agent,
                     tools=self.tools,
                     verbose=self.verbose,
                     handle_parsing_errors=True,
-                    max_iterations=self.max_iterations, # Use configured max_iterations
+                    max_iterations=self.max_iterations,
                     return_intermediate_steps=True
                 )
             except Exception as fallback_error:

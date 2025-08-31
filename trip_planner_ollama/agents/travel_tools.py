@@ -62,35 +62,6 @@ class RouteOptimizationInput(PydanticV1BaseModel):
     destinations: List[str] = PydanticV1Field(description="List of destination cities")
     preferences: Dict[str, Any] = PydanticV1Field(default_factory=dict, description="Route preferences")
 
-
-class HotelSearchInput(PydanticV1BaseModel):
-    """Input for hotel search tool."""
-    city: str = PydanticV1Field(description="City name for hotel search")
-    check_in: str = PydanticV1Field(description="Check-in date (YYYY-MM-DD)")
-    check_out: str = PydanticV1Field(description="Check-out date (YYYY-MM-DD)")
-    guests: int = PydanticV1Field(1, description="Number of guests")
-    price_range: Optional[str] = PydanticV1Field(None, description="Price range (budget, mid-range, luxury)")
-
-class ActivitySearchInput(PydanticV1BaseModel):
-    """Input for activity search tool."""
-    location: str = PydanticV1Field(description="Location for activity search")
-    interests: List[str] = PydanticV1Field(description="List of interests/activity types")
-    date: Optional[str] = PydanticV1Field(None, description="Specific date (YYYY-MM-DD)")
-    duration_hours: Optional[int] = PydanticV1Field(None, description="Preferred duration in hours")
-
-class BudgetAnalysisInput(PydanticV1BaseModel):
-    """Input for budget analysis tool."""
-    total_budget: float = PydanticV1Field(description="Total budget amount")
-    destinations: List[str] = PydanticV1Field(description="List of destinations")
-    duration_days: int = PydanticV1Field(description="Trip duration in days")
-    travel_style: str = PydanticV1Field("mid-range", description="Travel style (budget, mid-range, luxury)")
-
-class RouteOptimizationInput(PydanticV1BaseModel):
-    """Input for route optimization tool."""
-    origin: str = PydanticV1Field(description="Starting city")
-    destinations: List[str] = PydanticV1Field(description="List of destination cities")
-    preferences: Dict[str, Any] = PydanticV1Field(default_factory=dict, description="Route preferences")
-
 # Specialized Travel Tools using LangChain's @tool decorator
 class TravelPlanningTools:
     """Collection of travel planning tools for LangChain agents."""
@@ -145,6 +116,19 @@ class TravelPlanningTools:
                 else:
                     # Handle empty or non-string input
                     return json.dumps([{"error": f"Invalid input received: {repr(query)}, type: {type(query)}"}])
+                
+                # Handle multi-city destination input (agent confusion)
+                destination = params['destination']
+                if isinstance(destination, list):
+                    if len(destination) == 1:
+                        destination = destination[0]
+                    else:
+                        return json.dumps([{
+                            "error": f"Multi-city flight search not supported. Please search one route at a time: {params['origin']} to each destination separately.",
+                            "suggestion": f"Try searching: {params['origin']} to {destination[0]}, then {destination[0]} to {destination[1]}, etc."
+                        }])
+                
+                params['destination'] = destination
                     
                 # Simplified async handling - always use asyncio.run in a new thread
                 logger.info(f"🔍 Searching flights: {params['origin']} → {params['destination']} on {params['departure_date']}")
@@ -196,7 +180,7 @@ class TravelPlanningTools:
                         estimated_price=f.price,
                         data_source='google_search',
                         confidence=0.9
-                    ).dict()
+                    ).model_dump()
                     for f in flights_from_google
                 ]
                 
@@ -291,7 +275,7 @@ class TravelPlanningTools:
                         address=h.address,
                         data_source='google_search',
                         confidence=0.9
-                    ).dict()
+                    ).model_dump()
                     for h in hotels_from_google
                 ]
                 
