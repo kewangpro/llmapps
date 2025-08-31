@@ -19,7 +19,7 @@ User Request → FastAPI Server → LLM Agent → Ollama (Mistral) → Complete 
 **Stack:**
 - **Frontend**: Flutter Web App + CLI Tool
 - **Backend**: FastAPI with LangChain ReAct agent
-- **AI**: Single master agent with autonomous reasoning using Ollama/Mistral
+- **AI**: Master travel agent with dual collaboration modes using Ollama/Mistral
 - **Data**: Google Search (optional) + intelligent fallbacks
 
 ## 🚀 Quick Start
@@ -87,9 +87,21 @@ Copy `.env.example` to `.env` and add your Google Search credentials for enhance
 
 ## 🤖 LLM Agent Architecture
 
-**Master Travel Agent** uses LangChain's ReAct framework for autonomous reasoning:
+**Dual Collaboration Modes** using LangChain's ReAct framework:
+
+**Simple Mode (Recommended):**
+- Single master agent with all 5 travel tools
+- 25-second execution time for optimal performance
+- Direct tool access with autonomous reasoning
+
+**Comprehensive Mode:**
+- 5 specialized agents in sequential collaboration
+- Detailed multi-agent reasoning across budget, flight, accommodation, activity, and synthesis phases
+- Extended execution time with enhanced analysis depth
+
+**Core Features:**
 - **Chain-of-Thought**: Multi-step planning with reasoning traces
-- **Tool Selection**: Autonomous decision-making for flight/hotel/activity searches
+- **Tool Selection**: Autonomous decision-making for flight/hotel/activity searches  
 - **Structured Output**: Standardized format parsing for reliable data extraction
 - **Pure LLM**: No fallback systems - full autonomous operation
 
@@ -103,9 +115,14 @@ Copy `.env.example` to `.env` and add your Google Search credentials for enhance
 ├── models.py            # Pydantic data models & validation
 ├── config.py            # Configuration management
 ├── agents/              # LangChain ReAct agent system
-│   ├── master_travel_agent.py    # Main LLM reasoning agent
-│   ├── travel_tools.py           # Travel planning tools
-│   └── langchain_base_agent.py   # ReAct framework base
+│   ├── master_travel_agent.py         # Main LLM reasoning agent
+│   ├── langchain_multi_agent_system.py # Dual-mode coordination system
+│   ├── flight_planning_agent.py       # Specialized flight search agent
+│   ├── accommodation_agent.py          # Hotel search specialist
+│   ├── activity_agent.py               # Activity recommendation agent
+│   ├── budget_planning_agent.py        # Budget analysis agent
+│   ├── travel_tools.py                 # Travel planning tools
+│   └── langchain_base_agent.py         # ReAct framework base
 ├── mobile_app/          # Flutter web interface
 └── services/            # Google Search & utilities
 ```
