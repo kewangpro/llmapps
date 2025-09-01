@@ -81,7 +81,7 @@ class BaseLangChainAgent(ABC):
         self.agent_timeout = config.agent_timeout
         
         # Log which model is being used
-        logger.info(f"🧠 Using model: {self.model_name} with temperature: {temperature}")
+        logger.debug(f"🧠 Using model: {self.model_name} with temperature: {temperature}")
         
         # Initialize LangChain components 
         self.llm = Ollama(model=self.model_name, temperature=temperature)
@@ -96,7 +96,7 @@ class BaseLangChainAgent(ABC):
         self.agent_executor = self._create_langchain_agent_executor()
         
         if self.agent_executor:
-            logger.info(f"✅ Created working AgentExecutor for {self.agent_name} with Google Search tools")
+            logger.debug(f"✅ Created working AgentExecutor for {self.agent_name} with Google Search tools")
         else:
             logger.error(f"❌ Failed to create AgentExecutor for {self.agent_name}")
             raise Exception(f"Could not create working AgentExecutor for {self.agent_name}")
@@ -106,76 +106,65 @@ class BaseLangChainAgent(ABC):
         self.message_queue = asyncio.Queue()
         self.collaboration_context = {}
         
-        logger.info(f"Initialized LangChain agent: {self.agent_name} ({self.agent_id})")
+        logger.debug(f"Initialized LangChain agent: {self.agent_name} ({self.agent_id})")
     
     def _create_langchain_agent_executor(self) -> AgentExecutor:
         """Create the actual LangChain agent with reasoning capabilities."""
         try:
-            # Try using the older, more forgiving agent initialization
-            from langchain.agents import initialize_agent, AgentType
+            from langchain.prompts import PromptTemplate
             
-            agent_executor = initialize_agent(
-                tools=self.tools,
-                llm=self.llm,
-                agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-                verbose=self.verbose,
-                handle_parsing_errors=True,
-                max_iterations=self.max_iterations,  # Use configured max_iterations
-                early_stopping_method="generate",  # Generate final answer when done
-                return_intermediate_steps=True
-            )
-            logger.info(f"✅ Created ZERO_SHOT_REACT agent for {self.agent_name}")
-            return agent_executor
-            
-        except Exception as e:
-            logger.error(f"Failed to create ZERO_SHOT_REACT agent: {e}")
-            # Fallback to custom ReAct prompt optimized for Mistral
-            try:
-                from langchain.prompts import PromptTemplate
-                
-                # Create a more explicit ReAct prompt optimized for Mistral
-                react_prompt = PromptTemplate.from_template("""You are a travel planning assistant. Use tools to find flights and hotels.
+            # Create a more explicit ReAct prompt optimized for Mistral and other Ollama models
+            # This prompt is more forceful about JSON formatting to avoid parsing errors.
+            react_prompt = PromptTemplate.from_template("""
 
-Available tools:
+
+You are a helpful travel planning assistant. Your goal is to use the available tools to answer the user's request.
+
+Here are the tools available:
 {tools}
 
-FOLLOW THIS EXACT FORMAT:
+To use a tool, you MUST use the following format:
 
-Thought: [What I need to do next]
-Action: [tool name from the list above]
-Action Input: {{"parameter": "value"}}
-Observation: [Tool result will appear here - DO NOT write this yourself]
-Thought: [What to do with the result]
-Action: [next tool if needed]
-Action Input: {{"parameter": "value"}}  
-Observation: [Next tool result - DO NOT write this yourself]
-Thought: [Final thinking]
-Final Answer: [Summary of what was found]
+Thought: [Your reasoning for what to do next. You must use a tool to gather information before giving a final answer.]
+Action: [The name of the tool to use, from this list: {tool_names}]
+Action Input: [A valid JSON string with the tool's parameters. IMPORTANT: Use double quotes for all keys and string values.]
+Observation: [The result of the tool will be inserted here by the system. You do not write this.]
 
-RULES:
-- Always start each step with "Thought: "
-- Use "Action: " with exact tool name
-- Use "Action Input: " with valid JSON only
-- Never write "Observation: " - wait for the system
-- End with "Final Answer: "
+Here is an example of a valid thought process:
+
+Thought: I need to find flights from Seattle to Tokyo.
+Action: google_flight_search
+Action Input: {{'origin': 'Seattle', 'destination': 'Tokyo', 'departure_date': '2025-10-01'}}
+Observation: Found 5 flights...
+
+RULES FOR YOUR RESPONSE:
+1.  Always begin your response with a "Thought".
+2.  You MUST use at least one tool to gather information before providing a "Final Answer".
+3.  If you use a tool, you MUST use "Action" and "Action Input" in the correct format.
+4.  The "Action Input" MUST be a valid JSON object. Use double quotes for all keys and string values (e.g., {{'key': 'value'}}).
+5.  Do NOT write "Observation:". The system will provide this.
+6.  After the final observation, provide your "Final Answer".
+
+Begin!
 
 Question: {input}
-{agent_scratchpad}""")
-                
-                agent = create_react_agent(llm=self.llm, tools=self.tools, prompt=react_prompt)
-                logger.info(f"✅ Created custom ReAct agent for {self.agent_name}")
-                
-                return AgentExecutor(
-                    agent=agent,
-                    tools=self.tools,
-                    verbose=self.verbose,
-                    handle_parsing_errors=True,
-                    max_iterations=self.max_iterations,
-                    return_intermediate_steps=True
-                )
-            except Exception as fallback_error:
-                logger.error(f"All agent creation methods failed: {fallback_error}")
-                raise e
+{agent_scratchpad}
+""")
+            
+            agent = create_react_agent(llm=self.llm, tools=self.tools, prompt=react_prompt)
+            logger.debug(f"✅ Created custom ReAct agent for {self.agent_name}")
+            
+            return AgentExecutor(
+                agent=agent,
+                tools=self.tools,
+                verbose=self.verbose,
+                handle_parsing_errors=True,
+                max_iterations=self.max_iterations,
+                return_intermediate_steps=True
+            )
+        except Exception as e:
+            logger.error(f"Failed to create ReAct agent: {e}")
+            raise e
 
     @abstractmethod
     def _setup_tools(self) -> List[BaseTool]:
@@ -196,15 +185,15 @@ Question: {input}
             # Add context to the query if provided
             if context:
                 self.collaboration_context.update(context)
-                enhanced_query = f"{query}\n\nContext: {json.dumps(context, indent=2)}"
+                enhanced_query = f"{query}\n\nContext: {json.dumps(context, indent=2)}" 
             else:
                 enhanced_query = query
             
             # Add final answer guidance to help agent complete
             enhanced_query += "\n\nIMPORTANT: After you use the necessary tools to gather information, you MUST provide a 'Final Answer:' that summarizes what you learned. Do not continue thinking indefinitely."
             
-            logger.info(f"🤖 {self.agent_name} processing query: {query[:200]}...")
-            logger.info(f"📝 Enhanced query length: {len(enhanced_query)} characters")
+            logger.debug(f"🤖 {self.agent_name} processing query: {query[:200]}...")
+            logger.debug(f"📝 Enhanced query length: {len(enhanced_query)} characters")
             
             # Try agent executor first
             if hasattr(self, 'agent_executor') and self.agent_executor:
@@ -575,7 +564,7 @@ Question: {input}
             
             {json.dumps(message.content, indent=2)}
             
-            Please analyze this message and provide an appropriate response based on your expertise."""
+Please analyze this message and provide an appropriate response based on your expertise."""
             
             response = await self.process_query(query)
             

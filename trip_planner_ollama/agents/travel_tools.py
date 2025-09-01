@@ -19,8 +19,11 @@ from langchain.pydantic_v1 import BaseModel as PydanticV1BaseModel, Field as Pyd
 
 from services.google_travel_search import GoogleTravelSearch
 from models import Flight, Hotel
+from config import get_config
 
 logger = logging.getLogger(__name__)
+
+config = get_config()
 
 # Tool Input Models using PydanticV1 for LangChain compatibility
 
@@ -67,7 +70,7 @@ class TravelPlanningTools:
     """Collection of travel planning tools for LangChain agents."""
     
     def __init__(self):
-        self.google_search = GoogleTravelSearch()
+        self.google_search = GoogleTravelSearch(api_key=config.google_search_api_key, search_engine_id=config.google_search_engine_id)
         # Create tools as properties so they don't include self
         self._flight_search_tool = self._create_flight_search_tool()
         self._hotel_search_tool = self._create_hotel_search_tool()
@@ -123,15 +126,17 @@ class TravelPlanningTools:
                     if len(destination) == 1:
                         destination = destination[0]
                     else:
-                        return json.dumps([{
-                            "error": f"Multi-city flight search not supported. Please search one route at a time: {params['origin']} to each destination separately.",
-                            "suggestion": f"Try searching: {params['origin']} to {destination[0]}, then {destination[0]} to {destination[1]}, etc."
-                        }])
+                        return json.dumps([
+                            {
+                                "error": f"Multi-city flight search not supported. Please search one route at a time: {params['origin']} to each destination separately.",
+                                "suggestion": f"Try searching: {params['origin']} to {destination[0]}, then {destination[0]} to {destination[1]}, etc."
+                            }
+                        ])
                 
                 params['destination'] = destination
                     
                 # Simplified async handling - always use asyncio.run in a new thread
-                logger.info(f"🔍 Searching flights: {params['origin']} → {params['destination']} on {params['departure_date']}")
+                logger.debug(f"🔍 Searching flights: {params['origin']} → {params['destination']} on {params['departure_date']}")
                 import concurrent.futures
                 from services.google_travel_search import search_flights_google
                 
@@ -184,13 +189,14 @@ class TravelPlanningTools:
                     for f in flights_from_google
                 ]
                 
-                # Create a simplified summary for the agent
+                # Create a simplified summary for the agent with data source indicators
                 flight_summary = f"Found {len(flights)} flights from {params['origin']} to {params['destination']} on {params['departure_date']}:\n"
                 for i, f in enumerate(flights[:3]):  # Show max 3 flights
-                    flight_summary += f"Flight {i+1}: {f['airline']} - Depart: {f['departure_time']}, Arrive: {f['arrival_time']}, Price: {f['estimated_price']}\n"
+                    data_source = "AI agent" if f.get('data_source') == 'simulation' else "Google Search"
+                    flight_summary += f"Flight {i+1}: {f['airline']} - Depart: {f['departure_time']}, Arrive: {f['arrival_time']}, Price: {f['estimated_price']} [Source: {data_source}]\n"
                 
                 logger.info(f"📤 Returning simplified flight summary: {len(flight_summary)} chars")
-                logger.info(f"🔍 Flight summary preview: {flight_summary[:300]}...")
+                logger.debug(f"🔍 Flight summary preview: {flight_summary[:300]}...")
                 
                 return flight_summary
                 
@@ -279,13 +285,14 @@ class TravelPlanningTools:
                     for h in hotels_from_google
                 ]
                 
-                # Create a simplified summary for the agent
+                # Create a simplified summary for the agent with data source indicators
                 hotel_summary = f"Found {len(hotels)} hotels in {params['city']} for {params['check_in']} to {params['check_out']}:\n"
                 for i, h in enumerate(hotels[:3]):  # Show max 3 hotels
-                    hotel_summary += f"Hotel {i+1}: {h['name']} - {h['price_per_night']}/night, Rating: {h['rating']}\n"
+                    data_source = "AI agent" if h.get('data_source') == 'simulation' else "Google Search"
+                    hotel_summary += f"Hotel {i+1}: {h['name']} - {h['price_per_night']}/night, Rating: {h['rating']} [Source: {data_source}]\n"
                 
                 logger.info(f"📤 Returning hotel summary: {len(hotel_summary)} chars")
-                logger.info(f"🔍 Hotel summary preview: {hotel_summary[:300]}...")
+                logger.debug(f"🔍 Hotel summary preview: {hotel_summary[:300]}...")
                 
                 return hotel_summary
                 
@@ -324,6 +331,7 @@ class TravelPlanningTools:
                 # Build comprehensive search query
                 interest_str = ", ".join(interests)
                 search_query = f"{location} {interest_str} activities attractions things to do"
+                logger.info(f"🎯 Searching activities in {location} for interests: {interest_str}")
                 
                 # Use web search for activity information
                 try:
@@ -345,13 +353,18 @@ class TravelPlanningTools:
                     results = asyncio.run(google_search.search_web(search_query, num_results=8))
                 
                 if not results:
+                    logger.warning(f"⏰ Activity search found no results for {location}")
                     return f"No activities found for {interest_str} in {location}"
+                
+                logger.info(f"✅ Activity search completed, found {len(results)} activities")
                 
                 # Format activity results for agent reasoning
                 activity_summary = f"Found activities in {location} for interests: {interest_str}\n\n"
                 
                 for i, result in enumerate(results[:6], 1):  # Top 6 activities
-                    activity_summary += f"{i}. {result.get('title', 'Unknown Activity')}\n"
+                    # Determine data source - mock activities have example.com URLs, real ones don't
+                    data_source = "AI agent" if 'example.com' in result.get('url', '') else "Google Search"
+                    activity_summary += f"{i}. {result.get('title', 'Unknown Activity')} [Source: {data_source}]\n"
                     snippet = result.get('snippet', '')
                     if snippet:
                         activity_summary += f"   Description: {snippet[:150]}...\n"

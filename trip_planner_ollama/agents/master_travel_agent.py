@@ -27,15 +27,24 @@ class MasterTravelAgent(BaseLangChainAgent):
     - Provide comprehensive travel recommendations
     """
     
-    def __init__(self, model_name: str = None):
+    def __init__(self, model_name: str = None, use_google_search: bool = False):
         from config import get_config
         config = get_config()
         
-        self.travel_tools = TravelPlanningTools()
+        # Choose tools based on mode
+        if use_google_search:
+            from .google_enhanced_tools import GoogleEnhancedTravelTools
+            self.travel_tools = TravelPlanningTools()
+            self.google_tools = GoogleEnhancedTravelTools()
+        else:
+            self.travel_tools = TravelPlanningTools()
+            self.google_tools = None
+        
+        self.use_google_search = use_google_search
         
         super().__init__(
             agent_name="MasterTravelAgent",
-            agent_description="Master AI travel planning agent that coordinates comprehensive trip planning using specialized tools and agents for flights, hotels, activities, and budget optimization.",
+            agent_description="Master AI travel planning agent that coordinates comprehensive trip planning using specialized tools and agents for flights, hotels, activities, and budget optimization with Google Search integration when available.",
             model_name=model_name or config.ollama_model,
             temperature=0.1,  # Very low temperature for better format compliance
             max_iterations=8,  # Reduced iterations for simpler tasks
@@ -43,14 +52,25 @@ class MasterTravelAgent(BaseLangChainAgent):
         )
     
     def _setup_tools(self) -> List[BaseTool]:
-        """Set up all travel planning tools for comprehensive planning."""
-        return [
-            self.travel_tools.flight_search,
-            self.travel_tools.hotel_search, 
-            self.travel_tools.activity_search,
-            self.travel_tools.budget_analysis,
-            self.travel_tools.route_optimization
-        ]
+        """Set up travel planning tools - Google enhanced for comprehensive mode."""
+        if self.use_google_search and self.google_tools:
+            # Use Google enhanced tools for comprehensive mode
+            return [
+                self.google_tools.google_flight_search,
+                self.google_tools.google_hotel_search,
+                self.google_tools.google_activity_search,
+                self.travel_tools.budget_analysis,
+                self.travel_tools.route_optimization
+            ]
+        else:
+            # Use regular tools for simple mode
+            return [
+                self.travel_tools.flight_search,
+                self.travel_tools.hotel_search, 
+                self.travel_tools.activity_search,
+                self.travel_tools.budget_analysis,
+                self.travel_tools.route_optimization
+            ]
     
     async def plan_complete_trip(
         self,
@@ -78,22 +98,91 @@ class MasterTravelAgent(BaseLangChainAgent):
             return_date = (datetime.strptime(start_date, "%Y-%m-%d") + timedelta(days=duration_days)).strftime('%Y-%m-%d')
             planning_query = f"""Plan a round-trip from {origin} to {destinations[0]}.
 
+You MUST follow these steps and use the actual search tools - DO NOT provide fake or placeholder data:
+
 Step 1: Search flights from {origin} to {destinations[0]} on {start_date}
-Step 2: Search hotels in {destinations[0]} from {start_date} to {return_date}  
-Step 3: Search return flights from {destinations[0]} to {origin} on {return_date}
+Step 2: Search return flights from {destinations[0]} to {origin} on {return_date}
+Step 3: Search hotels in {destinations[0]} from {start_date} to {return_date}
+Step 4: For each day in {destinations[0]}, search for one unique activity based on interests: {interests}. You must return exactly one activity per day, each with its own description and category.
+Step 5: Analyze budget allocation for the trip
+Step 6: Compile results into the required JSON format
 
 Budget: ${budget:,.2f} for {duration_days} days
 
-IMPORTANT: Your Final Answer must be in EXACTLY this format:
+CRITICAL: Your response MUST end with EXACTLY this format (no extra text, no markdown, no code blocks):
 
-Final Answer: FLIGHTS:
-- {origin} to {destinations[0]}: [Airline] - $[Price]
-- {destinations[0]} to {origin}: [Airline] - $[Price]
+Final Answer: {{
+  "flights": [
+    {{
+      "from_city": "{origin}",
+      "to_city": "{destinations[0]}",
+      "date": "{start_date}",
+      "airline": "[Actual Airline from Search]",
+      "price": [Actual Price Number],
+      "departure_time": "[Actual Time]",
+      "arrival_time": "[Actual Time]",
+      "duration": "[Actual Duration]",
+      "source": "google_search"
+    }},
+    {{
+      "from_city": "{destinations[0]}",
+      "to_city": "{origin}",
+      "date": "{return_date}",
+      "airline": "[Actual Airline from Search]",
+      "price": [Actual Price Number],
+      "departure_time": "[Actual Time]",
+      "arrival_time": "[Actual Time]", 
+      "duration": "[Actual Duration]",
+      "source": "google_search"
+    }}
+  ],
+  "hotels": [
+    {{
+      "city": "{destinations[0]}",
+      "name": "[Actual Hotel Name from Search]",
+      "price_per_night": [Actual Price Number],
+      "rating": [Actual Rating Number],
+      "amenities": ["[Actual Amenity]", "[Actual Amenity]"],
+      "source": "google_search"
+    }}
+  ],
+  "activities": [
+    // For each day, one activity object:
+    {{
+      "city": "{destinations[0]}",
+      "date": "[YYYY-MM-DD]", // The date for this activity
+      "name": "[Actual Activity Name]",
+      "description": "[Actual Description]",
+      "category": "[Category like 'culture' or 'food']",
+      "source": "google_search"
+    }}
+    // ...repeat for each day
+  ],
+  "budget": {{
+    "total": {budget},
+    "breakdown": {{
+      "flights": [Estimated Flight Costs],
+      "hotels": [Estimated Hotel Costs],
+      "activities": [Estimated Activity Costs],
+      "food": [Estimated Food Costs],
+      "transport": [Estimated Transport Costs]
+    }}
+  }},
+  "summary": "Brief summary of the planned trip"
+}}
 
-HOTELS:  
-- {destinations[0]}: [Hotel Name] - $[Price]/night
+MANDATORY FORMATTING RULES:
+1. Use ACTUAL data from your tool searches - NO placeholders
+2. All prices must be numbers (not strings with $)
+3. Must be valid JSON format
+4. Must include "Final Answer: " prefix EXACTLY
+5. NO markdown code blocks (```json)
+6. NO extra text after the JSON
+7. JSON must be on a single line after "Final Answer: "
+8. You MUST call all required search tools
 
-Use the actual data from your tool searches. Include "Final Answer: " prefix for LangChain parsing."""
+EXAMPLE OF CORRECT FORMAT:
+Final Answer: {{"flights": [{{"from_city": "Seattle", "to_city": "Tokyo", "airline": "ANA", "price": 800}}], "hotels": [], "activities": [], "summary": "Trip planned"}}"""
         else:
             # Multi-city trip - simple step-by-step approach
             from datetime import datetime, timedelta
@@ -104,41 +193,109 @@ Use the actual data from your tool searches. Include "Final Answer: " prefix for
             # Create simple, clear steps
             planning_query = f"""Plan a multi-city trip: {' → '.join(route)}
 
-Search flights and hotels for each segment:
+Search flights, hotels, and activities for each segment:
 
 """
             current_date = start_dt
             step_num = 1
             
-            # Add each flight and hotel step
+            # Add each flight, hotel, and activity step
             for i in range(len(route) - 1):
                 flight_date = current_date.strftime('%Y-%m-%d')
                 planning_query += f"Step {step_num}: Search flights from {route[i]} to {route[i+1]} on {flight_date}\n"
                 step_num += 1
                 
-                # Add hotel step if this is a destination (not return leg)
+                # Add hotel and activity step if this is a destination (not return leg)
                 if i < len(destinations):
                     hotel_end = (current_date + timedelta(days=days_per_city)).strftime('%Y-%m-%d')
                     planning_query += f"Step {step_num}: Search hotels in {route[i+1]} from {flight_date} to {hotel_end}\n"
                     step_num += 1
+                    planning_query += f"Step {step_num}: Search for activities in {route[i+1]} based on interests: {interests}\n"
+                    step_num += 1
                     current_date += timedelta(days=days_per_city)
             
+            planning_query += f"Step {step_num}: Analyze budget allocation for the trip\n"
+            step_num += 1
+            planning_query += f"Step {step_num}: Compile results into required JSON format\n"
             planning_query += f"\nBudget: ${budget:,.2f} for {duration_days} days\n\n"
-            planning_query += """IMPORTANT: Your Final Answer must be in EXACTLY this format:
+            
+            # Build JSON template for multi-city
+            flights_json = []
+            hotels_json = []
+            activities_json = []
+            
+            for i in range(len(route) - 1):
+                flight_date = (start_dt + timedelta(days=i*days_per_city)).strftime('%Y-%m-%d')
+                flights_json.append(f'''{{
+      "from_city": "{route[i]}",
+      "to_city": "{route[i+1]}",
+      "date": "{flight_date}",
+      "airline": "[Actual Airline from Search]",
+      "price": [Actual Price Number],
+      "departure_time": "[Actual Time]",
+      "arrival_time": "[Actual Time]",
+      "duration": "[Actual Duration]",
+      "source": "google_search"
+    }}''')
+                
+                if i < len(destinations):
+                    hotels_json.append(f'''{{
+      "city": "{route[i+1]}",
+      "name": "[Actual Hotel Name from Search]",
+      "price_per_night": [Actual Price Number],
+      "rating": [Actual Rating Number],
+      "amenities": ["[Actual Amenity]", "[Actual Amenity]"],
+      "source": "google_search"
+    }}''')
+                    
+                    activities_json.append(f'''{{
+      "city": "{route[i+1]}",
+      "name": "[Actual Activity Name]",
+      "description": "[Actual Description]",
+      "category": "[Category]",
+      "source": "google_search"
+    }}''')
+            
+            planning_query += f"""CRITICAL: Your response MUST end with EXACTLY this format (no extra text, no markdown, no code blocks):
 
-Final Answer: FLIGHTS:
-- [Origin] to [Dest1]: [Airline] - $[Price]
-- [Dest1] to [Dest2]: [Airline] - $[Price]  
-- [Dest2] to [Origin]: [Airline] - $[Price]
+Final Answer: {{
+  "flights": [
+    {','.join(flights_json)}
+  ],
+  "hotels": [
+    {','.join(hotels_json)}
+  ],
+  "activities": [
+    {','.join(activities_json)}
+  ],
+  "budget": {{
+    "total": {budget},
+    "breakdown": {{
+      "flights": [Estimated Flight Costs],
+      "hotels": [Estimated Hotel Costs],
+      "activities": [Estimated Activity Costs],
+      "food": [Estimated Food Costs],
+      "transport": [Estimated Transport Costs]
+    }}
+  }},
+  "summary": "Brief summary of the planned trip"
+}}
 
-HOTELS:
-- [Dest1]: [Hotel Name] - $[Price]/night
-- [Dest2]: [Hotel Name] - $[Price]/night
+MANDATORY FORMATTING RULES:
+1. Use ACTUAL data from your tool searches - NO placeholders
+2. All prices must be numbers (not strings with $)
+3. Must be valid JSON format
+4. Must include "Final Answer: " prefix EXACTLY
+5. NO markdown code blocks (```json)
+6. NO extra text after the JSON
+7. JSON must be on a single line after "Final Answer: "
+8. You MUST call all required search tools
 
-Use the actual data from your tool searches. Include "Final Answer: " prefix for LangChain parsing."""
+EXAMPLE OF CORRECT FORMAT:
+Final Answer: {{"flights": [{{"from_city": "Seattle", "to_city": "Tokyo", "airline": "ANA", "price": 800}}], "hotels": [], "activities": [], "summary": "Trip planned"}}"""
         
         # Use pure LLM agent reasoning - no fallback needed
-        logger.info("🤖 Starting LLM agent reasoning process...")
+        logger.debug("🤖 Starting LLM agent reasoning process...")
         result = await self.process_query(planning_query)
         
         logger.info("🎯 Agent completed successfully!")

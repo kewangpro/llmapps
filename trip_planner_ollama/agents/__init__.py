@@ -19,6 +19,7 @@ TRUE LangChain Agents:
 # TRUE LangChain Agent Framework
 from .langchain_base_agent import BaseLangChainAgent, AgentMessage, AgentTask
 from .travel_tools import TravelPlanningTools
+from .google_enhanced_tools import GoogleEnhancedTravelTools
 from .master_travel_agent import MasterTravelAgent
 from .flight_planning_agent import FlightPlanningAgent
 from .accommodation_agent import AccommodationAgent
@@ -43,6 +44,7 @@ __all__ = [
     'ActivityAgent', 
     'BudgetPlanningAgent',
     'TravelPlanningTools',
+    'GoogleEnhancedTravelTools',
     
     # Multi-Agent System
     'LangChainMultiAgentSystem',

@@ -9,12 +9,14 @@ agents/
 ├── __init__.py                      # Package imports and agent creation
 ├── langchain_base_agent.py          # ReAct framework base class
 ├── travel_tools.py                  # 5 specialized travel tools
+├── google_enhanced_tools.py         # Google Search enhanced travel tools
 ├── master_travel_agent.py           # Main LLM reasoning agent
 ├── flight_planning_agent.py         # Specialized flight search agent
 ├── accommodation_agent.py           # Hotel search specialist
 ├── activity_agent.py                # Activity recommendation agent
 ├── budget_planning_agent.py         # Budget analysis agent
-└── langchain_multi_agent_system.py # Dual-mode system coordination
+├── langchain_multi_agent_system.py # Dual-mode system coordination
+└── README.md                        # This documentation file
 ```
 
 ## 🎯 Agent Framework Features
@@ -44,6 +46,7 @@ agents/
 ### **Core Framework**
 - **`langchain_base_agent.py`**: ReAct framework base with custom prompt optimization for Mistral
 - **`travel_tools.py`**: 5 specialized travel tools with Google Search integration
+- **`google_enhanced_tools.py`**: Enhanced travel tools with real-time Google Search API integration
 - **`master_travel_agent.py`**: Single comprehensive LLM agent with autonomous reasoning
 - **`langchain_multi_agent_system.py`**: Dual-mode system coordination and API integration
 
@@ -95,11 +98,27 @@ The master agent has access to 5 specialized tools implemented in `travel_tools.
 4. **`budget_analysis`**: Financial planning and cost optimization
 5. **`route_optimization`**: Multi-city routing and travel logistics
 
+### **Google Enhanced Tools** (`google_enhanced_tools.py`)
+Advanced travel tools with real-time Google Search API integration:
+
+- **Enhanced Flight Search**: Real-time flight pricing and availability through Google Travel API
+- **Enhanced Hotel Search**: Live hotel inventory and pricing with Google Search integration
+- **Enhanced Activity Search**: Current local attractions and experiences from Google Search
+- **Budget Analysis Enhanced**: Real-time cost data for accurate budget planning
+- **Route Optimization Enhanced**: Live traffic and routing data from Google APIs
+
 ### **Tool Capabilities**
 - **Google Search Integration**: Real-time data when API credentials available
 - **Intelligent Fallbacks**: Knowledge-based responses when APIs unavailable
 - **Human-Readable Output**: Clear summaries for LLM consumption and reasoning
 - **Context Awareness**: Tools understand user preferences and constraints
+- **Real-Time Data**: Live pricing, availability, and travel information when Google APIs are configured
+
+### **Configuration Requirements**
+- **Basic Tools**: Work out-of-the-box with knowledge-based responses
+- **Google Enhanced Tools**: Require Google Search API credentials configured in environment variables
+- **Fallback Behavior**: Enhanced tools automatically fall back to knowledge-based responses when APIs are unavailable
+- **API Integration**: Uses `GoogleTravelSearch` service for real-time data when properly configured
 
 ## 🔄 System Architecture
 
@@ -187,13 +206,21 @@ comprehensive_result = await agent_system.plan_trip_with_reasoning(
 ### **Direct Tool Access**
 ```python
 from agents.travel_tools import TravelPlanningTools
+from agents.google_enhanced_tools import GoogleEnhancedTravelTools
 
-# Access tools directly for testing
+# Access basic tools directly for testing
 tools = TravelPlanningTools()
 
 # Individual tool calls
 flight_results = tools.flight_search.func('{"origin": "Seattle", "destination": "Tokyo", "departure_date": "2025-09-01"}')
 hotel_results = tools.hotel_search.func('{"city": "Tokyo", "check_in": "2025-09-01", "check_out": "2025-09-06"}')
+
+# Access Google Enhanced tools for real-time data (when API credentials are configured)
+enhanced_tools = GoogleEnhancedTravelTools()
+
+# Enhanced tool calls with real-time data
+live_flight_results = enhanced_tools.enhanced_flight_search.func('{"origin": "Seattle", "destination": "Tokyo", "departure_date": "2025-09-01"}')
+live_hotel_results = enhanced_tools.enhanced_hotel_search.func('{"city": "Tokyo", "check_in": "2025-09-01", "check_out": "2025-09-06"}')
 ```
 
 ## 🧪 Testing & Validation
