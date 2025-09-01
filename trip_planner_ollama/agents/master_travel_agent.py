@@ -47,7 +47,7 @@ class MasterTravelAgent(BaseLangChainAgent):
             agent_description="Master AI travel planning agent that coordinates comprehensive trip planning using specialized tools and agents for flights, hotels, activities, and budget optimization with Google Search integration when available.",
             model_name=model_name or config.ollama_model,
             temperature=0.1,  # Very low temperature for better format compliance
-            max_iterations=8,  # Reduced iterations for simpler tasks
+            max_iterations=16,  # Further increased iterations for complex JSON synthesis
             verbose=True
         )
     
@@ -100,14 +100,16 @@ class MasterTravelAgent(BaseLangChainAgent):
 
 You MUST follow these steps and use the actual search tools - DO NOT provide fake or placeholder data:
 
-Step 1: Search flights from {origin} to {destinations[0]} on {start_date}
-Step 2: Search return flights from {destinations[0]} to {origin} on {return_date}
-Step 3: Search hotels in {destinations[0]} from {start_date} to {return_date}
-Step 4: For each day in {destinations[0]}, search for one unique activity based on interests: {interests}. You must return exactly one activity per day, each with its own description and category.
+Step 1: Search flights using: {{'origin': '{origin}', 'destination': '{destinations[0]}', 'departure_date': '{start_date}'}}
+Step 2: Search return flights using: {{'origin': '{destinations[0]}', 'destination': '{origin}', 'departure_date': '{return_date}'}}
+Step 3: Search hotels using: {{'city': '{destinations[0]}', 'check_in': '{start_date}', 'check_out': '{return_date}'}}
+Step 4: Search activities using: {{'location': '{destinations[0]}', 'interests': {interests}}} and return {duration_days} different activities (one for each day)
 Step 5: Analyze budget allocation for the trip
-Step 6: Compile results into the required JSON format
+Step 6: Compile results into the required JSON format using data from your tool searches
 
 Budget: ${budget:,.2f} for {duration_days} days
+
+After calling all tools, immediately generate the Final Answer JSON using your search results.
 
 CRITICAL: Your response MUST end with EXACTLY this format (no extra text, no markdown, no code blocks):
 
@@ -147,34 +149,45 @@ Final Answer: {{
     }}
   ],
   "activities": [
-    // For each day, one activity object:
+    // YOU MUST include {duration_days} activity objects - one for each day:
     {{
       "city": "{destinations[0]}",
-      "date": "[YYYY-MM-DD]", // The date for this activity
-      "name": "[Actual Activity Name]",
-      "description": "[Actual Description]",
+      "date": "{start_date}", // Day 1 date
+      "name": "[Actual Activity Name Day 1]",
+      "description": "[Actual Description Day 1]",
+      "category": "[Category like 'culture' or 'food']",
+      "source": "google_search"
+    }},
+    {{
+      "city": "{destinations[0]}",
+      "date": "[YYYY-MM-DD]", // Day 2 date  
+      "name": "[Actual Activity Name Day 2]",
+      "description": "[Actual Description Day 2]",
       "category": "[Category like 'culture' or 'food']",
       "source": "google_search"
     }}
-    // ...repeat for each day
+    // ...continue for all {duration_days} days
   ],
   "budget": {{
     "total": {budget},
     "breakdown": {{
-      "flights": [Estimated Flight Costs],
-      "hotels": [Estimated Hotel Costs],
-      "activities": [Estimated Activity Costs],
-      "food": [Estimated Food Costs],
-      "transport": [Estimated Transport Costs]
+      "flights": 1500.0,
+      "hotels": 800.0,
+      "activities": 400.0,
+      "food": 250.0,
+      "transport": 50.0
     }}
   }},
   "summary": "Brief summary of the planned trip"
 }}
 
 MANDATORY FORMATTING RULES:
-1. Use ACTUAL data from your tool searches - NO placeholders
-2. All prices must be numbers (not strings with $)
-3. Must be valid JSON format
+1. Use ACTUAL data from your tool searches - NO placeholders  
+2. All tool inputs must use dict format like {{'key': 'value'}}, NOT URL strings
+3. All prices must be numbers (not strings with $)
+4. Budget breakdown values must be numbers like 1500.0, NOT arrays like [1500.0]
+5. Budget breakdown must include ALL fields: flights, hotels, activities, food, transport  
+6. Must be valid JSON format
 4. Must include "Final Answer: " prefix EXACTLY
 5. NO markdown code blocks (```json)
 6. NO extra text after the JSON
@@ -202,22 +215,23 @@ Search flights, hotels, and activities for each segment:
             # Add each flight, hotel, and activity step
             for i in range(len(route) - 1):
                 flight_date = current_date.strftime('%Y-%m-%d')
-                planning_query += f"Step {step_num}: Search flights from {route[i]} to {route[i+1]} on {flight_date}\n"
+                planning_query += f"Step {step_num}: Search flights using: {{'origin': '{route[i]}', 'destination': '{route[i+1]}', 'departure_date': '{flight_date}'}}\n"
                 step_num += 1
                 
                 # Add hotel and activity step if this is a destination (not return leg)
                 if i < len(destinations):
                     hotel_end = (current_date + timedelta(days=days_per_city)).strftime('%Y-%m-%d')
-                    planning_query += f"Step {step_num}: Search hotels in {route[i+1]} from {flight_date} to {hotel_end}\n"
+                    planning_query += f"Step {step_num}: Search hotels using: {{'city': '{route[i+1]}', 'check_in': '{flight_date}', 'check_out': '{hotel_end}'}}\n"
                     step_num += 1
-                    planning_query += f"Step {step_num}: Search for activities in {route[i+1]} based on interests: {interests}\n"
+                    planning_query += f"Step {step_num}: Search activities using: {{'location': '{route[i+1]}', 'interests': {interests}}} and return {days_per_city} different activities for this city\n"
                     step_num += 1
                     current_date += timedelta(days=days_per_city)
             
             planning_query += f"Step {step_num}: Analyze budget allocation for the trip\n"
             step_num += 1
-            planning_query += f"Step {step_num}: Compile results into required JSON format\n"
+            planning_query += f"Step {step_num}: Compile results into required JSON format using data from your tool searches\n"
             planning_query += f"\nBudget: ${budget:,.2f} for {duration_days} days\n\n"
+            planning_query += f"After calling all tools, immediately generate the Final Answer JSON using your search results.\n\n"
             
             # Build JSON template for multi-city
             flights_json = []
@@ -248,11 +262,13 @@ Search flights, hotels, and activities for each segment:
       "source": "google_search"
     }}''')
                     
-                    activities_json.append(f'''{{
+                    # Generate multiple activities per city (one for each day)
+                    for day in range(days_per_city):
+                        activities_json.append(f'''{{
       "city": "{route[i+1]}",
-      "name": "[Actual Activity Name]",
-      "description": "[Actual Description]",
-      "category": "[Category]",
+      "name": "[Actual Activity Name {day+1}]",
+      "description": "[Actual Description {day+1}]",
+      "category": "[Category {day+1}]",
       "source": "google_search"
     }}''')
             
@@ -271,20 +287,23 @@ Final Answer: {{
   "budget": {{
     "total": {budget},
     "breakdown": {{
-      "flights": [Estimated Flight Costs],
-      "hotels": [Estimated Hotel Costs],
-      "activities": [Estimated Activity Costs],
-      "food": [Estimated Food Costs],
-      "transport": [Estimated Transport Costs]
+      "flights": 1500.0,
+      "hotels": 800.0,
+      "activities": 400.0,
+      "food": 250.0,
+      "transport": 50.0
     }}
   }},
   "summary": "Brief summary of the planned trip"
 }}
 
 MANDATORY FORMATTING RULES:
-1. Use ACTUAL data from your tool searches - NO placeholders
-2. All prices must be numbers (not strings with $)
-3. Must be valid JSON format
+1. Use ACTUAL data from your tool searches - NO placeholders  
+2. All tool inputs must use dict format like {{'key': 'value'}}, NOT URL strings
+3. All prices must be numbers (not strings with $)
+4. Budget breakdown values must be numbers like 1500.0, NOT arrays like [1500.0]
+5. Budget breakdown must include ALL fields: flights, hotels, activities, food, transport  
+6. Must be valid JSON format
 4. Must include "Final Answer: " prefix EXACTLY
 5. NO markdown code blocks (```json)
 6. NO extra text after the JSON

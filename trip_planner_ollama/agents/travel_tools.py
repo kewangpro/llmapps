@@ -108,16 +108,40 @@ class TravelPlanningTools:
             Input should be a JSON string with origin, destination, and departure_date.
             """
             try:
-                # Parse the JSON input - handle LangChain's extra quoting
-                if isinstance(query, str) and query.strip():
+                logger.debug(f"🔍 Flight search input: {repr(query)}, type: {type(query)}")
+                
+                # Handle both dict objects and JSON strings from LangChain
+                if isinstance(query, dict):
+                    # Direct dict input from agent
+                    params = query
+                    logger.debug(f"✅ Using dict input directly: {params}")
+                elif isinstance(query, str) and query.strip():
                     import json
-                    # Remove extra quotes if present (LangChain may add them)
+                    import ast
                     clean_query = query.strip()
-                    if (clean_query.startswith("'" ) and clean_query.endswith("'" )) or (clean_query.startswith('"') and clean_query.endswith('"')):
-                        clean_query = clean_query[1:-1]
-                    params = json.loads(clean_query)
+                    
+                    # Try to handle Python dict string representation first
+                    if clean_query.startswith('{') and clean_query.endswith('}'):
+                        try:
+                            # Try to safely evaluate Python dict string
+                            params = ast.literal_eval(clean_query)
+                            logger.debug(f"✅ Parsed Python dict string: {params}")
+                        except (ValueError, SyntaxError):
+                            logger.debug(f"❌ Failed to parse as Python dict, trying JSON...")
+                            # Fall back to JSON parsing
+                            # Remove extra quotes if present (LangChain may add them)
+                            if (clean_query.startswith("'" ) and clean_query.endswith("'" )) or (clean_query.startswith('"') and clean_query.endswith('"')):
+                                clean_query = clean_query[1:-1]
+                            params = json.loads(clean_query)
+                            logger.debug(f"✅ Parsed as JSON: {params}")
+                    else:
+                        # Remove extra quotes if present (LangChain may add them)
+                        if (clean_query.startswith("'" ) and clean_query.endswith("'" )) or (clean_query.startswith('"') and clean_query.endswith('"')):
+                            clean_query = clean_query[1:-1]
+                        params = json.loads(clean_query)
+                        logger.debug(f"✅ Parsed as JSON: {params}")
                 else:
-                    # Handle empty or non-string input
+                    # Handle empty or invalid input
                     return json.dumps([{"error": f"Invalid input received: {repr(query)}, type: {type(query)}"}])
                 
                 # Handle multi-city destination input (agent confusion)
@@ -222,16 +246,40 @@ class TravelPlanningTools:
             Input should be a JSON string with city, check_in, and check_out.
             """
             try:
-                # Parse the JSON input - handle LangChain's extra quoting
-                if isinstance(query, str) and query.strip():
+                logger.debug(f"🏨 Hotel search input: {repr(query)}, type: {type(query)}")
+                
+                # Handle both dict objects and JSON strings from LangChain
+                if isinstance(query, dict):
+                    # Direct dict input from agent
+                    params = query
+                    logger.debug(f"✅ Using dict input directly: {params}")
+                elif isinstance(query, str) and query.strip():
                     import json
-                    # Remove extra quotes if present (LangChain may add them)
+                    import ast
                     clean_query = query.strip()
-                    if (clean_query.startswith("'" ) and clean_query.endswith("'" )) or (clean_query.startswith('"') and clean_query.endswith('"')):
-                        clean_query = clean_query[1:-1]
-                    params = json.loads(clean_query)
+                    
+                    # Try to handle Python dict string representation first
+                    if clean_query.startswith('{') and clean_query.endswith('}'):
+                        try:
+                            # Try to safely evaluate Python dict string
+                            params = ast.literal_eval(clean_query)
+                            logger.debug(f"✅ Parsed Python dict string: {params}")
+                        except (ValueError, SyntaxError):
+                            logger.debug(f"❌ Failed to parse as Python dict, trying JSON...")
+                            # Fall back to JSON parsing
+                            # Remove extra quotes if present (LangChain may add them)
+                            if (clean_query.startswith("'" ) and clean_query.endswith("'" )) or (clean_query.startswith('"') and clean_query.endswith('"')):
+                                clean_query = clean_query[1:-1]
+                            params = json.loads(clean_query)
+                            logger.debug(f"✅ Parsed as JSON: {params}")
+                    else:
+                        # Remove extra quotes if present (LangChain may add them)
+                        if (clean_query.startswith("'" ) and clean_query.endswith("'" )) or (clean_query.startswith('"') and clean_query.endswith('"')):
+                            clean_query = clean_query[1:-1]
+                        params = json.loads(clean_query)
+                        logger.debug(f"✅ Parsed as JSON: {params}")
                 else:
-                    # Handle empty or non-string input
+                    # Handle empty or invalid input
                     return json.dumps([{"error": f"Invalid input received: {repr(query)}, type: {type(query)}"}])
                     
                 # Simplified async handling - always use asyncio.run in a new thread
@@ -308,21 +356,46 @@ class TravelPlanningTools:
         def activity_search(query: str) -> str:
             """
             Search for activities, attractions, and experiences in a location.
+            Input should be a JSON string with location/city and interests.
             
             Finds activities matching user interests with practical details like
             operating hours, costs, and booking requirements.
             """
             try:
-                # Parse the JSON input - handle LangChain's extra quoting
-                if isinstance(query, str) and query.strip():
+                logger.debug(f"🎯 Activity search input: {repr(query)}, type: {type(query)}")
+                
+                # Handle both dict objects and JSON strings from LangChain
+                if isinstance(query, dict):
+                    # Direct dict input from agent
+                    params = query
+                    logger.debug(f"✅ Using dict input directly: {params}")
+                elif isinstance(query, str) and query.strip():
                     import json
-                    # Remove extra quotes if present (LangChain may add them)
+                    import ast
                     clean_query = query.strip()
-                    if (clean_query.startswith("'" ) and clean_query.endswith("'" )) or (clean_query.startswith('"') and clean_query.endswith('"')):
-                        clean_query = clean_query[1:-1]
-                    params = json.loads(clean_query)
+                    
+                    # Try to handle Python dict string representation first
+                    if clean_query.startswith('{') and clean_query.endswith('}'):
+                        try:
+                            # Try to safely evaluate Python dict string
+                            params = ast.literal_eval(clean_query)
+                            logger.debug(f"✅ Parsed Python dict string: {params}")
+                        except (ValueError, SyntaxError):
+                            logger.debug(f"❌ Failed to parse as Python dict, trying JSON...")
+                            # Fall back to JSON parsing
+                            # Remove extra quotes if present (LangChain may add them)
+                            if (clean_query.startswith("'" ) and clean_query.endswith("'" )) or (clean_query.startswith('"') and clean_query.endswith('"')):
+                                clean_query = clean_query[1:-1]
+                            params = json.loads(clean_query)
+                            logger.debug(f"✅ Parsed as JSON: {params}")
+                    else:
+                        # Remove extra quotes if present (LangChain may add them)
+                        if (clean_query.startswith("'" ) and clean_query.endswith("'" )) or (clean_query.startswith('"') and clean_query.endswith('"')):
+                            clean_query = clean_query[1:-1]
+                        params = json.loads(clean_query)
+                        logger.debug(f"✅ Parsed as JSON: {params}")
                 else:
-                    # Handle empty or non-string input
+                    # Handle empty or invalid input
                     return json.dumps([{"error": f"Invalid input received: {repr(query)}, type: {type(query)}"}])
                 
                 location = params.get("location", params.get("city", "Unknown Location"))
@@ -394,8 +467,12 @@ class TravelPlanningTools:
                 logger.info(f"📊 Budget analysis called with query: {query}")
                 logger.info(f"📊 Query type: {type(query)}")
                 
-                # Handle both JSON and plain text input
-                if isinstance(query, str) and query.strip():
+                # Handle dict objects, JSON strings, and plain text input
+                if isinstance(query, dict):
+                    # Direct dict input from agent
+                    params = query
+                    logger.info(f"📊 Received dict params: {params}")
+                elif isinstance(query, str) and query.strip():
                     import json
                     clean_query = query.strip()
                     
@@ -513,20 +590,25 @@ class TravelPlanningTools:
             try:
                 logger.info(f"🗺️ Route optimization called with: {query}")
                 
-                # Parse the JSON input  
-                if isinstance(query, str):
+                # Handle both dict objects and JSON strings from LangChain
+                if isinstance(query, dict):
+                    # Direct dict input from agent
+                    params = query
+                elif isinstance(query, str) and query.strip():
                     import json
-                    if not query or query.strip() == '':
-                        logger.error("❌ Empty query string in route_optimization")
-                        return "Route optimization failed: Empty input provided"
+                    clean_query = query.strip()
+                    # Remove extra quotes if present (LangChain may add them)
+                    if (clean_query.startswith("'" ) and clean_query.endswith("'" )) or (clean_query.startswith('"') and clean_query.endswith('"')):
+                        clean_query = clean_query[1:-1]
                     try:
-                        params = json.loads(query)
+                        params = json.loads(clean_query)
                     except json.JSONDecodeError as e:
                         logger.error(f"❌ JSON decode error in route_optimization: {e}")
                         logger.error(f"❌ Query was: '{query}'")
                         return f"Route optimization failed: Invalid JSON format - {str(e)}"
                 else:
-                    params = query
+                    logger.error("❌ Empty or invalid query in route_optimization")
+                    return "Route optimization failed: Empty input provided"
                 
                 # Handle different input formats
                 destinations = params.get("destinations", [])
