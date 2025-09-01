@@ -13,13 +13,13 @@ Smart multi-city trip planning powered by pure LLM reasoning. Plan complete itin
 ## 🏗️ How It Works
 
 ```
-User Request → FastAPI Server → LLM Agent → Ollama (Mistral) → Complete Trip Plan
+User Request → FastAPI Server → LLM Agent → Ollama (Gemma3) → Complete Trip Plan
 ```
 
 **Stack:**
 - **Frontend**: Flutter Web App + CLI Tool
 - **Backend**: FastAPI with LangChain ReAct agent
-- **AI**: Master travel agent with dual collaboration modes using Ollama/Mistral
+- **AI**: Master travel agent with dual collaboration modes using Ollama/Gemma3
 - **Data**: Google Search (optional) + intelligent fallbacks
 
 ## 🚀 Quick Start
@@ -31,7 +31,7 @@ pip install -r requirements.txt
 
 # Start Ollama and pull model
 ollama serve
-ollama pull mistral:latest
+ollama pull gemma3:latest
 
 # Start API server
 python main.py
@@ -175,4 +175,4 @@ For enhanced real-time data, add Google Search credentials to `.env`:
 
 ---
 
-**Built with LangChain ReAct + Ollama + Flutter**
+**Built with LangChain ReAct + Ollama (Gemma3) + Flutter**
