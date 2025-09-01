@@ -80,6 +80,7 @@ class TripRequest {
   final int durationDays;
   final String budget;
   final String preferences;
+  final String collaborationMode;
 
   TripRequest({
     required this.origin,
@@ -88,6 +89,7 @@ class TripRequest {
     required this.durationDays,
     this.budget = 'medium',
     this.preferences = '',
+    this.collaborationMode = 'simple',
   });
 
   Map<String, dynamic> toJson() {
@@ -98,6 +100,7 @@ class TripRequest {
       'duration_days': durationDays,
       'budget': budget,
       'preferences': preferences,
+      'collaboration_mode': collaborationMode,
     };
   }
 }
