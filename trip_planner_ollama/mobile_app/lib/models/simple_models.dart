@@ -217,7 +217,7 @@ class TripPlan {
       
       // Add the best hotel for the destination city
       var cityHotels = hotels.where((hotel) => 
-        hotel.city == flight.to && !processedHotels.contains(hotel.name)
+        hotel.city.toLowerCase() == flight.to.toLowerCase() && !processedHotels.contains(hotel.name)
       ).toList();
       
       if (cityHotels.isNotEmpty) {
@@ -261,7 +261,7 @@ class TripPlan {
       
       List<DayPlan> cityDays = sortedDays
           .where((dayPlan) => 
-            dayPlan.city == flight.to && 
+            dayPlan.city.toLowerCase() == flight.to.toLowerCase() && 
             !processedDates.contains(dayPlan.date) &&
             (nextDepartureDate == null || dayPlan.date.compareTo(nextDepartureDate) < 0)
           )
