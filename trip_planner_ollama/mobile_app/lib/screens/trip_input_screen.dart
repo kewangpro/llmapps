@@ -20,6 +20,7 @@ class _TripInputScreenState extends State<TripInputScreen> {
   
   String _selectedBudget = 'medium';
   bool _isLoading = false;
+  bool _isComprehensiveMode = false;
   
   final List<String> _budgetOptions = ['low', 'medium', 'high'];
 
@@ -115,6 +116,92 @@ class _TripInputScreenState extends State<TripInputScreen> {
                   maxLines: 3,
                   isRequired: false,
                 ),
+                const SizedBox(height: 20),
+                
+                // Comprehensive Mode Toggle
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[300]!),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            _isComprehensiveMode ? Icons.psychology : Icons.speed,
+                            color: _isComprehensiveMode ? Colors.purple : Colors.blue,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _isComprehensiveMode ? 'Comprehensive Mode' : 'Simple Mode',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  _isComprehensiveMode 
+                                    ? '5 specialized agents with Google Search (3+ minutes)'
+                                    : 'Single master agent, fast results (30-60 seconds)',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch(
+                            value: _isComprehensiveMode,
+                            onChanged: (value) {
+                              setState(() {
+                                _isComprehensiveMode = value;
+                              });
+                            },
+                            activeTrackColor: Colors.purple[300],
+                            activeThumbColor: Colors.purple,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _isComprehensiveMode ? Colors.purple[50] : Colors.blue[50],
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              size: 16,
+                              color: _isComprehensiveMode ? Colors.purple[700] : Colors.blue[700],
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _isComprehensiveMode
+                                  ? 'Detailed analysis with budget planning, specialized flight/hotel agents, and activity recommendations'
+                                  : 'Quick trip planning with efficient single-agent processing',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: _isComprehensiveMode ? Colors.purple[700] : Colors.blue[700],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 32),
                 
                 ElevatedButton(
@@ -128,10 +215,10 @@ class _TripInputScreenState extends State<TripInputScreen> {
                     ),
                   ),
                   child: _isLoading
-                      ? const Row(
+                      ? Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            SizedBox(
+                            const SizedBox(
                               width: 20,
                               height: 20,
                               child: CircularProgressIndicator(
@@ -139,13 +226,17 @@ class _TripInputScreenState extends State<TripInputScreen> {
                                 strokeWidth: 2,
                               ),
                             ),
-                            SizedBox(width: 12),
-                            Text('Planning Trip...'),
+                            const SizedBox(width: 12),
+                            Text(_isComprehensiveMode 
+                                ? 'Planning with 5 agents...' 
+                                : 'Planning Trip...'),
                           ],
                         )
-                      : const Text(
-                          'Plan My Trip',
-                          style: TextStyle(fontSize: 18),
+                      : Text(
+                          _isComprehensiveMode 
+                              ? 'Plan with Comprehensive Mode' 
+                              : 'Plan My Trip',
+                          style: const TextStyle(fontSize: 18),
                         ),
                 ),
               ],
@@ -214,6 +305,7 @@ class _TripInputScreenState extends State<TripInputScreen> {
         durationDays: int.parse(_durationController.text.trim()),
         budget: _selectedBudget,
         preferences: _preferencesController.text.trim(),
+        collaborationMode: _isComprehensiveMode ? 'comprehensive' : 'simple',
       );
 
       final tripPlan = await ApiService.planTrip(request);

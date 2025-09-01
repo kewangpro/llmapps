@@ -214,11 +214,32 @@ class TripResultScreen extends StatelessWidget {
               ],
             ),
             
-            // Confidence indicator
-            if (flight.confidence != null) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
+            // Data source and confidence indicators
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                // Data source indicator
+                if (flight.dataSource != null) ...[
+                  Icon(
+                    flight.dataSource!.contains('Google') ? Icons.search : Icons.psychology,
+                    size: 16,
+                    color: flight.dataSource!.contains('Google') ? Colors.blue : Colors.purple,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    flight.dataSource!.contains('Google') ? 'Google Search' : 'AI Agent',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: flight.dataSource!.contains('Google') ? Colors.blue[700] : Colors.purple[700],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  if (flight.confidence != null) ...[
+                    const SizedBox(width: 16),
+                  ],
+                ],
+                // Confidence indicator
+                if (flight.confidence != null) ...[
                   const Icon(Icons.verified, size: 16, color: Colors.grey),
                   const SizedBox(width: 6),
                   Text(
@@ -229,8 +250,8 @@ class TripResultScreen extends StatelessWidget {
                     ),
                   ),
                 ],
-              ),
-            ],
+              ],
+            ),
           ],
         ),
       ),
@@ -588,11 +609,32 @@ class TripResultScreen extends StatelessWidget {
               ),
             ],
             
-            // Confidence indicator
-            if (hotel.confidence != null) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
+            // Data source and confidence indicators
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                // Data source indicator
+                if (hotel.dataSource != null) ...[
+                  Icon(
+                    hotel.dataSource!.contains('Google') ? Icons.search : Icons.psychology,
+                    size: 16,
+                    color: hotel.dataSource!.contains('Google') ? Colors.blue : Colors.purple,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    hotel.dataSource!.contains('Google') ? 'Google Search' : 'AI Agent',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: hotel.dataSource!.contains('Google') ? Colors.blue[700] : Colors.purple[700],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  if (hotel.confidence != null) ...[
+                    const SizedBox(width: 16),
+                  ],
+                ],
+                // Confidence indicator
+                if (hotel.confidence != null) ...[
                   const Icon(Icons.verified, size: 16, color: Colors.grey),
                   const SizedBox(width: 6),
                   Text(
@@ -603,8 +645,8 @@ class TripResultScreen extends StatelessWidget {
                     ),
                   ),
                 ],
-              ),
-            ],
+              ],
+            ),
           ],
         ),
       ),
