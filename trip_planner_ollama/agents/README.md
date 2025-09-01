@@ -44,7 +44,7 @@ agents/
 ## 🔧 Agent Components
 
 ### **Core Framework**
-- **`langchain_base_agent.py`**: ReAct framework base with custom prompt optimization for Mistral
+- **`langchain_base_agent.py`**: ReAct framework base with custom prompt optimization for Gemma3
 - **`travel_tools.py`**: 5 specialized travel tools with Google Search integration
 - **`google_enhanced_tools.py`**: Enhanced travel tools with real-time Google Search API integration
 - **`master_travel_agent.py`**: Single comprehensive LLM agent with autonomous reasoning
@@ -63,7 +63,7 @@ agents/
   - Budget optimization and preference matching
 - **Format**: Standardized "Final Answer:" output for reliable parsing
 - **Temperature**: Low (0.1) for consistent format compliance
-- **Model**: Optimized for Mistral with custom ReAct prompt
+- **Model**: Optimized for Gemma3 with custom ReAct prompt
 
 ### **Specialized Agents (Comprehensive Mode)**
 
@@ -265,7 +265,7 @@ live_hotel_results = enhanced_tools.enhanced_hotel_search.func('{"city": "Tokyo"
 ### **📈 Reliability**
 - Consistent format specification ensures predictable output parsing
 - LangChain ReAct framework provides robust agent execution
-- Custom prompts optimized for Mistral model performance
+- Custom prompts optimized for Gemma3 model performance
 - Dual modes handle both speed and analysis depth requirements
 
 ### **🏗️ Code Organization**
