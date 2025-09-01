@@ -36,22 +36,38 @@ def _parse_standardized_json_output(result_text: str, request: TripRequest, agen
     activities = {}
     budget_float = 3000.0  # Default budget
     
-    # Look for "Final Answer: {json}" pattern in agent output, handling markdown code blocks
+    # Look for JSON in agent output - handle multiple formats
     import re
-    # If result_text is already JSON, parse directly
     json_str = None
+    
+    # Try direct JSON parsing first
     if result_text.strip().startswith('{'):
         json_str = result_text.strip()
         logger.debug(f"📝 Parsing result text as direct JSON: {json_str[:200]}...")
     else:
-        # Otherwise, extract JSON block after Final Answer:
-        pattern = r'Final Answer:\s*({.*?})'
-        json_match = re.search(pattern, result_text, re.DOTALL)
-        if not json_match:
-            logger.info(f"❌ JSON pattern NOT matched: {pattern}")
+        # Try "Final Answer:" format
+        final_answer_pattern = r'Final Answer:\s*({.*?})'
+        final_answer_match = re.search(final_answer_pattern, result_text, re.DOTALL)
+        
+        # Try markdown code block format
+        markdown_pattern = r'```json\s*({.*?})\s*```'
+        markdown_match = re.search(markdown_pattern, result_text, re.DOTALL)
+        
+        # Try any JSON block pattern
+        json_block_pattern = r'{[^{}]*(?:{[^{}]*}[^{}]*)*}'
+        json_block_match = re.search(json_block_pattern, result_text, re.DOTALL)
+        
+        if final_answer_match:
+            json_str = final_answer_match.group(1).strip()
+            logger.info(f"📝 Found Final Answer JSON: {json_str[:200]}...")
+        elif markdown_match:
+            json_str = markdown_match.group(1).strip()
+            logger.info(f"📝 Found markdown JSON: {json_str[:200]}...")
+        elif json_block_match:
+            json_str = json_block_match.group(0).strip()
+            logger.info(f"📝 Found JSON block: {json_str[:200]}...")
         else:
-            json_str = json_match.group(1).strip()
-            logger.info(f"📝 Found JSON output: {json_str[:200]}...")
+            logger.error(f"❌ No JSON pattern matched in output: {result_text[:300]}...")
 
     if json_str:
         try:
@@ -362,7 +378,9 @@ async def plan_trip(request: TripRequest, background_tasks: BackgroundTasks):
                 transformed = _transform_activity_for_frontend(picked)
                 logger.debug(f"✅ Transformed activity: {transformed.get('name', 'N/A')} in {transformed.get('city', 'N/A')}")
                 # For compatibility: activities field expects simple strings (as per DayPlan model)
-                activities_list.append(transformed.get('name', 'Activity'))
+                # Use description for richer content, fallback to name if description is empty
+                activity_text = transformed.get('description', '').strip() or transformed.get('name', 'Activity')
+                activities_list.append(activity_text)
             daily_plans_with_activities.append({
                 "day": i+1,
                 "date": day_date,
