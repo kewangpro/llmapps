@@ -1,6 +1,6 @@
 # AI Trip Planner Mobile App
 
-A Flutter mobile application for smart multi-city round trip planning using pure LLM reasoning with Ollama integration (Mistral model).
+A Flutter mobile application for smart multi-city round trip planning using pure LLM reasoning with Ollama integration (Gemma3 model).
 
 ## 🎯 Features
 
@@ -9,7 +9,7 @@ A Flutter mobile application for smart multi-city round trip planning using pure
 - **Flight Integration**: Realistic airline suggestions with times and pricing
 - **Beautiful UI**: Clean, modern interface with visual distinction between flights and activities
 - **Cross-Platform**: Runs on iOS, Android, and Web
-- **Local AI**: Uses Ollama Mistral for privacy-focused trip generation
+- **Local AI**: Uses Ollama Gemma3 for privacy-focused trip generation
 - **Hotel Selection**: AI selects best hotel per city based on rating and price
 - **Clean UI**: Modern interface with AI agent badges and structured data display
 
@@ -17,7 +17,7 @@ A Flutter mobile application for smart multi-city round trip planning using pure
 
 - **Frontend**: Flutter (Dart)
 - **Backend API**: FastAPI Python server (../main.py)
-- **AI Engine**: Dual-mode LangChain ReAct system + Ollama Mistral
+- **AI Engine**: Dual-mode LangChain ReAct system + Ollama Gemma3
 - **Models**: Clean data models with JSON serialization
 - **CLI Tool**: Command-line interface (../run.py) for direct API access
 
@@ -186,7 +186,7 @@ flutter packages pub run build_runner build
 - Dual-mode LangChain ReAct framework with autonomous reasoning
 - Simple mode: Single master agent (25s execution, production-optimized)
 - Comprehensive mode: 5 specialized agents with sequential collaboration  
-- Ollama Mistral local model processing
+- Ollama Gemma3 local model processing
 - Structured output format with exact pattern matching
 - Smart hotel selection algorithm (rating + price optimization)
 - Pure LLM reasoning without fallback systems
@@ -196,7 +196,7 @@ flutter packages pub run build_runner build
 - **Web Support**: Fully functional on Chrome/Safari with automated setup
 - **Hot Reload**: Supports Flutter hot reload for rapid development
 - **API Dependencies**: Requires backend server for full functionality
-- **Local AI**: All AI processing happens locally via Ollama (Mistral model) with dual collaboration modes
+- **Local AI**: All AI processing happens locally via Ollama (Gemma3 model) with dual collaboration modes
 - **Clean Architecture**: Recent cleanup removed unused test files and dependencies
 - **Hotel Logic**: Implements smart selection - best rating first, then lowest price for ties
 
