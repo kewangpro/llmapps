@@ -100,6 +100,27 @@ def _parse_standardized_json_output(result_text: str, request: TripRequest, agen
                         'transport': 0.0
                     }
                     logger.info(f"🔧 Created budget breakdown: flights=${flight_cost}, hotels=${hotel_cost}, activities=${activity_cost}, food=${food_cost}")
+                # If budget has breakdown but missing fields, patch them
+                elif 'breakdown' in budget:
+                    breakdown = budget['breakdown']
+                    total_budget = budget.get('total', 3000.0)
+                    
+                    # Add missing fields with reasonable defaults
+                    if 'food' not in breakdown:
+                        breakdown['food'] = total_budget * 0.1
+                        logger.info(f"🔧 Added missing 'food' field to budget breakdown: ${breakdown['food']}")
+                    if 'transport' not in breakdown:
+                        breakdown['transport'] = total_budget * 0.05
+                        logger.info(f"🔧 Added missing 'transport' field to budget breakdown: ${breakdown['transport']}")
+                    if 'activities' not in breakdown:
+                        breakdown['activities'] = total_budget * 0.15
+                        logger.info(f"🔧 Added missing 'activities' field to budget breakdown: ${breakdown['activities']}")
+                    if 'hotels' not in breakdown:
+                        breakdown['hotels'] = total_budget * 0.3
+                        logger.info(f"🔧 Added missing 'hotels' field to budget breakdown: ${breakdown['hotels']}")
+                    if 'flights' not in breakdown:
+                        breakdown['flights'] = total_budget * 0.4
+                        logger.info(f"🔧 Added missing 'flights' field to budget breakdown: ${breakdown['flights']}")
             
             # Patch: add summary if missing
             if 'summary' not in parsed_data:
@@ -368,13 +389,30 @@ async def plan_trip(request: TripRequest, background_tasks: BackgroundTasks):
                     logger.debug(f"🔍 Added activity: {act.get('name', 'Unknown')}")
         
         logger.info(f"🎯 Flattened {len(flat_activities)} activities for daily plan assignment")
-        # If no activities, use empty string
+        # Assign activities to days based on proper city distribution
         for i in range(request.duration_days):
             day_date = (datetime.strptime(request.start_date, "%Y-%m-%d") + timedelta(days=i)).strftime("%Y-%m-%d")
-            city = request.destinations[0] if request.destinations else request.origin
+            
+            # Calculate which city this day belongs to for multi-city trips
+            if len(request.destinations) > 1:
+                days_per_city = request.duration_days // len(request.destinations)
+                city_index = min(i // days_per_city, len(request.destinations) - 1)
+                city = request.destinations[city_index]
+            else:
+                city = request.destinations[0] if request.destinations else request.origin
+            
             activities_list = []
             if flat_activities:
-                picked = random.choice(flat_activities)
+                # Filter activities for the current city
+                city_activities = [act for act in flat_activities if act.get('city', '').lower() == city.lower()]
+                if city_activities:
+                    picked = random.choice(city_activities)
+                    logger.debug(f"🎯 Day {i+1} ({city}): Selected activity '{picked.get('name', 'Unknown')}' from {len(city_activities)} available")
+                else:
+                    # Fallback to any activity if no city-specific activities found
+                    picked = random.choice(flat_activities)
+                    logger.warning(f"⚠️ Day {i+1} ({city}): No city-specific activities found, using fallback activity")
+                
                 transformed = _transform_activity_for_frontend(picked)
                 logger.debug(f"✅ Transformed activity: {transformed.get('name', 'N/A')} in {transformed.get('city', 'N/A')}")
                 # For compatibility: activities field expects simple strings (as per DayPlan model)
