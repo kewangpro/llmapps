@@ -41,8 +41,10 @@ class GoogleHotelResult:
 class GoogleTravelSearch:
     """Search for travel information using Google Search"""
     
-    def __init__(self):
+    def __init__(self, api_key: Optional[str] = None, search_engine_id: Optional[str] = None):
         self.session: Optional[aiohttp.ClientSession] = None
+        self.api_key = api_key
+        self.search_engine_id = search_engine_id
         
         # User agents to rotate for requests
         self.user_agents = [
@@ -194,12 +196,8 @@ class GoogleTravelSearch:
     
     async def _google_custom_search(self, query: str) -> List[Dict[str, Any]]:
         """Search using Google Custom Search API (optional)"""
-        import os
         
-        api_key = os.getenv('GOOGLE_SEARCH_API_KEY')
-        search_engine_id = os.getenv('GOOGLE_SEARCH_ENGINE_ID') 
-        
-        if not api_key or not search_engine_id:
+        if not self.api_key or not self.search_engine_id:
             # API not configured, use fallback
             return []
         
@@ -208,18 +206,26 @@ class GoogleTravelSearch:
         
         url = "https://www.googleapis.com/customsearch/v1"
         params = {
-            'key': api_key,
-            'cx': search_engine_id,
+            'key': self.api_key,
+            'cx': self.search_engine_id,
             'q': query,
             'num': 5
         }
         
+        logger.debug(f"🔍 Calling Google Search API for: '{query}'")
+        
         async with self.session.get(url, params=params) as response:
             if response.status == 200:
                 data = await response.json()
+                logger.info(f"✅ Google Search API returned {len(data.get('items', []))} results.")
                 return data.get('items', [])
             else:
                 logger.warning(f"Google Search API returned status {response.status}")
+                try:
+                    error_details = await response.json()
+                    logger.warning(f"Google Search API error details: {error_details}")
+                except Exception as e:
+                    logger.warning(f"Could not parse Google Search API error response: {e}")
                 return []
     
     def _parse_flight_results(
@@ -238,14 +244,10 @@ class GoogleTravelSearch:
             snippet = result.get('snippet', '')
             
             # Extract flight information using regex patterns
-            # This is a simplified parser - real implementation would be more sophisticated
-            
-            # Look for price patterns
             price_match = re.search(r'\$(\d{1,4})', title + ' ' + snippet)
             price = f"${price_match.group(1)}" if price_match else f"${random.randint(300, 1200)}"
             
-            # Look for airline patterns
-            airlines = ['United', 'Delta', 'American', 'Southwest', 'JetBlue', 'Alaska']
+            airlines = ['United', 'Delta', 'American', 'Southwest', 'JetBlue', 'Alaska', 'ANA', 'EVA Air', 'China Airlines']
             airline = next((a for a in airlines if a.lower() in (title + snippet).lower()), 'Partner Airlines')
             
             # Generate realistic times
@@ -265,7 +267,7 @@ class GoogleTravelSearch:
                 price=price,
                 date=date,
                 duration=f"{flight_duration}h {random.randint(10, 50)}m",
-                confidence=0.75  # Real search result
+                confidence=0.85  # Real search result
             )
             flights.append(flight)
             
@@ -309,18 +311,14 @@ class GoogleTravelSearch:
             snippet = result.get('snippet', '')
             
             # Extract hotel information using regex patterns
-            
-            # Look for price patterns
             price_match = re.search(r'\$(\d{1,3})', title + ' ' + snippet)
             price = f"${price_match.group(1)}" if price_match else f"${random.randint(80, 300)}"
             
-            # Extract hotel name (first part of title, usually before " - " or " | ")
             hotel_name = title.split(' - ')[0].split(' | ')[0].strip()
             if not hotel_name or len(hotel_name) < 5:
                 hotel_chains = ["Marriott", "Hilton", "Hyatt", "InterContinental", "Grand Hotel"]
                 hotel_name = f"{random.choice(hotel_chains)} {city}"
             
-            # Look for rating patterns
             rating_match = re.search(r'(\d\.\d)\s*star|(\d)/5|(\d\.\d)/5', title + ' ' + snippet)
             if rating_match:
                 rating = float(rating_match.group(1) or rating_match.group(2) or rating_match.group(3))
@@ -329,7 +327,6 @@ class GoogleTravelSearch:
             else:
                 rating = round(3.5 + random.uniform(0, 1.5), 1)
             
-            # Generate amenities based on rating
             base_amenities = ["WiFi", "24h Reception"]
             if rating >= 4.0:
                 base_amenities.extend(["Restaurant", "Gym", "Room Service"])
@@ -345,7 +342,7 @@ class GoogleTravelSearch:
                 price_per_night=price,
                 amenities=list(set(amenities)),  # Remove duplicates
                 address=f"{random.randint(100, 999)} {random.choice(['Main St', 'Central Ave', 'Broadway'])}, {city}",
-                confidence=0.8  # Real search result
+                confidence=0.85  # Real search result
             )
             hotels.append(hotel)
             
