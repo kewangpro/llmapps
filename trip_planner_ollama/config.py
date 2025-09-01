@@ -31,7 +31,7 @@ class APIConfig(BaseSettings):
     log_level: str = Field('INFO', env='LOG_LEVEL')
     
     # LLM Configuration
-    ollama_model: str = Field('mistral:latest', env='OLLAMA_MODEL')
+    ollama_model: str = Field('gemma3:latest', env='OLLAMA_MODEL')
     ollama_temperature: float = Field(0.3, env='OLLAMA_TEMPERATURE')
     ollama_max_iterations: int = Field(3, env='OLLAMA_MAX_ITERATIONS')
     agent_timeout: float = Field(120.0, env='AGENT_TIMEOUT')  # Increased timeout for complex agent tasks

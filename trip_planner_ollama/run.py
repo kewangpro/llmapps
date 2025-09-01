@@ -23,8 +23,8 @@ def parse_arguments():
         epilog="""
 Examples:
   python run.py --origin Seattle --destinations Tokyo --start-date 2025-09-02 --duration 7
-  python run.py --origin "San Francisco" --destinations Tokyo Seoul --start-date 2025-10-15 --duration 12 --budget high
-  python run.py --origin NYC --destinations Paris London --start-date 2025-06-01 --duration 10 --preferences "food, museums"
+  python run.py --origin "San Francisco" --destinations Tokyo Seoul --start-date 2025-10-15 --duration 12 --budget high --mode comprehensive
+  python run.py --origin NYC --destinations Paris London --start-date 2025-06-01 --duration 10 --preferences "food, museums" --mode simple
         """
     )
     
@@ -68,6 +68,13 @@ Examples:
     )
     
     parser.add_argument(
+        '--mode', '-m',
+        choices=['simple', 'comprehensive'],
+        default='simple',
+        help='Collaboration mode: simple (fast, single agent) or comprehensive (detailed, multi-agent) (default: simple)'
+    )
+    
+    parser.add_argument(
         '--api-url',
         default='http://localhost:8000',
         help='API base URL (default: http://localhost:8000)'
@@ -103,6 +110,7 @@ def print_trip_request(args):
     print(f"⏱️  Duration: {args.duration} days")
     print(f"💰 Budget: {args.budget}")
     print(f"🎨 Preferences: {args.preferences}")
+    print(f"🤖 Mode: {args.mode} ({'single agent, fast' if args.mode == 'simple' else '5 agents, detailed'})")
     print()
 
 
@@ -114,14 +122,20 @@ async def call_trip_api(args) -> Dict[str, Any]:
         "start_date": args.start_date,
         "duration_days": args.duration,
         "budget": args.budget,
-        "preferences": args.preferences
+        "preferences": args.preferences,
+        "collaboration_mode": args.mode
     }
     
     print("🤖 Planning your trip with AI agents...")
-    print("⏳ This may take 60-90 seconds for complex trips...")
+    if args.mode == 'simple':
+        print("⏳ Simple mode: This may take 25-60 seconds...")
+    else:
+        print("⏳ Comprehensive mode: This may take 180+ seconds for detailed analysis...")
     print()
     
-    timeout = aiohttp.ClientTimeout(total=300)  # 5 minute timeout
+    # Set timeout based on mode
+    timeout_seconds = 180 if args.mode == 'simple' else 360  # 3 min simple, 6 min comprehensive
+    timeout = aiohttp.ClientTimeout(total=timeout_seconds)
     
     async with aiohttp.ClientSession(timeout=timeout) as session:
         try:
@@ -274,6 +288,10 @@ async def main():
     try:
         # Call the API
         trip_data = await call_trip_api(args)
+        
+        if not trip_data or not isinstance(trip_data, dict):
+            print("❌ Error: No valid response from API. Make sure the API server is running and returns valid JSON.")
+            sys.exit(1)
         
         print("✅ Trip planning completed!")
         print()

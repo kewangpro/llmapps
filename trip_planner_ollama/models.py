@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 
 class TripRequest(BaseModel):
@@ -8,6 +8,7 @@ class TripRequest(BaseModel):
     duration_days: int
     budget: Optional[str] = "medium"
     preferences: Optional[str] = ""
+    collaboration_mode: Optional[str] = "simple"  # "simple" or "comprehensive"
 
 class Flight(BaseModel):
     from_city: str = ""  # Internal field name
@@ -28,14 +29,14 @@ class DayPlan(BaseModel):
     activities: List[str]
     accommodation: Optional[str] = None
     transportation: Optional[str] = None
-    city_tips: List[str] = []
+    city_tips: List[str] = Field(default_factory=list)
 
 class Hotel(BaseModel):
     name: str = ""
     city: str = ""
     rating: float = 0.0
     price_per_night: str = ""
-    amenities: List[str] = []
+    amenities: List[str] = Field(default_factory=list)
     address: Optional[str] = None
     # NEW: Data source tracking for MCP/API/fallback indicators
     data_source: Optional[str] = None  # "mcp", "api", "fallback", "mcp_fallback", etc.

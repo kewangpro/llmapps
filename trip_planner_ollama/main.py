@@ -1,261 +1,158 @@
+
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from models import TripRequest, TripPlan, DayPlan, Flight, Hotel
 from config import get_config
 from services.error_handler import global_error_handler, log_error
-# TRUE LangChain Agent Framework
 from agents import create_langchain_agent_system, LangChainMultiAgentSystem
 import uvicorn
 import logging
-import asyncio
 import json
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Get configuration
-async def _extract_trip_plan_data(result, request: TripRequest) -> dict:
+def _parse_standardized_json_output(result_text: str, request: TripRequest, agent_result: dict = None) -> tuple:
     """
-    Extracts structured trip plan data from the agent's result.
-    """
-    # First, check if the agent provided structured trip_plan data
-    structured_trip_plan = None
-    if hasattr(result, 'primary_result') and isinstance(result.primary_result, dict):
-        structured_trip_plan = result.primary_result.get('trip_plan')
+    Parse standardized JSON output from agent instead of using fragile regex patterns.
     
-    if structured_trip_plan and isinstance(structured_trip_plan, dict):
-        logger.info(f"✅ Using structured trip plan with {len(structured_trip_plan.get('flights', []))} flights and {len(structured_trip_plan.get('hotels', []))} hotels")
-        
-        # Use the structured data directly
-        flights = structured_trip_plan.get('flights', [])
-        hotels = structured_trip_plan.get('hotels', [])
-        estimated_budget = structured_trip_plan.get('estimated_budget', "$3000.00")
-        
-        # Convert flights and hotels to proper model format if needed
-        from models import Flight, Hotel
-        formatted_flights = []
-        for f in flights:
-            formatted_flights.append(Flight(
-                from_city=f.get('from_city', ''),
-                to_city=f.get('to_city', ''),
-                date=f.get('date', ''),
-                departure_time=f.get('departure_time', ''),
-                arrival_time=f.get('arrival_time', ''),
-                airline=f.get('airline', ''),
-                estimated_price=f.get('estimated_price', ''),
-                data_source=f.get('data_source', 'langchain_agents'),
-                confidence=f.get('confidence', 0.8)
-            ))
-        
-        formatted_hotels = []
-        for h in hotels:
-            formatted_hotels.append(Hotel(
-                name=h.get('name', ''),
-                city=h.get('city', ''),
-                rating=h.get('rating', 0.0),
-                price_per_night=h.get('price_per_night', ''),
-                amenities=h.get('amenities', []),
-                address=h.get('address', ''),
-                data_source=h.get('data_source', 'langchain_agents'),
-                confidence=h.get('confidence', 0.8)
-            ))
-        
-        flights = formatted_flights
-        hotels = formatted_hotels
-        
+    Returns:
+        tuple: (flights, hotels, activities, budget_float) where:
+        - flights: List[Flight] - parsed flight data
+        - hotels: List[Hotel] - parsed hotel data  
+        - activities: Dict[str, List[str]] - activities by city
+        - budget_float: float - extracted budget amount
+    """
+    from models import Flight, Hotel
+    from schemas.agent_output_schema import StandardizedAgentOutput, validate_agent_output
+    
+    flights = []
+    hotels = []
+    activities = {}
+    budget_float = 3000.0  # Default budget
+    
+    # Look for "Final Answer: {json}" pattern in agent output, handling markdown code blocks
+    import re
+    # If result_text is already JSON, parse directly
+    json_str = None
+    if result_text.strip().startswith('{'):
+        json_str = result_text.strip()
+        logger.debug(f"📝 Parsing result text as direct JSON: {json_str[:200]}...")
     else:
-        # Extract text from pure LLM agent result
-        result_text = ""
-        if hasattr(result, 'primary_result') and isinstance(result.primary_result, dict):
-            # Old agent system format
-            result_text = str(result.primary_result.get("output", ""))
-        elif isinstance(result, dict) and "output" in result:
-            # Pure LLM agent format - direct output key
-            result_text = str(result["output"])
+        # Otherwise, extract JSON block after Final Answer:
+        pattern = r'Final Answer:\s*({.*?})'
+        json_match = re.search(pattern, result_text, re.DOTALL)
+        if not json_match:
+            logger.info(f"❌ JSON pattern NOT matched: {pattern}")
         else:
-            # Fallback - convert entire result to string
-            result_text = str(result)
+            json_str = json_match.group(1).strip()
+            logger.info(f"📝 Found JSON output: {json_str[:200]}...")
+
+    if json_str:
+        try:
+            # Parse the JSON
+            parsed_data = json.loads(json_str)
+            logger.info(f"✅ Successfully parsed JSON with {len(parsed_data.get('flights', []))} flights, {len(parsed_data.get('hotels', []))} hotels, {len(parsed_data.get('activities', []))} activities")
             
-        logger.info(f"🔍 Agent output for parsing: {result_text[:500]}...")
-        
-        flights = _parse_flights_from_text(result_text, request)
-        hotels = _parse_hotels_from_text(result_text, request)
-        budget_float = _parse_budget_from_text(result_text)
-        estimated_budget = f"${budget_float:.2f}" if budget_float else "$3000.00"
+            # Patch: supply default date for flights before schema validation
+            if 'flights' in parsed_data and isinstance(parsed_data['flights'], list):
+                for flight in parsed_data['flights']:
+                    if 'date' not in flight or not str(flight.get('date', '')).strip():
+                        flight['date'] = request.start_date
+            
+            # Patch: fix budget structure if needed
+            if 'budget' in parsed_data and isinstance(parsed_data['budget'], dict):
+                budget = parsed_data['budget']
+                # If budget doesn't have breakdown, create one
+                if 'breakdown' not in budget:
+                    total_budget = budget.get('total', 3000.0)
+                    flight_cost = budget.get('flights', total_budget * 0.4)
+                    hotel_cost = budget.get('hotel', total_budget * 0.3)
+                    activity_cost = budget.get('activities', total_budget * 0.2)
+                    food_cost = total_budget * 0.1
+                    
+                    budget['breakdown'] = {
+                        'flights': flight_cost,
+                        'hotels': hotel_cost,
+                        'activities': activity_cost,
+                        'food': food_cost,
+                        'transport': 0.0
+                    }
+                    logger.info(f"🔧 Created budget breakdown: flights=${flight_cost}, hotels=${hotel_cost}, activities=${activity_cost}, food=${food_cost}")
+            
+            # Patch: add summary if missing
+            if 'summary' not in parsed_data:
+                destinations_str = ', '.join(request.destinations) if request.destinations else 'destinations'
+                parsed_data['summary'] = f"Trip plan from {request.origin} to {destinations_str} for {request.duration_days} days with {request.budget} budget"
+                logger.info(f"🔧 Added default summary: {parsed_data['summary']}")
+            
+            # Validate against schema
+            validated_output = validate_agent_output(parsed_data)
+            # Convert flights to Flight models
+            for flight_data in validated_output.flights:
+                # Patch: supply default date if missing or empty
+                flight_date = getattr(flight_data, 'date', None)
+                if not flight_date or not str(flight_date).strip():
+                    # Use request.start_date as fallback
+                    flight_date = request.start_date
+                flight = Flight(
+                    from_city=flight_data.from_city,
+                    to_city=flight_data.to_city,
+                    date=flight_date,
+                    departure_time=flight_data.departure_time,
+                    arrival_time=flight_data.arrival_time,
+                    airline=flight_data.airline,
+                    estimated_price=f"${flight_data.price:.2f}",
+                    data_source=flight_data.source
+                )
+                flights.append(flight)
+                logger.debug(f"✈️  {flight.from_city} → {flight.to_city}: {flight.airline} - {flight.estimated_price} [{flight.data_source}]")
+            # Convert hotels to Hotel models
+            for hotel_data in validated_output.hotels:
+                hotel = Hotel(
+                    city=hotel_data.city,
+                    name=hotel_data.name,
+                    price_per_night=f"${hotel_data.price_per_night:.2f}",
+                    rating=float(hotel_data.rating),
+                    amenities=hotel_data.amenities,
+                    data_source=hotel_data.source
+                )
+                hotels.append(hotel)
+                logger.debug(f"🏨 {hotel.city}: {hotel.name} - {hotel.price_per_night}/night [{hotel.data_source}]")
+            # Activities - store as objects instead of just strings
+            activities = {}
+            for activity_data in validated_output.activities:
+                city = getattr(activity_data, 'city', None)
+                if city:
+                    if city not in activities:
+                        activities[city] = []
+                    # Store the complete activity object data for transformation
+                    activity_obj = {
+                        'city': city,
+                        'name': getattr(activity_data, 'name', ''),
+                        'description': getattr(activity_data, 'description', ''),
+                        'category': getattr(activity_data, 'category', ''),
+                        'source': getattr(activity_data, 'source', 'ai_agent')
+                    }
+                    activities[city].append(activity_obj)
+            # Budget
+            if validated_output.budget:
+                budget_float = validated_output.budget.total
+        except Exception as e:
+            logger.error(f"Error parsing agent output: {e}")
+            logger.error(f"Raw agent output for debugging:\n{json_str}")
+            flights = []
+            hotels = []
+            activities = {}
+            budget_float = 3000.0
+    # Always return a tuple, even if nothing was parsed
+    return flights, hotels, activities, budget_float
 
-    # Create detailed daily plans with activities based on destinations
-    daily_plans = []
-    current_date = datetime.strptime(request.start_date, "%Y-%m-%d")
-    
-    # Calculate days per destination for multi-city trips
-    total_destinations = len(request.destinations)
-    if total_destinations == 0:
-        destinations_with_days = [(request.origin, request.duration_days)]
-    else:
-        days_per_city = request.duration_days // total_destinations
-        remaining_days = request.duration_days % total_destinations
-        destinations_with_days = []
-        for i, dest in enumerate(request.destinations):
-            city_days = days_per_city + (1 if i < remaining_days else 0)
-            destinations_with_days.append((dest, city_days))
-    
-    day_counter = 1
-    for dest_city, city_duration in destinations_with_days:
-        for city_day in range(city_duration):
-            activities = _generate_activities_for_city(dest_city, city_day + 1, request.preferences)
-            daily_plans.append({
-                "day": day_counter,
-                "date": (current_date + timedelta(days=day_counter - 1)).strftime("%Y-%m-%d"),
-                "city": dest_city,
-                "activities": activities,
-                "transportation": "Local metro/taxi" if city_day > 0 else "Airport transfer",
-                "city_tips": _get_city_tips(dest_city)
-            })
-            day_counter += 1
-
-    route_order = [request.origin] + request.destinations # Simplistic
-
-    return {
-        "origin": request.origin,
-        "destinations": request.destinations,
-        "start_date": request.start_date,
-        "duration_days": request.duration_days,
-        "budget": request.budget,
-        "preferences": request.preferences,
-        "plan_summary": result,
-        "flights": flights,
-        "hotels": hotels,
-        "estimated_budget": estimated_budget,
-        "total_days": request.duration_days,
-        "route_order": route_order,
-        "daily_plans": daily_plans,
-        "travel_tips": ["Enjoy your trip!", "Check visa requirements", "Pack for the weather"] # Placeholder list
-    }
-
-def _parse_budget_from_text(text: str) -> float:
-    """Extract budget information from agent's final text output."""
-    try:
-        import re
-        # Pattern to match: "approximately $3000.00" or "total cost... $3000"
-        patterns = [
-            r'approximately\s*\$(\d+(?:,\d+)?(?:\.\d{2})?)',
-            r'total cost[^$]*\$(\d+(?:,\d+)?(?:\.\d{2})?)',
-            r'budget[^$]*\$(\d+(?:,\d+)?(?:\.\d{2})?)',
-            r'\$(\d+(?:,\d+)?(?:\.\d{2})?)(?:\s*budget|\s*total)'
-        ]
-        
-        for pattern in patterns:
-            matches = re.finditer(pattern, text, re.IGNORECASE)
-            for match in matches:
-                budget_str = match.group(1).replace(',', '')
-                return float(budget_str)
-        
-        logger.info("No budget information found in text, using default")
-        return 3000.0  # Default budget
-        
-    except Exception as e:
-        logger.error(f"Error parsing budget from text: {e}")
-        return 3000.0  # Default budget
-
-def _generate_activities_for_city(city: str, day_number: int, preferences: str) -> List[str]:
-    """Generate sample activities for a city based on preferences."""
-    city_lower = city.lower()
-    preference_lower = preferences.lower() if preferences else ""
-    
-    # City-specific activities
-    city_activities = {
-        "tokyo": [
-            "Visit Senso-ji Temple in Asakusa",
-            "Explore Shibuya Crossing and shopping district", 
-            "Experience Tsukiji Outer Market food tour",
-            "Take in views from Tokyo Skytree",
-            "Stroll through Ueno Park and museums",
-            "Discover Harajuku street fashion",
-            "Enjoy traditional kaiseki dining",
-            "Visit Meiji Shrine"
-        ],
-        "taipei": [
-            "Visit Taipei 101 observatory",
-            "Explore Ximending night market",
-            "Take day trip to Jiufen mountain town", 
-            "Tour National Palace Museum",
-            "Soak in Beitou hot springs",
-            "Sample street food in Shilin night market"
-        ],
-        "seoul": [
-            "Explore Gyeongbokgung Palace",
-            "Shop in Myeongdong district",
-            "Hike in Namsan Park to N Seoul Tower",
-            "Experience Korean BBQ in Gangnam",
-            "Visit Bukchon Hanok Village",
-            "Discover Hongdae nightlife"
-        ],
-        "paris": [
-            "Visit the Eiffel Tower and Trocadéro",
-            "Explore Louvre Museum",
-            "Stroll along the Seine and Notre-Dame",
-            "Discover Montmartre and Sacré-Cœur",
-            "Experience café culture in Le Marais",
-            "Shop along Champs-Élysées"
-        ]
-    }
-    
-    # Get city activities or default
-    activities = city_activities.get(city_lower, [
-        f"Explore {city} city center",
-        f"Visit local museums and landmarks",
-        f"Try traditional {city} cuisine",
-        f"Walk through historic districts"
-    ])
-    
-    # Filter by preferences if provided
-    if "food" in preference_lower or "cuisine" in preference_lower:
-        activities = [act for act in activities if any(word in act.lower() for word in ["food", "market", "dining", "cuisine", "restaurant"])]
-    elif "culture" in preference_lower or "history" in preference_lower:
-        activities = [act for act in activities if any(word in act.lower() for word in ["temple", "museum", "palace", "shrine", "historic", "traditional"])]
-    elif "shopping" in preference_lower:
-        activities = [act for act in activities if any(word in act.lower() for word in ["shop", "market", "district"])]
-    
-    # Return 2-3 activities per day, varying by day number
-    start_idx = (day_number - 1) * 2
-    return activities[start_idx:start_idx + 3] or activities[:3]
-
-def _get_city_tips(city: str) -> List[str]:
-    """Get useful tips for a specific city."""
-    city_lower = city.lower()
-    
-    city_tips = {
-        "tokyo": [
-            "Get a JR Pass for convenient train travel",
-            "Carry cash - many places don't accept cards",
-            "Bow slightly when greeting locals"
-        ],
-        "taipei": [
-            "Use the EasyCard for public transportation",
-            "Night markets are must-visit experiences",
-            "Learn basic Mandarin greetings"
-        ],
-        "seoul": [
-            "Download subway apps for navigation", 
-            "Try Korean skincare products",
-            "Respect cultural customs at temples"
-        ],
-        "paris": [
-            "Buy metro day passes for easy transport",
-            "Learn basic French phrases",
-            "Dress stylishly to fit in with locals"
-        ]
-    }
-    
-    return city_tips.get(city_lower, [
-        f"Research {city} cultural customs",
-        "Learn key phrases in local language",
-        "Use public transportation when possible"
-    ])
 
 config = get_config()
 
@@ -290,29 +187,30 @@ async def startup_event():
     global langchain_agent_system
     
     logger.info("🚀 Starting LangChain Agent Trip Planner API")
-    logger.info(f"Configuration: {config.get_environment_info()}")
+    config = get_config()
+    logger.debug(f"Configuration: {config.get_environment_info()}")
     
     # Initialize TRUE LangChain Agent System
     try:
-        langchain_agent_system = create_langchain_agent_system(model_name="gemma3:latest")
-        logger.info("🤖 LangChain Agent System initialized with reasoning capabilities")
-        logger.info("   - AgentExecutor with ReAct reasoning")
-        logger.info("   - Chain-of-thought planning")
-        logger.info("   - Automatic tool selection")
-        logger.info("   - Multi-agent collaboration")
-        logger.info("   - Google Search tools integration")
+        langchain_agent_system = create_langchain_agent_system(model_name=config.ollama_model)
+        logger.info("🤖 LangChain Agent System initialized")
+        logger.debug("   - AgentExecutor with ReAct reasoning")
+        logger.debug("   - Chain-of-thought planning")
+        logger.debug("   - Automatic tool selection")
+        logger.debug("   - Multi-agent collaboration")
+        logger.debug("   - Google Search tools integration")
     except Exception as e:
         logger.error(f"❌ LangChain Agent System initialization failed: {e}")
         langchain_agent_system = None
     
     # Log API availability
     if config.has_google_search_config:
-        logger.info("✅ Google Search API configured - enhanced search results available")
+        logger.info("✅ Google Search API configured")
     else:
         logger.info("✅ Using intelligent travel data with LangChain agents")
     
     if langchain_agent_system:
-        logger.info("🤖 LangChain Agent System ready with 5 specialized reasoning agents")
+        logger.debug("🤖 LangChain Agent System ready with 5 specialized reasoning agents")
 
 @app.get("/")
 async def health_check():
@@ -377,7 +275,7 @@ async def plan_trip(request: TripRequest, background_tasks: BackgroundTasks):
         if not langchain_agent_system:
             raise HTTPException(status_code=503, detail="Agent system is not available")
 
-        logger.info("🤖 Using TRUE LangChain Agent System with reasoning capabilities")
+        logger.debug("🤖 Using TRUE LangChain Agent System with reasoning capabilities")
         
         budget_map = {"low": 2000.0, "medium": 3000.0, "high": 5000.0}
         numeric_budget = budget_map.get(request.budget, 3000.0)
@@ -400,31 +298,81 @@ async def plan_trip(request: TripRequest, background_tasks: BackgroundTasks):
             budget=numeric_budget,
             interests=interests,
             travel_style=request.budget,
-            collaboration_mode="simple"  # Use master agent for now
+            collaboration_mode=request.collaboration_mode
         )
         
         if result.primary_result.get("status") == "error":
             raise HTTPException(status_code=500, detail=f"Agent system failed: {result.primary_result.get('error')}")
 
-        # Extract structured data from agent system response
-        trip_plan_data = await _extract_trip_plan_data(result, request)
-
-        # Ensure we have the required structure for TripPlan
-        if "total_days" not in trip_plan_data:
-            trip_plan_data["total_days"] = request.duration_days
-        if "route_order" not in trip_plan_data:
-            trip_plan_data["route_order"] = [request.origin] + request.destinations  
-        if "daily_plans" not in trip_plan_data:
-            trip_plan_data["daily_plans"] = [{"day": i+1, "date": (datetime.strptime(request.start_date, "%Y-%m-%d") + timedelta(days=i)).strftime("%Y-%m-%d"), "city": request.destinations[0] if request.destinations else request.origin, "activities": []} for i in range(request.duration_days)]
-
+        # Parse agent output directly
+        result_text = str(result.primary_result.get("output", "")) if hasattr(result, 'primary_result') and isinstance(result.primary_result, dict) else str(result)
+        agent_result_dict = result.primary_result if hasattr(result, 'primary_result') and isinstance(result.primary_result, dict) else result if isinstance(result, dict) else {}
+        flights, hotels, activities, budget_float = _parse_standardized_json_output(result_text, request, agent_result_dict)
+        estimated_budget = f"${budget_float:.2f}" if budget_float else "$3000.00"
+        # Build TripPlan data
+        trip_plan_data = {
+            "flights": flights,
+            "hotels": hotels,
+            "activities": activities,
+            "estimated_budget": estimated_budget,
+            "total_days": request.duration_days,
+            "route_order": [request.origin] + request.destinations,
+            "daily_plans": [{"day": i+1, "date": (datetime.strptime(request.start_date, "%Y-%m-%d") + timedelta(days=i)).strftime("%Y-%m-%d"), "city": request.destinations[0] if request.destinations else request.origin, "activities": []} for i in range(request.duration_days)],
+            "travel_tips": []
+        }
         trip_plan = TripPlan(**trip_plan_data)
-        logger.info(f"🎯 After TripPlan creation - flights: {len(trip_plan.flights)}, hotels: {len(trip_plan.hotels)}")
+        activities_data = trip_plan_data.get('activities', {})
+        logger.debug(f"🔍 Activities data type: {type(activities_data)}, content: {activities_data}")
+        if isinstance(activities_data, dict):
+            total_activities = sum(len(acts) for acts in activities_data.values())
+        elif isinstance(activities_data, list):
+            total_activities = len(activities_data)
+        else:
+            total_activities = 0
+        logger.info(f"🎯 After TripPlan creation - flights: {len(trip_plan.flights)}, hotels: {len(trip_plan.hotels)}, activities: {total_activities}")
+        # Patch: Remove top-level activities, include activities in daily_plans
+        # Assign activities to daily_plans by city and date
+        # Rebuild daily_plans: randomly pick one transformed activity per day
+        import random
+        daily_plans_with_activities = []
+        # Flatten activities to a list of dicts
+        flat_activities = []
+        logger.debug(f"🔍 Flattening activities - type: {type(activities_data)}, content: {activities_data}")
+        if isinstance(activities_data, dict):
+            for city, acts in activities_data.items():
+                logger.debug(f"🔍 Processing city {city} with {len(acts) if isinstance(acts, list) else 'unknown'} activities")
+                for act in acts:
+                    if isinstance(act, dict):
+                        flat_activities.append(act)
+                        logger.debug(f"🔍 Added activity: {act.get('name', 'Unknown')}")
+        elif isinstance(activities_data, list):
+            for act in activities_data:
+                if isinstance(act, dict):
+                    flat_activities.append(act)
+                    logger.debug(f"🔍 Added activity: {act.get('name', 'Unknown')}")
         
-        # Transform the response for frontend compatibility
+        logger.info(f"🎯 Flattened {len(flat_activities)} activities for daily plan assignment")
+        # If no activities, use empty string
+        for i in range(request.duration_days):
+            day_date = (datetime.strptime(request.start_date, "%Y-%m-%d") + timedelta(days=i)).strftime("%Y-%m-%d")
+            city = request.destinations[0] if request.destinations else request.origin
+            activities_list = []
+            if flat_activities:
+                picked = random.choice(flat_activities)
+                transformed = _transform_activity_for_frontend(picked)
+                logger.debug(f"✅ Transformed activity: {transformed.get('name', 'N/A')} in {transformed.get('city', 'N/A')}")
+                # For compatibility: activities field expects simple strings (as per DayPlan model)
+                activities_list.append(transformed.get('name', 'Activity'))
+            daily_plans_with_activities.append({
+                "day": i+1,
+                "date": day_date,
+                "city": city,
+                "activities": activities_list
+            })
         response_data = {
             "total_days": trip_plan.total_days,
             "route_order": trip_plan.route_order,
-            "daily_plans": [day.dict() for day in trip_plan.daily_plans],
+            "daily_plans": daily_plans_with_activities,
             "estimated_budget": trip_plan.estimated_budget,
             "travel_tips": trip_plan.travel_tips,
             "flights": [_transform_flight_for_frontend(flight) for flight in trip_plan.flights],
@@ -441,209 +389,19 @@ async def plan_trip(request: TripRequest, background_tasks: BackgroundTasks):
         )
         
         return response_data
-    
-    except ValueError as e:
-        log_error(e, {"endpoint": "plan_trip", "request": request.dict()})
-        raise HTTPException(status_code=400, detail=str(e))
-    
+
     except Exception as e:
-        processing_time = (datetime.utcnow() - request_start_time).total_seconds()
-        log_error(e, {
-            "endpoint": "plan_trip",
-            "request": request.dict(),
-            "processing_time": processing_time
-        })
-        
         background_tasks.add_task(
             log_trip_request,
             request,
             None,
-            processing_time,
+            (datetime.utcnow() - request_start_time).total_seconds(),
             f"error: {str(e)}"
         )
-        
         raise HTTPException(
-            status_code=500, 
+            status_code=500,
             detail=f"Failed to plan trip: {str(e)}"
         )
-
-@app.get("/debug-fallback")
-async def debug_fallback():
-    """Debug fallback data creation."""
-    from models import TripRequest
-    request = TripRequest(
-        origin="Seattle",
-        destinations=["Tokyo"], 
-        start_date="2025-09-02",
-        duration_days=2,
-        budget="medium"
-    )
-    
-    flights = _create_fallback_flights(request)
-    hotels = _create_fallback_hotels(request)
-    
-    flights_transformed = [_transform_flight_for_frontend(flight) for flight in flights]
-    hotels_transformed = [_transform_hotel_for_frontend(hotel) for hotel in hotels]
-    
-    return {
-        "flights_created": len(flights),
-        "hotels_created": len(hotels),
-        "flights_transformed": len(flights_transformed),
-        "hotels_transformed": len(hotels_transformed),
-        "flights": flights_transformed,
-        "hotels": hotels_transformed
-    }
-
-@app.get("/debug-text-extraction")
-async def debug_text_extraction():
-    """Debug text extraction with sample agent output."""
-    sample_text = """Here is a summary of the trip plan based on the information gathered:
-
-**Flights:**
-
-*   **Seattle to Tokyo:** Alaska Airlines - Depart: 08:06, Arrive: 21:53, Price: $1047
-*   **Tokyo to Taipei:** Japan Airlines - Depart: 08:18, Arrive: 23:52, Price: $796
-*   **Taipei to Seattle:** Japan Airlines - Depart: 08:15, Arrive: 19:58, Price: $842
-
-**Hotels:**
-
-*   **Tokyo:** Sheraton Tokyo Resort - $201/night, Rating: 3.6
-*   **Taipei:** Plaza Hotel Taipei Suites - $121/night, Rating: 3.6
-
-**Budget Breakdown:**
-
-*   Total Estimated Cost: Approximately $3000.00
-
-**Recommendations:**
-
-*   Mid-range travel with balance of comfort and value
-*   Mix of hotel types and dining options
-*   Public transport with some taxis/rideshares"""
-    
-    from models import TripRequest
-    request = TripRequest(
-        origin="Seattle",
-        destinations=["Tokyo", "Taipei"],
-        start_date="2025-09-02", 
-        duration_days=10,
-        budget="medium"
-    )
-    
-    flights = _parse_flights_from_text(sample_text, request)
-    hotels = _parse_hotels_from_text(sample_text, request)
-    estimated_budget = _parse_budget_from_text(sample_text)
-    
-    return {
-        "sample_text": sample_text,
-        "flights_extracted": len(flights),
-        "hotels_extracted": len(hotels),
-        "estimated_budget": estimated_budget,
-        "flights": [_transform_flight_for_frontend(f) for f in flights],
-        "hotels": [_transform_hotel_for_frontend(h) for h in hotels]
-    }
-
-@app.get("/api-status")
-async def api_status():
-    """Get detailed status of LangChain agent system."""
-    try:
-        status = {
-            "timestamp": datetime.utcnow().isoformat(),
-            "langchain_agents": {
-                "status": "available" if langchain_agent_system else "unavailable",
-                "agent_count": 5 if langchain_agent_system else 0,
-                "reasoning_enabled": True if langchain_agent_system else False,
-                "google_search_tools": config.has_google_search_config
-            },
-            "error_stats": global_error_handler.get_error_stats(),
-            "integration_mode": "langchain_agents_only"
-        }
-        
-        if langchain_agent_system:
-            status["langchain_agents"]["agents"] = [
-                "MasterTravelAgent",
-                "FlightPlanningAgent", 
-                "AccommodationAgent",
-                "ActivityAgent",
-                "BudgetPlanningAgent"
-            ]
-        
-        return status
-    
-    except Exception as e:
-        log_error(e, {"endpoint": "api_status"})
-        raise HTTPException(status_code=500, detail="Failed to get API status")
-
-
-@app.get("/test-flight-cards")
-async def test_flight_cards():
-    """Test endpoint to verify flight cards work in mobile app."""
-    try:
-        from datetime import datetime, timedelta
-        
-        # Generate test flights exactly like the main endpoint
-        flights = []
-        destinations = ["Tokyo", "Seoul"]
-        origin = "San Francisco"
-        
-        for i, destination in enumerate(destinations):
-            departure_date = (datetime.utcnow() + timedelta(days=30 + i*2)).strftime("%Y-%m-%d")
-            origin_city = origin if i == 0 else destinations[i-1]
-            
-            flight = {
-                "from_city": origin_city,
-                "to_city": destination,
-                "date": departure_date,
-                "departure_time": "10:30 AM",
-                "arrival_time": "2:45 PM",
-                "airline": "LangChain Test Airlines",
-                "estimated_price": f"${200 + i*50}",
-                "data_source": "langchain_agents",
-                "confidence": 0.85
-            }
-            flights.append(flight)
-        
-        # Return flight
-        return_date = (datetime.utcnow() + timedelta(days=35)).strftime("%Y-%m-%d")
-        return_flight = {
-            "from_city": destinations[-1],
-            "to_city": origin,
-            "date": return_date,
-            "departure_time": "6:15 PM",
-            "arrival_time": "11:30 PM",
-            "airline": "LangChain Test Airlines",
-            "estimated_price": "$280",
-            "data_source": "langchain_agents",
-            "confidence": 0.85
-        }
-        flights.append(return_flight)
-        
-        # Generate test hotels
-        hotels = []
-        for destination in destinations:
-            hotel = {
-                "name": f"LangChain Test Hotel {destination}",
-                "city": destination,
-                "rating": 4.2,
-                "price_per_night": f"${80 + len(destination)*5}",
-                "amenities": ["WiFi", "Pool", "Gym", "Restaurant"],
-                "address": f"Downtown {destination}",
-                "data_source": "langchain_agents",
-                "confidence": 0.80
-            }
-            hotels.append(hotel)
-        
-        return {
-            "test_purpose": "Verify mobile app flight cards display",
-            "flights_count": len(flights),
-            "hotels_count": len(hotels),
-            "sample_flight": flights[0] if flights else None,
-            "sample_hotel": hotels[0] if hotels else None,
-            "data_source": "langchain_agents",
-            "status": "Flight cards should display properly in mobile app"
-        }
-        
-    except Exception as e:
-        return {"error": str(e), "status": "test_failed"}
 
 @app.get("/test-ollama")
 async def test_ollama():
@@ -753,162 +511,6 @@ async def log_trip_request(
     except Exception as e:
         logger.error(f"Failed to log trip request: {e}")
 
-def _parse_flights_from_text(text: str, request: TripRequest) -> List[Flight]:
-    """Extract flight data from agent's final text output.""" 
-    flights = []
-    try:
-        import re
-        # Exact pattern to match the required agent output format: "- Seattle to Tokyo: Alaska Airlines - $500"
-        pattern = r'-\s+([^:]+?)\s+to\s+([^:]+?):\s+([^-]+?)\s*-\s*\$(\d+(?:,\d+)?)'
-        matches = list(re.finditer(pattern, text))
-        
-        logger.info(f"Looking for flight pattern in text: {text[:300]}")
-        logger.info(f"Found {len(matches)} flight matches using exact format pattern")
-        
-        flight_dates = []
-        if len(request.destinations) == 1:
-            # Single destination - outbound and return
-            from datetime import datetime, timedelta
-            start_dt = datetime.strptime(request.start_date, "%Y-%m-%d")
-            flight_dates = [
-                request.start_date,
-                (start_dt + timedelta(days=request.duration_days)).strftime("%Y-%m-%d")
-            ]
-        else:
-            # Multi-city - calculate dates for each segment
-            from datetime import datetime, timedelta
-            start_dt = datetime.strptime(request.start_date, "%Y-%m-%d")
-            days_per_city = request.duration_days // len(request.destinations)
-            current_date = start_dt
-            flight_dates = []
-            
-            # Add dates for each segment
-            for i in range(len(request.destinations) + 1):  # +1 for return flight
-                flight_dates.append(current_date.strftime("%Y-%m-%d"))
-                if i < len(request.destinations):
-                    current_date += timedelta(days=days_per_city)
-        
-        for i, match in enumerate(matches):
-            from_city = match.group(1).strip()
-            to_city = match.group(2).strip()
-            airline = match.group(3).strip()
-            price = f"${match.group(4)}"
-            
-            # Use calculated flight date
-            flight_date = flight_dates[i] if i < len(flight_dates) else request.start_date
-            
-            flight = Flight(
-                from_city=from_city,
-                to_city=to_city,
-                date=flight_date,
-                departure_time="08:00",  # Default time since not provided in simple format
-                arrival_time="20:00",    # Default time since not provided in simple format
-                airline=airline,
-                estimated_price=price,
-                data_source="langchain_agents_text_extraction",
-                confidence=0.9
-            )
-            flights.append(flight)
-                
-        logger.info(f"Extracted {len(flights)} flights from text using regex patterns")
-        
-    except Exception as e:
-        logger.error(f"Error parsing flights from text: {e}")
-    
-    return flights
-
-def _parse_hotels_from_text(text: str, request: TripRequest) -> List[Hotel]:
-    """Extract hotel data from agent's final text output."""
-    hotels = []
-    try:
-        import re
-        # Exact pattern to match required agent output format: "- Tokyo: Hotel Name - $200/night"
-        pattern = r'-\s+([^:]+?):\s+([^-]+?)\s*-\s*\$(\d+(?:,\d+)?)/night'
-        matches = list(re.finditer(pattern, text))
-        logger.info(f"Found {len(matches)} hotel matches using pattern matching")
-        
-        for match in matches:
-            city = match.group(1).strip()
-            name = match.group(2).strip()
-            # Clean up any remaining markdown formatting from the name
-            if name.startswith('*'):
-                name = name.lstrip('* ').strip()
-            price = f"${match.group(3)}/night"
-            rating = 3.8  # Default rating since not in simple format
-                
-            hotel = Hotel(
-                name=name,
-                city=city,
-                rating=rating,
-                price_per_night=price,
-                amenities=["WiFi", "Restaurant", "Gym"], # Default amenities
-                address=f"Downtown {city}", # Default address
-                data_source="langchain_agents_text_extraction", 
-                confidence=0.9
-            )
-            hotels.append(hotel)
-                
-        logger.info(f"Extracted {len(hotels)} hotels from text using regex patterns")
-        
-    except Exception as e:
-        logger.error(f"Error parsing hotels from text: {e}")
-    
-    return hotels
-
-def _create_fallback_flights(request: TripRequest) -> List[Flight]:
-    """Create fallback flight data when agent doesn't provide flights."""
-    flights = []
-    try:
-        current_date = datetime.strptime(request.start_date, "%Y-%m-%d")
-        route = [request.origin] + request.destinations + [request.origin]
-        
-        for i in range(len(route) - 1):
-            flight_date = (current_date + timedelta(days=i*2)).strftime("%Y-%m-%d")
-            
-            flight = Flight(
-                from_city=route[i],
-                to_city=route[i+1],
-                date=flight_date,
-                departure_time="10:30 AM",
-                arrival_time="2:45 PM" + (" (+1 day)" if i > 0 else ""),
-                airline="Agent Airlines",
-                estimated_price=f"${300 + i*50}",
-                data_source="langchain_agents_fallback",
-                confidence=0.7
-            )
-            flights.append(flight)
-        
-        logger.info(f"Created {len(flights)} fallback flights")
-        
-    except Exception as e:
-        logger.error(f"Error creating fallback flights: {e}")
-    
-    return flights
-
-def _create_fallback_hotels(request: TripRequest) -> List[Hotel]:
-    """Create fallback hotel data when agent doesn't provide hotels."""
-    hotels = []
-    try:
-        for destination in request.destinations:
-            hotel = Hotel(
-                name=f"Downtown Hotel {destination}",
-                city=destination,
-                rating=4.2,
-                price_per_night=f"${100 + len(destination)*5}",
-                amenities=["WiFi", "Pool", "Gym", "Restaurant"],
-                address=f"Downtown {destination}",
-                data_source="langchain_agents_fallback", 
-                confidence=0.7
-            )
-            hotels.append(hotel)
-        
-        logger.info(f"Created {len(hotels)} fallback hotels")
-        
-    except Exception as e:
-        logger.error(f"Error creating fallback hotels: {e}")
-    
-    return hotels
-
 def _transform_flight_for_frontend(flight) -> Dict[str, Any]:
     """Transform flight data from backend format to frontend format."""
     try:
@@ -944,6 +546,28 @@ def _transform_hotel_for_frontend(hotel) -> Dict[str, Any]:
         return hotel_dict
     except Exception as e:
         logger.error(f"❌ Error transforming hotel: {e}")
+        return {}
+
+def _transform_activity_for_frontend(activity) -> dict:
+    """Transform activity data from backend format to frontend format."""
+    try:
+        if hasattr(activity, '__dict__'):
+            activity_dict = activity.__dict__.copy()
+        else:
+            activity_dict = activity.copy() if isinstance(activity, dict) else {}
+        # Only keep relevant fields for frontend
+        transformed = {
+            "city": activity_dict.get("city", ""),
+            "date": activity_dict.get("date", ""),
+            "name": activity_dict.get("name", ""),
+            "description": activity_dict.get("description", ""),
+            "category": activity_dict.get("category", ""),
+            "source": activity_dict.get("source", "")
+        }
+        logger.debug(f"✅ Transformed activity: {transformed.get('name', 'N/A')} in {transformed.get('city', 'N/A')}")
+        return transformed
+    except Exception as e:
+        logger.error(f"❌ Error transforming activity: {e}")
         return {}
 
 
