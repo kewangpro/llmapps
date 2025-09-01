@@ -123,6 +123,8 @@ Copy `.env.example` to `.env` and add your Google Search credentials for enhance
 │   ├── budget_planning_agent.py        # Budget analysis agent
 │   ├── travel_tools.py                 # Travel planning tools
 │   └── langchain_base_agent.py         # ReAct framework base
+├── schemas/             # Agent output validation schemas
+│   └── agent_output_schema.py          # Standardized output format validation
 ├── mobile_app/          # Flutter web interface
 └── services/            # Google Search & utilities
 ```
