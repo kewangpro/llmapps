@@ -77,9 +77,28 @@ def _parse_standardized_json_output(result_text: str, request: TripRequest, agen
             
             # Patch: supply default date for flights before schema validation
             if 'flights' in parsed_data and isinstance(parsed_data['flights'], list):
+                # Calculate return date
+                return_date = (datetime.strptime(request.start_date, "%Y-%m-%d") + timedelta(days=request.duration_days)).strftime('%Y-%m-%d')
+                
                 for flight in parsed_data['flights']:
                     if 'date' not in flight or not str(flight.get('date', '')).strip():
-                        flight['date'] = request.start_date
+                        # Determine if this is outbound or return flight
+                        from_city = flight.get('from_city', '').lower()
+                        to_city = flight.get('to_city', '').lower()
+                        origin = request.origin.lower()
+                        
+                        # If any destination city appears in from_city and origin appears in to_city, it's a return flight
+                        is_return_flight = False
+                        for dest in request.destinations:
+                            if dest.lower() in from_city and origin in to_city:
+                                is_return_flight = True
+                                break
+                        
+                        # Assign appropriate date
+                        if is_return_flight:
+                            flight['date'] = return_date
+                        else:
+                            flight['date'] = request.start_date
             
             # Patch: fix budget structure if needed
             if 'budget' in parsed_data and isinstance(parsed_data['budget'], dict):
