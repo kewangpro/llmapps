@@ -8,7 +8,7 @@ A Flutter mobile application for smart multi-city round trip planning using pure
 - **Unified Itinerary**: Chronological view combining flights and daily activities
 - **Flight Integration**: Realistic airline suggestions with times and pricing
 - **Beautiful UI**: Clean, modern interface with visual distinction between flights and activities
-- **Cross-Platform**: Runs on iOS, Android, and Web
+- **Cross-Platform**: Runs on iOS (iPhone/iPad Simulator), Android, and Web
 - **Local AI**: Uses Ollama Gemma3 for privacy-focused trip generation
 - **Hotel Selection**: AI selects best hotel per city based on rating and price
 - **Clean UI**: Modern interface with AI agent badges and structured data display
@@ -43,6 +43,9 @@ A Flutter mobile application for smart multi-city round trip planning using pure
 - Flutter SDK (3.10.0+)
 - Dart SDK (3.0.0+)
 - Backend API server running on localhost:8000
+- **iOS Development**: Xcode, iOS Simulator (iOS 18.6+), CocoaPods
+- **Android Development**: Android Studio, Android SDK (optional)
+- **Web Development**: Chrome browser (recommended)
 
 ### Installation
 
@@ -68,8 +71,48 @@ A Flutter mobile application for smart multi-city round trip planning using pure
    
    **Manual Launch**:
    - **Web**: `flutter run -d chrome`
-   - **iOS Simulator** (requires Xcode): `flutter run -d ios`
-   - **Android** (requires Android Studio): `flutter run -d android`
+   - **iOS Simulator**: `flutter run -d ios` (requires iOS setup - see iOS Setup section below)
+   - **Android**: `flutter run -d android` (requires Android Studio)
+
+### iOS Setup (Required for iOS Simulator)
+
+**First-time iOS Setup**:
+1. **Install Xcode** from the Mac App Store
+2. **Accept Xcode License**:
+   ```bash
+   sudo xcodebuild -license accept
+   ```
+3. **Install CocoaPods**:
+   ```bash
+   brew install cocoapods
+   ```
+4. **Generate iOS Platform Files** (if not present):
+   ```bash
+   flutter create --platforms=ios .
+   ```
+5. **Download iOS Simulator Runtime**:
+   ```bash
+   xcodebuild -downloadPlatform iOS
+   ```
+
+**Running on iOS**:
+1. **Check available devices**:
+   ```bash
+   flutter devices
+   ```
+2. **Launch on specific iOS simulator**:
+   ```bash
+   flutter run -d ios
+   ```
+   Or target specific device:
+   ```bash
+   flutter run -d [DEVICE_ID]
+   ```
+
+**iOS Troubleshooting**:
+- If no iOS devices appear: `open -a Simulator` then run `flutter devices`
+- For "connection refused" errors: Ensure backend server is running on `http://localhost:8000`
+- iOS App Transport Security is configured to allow localhost connections
 
 ### Automated Setup Script
 The `run.sh` script provides a complete development workflow:
@@ -124,9 +167,17 @@ class ItineraryItem {
 
 ### Build for Production
 ```bash
+# Web deployment
 flutter build web
+
+# Android APK
 flutter build apk
-flutter build ios
+
+# iOS (requires Apple Developer account for App Store)
+flutter build ios --release
+
+# iOS IPA (for distribution)
+flutter build ipa
 ```
 
 ### Testing
@@ -193,12 +244,17 @@ flutter packages pub run build_runner build
 
 ## 🚧 Development Notes
 
-- **Web Support**: Fully functional on Chrome/Safari with automated setup
-- **Hot Reload**: Supports Flutter hot reload for rapid development
+- **Multi-Platform Support**: 
+  - **Web**: Fully functional on Chrome/Safari with automated setup
+  - **iOS**: Complete support with iOS 18.6 Simulator, iPhone 15+ device types
+  - **Android**: Standard Android development setup required
+- **Hot Reload**: Supports Flutter hot reload for rapid development across all platforms
 - **API Dependencies**: Requires backend server for full functionality
 - **Local AI**: All AI processing happens locally via Ollama (Gemma3 model) with dual collaboration modes
+- **iOS Configuration**: App Transport Security configured for localhost API access
 - **Clean Architecture**: Recent cleanup removed unused test files and dependencies
 - **Hotel Logic**: Implements smart selection - best rating first, then lowest price for ties
+- **Network Security**: HTTP localhost connections enabled for development on all platforms
 
 ## 📝 Configuration
 
