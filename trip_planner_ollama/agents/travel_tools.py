@@ -118,7 +118,45 @@ class TravelPlanningTools:
                 elif isinstance(query, str) and query.strip():
                     import json
                     import ast
+                    import re
                     clean_query = query.strip()
+                    
+                    # SANITIZATION: Extract JSON/dict from contaminated LangChain input
+                    # Look for pattern like "Action Input: {'key': 'value'}" or similar
+                    if not (clean_query.startswith('{') and clean_query.endswith('}')):
+                        logger.debug(f"🧹 Input appears contaminated, attempting to extract JSON/dict: {repr(clean_query[:200])}")
+                        
+                        # More aggressive cleaning - look for the last occurrence of a dict pattern
+                        # Since LangChain often puts: "Thought: ... Action: ... Action Input: {'key': 'value'}"
+                        lines = clean_query.split('\n')
+                        potential_dicts = []
+                        
+                        for line in lines:
+                            line = line.strip()
+                            # Look for lines containing dict patterns
+                            if '{' in line and '}' in line:
+                                # Extract everything from first { to last }
+                                start_idx = line.find('{')
+                                end_idx = line.rfind('}')
+                                if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                                    candidate = line[start_idx:end_idx+1]
+                                    potential_dicts.append(candidate)
+                        
+                        if potential_dicts:
+                            # Use the last (most recent) dict found
+                            clean_query = potential_dicts[-1]
+                            logger.debug(f"✅ Extracted dict from line: {clean_query}")
+                        else:
+                            # Fallback: try regex pattern
+                            dict_pattern = r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}"
+                            matches = re.findall(dict_pattern, clean_query)
+                            
+                            if matches:
+                                clean_query = matches[-1]  # Use last match
+                                logger.debug(f"✅ Extracted dict pattern: {clean_query}")
+                            else:
+                                logger.error(f"❌ Could not extract valid JSON/dict from contaminated input: {repr(clean_query)}")
+                                return json.dumps([{"error": f"Could not parse contaminated input: {repr(query[:100])}..."}])
                     
                     # Try to handle Python dict string representation first
                     if clean_query.startswith('{') and clean_query.endswith('}'):

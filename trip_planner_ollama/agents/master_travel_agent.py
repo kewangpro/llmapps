@@ -98,14 +98,23 @@ class MasterTravelAgent(BaseLangChainAgent):
             return_date = (datetime.strptime(start_date, "%Y-%m-%d") + timedelta(days=duration_days)).strftime('%Y-%m-%d')
             planning_query = f"""Plan a round-trip from {origin} to {destinations[0]}.
 
+⚠️  CRITICAL REQUIREMENT: You MUST execute EXACTLY 4 tool searches: outbound flight, return flight, hotel, activities. 
+⚠️  FORBIDDEN: Do NOT fabricate data. Do NOT skip tool calls. Do NOT take shortcuts.
+
 You MUST follow these steps and use the actual search tools - DO NOT provide fake or placeholder data:
 
-Step 1: Search flights using: {{'origin': '{origin}', 'destination': '{destinations[0]}', 'departure_date': '{start_date}'}}
-Step 2: Search return flights using: {{'origin': '{destinations[0]}', 'destination': '{origin}', 'departure_date': '{return_date}'}}
-Step 3: Search hotels using: {{'city': '{destinations[0]}', 'check_in': '{start_date}', 'check_out': '{return_date}'}}
-Step 4: Search activities using: {{'location': '{destinations[0]}', 'interests': {interests}}} and return {duration_days} different activities (one for each day)
-Step 5: Analyze budget allocation for the trip
-Step 6: Compile results into the required JSON format using data from your tool searches
+CRITICAL: You are FORBIDDEN from fabricating, guessing, or making up flight/hotel/activity data. You MUST call every single search tool below. Any shortcut behavior will result in incorrect data.
+
+MANDATORY STEP-BY-STEP EXECUTION - NO SHORTCUTS ALLOWED:
+
+Step 1: REQUIRED - Search flights using: {{'origin': '{origin}', 'destination': '{destinations[0]}', 'departure_date': '{start_date}'}}
+Step 2: REQUIRED - Search return flights using: {{'origin': '{destinations[0]}', 'destination': '{origin}', 'departure_date': '{return_date}'}}  
+Step 3: REQUIRED - Search hotels using: {{'city': '{destinations[0]}', 'check_in': '{start_date}', 'check_out': '{return_date}'}}
+Step 4: REQUIRED - Search activities using: {{'location': '{destinations[0]}', 'interests': {interests}}} and return {duration_days} different activities (one for each day)
+Step 5: REQUIRED - Analyze budget allocation for the trip
+Step 6: REQUIRED - Compile results into the required JSON format using data from your tool searches
+
+WARNING: If you skip Step 2 (return flight search), the return flight data will be INCORRECT. You MUST search for return flights separately.
 
 Budget: ${budget:,.2f} for {duration_days} days
 
@@ -192,7 +201,8 @@ MANDATORY FORMATTING RULES:
 5. NO markdown code blocks (```json)
 6. NO extra text after the JSON
 7. JSON must be on a single line after "Final Answer: "
-8. You MUST call all required search tools
+8. You MUST execute ALL 4 search tool calls: outbound flight, return flight, hotel, activities
+9. FORBIDDEN: Skipping tool calls and making up data instead
 
 EXAMPLE OF CORRECT FORMAT:
 Final Answer: {{"flights": [{{"from_city": "Seattle", "to_city": "Tokyo", "airline": "ANA", "price": 800}}], "hotels": [], "activities": [], "summary": "Trip planned"}}"""
@@ -308,7 +318,8 @@ MANDATORY FORMATTING RULES:
 5. NO markdown code blocks (```json)
 6. NO extra text after the JSON
 7. JSON must be on a single line after "Final Answer: "
-8. You MUST call all required search tools
+8. You MUST execute ALL 4 search tool calls: outbound flight, return flight, hotel, activities
+9. FORBIDDEN: Skipping tool calls and making up data instead
 
 EXAMPLE OF CORRECT FORMAT:
 Final Answer: {{"flights": [{{"from_city": "Seattle", "to_city": "Tokyo", "airline": "ANA", "price": 800}}], "hotels": [], "activities": [], "summary": "Trip planned"}}"""
