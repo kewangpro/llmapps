@@ -584,7 +584,9 @@ class TravelPlanningTools:
                     budget_breakdown = f"Budget Analysis based on: {description}\n"
                     budget_breakdown += f"Using ${total_budget:,.2f} budget for {duration_days}-day trip\n\n"
                 else:
-                    budget_breakdown = f"Budget Analysis for {duration_days} days to {', '.join(destinations)}\n"
+                    # Handle destinations list safely
+                    destinations_str = ', '.join(str(d) for d in destinations) if isinstance(destinations, list) else str(destinations)
+                    budget_breakdown = f"Budget Analysis for {duration_days} days to {destinations_str}\n"
                     budget_breakdown += f"Total Budget: ${total_budget:,.2f} ({travel_style} style)\n\n"
                 
                 daily_budget = total_budget / duration_days if duration_days > 0 else 0
@@ -674,7 +676,9 @@ class TravelPlanningTools:
                 # Simple route optimization logic
                 route_analysis = f"Route Optimization Analysis\n"
                 route_analysis += f"Origin: {origin}\n"
-                route_analysis += f"Destinations: {', '.join(destinations)}\n\n"
+                # Handle destinations list safely  
+                destinations_str = ', '.join(str(d) for d in destinations) if isinstance(destinations, list) else str(destinations)
+                route_analysis += f"Destinations: {destinations_str}\n\n"
                 
                 # Suggest optimal order (simplified)
                 if len(destinations) == 1:

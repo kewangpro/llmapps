@@ -132,9 +132,9 @@ Observation: [The result of the tool will be inserted here by the system. You do
 
 Here is an example of a valid thought process:
 
-Thought: I need to find flights from Seattle to Tokyo.
+Thought: I need to find flights from [origin] to [destination].
 Action: google_flight_search
-Action Input: {{'origin': 'Seattle', 'destination': 'Tokyo', 'departure_date': '2025-10-01'}}
+Action Input: {{'origin': '[origin]', 'destination': '[destination]', 'departure_date': '[date]'}}
 Observation: Found 5 flights...
 
 RULES FOR YOUR RESPONSE:
@@ -299,9 +299,35 @@ Question: {input}
                         tools_used = []
                         tool_outputs = []
                         
-                        # Extract any completed tool results 
-                        if hasattr(self, '_last_tool_outputs'):
-                            tool_outputs = self._last_tool_outputs
+                        # Extract tool outputs from intermediate steps
+                        for step in partial_steps:
+                            if isinstance(step, tuple) and len(step) >= 2:
+                                action = step[0]
+                                observation = step[1]
+                                if hasattr(action, 'tool'):
+                                    tools_used.append(action.tool)
+                                    tool_outputs.append(str(observation))
+                                    logger.info(f"🛠️  Captured tool output from {action.tool}: {str(observation)[:100]}...")
+                        
+                        # Primary fallback: check if the agent has any stored tool outputs from callback handler
+                        if not tool_outputs and hasattr(self, '_last_tool_outputs') and self._last_tool_outputs:
+                            tool_outputs = self._last_tool_outputs[:]  # Make a copy
+                            logger.info(f"🔄 Using {len(tool_outputs)} tool outputs from callback handler")
+                            # Deduce tools used from output content
+                            for output in tool_outputs:
+                                if "flights from" in output.lower():
+                                    tools_used.append("google_flight_search")
+                                elif "hotels in" in output.lower():
+                                    tools_used.append("google_hotel_search")
+                                elif "activity" in output.lower() or "attraction" in output.lower():
+                                    tools_used.append("google_activity_search")
+                                elif "budget" in output.lower():
+                                    tools_used.append("budget_analysis")
+                        
+                        # Additional fallback: check if callback handler is accessible through debug callback
+                        if not tool_outputs and hasattr(self, 'debug_callback') and hasattr(self.debug_callback, 'tool_outputs'):
+                            tool_outputs = self.debug_callback.tool_outputs
+                            logger.info(f"🔄 Using {len(tool_outputs)} tool outputs from debug callback handler")
                         
                         # Extract structured flight and hotel data for the web app
                         flights_data = []
@@ -322,8 +348,8 @@ Question: {input}
                         # Create structured trip plan data that the web app expects
                         start_date = context.get("start_date", "2025-09-01") if context else "2025-09-01"
                         duration_days = context.get("duration_days", 10) if context else 10
-                        destinations = context.get("destinations", ["tokyo"]) if context else ["tokyo"]
-                        origin = context.get("origin", "seattle") if context else "seattle"
+                        destinations = context.get("destinations", ["Tokyo"]) if context else ["Tokyo"]
+                        origin = context.get("origin", "Seattle") if context else "Seattle"
                         
                         # Create proper trip plan structure
                         trip_plan_data = {
