@@ -6,6 +6,7 @@ from models import TripRequest, TripPlan, DayPlan, Flight, Hotel
 from config import get_config
 from services.error_handler import global_error_handler, log_error
 from agents import create_langchain_agent_system, LangChainMultiAgentSystem
+from curation import TripCurator
 import uvicorn
 import logging
 import json
@@ -22,11 +23,13 @@ def _parse_standardized_json_output(result_text: str, request: TripRequest, agen
     Parse standardized JSON output from agent instead of using fragile regex patterns.
     
     Returns:
-        tuple: (flights, hotels, activities, budget_float) where:
+        tuple: (flights, hotels, activities, budget_float, curated_flights, curated_hotels) where:
         - flights: List[Flight] - parsed flight data
         - hotels: List[Hotel] - parsed hotel data  
         - activities: Dict[str, List[str]] - activities by city
         - budget_float: float - extracted budget amount
+        - curated_flights: Dict - curated flight structure (primary/alternatives)
+        - curated_hotels: Dict - curated hotel structure (primary/alternatives)
     """
     from models import Flight, Hotel
     from schemas.agent_output_schema import StandardizedAgentOutput, validate_agent_output
@@ -35,39 +38,36 @@ def _parse_standardized_json_output(result_text: str, request: TripRequest, agen
     hotels = []
     activities = {}
     budget_float = 3000.0  # Default budget
+    curated_flights = {"primary": {"outbound": None, "return": None}, "alternatives": []}
+    curated_hotels = {"primary": None, "alternatives": []}
     
-    # Look for JSON in agent output - handle multiple formats
+    # Look for JSON in agent output - prioritize Final Answer format
     import re
     json_str = None
     
-    # Try direct JSON parsing first
-    if result_text.strip().startswith('{'):
-        json_str = result_text.strip()
-        logger.debug(f"📝 Parsing result text as direct JSON: {json_str[:200]}...")
+    # First, try to find "Final Answer:" format
+    final_answer_pattern = r'Final Answer:\s*```?json\s*({.*?})\s*```?'
+    final_answer_match = re.search(final_answer_pattern, result_text, re.DOTALL)
+    
+    if final_answer_match:
+        json_str = final_answer_match.group(1).strip()
+        logger.info(f"📝 Found Final Answer JSON: {json_str[:200]}...")
     else:
-        # Try "Final Answer:" format
-        final_answer_pattern = r'Final Answer:\s*({.*?})'
-        final_answer_match = re.search(final_answer_pattern, result_text, re.DOTALL)
-        
-        # Try markdown code block format
+        # Fallback: try markdown JSON block (in case Final Answer prefix was stripped)
         markdown_pattern = r'```json\s*({.*?})\s*```'
         markdown_match = re.search(markdown_pattern, result_text, re.DOTALL)
         
-        # Try any JSON block pattern
-        json_block_pattern = r'{[^{}]*(?:{[^{}]*}[^{}]*)*}'
-        json_block_match = re.search(json_block_pattern, result_text, re.DOTALL)
-        
-        if final_answer_match:
-            json_str = final_answer_match.group(1).strip()
-            logger.info(f"📝 Found Final Answer JSON: {json_str[:200]}...")
-        elif markdown_match:
+        if markdown_match:
             json_str = markdown_match.group(1).strip()
-            logger.info(f"📝 Found markdown JSON: {json_str[:200]}...")
-        elif json_block_match:
-            json_str = json_block_match.group(0).strip()
-            logger.info(f"📝 Found JSON block: {json_str[:200]}...")
+            logger.info(f"📝 Found markdown JSON (Final Answer likely stripped): {json_str[:200]}...")
+        elif result_text.strip().startswith('{'):
+            # Direct JSON as last resort
+            json_str = result_text.strip()
+            logger.debug(f"📝 Fallback: Parsing result text as direct JSON: {json_str[:200]}...")
         else:
-            logger.error(f"❌ No JSON pattern matched in output: {result_text[:300]}...")
+            logger.error(f"❌ No JSON found in output: {result_text[:300]}...")
+            # Return defaults when no JSON found
+            return flights, hotels, activities, budget_float, curated_flights, curated_hotels
 
     if json_str:
         try:
@@ -149,36 +149,49 @@ def _parse_standardized_json_output(result_text: str, request: TripRequest, agen
             
             # Validate against schema
             validated_output = validate_agent_output(parsed_data)
-            # Convert flights to Flight models
+            # Prepare raw data for curation
+            flights_raw_data = []
+            hotels_raw_data = []
+            
             for flight_data in validated_output.flights:
                 # Patch: supply default date if missing or empty
                 flight_date = getattr(flight_data, 'date', None)
                 if not flight_date or not str(flight_date).strip():
                     # Use request.start_date as fallback
                     flight_date = request.start_date
-                flight = Flight(
-                    from_city=flight_data.from_city,
-                    to_city=flight_data.to_city,
-                    date=flight_date,
-                    departure_time=flight_data.departure_time,
-                    arrival_time=flight_data.arrival_time,
-                    airline=flight_data.airline,
-                    estimated_price=f"${flight_data.price:.2f}",
-                    data_source=flight_data.source
-                )
-                flights.append(flight)
-                logger.debug(f"✈️  {flight.from_city} → {flight.to_city}: {flight.airline} - {flight.estimated_price} [{flight.data_source}]")
-            # Convert hotels to Hotel models
+                
+                # Convert to dict for curator
+                flight_dict = {
+                    'from_city': flight_data.from_city,
+                    'to_city': flight_data.to_city,
+                    'date': flight_date,
+                    'departure_time': flight_data.departure_time,
+                    'arrival_time': flight_data.arrival_time,
+                    'airline': flight_data.airline,
+                    'price': flight_data.price,
+                    'source': flight_data.source
+                }
+                flights_raw_data.append(flight_dict)
+            
             for hotel_data in validated_output.hotels:
-                hotel = Hotel(
-                    city=hotel_data.city,
-                    name=hotel_data.name,
-                    price_per_night=f"${hotel_data.price_per_night:.2f}",
-                    rating=float(hotel_data.rating),
-                    amenities=hotel_data.amenities,
-                    data_source=hotel_data.source
-                )
-                hotels.append(hotel)
+                hotel_dict = {
+                    'city': hotel_data.city,
+                    'name': hotel_data.name,
+                    'price_per_night': hotel_data.price_per_night,
+                    'rating': float(hotel_data.rating),
+                    'amenities': hotel_data.amenities,
+                    'source': hotel_data.source
+                }
+                hotels_raw_data.append(hotel_dict)
+            
+            # Use curation system to process data
+            flights, curated_flights = trip_curator.curate_flights(flights_raw_data, request)
+            hotels, curated_hotels = trip_curator.curate_hotels(hotels_raw_data, request)
+            
+            logger.info(f"🎯 Curation results - flights: {len(flights)}, hotels: {len(hotels)}")
+            for flight in flights:
+                logger.debug(f"✈️  {flight.from_city} → {flight.to_city}: {flight.airline} - {flight.estimated_price} [{flight.data_source}]")
+            for hotel in hotels:
                 logger.debug(f"🏨 {hotel.city}: {hotel.name} - {hotel.price_per_night}/night [{hotel.data_source}]")
             # Activities - store as objects instead of just strings
             activities = {}
@@ -206,8 +219,10 @@ def _parse_standardized_json_output(result_text: str, request: TripRequest, agen
             hotels = []
             activities = {}
             budget_float = 3000.0
+            curated_flights = {"primary": {"outbound": None, "return": None}, "alternatives": []}
+            curated_hotels = {"primary": None, "alternatives": []}
     # Always return a tuple, even if nothing was parsed
-    return flights, hotels, activities, budget_float
+    return flights, hotels, activities, budget_float, curated_flights, curated_hotels
 
 
 config = get_config()
@@ -236,6 +251,9 @@ app.add_middleware(
 
 # Initialize the TRUE LangChain Agent System
 langchain_agent_system: Optional[LangChainMultiAgentSystem] = None
+
+# Initialize Trip Curator
+trip_curator = TripCurator()
 
 @app.on_event("startup")
 async def startup_event():
@@ -363,7 +381,7 @@ async def plan_trip(request: TripRequest, background_tasks: BackgroundTasks):
         # Parse agent output directly
         result_text = str(result.primary_result.get("output", "")) if hasattr(result, 'primary_result') and isinstance(result.primary_result, dict) else str(result)
         agent_result_dict = result.primary_result if hasattr(result, 'primary_result') and isinstance(result.primary_result, dict) else result if isinstance(result, dict) else {}
-        flights, hotels, activities, budget_float = _parse_standardized_json_output(result_text, request, agent_result_dict)
+        flights, hotels, activities, budget_float, curated_flights, curated_hotels = _parse_standardized_json_output(result_text, request, agent_result_dict)
         estimated_budget = f"${budget_float:.2f}" if budget_float else "$3000.00"
         # Build TripPlan data
         trip_plan_data = {
@@ -451,7 +469,22 @@ async def plan_trip(request: TripRequest, background_tasks: BackgroundTasks):
             "estimated_budget": trip_plan.estimated_budget,
             "travel_tips": trip_plan.travel_tips,
             "flights": [_transform_flight_for_frontend(flight) for flight in trip_plan.flights],
-            "hotels": [_transform_hotel_for_frontend(hotel) for hotel in trip_plan.hotels]
+            "hotels": [_transform_hotel_for_frontend(hotel) for hotel in trip_plan.hotels],
+            # Enhanced: Include curated structures for advanced UX
+            "curated_flights": curated_flights,
+            "curated_hotels": curated_hotels,
+            "curation_info": {
+                "flight_selection_criteria": "Price (70%) + Duration (30%)",
+                "hotel_selection_criteria": "Rating (60%) + Price (40%)",
+                "primary_flights": {
+                    "outbound": curated_flights.get("primary", {}).get("outbound") is not None,
+                    "return": curated_flights.get("primary", {}).get("return") is not None
+                },
+                "alternatives_available": {
+                    "flights": len(curated_flights.get("alternatives", [])),
+                    "hotels": len(curated_hotels.get("alternatives", []))
+                }
+            }
         }
         
         processing_time = (datetime.utcnow() - request_start_time).total_seconds()
@@ -522,6 +555,125 @@ async def reset_error_stats():
     except Exception as e:
         log_error(e, {"endpoint": "reset_error_stats"})
         raise HTTPException(status_code=500, detail="Failed to reset error stats")
+
+@app.post("/curate-flights")
+async def curate_flights_endpoint(request: Dict[str, Any]):
+    """
+    Curate flight options from raw flight data.
+    
+    Expected request format:
+    {
+        "flights": [...],  # List of flight dictionaries or curated structure
+        "trip_request": {  # TripRequest-like data for context
+            "origin": "San Francisco",
+            "destinations": ["Tokyo"],
+            "start_date": "2024-03-15",
+            "duration_days": 7
+        }
+    }
+    
+    Returns curated flights with primary recommendations and alternatives.
+    """
+    try:
+        flights_data = request.get('flights', [])
+        trip_data = request.get('trip_request', {})
+        
+        if not flights_data:
+            return {"error": "No flight data provided"}
+        
+        # Create minimal TripRequest object for curation context
+        mock_request = type('MockRequest', (), {
+            'origin': trip_data.get('origin', 'Unknown'),
+            'destinations': trip_data.get('destinations', ['Unknown']),
+            'start_date': trip_data.get('start_date', datetime.now().strftime('%Y-%m-%d')),
+            'duration_days': trip_data.get('duration_days', 7)
+        })()
+        
+        # Curate flights using TripCurator
+        curated_flights, curated_structure = trip_curator.curate_flights(flights_data, mock_request)
+        
+        return {
+            "status": "success",
+            "curated_flights": [_transform_flight_for_frontend(flight) for flight in curated_flights],
+            "curated_structure": curated_structure,
+            "total_flights": len(curated_flights),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in curate-flights endpoint: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to curate flights: {str(e)}")
+
+@app.post("/curate-hotels")
+async def curate_hotels_endpoint(request: Dict[str, Any]):
+    """
+    Curate hotel options from raw hotel data.
+    
+    Expected request format:
+    {
+        "hotels": [...],  # List of hotel dictionaries or curated structure
+        "trip_request": {  # TripRequest-like data for context
+            "origin": "San Francisco",
+            "destinations": ["Tokyo"],
+            "start_date": "2024-03-15",
+            "duration_days": 7
+        }
+    }
+    
+    Returns curated hotels with primary recommendation and alternatives.
+    """
+    try:
+        hotels_data = request.get('hotels', [])
+        trip_data = request.get('trip_request', {})
+        
+        if not hotels_data:
+            return {"error": "No hotel data provided"}
+        
+        # Create minimal TripRequest object for curation context
+        mock_request = type('MockRequest', (), {
+            'origin': trip_data.get('origin', 'Unknown'),
+            'destinations': trip_data.get('destinations', ['Unknown']),
+            'start_date': trip_data.get('start_date', datetime.now().strftime('%Y-%m-%d')),
+            'duration_days': trip_data.get('duration_days', 7)
+        })()
+        
+        # Curate hotels using TripCurator
+        curated_hotels, curated_structure = trip_curator.curate_hotels(hotels_data, mock_request)
+        
+        return {
+            "status": "success",
+            "curated_hotels": [_transform_hotel_for_frontend(hotel) for hotel in curated_hotels],
+            "curated_structure": curated_structure,
+            "total_hotels": len(curated_hotels),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in curate-hotels endpoint: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to curate hotels: {str(e)}")
+
+@app.get("/curation-status")
+async def get_curation_status():
+    """Get the status of the curation system."""
+    try:
+        return {
+            "status": "active",
+            "curation_system": "TripCurator v1.0",
+            "features": [
+                "Smart flight selection (outbound/return separation)",
+                "Hotel optimization by rating and price", 
+                "Dual data structure support",
+                "Primary/alternative recommendation structure"
+            ],
+            "endpoints": [
+                "/curate-flights - Manual flight curation",
+                "/curate-hotels - Manual hotel curation"
+            ],
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting curation status: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get curation status")
 
 
 # Removed MCP endpoints - using only LangChain agents
@@ -688,6 +840,9 @@ if __name__ == "__main__":
     print("   - GET /api-status - Check agent system status") 
     print("   - GET /test-ollama - Test Ollama connectivity")
     print("   - GET /test-flight-cards - Test mobile app integration")
+    print("   - POST /curate-flights - Manual flight curation")
+    print("   - POST /curate-hotels - Manual hotel curation")
+    print("   - GET /curation-status - Check curation system status")
     print("")
     print("💡 Optional Google Search API:")
     print("   - Get API key: https://developers.google.com/custom-search/v1/overview")

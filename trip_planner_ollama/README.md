@@ -8,7 +8,8 @@ Smart multi-city trip planning powered by pure LLM reasoning. Plan complete itin
 - **📱 Modern Web App**: Flutter-based responsive interface  
 - **🖥️ CLI Tool**: Command-line interface for direct planning
 - **🔄 Works Offline**: No API keys required (Google Search optional)
-- **🏨 Smart Selection**: Automatically picks best hotels per city
+- **🎯 Intelligent Curation**: Smart flight and hotel selection with primary recommendations and alternatives
+- **🏨 Optimized Selection**: Algorithmic scoring based on price, rating, and convenience factors
 
 ## 🏗️ How It Works
 
@@ -59,7 +60,9 @@ Copy `.env.example` to `.env` and add your Google Search credentials for enhance
 
 **Complete Trip Plans:**
 - ✈️ Flight recommendations with airlines, times, and prices
-- 🏨 Best hotel per city (auto-selected by rating + price)
+- 🎯 Curated flight options (outbound/return separation with alternatives)
+- 🏨 Best hotel per city (auto-selected by rating + price optimization)
+- 🔄 Primary recommendations + alternative options for flexible planning
 - 📅 Daily itineraries with activities and local tips
 - 💰 Budget estimates and cost breakdowns
 
@@ -83,6 +86,11 @@ Copy `.env.example` to `.env` and add your Google Search credentials for enhance
 }
 ```
 
+**Curation Endpoints:**
+- `POST /curate-flights` - Manual flight curation with scoring
+- `POST /curate-hotels` - Manual hotel curation and selection
+- `GET /curation-status` - Check curation system status
+
 **Other Endpoints:** Health checks, system status, and interactive docs at `/docs`
 
 ## 🤖 LLM Agent Architecture
@@ -105,7 +113,7 @@ Copy `.env.example` to `.env` and add your Google Search credentials for enhance
 - **Structured Output**: Standardized format parsing for reliable data extraction
 - **Pure LLM**: No fallback systems - full autonomous operation
 
-**Available Tools**: Flight Search, Hotel Search, Activity Search, Budget Analysis, Route Optimization
+**Available Tools**: Flight Search, Hotel Search, Activity Search, Budget Analysis, Route Optimization, Intelligent Curation
 
 ## 📁 Structure
 
@@ -114,6 +122,7 @@ Copy `.env.example` to `.env` and add your Google Search credentials for enhance
 ├── run.py               # CLI tool for trip planning
 ├── models.py            # Pydantic data models & validation
 ├── config.py            # Configuration management
+├── curation.py          # Intelligent flight & hotel selection system
 ├── agents/              # LangChain ReAct agent system
 │   ├── master_travel_agent.py         # Main LLM reasoning agent
 │   ├── langchain_multi_agent_system.py # Dual-mode coordination system
@@ -172,6 +181,13 @@ For enhanced real-time data, add Google Search credentials to `.env`:
 - **Structured Extraction**: Regex parsing of standardized LLM output
 - **Multi-City Support**: Complex routing with proper date sequencing
 - **Real-time Integration**: Google Search API with intelligent fallbacks
+- **Smart Curation**: Algorithmic flight and hotel selection with primary/alternative structure
+
+**Curation System:**
+- **Flight Scoring**: Price (70%) + Duration (30%) with outbound/return separation
+- **Hotel Scoring**: Rating (60%) + Price (40%) optimization
+- **Flexible Output**: Primary recommendations + alternatives for user choice
+- **Dual Format Support**: Handles both curated and legacy data structures
 
 ---
 
