@@ -145,10 +145,11 @@ class TripResultScreen extends StatelessWidget {
                     ),
                   ),
                 // Data source indicator at rightmost position
-                if (flight.estimatedPrice != null && flight.dataSource != null)
-                  const SizedBox(width: 8),
-                if (flight.dataSource != null)
+                if (flight.dataSource != null) ...[
+                  if (flight.estimatedPrice != null)
+                    const SizedBox(width: 8),
                   _buildDataSourceBadge(flight.dataSource!),
+                ],
               ],
             ),
             
@@ -526,10 +527,11 @@ class TripResultScreen extends StatelessWidget {
                     ),
                   ),
                 // Data source indicator at rightmost position
-                if (hotel.pricePerNight.isNotEmpty && hotel.dataSource != null)
-                  const SizedBox(width: 8),
-                if (hotel.dataSource != null)
+                if (hotel.dataSource != null) ...[
+                  if (hotel.pricePerNight.isNotEmpty)
+                    const SizedBox(width: 8),
                   _buildDataSourceBadge(hotel.dataSource!),
+                ],
               ],
             ),
             
