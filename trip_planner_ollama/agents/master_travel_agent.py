@@ -110,7 +110,7 @@ class MasterTravelAgent(BaseLangChainAgent):
             if i < len(destinations):
                 checkout_date = (current_date + timedelta(days=days_per_destination)).strftime('%Y-%m-%d')
                 search_steps.append(f"Search hotels: {{'city': '{route[i+1]}', 'check_in': '{flight_date}', 'check_out': '{checkout_date}'}}")
-                search_steps.append(f"Search activities: {{'location': '{route[i+1]}', 'interests': {interests}}}")
+                search_steps.append(f"Search activities: {{'city': '{route[i+1]}', 'interests': {interests}}}")
                 current_date += timedelta(days=days_per_destination)
         
         # Add budget analysis
@@ -130,6 +130,8 @@ You must execute ALL {len(search_steps)} searches in this EXACT order. Do NOT sk
 
 MANDATORY: Execute each step above in order. After completing all {len(search_steps)} steps, provide your Final Answer JSON using the actual data from your searches.
 
+CRITICAL: Your response must EXACTLY match this JSON format. Do NOT change field names or structure:
+
 Final Answer: {{
   "flights": [
     {{"from_city": "actual_city", "to_city": "actual_city", "date": "actual_date", "airline": "actual airline from search", "price": actual_price_number, "departure_time": "actual time", "arrival_time": "actual time", "duration": "actual duration", "source": "search"}}
@@ -140,9 +142,15 @@ Final Answer: {{
   "activities": [
     {{"city": "actual_city", "name": "actual activity name from search", "description": "actual description from search", "category": "actual category", "source": "search"}}
   ],
-  "budget": {{"total": {budget}, "breakdown": {{"flights": 0, "hotels": 0, "activities": 0, "food": 0, "transport": 0}}}},
+  "budget": {{"total": {budget}, "breakdown": {{"flights": flight_cost_number, "hotels": hotel_cost_number, "activities": activity_cost_number, "food": food_cost_number, "transport": transport_cost_number}}}},
   "summary": "Brief trip summary based on your search results"
 }}
+
+IMPORTANT BUDGET FORMAT RULES:
+- "budget" must have BOTH "total" and "breakdown" fields
+- Use "hotels" not "accommodation" 
+- Use "transport" not "local_transport"
+- All breakdown values must be numbers, not zero
 
 Do NOT continue thinking after providing the Final Answer JSON."""
         
