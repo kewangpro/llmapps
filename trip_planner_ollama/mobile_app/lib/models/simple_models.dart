@@ -105,11 +105,37 @@ class TripRequest {
   }
 }
 
+class Activity {
+  final String name;
+  final String description;
+  final String city;
+  final String category;
+  final String? source;
+
+  Activity({
+    required this.name,
+    required this.description,
+    required this.city,
+    required this.category,
+    this.source,
+  });
+
+  factory Activity.fromJson(Map<String, dynamic> json) {
+    return Activity(
+      name: json['name'] ?? '',
+      description: json['description'] ?? json['name'] ?? '',
+      city: json['city'] ?? '',
+      category: json['category'] ?? 'general',
+      source: json['source'],
+    );
+  }
+}
+
 class DayPlan {
   final int day;
   final String date;
   final String city;
-  final List<String> activities;
+  final List<Activity> activities;
   final String? accommodation;
   final String? transportation;
   final List<String> cityTips;
@@ -125,11 +151,37 @@ class DayPlan {
   });
 
   factory DayPlan.fromJson(Map<String, dynamic> json) {
+    var activitiesJson = json['activities'] as List? ?? [];
+    List<Activity> activities = activitiesJson.map((activityJson) {
+      if (activityJson is String) {
+        // Handle legacy string format
+        return Activity(
+          name: activityJson,
+          description: activityJson,
+          city: json['city'] ?? '',
+          category: 'general',
+          source: 'ai_agent',
+        );
+      } else if (activityJson is Map<String, dynamic>) {
+        // Handle new object format
+        return Activity.fromJson(activityJson);
+      } else {
+        // Fallback
+        return Activity(
+          name: 'Activity',
+          description: 'Activity',
+          city: json['city'] ?? '',
+          category: 'general',
+          source: 'ai_agent',
+        );
+      }
+    }).toList();
+
     return DayPlan(
       day: json['day'] ?? 0,
       date: json['date'] ?? '',
       city: json['city'] ?? '',
-      activities: List<String>.from(json['activities'] ?? []),
+      activities: activities,
       accommodation: json['accommodation'],
       transportation: json['transportation'],
       cityTips: List<String>.from(json['city_tips'] ?? []),
