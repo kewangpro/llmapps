@@ -10,6 +10,7 @@ Smart multi-city trip planning with dual collaboration modes. Plan complete itin
 - **🔄 Flexible Configuration**: Simple Mode works offline, Comprehensive Mode uses Google Search API
 - **🎯 Intelligent Curation**: Smart flight and hotel selection with primary recommendations and alternatives
 - **🏨 Optimized Selection**: Algorithmic scoring based on price, rating, and convenience factors
+- **📅 Flight-Aware Scheduling**: Daily plans automatically align with actual flight schedules for accurate city assignments
 
 ## 🏗️ How It Works
 
@@ -70,7 +71,8 @@ Copy `.env.example` to `.env` and add your Google Search credentials to enable C
 - 🎯 Curated flight options (outbound/return separation with alternatives)
 - 🏨 Best hotel per city (auto-selected by rating + price optimization)
 - 🔄 Primary recommendations + alternative options for flexible planning
-- 📅 Daily itineraries with activities and local tips
+- 📅 Smart daily itineraries with flight-synchronized city scheduling
+- 🎯 Activities matched to correct cities based on actual travel dates
 - 💰 Budget estimates and cost breakdowns
 
 **Smart Interface:**
@@ -134,20 +136,9 @@ Copy `.env.example` to `.env` and add your Google Search credentials to enable C
 ├── run.py               # CLI tool for trip planning
 ├── models.py            # Pydantic data models & validation
 ├── config.py            # Configuration management
-├── curation.py          # Intelligent flight & hotel selection system
+├── curation.py          # Intelligent flight & hotel selection + daily plan generation
 ├── agents/              # LangChain ReAct agent system
-│   ├── travel_agent.py                 # Simple Mode single agent (LLM reasoning)
-│   ├── master_synthesis_agent.py       # Comprehensive Mode synthesis agent
-│   ├── langchain_multi_agent_system.py # Dual-mode coordination system
-│   ├── flight_planning_agent.py        # Specialized flight search agent
-│   ├── accommodation_agent.py          # Hotel search specialist
-│   ├── activity_agent.py               # Activity recommendation agent
-│   ├── budget_planning_agent.py        # Budget analysis agent
-│   ├── travel_tools.py                 # LLM reasoning tools (Simple Mode)
-│   ├── google_enhanced_tools.py        # Google Search tools (Comprehensive Mode)
-│   └── langchain_base_agent.py         # ReAct framework base
 ├── schemas/             # Agent output validation schemas
-│   └── agent_output_schema.py          # Standardized output format validation
 ├── mobile_app/          # Flutter web interface
 └── services/            # Google Search & utilities
 ```
@@ -205,6 +196,8 @@ To enable Comprehensive Mode with real-time data, add Google Search credentials 
 **Curation System:**
 - **Flight Scoring**: Price (70%) + Duration (30%) with outbound/return separation
 - **Hotel Scoring**: Rating (60%) + Price (40%) optimization
+- **Flight-Aware Daily Plans**: City assignments based on actual flight schedules
+- **Activity Optimization**: Smart matching of activities to correct cities and dates
 - **Flexible Output**: Primary recommendations + alternatives for user choice
 - **Dual Format Support**: Handles both curated and legacy data structures
 

@@ -45,6 +45,11 @@ def _parse_standardized_json_output(result_text: str, request: TripRequest, agen
     import re
     json_str = None
     
+    # Debug logging
+    logger.debug(f"🔍 JSON parsing - input length: {len(result_text)} chars")
+    logger.debug(f"🔍 JSON parsing - input starts: {result_text[:150]}...")
+    logger.debug(f"🔍 JSON parsing - input ends: ...{result_text[-150:]}")
+    
     # First, try to find "Final Answer:" format
     final_answer_pattern = r'Final Answer:\s*```?json\s*({.*?})\s*```?'
     final_answer_match = re.search(final_answer_pattern, result_text, re.DOTALL)
@@ -53,6 +58,7 @@ def _parse_standardized_json_output(result_text: str, request: TripRequest, agen
         json_str = final_answer_match.group(1).strip()
         logger.info(f"📝 Found Final Answer JSON: {json_str[:200]}...")
     else:
+        logger.debug("🔍 No Final Answer format found, trying markdown...")
         # Fallback: try markdown JSON block (in case Final Answer prefix was stripped)
         markdown_pattern = r'```json\s*({.*?})\s*```'
         markdown_match = re.search(markdown_pattern, result_text, re.DOTALL)
@@ -60,14 +66,16 @@ def _parse_standardized_json_output(result_text: str, request: TripRequest, agen
         if markdown_match:
             json_str = markdown_match.group(1).strip()
             logger.info(f"📝 Found markdown JSON (Final Answer likely stripped): {json_str[:200]}...")
-        elif result_text.strip().startswith('{'):
-            # Direct JSON as last resort
-            json_str = result_text.strip()
-            logger.debug(f"📝 Fallback: Parsing result text as direct JSON: {json_str[:200]}...")
         else:
-            logger.error(f"❌ No JSON found in output: {result_text[:300]}...")
-            # Return defaults when no JSON found
-            return flights, hotels, activities, budget_float, curated_flights, curated_hotels
+            logger.debug("🔍 No markdown JSON found, trying direct JSON...")
+            if result_text.strip().startswith('{'):
+                # Direct JSON as last resort
+                json_str = result_text.strip()
+                logger.debug(f"📝 Fallback: Parsing result text as direct JSON: {json_str[:200]}...")
+            else:
+                logger.error(f"❌ No JSON found in output: {result_text[:300]}...")
+                # Return defaults when no JSON found
+                return flights, hotels, activities, budget_float, curated_flights, curated_hotels
 
     if json_str:
         try:
@@ -428,64 +436,12 @@ async def plan_trip(request: TripRequest, background_tasks: BackgroundTasks):
         else:
             total_activities = 0
         logger.info(f"🎯 After TripPlan creation - flights: {len(trip_plan.flights)}, hotels: {len(trip_plan.hotels)}, activities: {total_activities}")
-        # Patch: Remove top-level activities, include activities in daily_plans
-        # Assign activities to daily_plans by city and date
-        # Rebuild daily_plans: randomly pick one transformed activity per day
-        import random
-        daily_plans_with_activities = []
-        # Flatten activities to a list of dicts
-        flat_activities = []
-        logger.debug(f"🔍 Flattening activities - type: {type(activities_data)}, content: {activities_data}")
-        if isinstance(activities_data, dict):
-            for city, acts in activities_data.items():
-                logger.debug(f"🔍 Processing city {city} with {len(acts) if isinstance(acts, list) else 'unknown'} activities")
-                for act in acts:
-                    if isinstance(act, dict):
-                        flat_activities.append(act)
-                        logger.debug(f"🔍 Added activity: {act.get('name', 'Unknown')}")
-        elif isinstance(activities_data, list):
-            for act in activities_data:
-                if isinstance(act, dict):
-                    flat_activities.append(act)
-                    logger.debug(f"🔍 Added activity: {act.get('name', 'Unknown')}")
+        # Use curation system to generate daily plans with activities
+        logger.debug("🏗️ Using TripCurator to generate daily plans with activities")
+        daily_plans_with_activities = trip_curator.generate_daily_plans_with_activities(
+            request, curated_flights, activities_data, flights
+        )
         
-        logger.info(f"🎯 Flattened {len(flat_activities)} activities for daily plan assignment")
-        # Assign activities to days based on proper city distribution
-        for i in range(request.duration_days):
-            day_date = (datetime.strptime(request.start_date, "%Y-%m-%d") + timedelta(days=i)).strftime("%Y-%m-%d")
-            
-            # Calculate which city this day belongs to for multi-city trips
-            if len(request.destinations) > 1:
-                days_per_city = request.duration_days // len(request.destinations)
-                city_index = min(i // days_per_city, len(request.destinations) - 1)
-                city = request.destinations[city_index]
-            else:
-                city = request.destinations[0] if request.destinations else request.origin
-            
-            activities_list = []
-            if flat_activities:
-                # Filter activities for the current city
-                city_activities = [act for act in flat_activities if act.get('city', '').lower() == city.lower()]
-                if city_activities:
-                    picked = random.choice(city_activities)
-                    logger.debug(f"🎯 Day {i+1} ({city}): Selected activity '{picked.get('name', 'Unknown')}' from {len(city_activities)} available")
-                else:
-                    # Fallback to any activity if no city-specific activities found
-                    picked = random.choice(flat_activities)
-                    logger.warning(f"⚠️ Day {i+1} ({city}): No city-specific activities found, using fallback activity")
-                
-                transformed = _transform_activity_for_frontend(picked)
-                logger.debug(f"✅ Transformed activity: {transformed.get('name', 'N/A')} in {transformed.get('city', 'N/A')}")
-                # For compatibility: activities field expects simple strings (as per DayPlan model)
-                # Use description for richer content, fallback to name if description is empty
-                activity_text = transformed.get('description', '').strip() or transformed.get('name', 'Activity')
-                activities_list.append(activity_text)
-            daily_plans_with_activities.append({
-                "day": i+1,
-                "date": day_date,
-                "city": city,
-                "activities": activities_list
-            })
         response_data = {
             "total_days": trip_plan.total_days,
             "route_order": trip_plan.route_order,

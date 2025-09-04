@@ -341,3 +341,145 @@ class TripCurator:
         except Exception as e:
             logger.error(f"Error creating hotel from data: {e}")
             return None
+    
+    def generate_daily_plans_with_activities(self, request, curated_flights: Dict[str, Any], 
+                                           activities_data: Any, flights: List[Flight]) -> List[Dict[str, Any]]:
+        """
+        Generate daily plans with proper city assignments based on curated flight schedule.
+        
+        Args:
+            request: TripRequest object with trip details
+            curated_flights: Curated flight structure from curate_flights()
+            activities_data: Activities data (dict or list)
+            flights: List of Flight objects as fallback
+            
+        Returns:
+            List[Dict]: Daily plans with city assignments and activities
+        """
+        import random
+        from datetime import datetime, timedelta
+        
+        daily_plans = []
+        
+        # Flatten activities to a list of dicts
+        flat_activities = []
+        logger.debug(f"🔍 Flattening activities - type: {type(activities_data)}, content: {activities_data}")
+        
+        if isinstance(activities_data, dict):
+            for city, acts in activities_data.items():
+                logger.debug(f"🔍 Processing city {city} with {len(acts) if isinstance(acts, list) else 'unknown'} activities")
+                for act in acts:
+                    if isinstance(act, dict):
+                        flat_activities.append(act)
+                        logger.debug(f"🔍 Added activity: {act.get('name', 'Unknown')}")
+        elif isinstance(activities_data, list):
+            for act in activities_data:
+                if isinstance(act, dict):
+                    flat_activities.append(act)
+                    logger.debug(f"🔍 Added activity: {act.get('name', 'Unknown')}")
+        
+        logger.info(f"🎯 Flattened {len(flat_activities)} activities for daily plan assignment")
+        
+        # Generate daily plans with proper city assignments
+        for i in range(request.duration_days):
+            day_date = (datetime.strptime(request.start_date, "%Y-%m-%d") + timedelta(days=i)).strftime("%Y-%m-%d")
+            
+            # Determine city based on curated flight schedule
+            city = self._determine_city_for_date(day_date, i, request, curated_flights, flights)
+            
+            # Select activities for this city
+            activities_list = []
+            if flat_activities:
+                # Filter activities for the current city
+                city_activities = [act for act in flat_activities if act.get('city', '').lower() == city.lower()]
+                if city_activities:
+                    picked = random.choice(city_activities)
+                    logger.debug(f"🎯 Day {i+1} ({city}): Selected activity '{picked.get('name', 'Unknown')}' from {len(city_activities)} available")
+                    
+                    # Transform activity for frontend compatibility
+                    transformed = self._transform_activity_for_daily_plan(picked)
+                    activity_text = transformed.get('description', '').strip() or transformed.get('name', 'Activity')
+                    activities_list.append(activity_text)
+                else:
+                    # Fallback to any activity if no city-specific activities found
+                    if flat_activities:
+                        picked = random.choice(flat_activities)
+                        logger.warning(f"⚠️ Day {i+1} ({city}): No city-specific activities found, using fallback activity")
+                        transformed = self._transform_activity_for_daily_plan(picked)
+                        activity_text = transformed.get('description', '').strip() or transformed.get('name', 'Activity')
+                        activities_list.append(activity_text)
+            
+            daily_plans.append({
+                "day": i+1,
+                "date": day_date,
+                "city": city,
+                "activities": activities_list
+            })
+        
+        # Debug: Verify daily plans are in correct order
+        logger.debug("🔍 Daily plans order check:")
+        for plan in daily_plans:
+            logger.debug(f"   Day {plan['day']}: {plan['city']} ({plan['date']})")
+        
+        # Ensure daily plans are sorted by day number (defensive programming)
+        daily_plans.sort(key=lambda x: x['day'])
+        logger.debug("✅ Daily plans sorted by day number")
+        
+        return daily_plans
+    
+    def _determine_city_for_date(self, day_date: str, day_index: int, request, 
+                                curated_flights: Dict[str, Any], flights: List[Flight]) -> str:
+        """Determine which city the traveler is in on a specific date."""
+        if len(request.destinations) <= 1:
+            return request.destinations[0] if request.destinations else request.origin
+        
+        # Find which city the traveler is in on this date using curated flights
+        city = request.destinations[0]  # Start with first destination
+        
+        # Check curated flights for city transitions
+        if curated_flights and "primary" in curated_flights:
+            primary_flights = curated_flights["primary"]
+            
+            # Check outbound flights for city changes
+            if primary_flights.get("outbound"):
+                outbound_flight = primary_flights["outbound"]
+                flight_date = outbound_flight.get("date")
+                if flight_date and flight_date <= day_date:
+                    to_city = outbound_flight.get("to_city", outbound_flight.get("destination", ""))
+                    if to_city in request.destinations:
+                        city = to_city
+                        logger.debug(f"🔍 Day {day_index+1} ({day_date}): In {city} due to curated outbound flight on {flight_date}")
+        
+        # Fallback: use raw flights if curated data isn't available
+        if city == request.destinations[0]:  # No change from curated flights
+            for flight in flights:
+                flight_date = flight.date if hasattr(flight, 'date') else getattr(flight, 'departure_date', None)
+                if flight_date and flight_date <= day_date:
+                    to_city = flight.to_city if hasattr(flight, 'to_city') else getattr(flight, 'destination', '')
+                    if to_city in request.destinations:
+                        city = to_city
+                        logger.debug(f"🔍 Day {day_index+1} ({day_date}): In {city} due to fallback flight on {flight_date}")
+                        break
+        
+        logger.debug(f"🎯 Day {day_index+1} ({day_date}): Final city assignment: {city}")
+        return city
+    
+    def _transform_activity_for_daily_plan(self, activity: Dict[str, Any]) -> Dict[str, Any]:
+        """Transform activity data for daily plan compatibility."""
+        try:
+            return {
+                "name": activity.get("name", "Activity"),
+                "description": activity.get("description", activity.get("name", "Activity")),
+                "city": activity.get("city", ""),
+                "category": activity.get("category", "general"),
+                "source": activity.get("source", "search")
+            }
+        except Exception as e:
+            logger.error(f"❌ Error transforming activity for daily plan: {e}")
+            return {
+                "name": "Activity",
+                "description": "Activity",
+                "city": "",
+                "category": "general",
+                "source": "search"
+            }
