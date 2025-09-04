@@ -128,13 +128,13 @@ async def call_trip_api(args) -> Dict[str, Any]:
     
     print("🤖 Planning your trip with AI agents...")
     if args.mode == 'simple':
-        print("⏳ Simple mode: This may take 25-60 seconds...")
+        print("⏳ Simple mode: This may take 25-60 seconds for single city, 120-240 seconds for multi-city...")
     else:
         print("⏳ Comprehensive mode: This may take 180+ seconds for detailed analysis...")
     print()
     
-    # Set timeout based on mode
-    timeout_seconds = 180 if args.mode == 'simple' else 360  # 3 min simple, 6 min comprehensive
+    # Set timeout based on mode - increased for multi-city trips with Google Search
+    timeout_seconds = 300 if args.mode == 'simple' else 420  # 5 min simple, 7 min comprehensive
     timeout = aiohttp.ClientTimeout(total=timeout_seconds)
     
     async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -163,13 +163,37 @@ def print_flight_info(flight: Dict[str, Any]):
     airline = flight.get('airline', 'Unknown Airline')
     departure = flight.get('departure_time', 'TBD')
     arrival = flight.get('arrival_time', 'TBD')
-    price = flight.get('estimated_price', 'Price TBD')
+    price = flight.get('estimated_price', flight.get('price', 'Price TBD'))
+    if isinstance(price, (int, float)):
+        price = f"${price:.2f}"
     date = flight.get('date', 'Date TBD')
     
     print(f"  ✈️  {from_city} → {to_city}")
     print(f"      {airline}")
     print(f"      Depart: {departure}, Arrive: {arrival}")
     print(f"      Date: {date}, Price: {price}")
+    print()
+
+def print_curated_flight_info(flight: Dict[str, Any], is_primary: bool = False):
+    """Print curated flight information with recommendation reason."""
+    from_city = flight.get('from_city', flight.get('from', 'Unknown'))
+    to_city = flight.get('to_city', flight.get('to', 'Unknown'))
+    airline = flight.get('airline', 'Unknown Airline')
+    departure = flight.get('departure_time', 'TBD')
+    arrival = flight.get('arrival_time', 'TBD')
+    price = flight.get('estimated_price', flight.get('price', 'Price TBD'))
+    if isinstance(price, (int, float)):
+        price = f"${price:.2f}"
+    date = flight.get('date', 'Date TBD')
+    reason = flight.get('recommendation_reason', '')
+    
+    prefix = "🌟 " if is_primary else "  ✈️  "
+    print(f"{prefix}{from_city} → {to_city}")
+    print(f"      {airline}")
+    print(f"      Depart: {departure}, Arrive: {arrival}")
+    print(f"      Date: {date}, Price: {price}")
+    if is_primary and reason:
+        print(f"      💡 {reason}")
     print()
 
 
@@ -179,6 +203,8 @@ def print_hotel_info(hotel: Dict[str, Any]):
     city = hotel.get('city', 'Unknown City')
     rating = hotel.get('rating', 0)
     price = hotel.get('price_per_night', hotel.get('pricePerNight', 'Price TBD'))
+    if isinstance(price, (int, float)):
+        price = f"${price:.2f}"
     address = hotel.get('address', '')
     
     print(f"  🏨 {name}")
@@ -189,6 +215,30 @@ def print_hotel_info(hotel: Dict[str, Any]):
     print(f"      💰 {price}/night")
     if address:
         print(f"      📮 {address}")
+    print()
+
+def print_curated_hotel_info(hotel: Dict[str, Any], is_primary: bool = False):
+    """Print curated hotel information with recommendation reason."""
+    name = hotel.get('name', 'Unknown Hotel')
+    city = hotel.get('city', 'Unknown City')
+    rating = hotel.get('rating', 0)
+    price = hotel.get('price_per_night', hotel.get('pricePerNight', 'Price TBD'))
+    if isinstance(price, (int, float)):
+        price = f"${price:.2f}"
+    address = hotel.get('address', '')
+    reason = hotel.get('recommendation_reason', '')
+    
+    prefix = "🌟 " if is_primary else "  🏨 "
+    print(f"{prefix}{name}")
+    print(f"      📍 {city}")
+    if rating > 0:
+        stars = '⭐' * min(int(rating), 5)
+        print(f"      {stars} {rating}/5.0")
+    print(f"      💰 {price}/night")
+    if address:
+        print(f"      📮 {address}")
+    if is_primary and reason:
+        print(f"      💡 {reason}")
     print()
 
 
@@ -233,21 +283,66 @@ def print_itinerary(trip_data: Dict[str, Any]):
     print(f"💰 Estimated Budget: {estimated_budget}")
     print()
     
-    # Flights
-    flights = trip_data.get('flights', [])
-    if flights:
-        print("✈️  FLIGHTS")
-        print("-" * 20)
-        for flight in flights:
-            print_flight_info(flight)
+    # Check if we have curated structures
+    curated_flights = trip_data.get('curated_flights', {})
+    curated_hotels = trip_data.get('curated_hotels', {})
     
-    # Hotels
-    hotels = trip_data.get('hotels', [])
-    if hotels:
-        print("🏨 ACCOMMODATIONS")
+    # Flights - show curated if available, otherwise show all flights
+    if curated_flights.get('primary', {}).get('outbound') or curated_flights.get('primary', {}).get('return'):
+        print("✈️  RECOMMENDED FLIGHTS")
         print("-" * 20)
-        for hotel in hotels:
-            print_hotel_info(hotel)
+        
+        # Show primary outbound flight
+        outbound = curated_flights.get('primary', {}).get('outbound')
+        if outbound:
+            print("🛫 Outbound Flight:")
+            print_curated_flight_info(outbound, is_primary=True)
+        
+        # Show primary return flight
+        return_flight = curated_flights.get('primary', {}).get('return')
+        if return_flight:
+            print("🛬 Return Flight:")
+            print_curated_flight_info(return_flight, is_primary=True)
+        
+        # Show alternatives if available
+        alternatives = curated_flights.get('alternatives', [])
+        if alternatives:
+            print("✈️  OTHER FLIGHT OPTIONS")
+            print("-" * 20)
+            for alt_flight in alternatives:
+                flight_type = alt_flight.get('flight_type', 'flight')
+                print(f"Alternative {flight_type.title()} Flight:")
+                print_curated_flight_info(alt_flight, is_primary=False)
+    else:
+        # Fallback to legacy display
+        flights = trip_data.get('flights', [])
+        if flights:
+            print("✈️  FLIGHTS")
+            print("-" * 20)
+            for flight in flights:
+                print_flight_info(flight)
+    
+    # Hotels - show curated if available, otherwise show all hotels
+    if curated_hotels.get('primary'):
+        print("🏨 RECOMMENDED ACCOMMODATION")
+        print("-" * 20)
+        print_curated_hotel_info(curated_hotels['primary'], is_primary=True)
+        
+        # Show alternatives if available
+        alternatives = curated_hotels.get('alternatives', [])
+        if alternatives:
+            print("🏨 OTHER ACCOMMODATION OPTIONS")
+            print("-" * 20)
+            for alt_hotel in alternatives:
+                print_curated_hotel_info(alt_hotel, is_primary=False)
+    else:
+        # Fallback to legacy display
+        hotels = trip_data.get('hotels', [])
+        if hotels:
+            print("🏨 ACCOMMODATIONS")
+            print("-" * 20)
+            for hotel in hotels:
+                print_hotel_info(hotel)
     
     # Daily Plans
     daily_plans = trip_data.get('daily_plans', [])
