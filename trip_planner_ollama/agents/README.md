@@ -16,7 +16,7 @@ agents/
 ├── accommodation_agent.py           # Hotel search specialist
 ├── activity_agent.py                # Activity recommendation agent
 ├── budget_planning_agent.py         # Budget analysis agent
-├── langchain_multi_agent_system.py # Dual-mode system coordination
+├── langchain_multi_agent_system.py # Multi-agent orchestration & mode routing
 └── README.md                        # This documentation file
 ```
 
@@ -50,7 +50,7 @@ agents/
 - **`google_enhanced_tools.py`**: Enhanced travel tools with real-time Google Search API integration (Comprehensive Mode)
 - **`travel_agent.py`**: Single agent for Simple Mode with pure LLM reasoning
 - **`master_synthesis_agent.py`**: Synthesis agent for Comprehensive Mode multi-agent collaboration
-- **`langchain_multi_agent_system.py`**: Dual-mode system coordination and API integration
+- **`langchain_multi_agent_system.py`**: Multi-agent orchestration, mode routing, and 5-phase collaboration management
 
 ### **Simple Mode Agent**
 
@@ -143,13 +143,13 @@ Advanced travel tools with real-time Google Search API integration used by speci
 
 ## 🔄 System Architecture
 
-### **Dual-Mode Agent System** (`langchain_multi_agent_system.py`)
-- **Mode Selection**: Routes requests to Simple Mode (single agent) or Comprehensive Mode (multi-agent)
-- **Simple Mode**: Direct routing to TravelAgent with LLM reasoning tools
-- **Comprehensive Mode**: Sequential 5-agent collaboration with Google Search tools + synthesis
-- **Context Management**: Maintains conversation state and memory across agents
-- **Error Handling**: Robust parsing with graceful degradation
-- **API Integration**: Bridges between FastAPI endpoints and LLM agents
+### **Multi-Agent Orchestration System** (`langchain_multi_agent_system.py`)
+- **Mode Routing**: Intelligently routes requests between Simple and Comprehensive modes based on `collaboration_mode` parameter
+- **Simple Mode Execution**: Directly invokes single TravelAgent for fast LLM reasoning
+- **Comprehensive Mode Orchestration**: Manages sequential 5-phase collaboration (Budget → Flight → Accommodation → Activity → Synthesis)
+- **Agent Lifecycle Management**: Initializes agents, coordinates execution, collects and structures results
+- **Data Flow Control**: Extracts agent outputs and passes them correctly between phases
+- **Result Synthesis**: Combines multi-agent results into final structured travel plans
 
 ### **ReAct Processing Flow**
 
