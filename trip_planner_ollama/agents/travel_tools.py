@@ -220,7 +220,7 @@ class TravelPlanningTools:
                         arrival_time=f.arrival_time,
                         airline=f.airline,
                         estimated_price=f.price,
-                        data_source='google_search',
+                        data_source='llm',
                         confidence=0.9
                     ).model_dump()
                     for f in flights_from_google
@@ -229,7 +229,7 @@ class TravelPlanningTools:
                 # Create a simplified summary for the agent with data source indicators
                 flight_summary = f"Found {len(flights)} flights from {params['origin']} to {params['destination']} on {params['departure_date']}:\n"
                 for i, f in enumerate(flights[:3]):  # Show max 3 flights
-                    data_source = "LLM reasoning"
+                    data_source = "llm"
                     flight_summary += f"Flight {i+1}: {f['airline']} - Depart: {f['departure_time']}, Arrive: {f['arrival_time']}, Price: {f['estimated_price']} [Source: {data_source}]\n"
                 
                 logger.debug(f"📤 Returning simplified flight summary: {len(flight_summary)} chars")
@@ -317,7 +317,7 @@ class TravelPlanningTools:
                         price_per_night=f"${h.price_per_night}",
                         amenities=h.amenities,
                         address=h.address,
-                        data_source='google_search',
+                        data_source='llm',
                         confidence=0.9
                     ).model_dump()
                     for h in hotels_from_google
@@ -326,7 +326,7 @@ class TravelPlanningTools:
                 # Create a simplified summary for the agent with data source indicators
                 hotel_summary = f"Found {len(hotels)} hotels in {params['city']} for {params['check_in']} to {params['check_out']}:\n"
                 for i, h in enumerate(hotels[:3]):  # Show max 3 hotels
-                    data_source = "LLM reasoning"
+                    data_source = "llm"
                     hotel_summary += f"Hotel {i+1}: {h['name']} - {h['price_per_night']}/night, Rating: {h['rating']} [Source: {data_source}]\n"
                 
                 logger.debug(f"📤 Returning hotel summary: {len(hotel_summary)} chars")

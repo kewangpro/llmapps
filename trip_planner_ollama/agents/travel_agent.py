@@ -94,13 +94,38 @@ class TravelAgent(BaseLangChainAgent):
                 current_date += timedelta(days=days_per_destination)
         
         # Add budget analysis
-        search_steps.append(f"Analyze budget for ${budget:,.2f} trip over {duration_days} days")
+        search_steps.append(f"Analyze budget for ${int(budget):,} trip over {duration_days} days")
         
         # Log the search steps for debugging
         logger.info(f"🔍 Generated {len(search_steps)} search steps for route: {' → '.join(route)}")
         for i, step in enumerate(search_steps):
             logger.info(f"   {i+1}. {step}")
         
+        # Build the search steps list
+        search_steps_text = chr(10).join([f"{i+1}. {step}" for i, step in enumerate(search_steps)])
+        
+        # Build JSON template with budget value
+        budget_value = int(budget)
+        json_template = """{
+  "flights": [
+    {"from_city": "San Francisco", "to_city": "Tokyo", "date": "2024-04-01", "airline": "Japan Airlines", "price": 850, "departure_time": "10:30", "arrival_time": "14:20+1", "duration": "11h 50m", "source": "llm"},
+    {"from_city": "Tokyo", "to_city": "Seoul", "date": "2024-04-05", "airline": "Korean Air", "price": 420, "departure_time": "09:15", "arrival_time": "11:30", "duration": "2h 15m", "source": "llm"}
+    // Include ALL flights from your searches - replace examples with actual search results
+  ],
+  "hotels": [
+    {"city": "Tokyo", "name": "Park Hyatt Tokyo", "price_per_night": 450, "rating": 4.8, "amenities": ["Wi-Fi", "Fitness Center", "Spa"], "source": "llm"},
+    {"city": "Seoul", "name": "Lotte Hotel Seoul", "price_per_night": 280, "rating": 4.6, "amenities": ["Wi-Fi", "Business Center", "Pool"], "source": "llm"}
+    // Include ALL hotels from your searches - replace examples with actual search results
+  ],
+  "activities": [
+    {"city": "Tokyo", "name": "Senso-ji Temple", "description": "Historic Buddhist temple in Asakusa", "category": "culture", "source": "llm"},
+    {"city": "Seoul", "name": "Bukchon Hanok Village", "description": "Traditional Korean architecture district", "category": "culture", "source": "llm"}
+    // Include ALL activities from your searches - replace examples with actual search results
+  ],
+  "budget": {"total": """ + str(budget_value) + """, "breakdown": {"flights": 1270, "hotels": 2920, "activities": 400, "food": 800, "transport": 200}},
+  "summary": "Multi-city adventure through Tokyo and Seoul with cultural highlights and premium accommodations"
+}"""
+
         # Create clean, focused planning query with explicit stopping
         planning_query = f"""Plan trip: {' → '.join(route)}
 
@@ -109,35 +134,27 @@ INSTRUCTIONS:
 2. After completing ALL searches, immediately output "Final Answer:" followed by JSON
 
 Search Steps:
-{chr(10).join([f"{i+1}. {step}" for i, step in enumerate(search_steps)])}
+{search_steps_text}
 
 After completing search step {len(search_steps)} (budget analysis), you MUST immediately respond with "Final Answer:" followed by this exact JSON structure:
 
-Final Answer: {{
-  "flights": [
-    // Include ALL flights from your searches - use the actual data from each flight_search call
-    {{"from_city": "actual_origin", "to_city": "actual_destination", "date": "actual_date", "airline": "actual airline from search", "price": actual_price_number, "departure_time": "actual time", "arrival_time": "actual time", "duration": "actual duration", "source": "search"}}
-    // Repeat for EACH flight search you performed - include all flight segments
-  ],
-  "hotels": [
-    // Include ALL hotels from your searches - use the actual data from each hotel_search call  
-    {{"city": "actual_city", "name": "actual hotel name from search", "price_per_night": actual_price_number, "rating": actual_rating_number, "amenities": ["actual", "amenities"], "source": "search"}}
-    // Repeat for EACH destination city
-  ],
-  "activities": [
-    // Include ALL activities from your searches - use the actual data from each activity_search call
-    {{"city": "actual_city", "name": "actual activity name from search", "description": "actual description from search", "category": "actual category", "source": "search"}}
-    // Repeat for EACH destination city  
-  ],
-  "budget": {{"total": {budget}, "breakdown": {{"flights": flight_cost_number, "hotels": hotel_cost_number, "activities": activity_cost_number, "food": food_cost_number, "transport": transport_cost_number}}}},
-  "summary": "Brief trip summary based on your search results"
-}}
+Final Answer: {json_template}
 
-IMPORTANT BUDGET FORMAT RULES:
-- "budget" must have BOTH "total" and "breakdown" fields
-- Use "hotels" not "accommodation" 
-- Use "transport" not "local_transport"
+CRITICAL JSON FORMAT REQUIREMENTS:
+- "budget" must contain EXACTLY these two fields: "total" and "breakdown"
+- "budget.total" must be the overall budget number (e.g., 3000)
+- "budget.breakdown" must contain: "flights", "hotels", "activities", "food", "transport" 
+- Do NOT create "total_budget" as a separate field
+- Do NOT put breakdown values directly in "budget"
+- Use "hotels" not "accommodation", "transport" not "local_transport"
 - All breakdown values must be numbers, not zero
+
+CORRECT budget format example:
+"budget": {{"total": 3000, "breakdown": {{"flights": 900, "hotels": 900, "activities": 450, "food": 600, "transport": 150}}}}
+
+INCORRECT formats (DO NOT USE):
+- "budget": {{"flights": 900, ...}}, "total_budget": 3000
+- "total": 3000, "budget": {{"flights": 900, ...}}
 
 IMMEDIATELY after completing all {len(search_steps)} searches, provide your Final Answer JSON. Do NOT continue thinking, reasoning, or performing additional actions after providing the Final Answer JSON."""
         

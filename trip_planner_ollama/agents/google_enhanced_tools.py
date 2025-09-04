@@ -124,7 +124,7 @@ class GoogleFlightSearchTool(BaseTool):
             results = []
             for i, flight in enumerate(flights, 1):
                 # Determine data source based on confidence and fallback status
-                data_source = "Google Search" if flight.confidence >= 0.8 else "Google Search (fallback)"
+                data_source = "google"
                 result = f"Flight {i}: {flight.airline} - Depart: {flight.departure_time}, Arrive: {flight.arrival_time}, Price: {flight.price}"
                 if hasattr(flight, 'duration') and flight.duration:
                     result += f", Duration: {flight.duration}"
@@ -183,7 +183,7 @@ class GoogleHotelSearchTool(BaseTool):
             for i, hotel in enumerate(hotels, 1):
                 amenities_str = ", ".join(hotel.amenities[:4])  # Show top 4 amenities
                 # Determine data source based on confidence and fallback status
-                data_source = "Google Search" if hotel.confidence >= 0.8 else "Google Search (fallback)"
+                data_source = "google"
                 result = f"Hotel {i}: {hotel.name} - {hotel.price_per_night}/night, Rating: {hotel.rating}"
                 if amenities_str:
                     result += f", Amenities: {amenities_str}"
@@ -251,7 +251,7 @@ class GoogleActivitySearchTool(BaseTool):
                 title = result.get('title', f'Activity {i}')
                 description = result.get('snippet', 'No description available')[:150]
                 # Activities from Google Search have high confidence when real API results, lower for fallback
-                data_source = "Google Search" if 'example.com' not in result.get('url', '') else "Google Search (fallback)"
+                data_source = "google"
                 activity = f"Activity {i}: {title} - {description} [Source: {data_source}]"
                 activities.append(activity)
             

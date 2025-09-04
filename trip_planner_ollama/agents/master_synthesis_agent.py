@@ -82,15 +82,15 @@ IMPORTANT: Extract and structure the flight, hotel, and activity data from the a
 Final Answer: {{
   "flights": [
     // Extract actual flight information from Flight Results above
-    // Example: {{"from_city": "Seattle", "to_city": "Seoul", "date": "2025-10-02", "airline": "Partner Airlines", "price": 613, "departure_time": "09:50", "arrival_time": "00:02", "duration": "15h 45m", "source": "comprehensive"}}
+    // Example: {{"from_city": "Seattle", "to_city": "Seoul", "date": "2025-10-02", "airline": "Partner Airlines", "price": 613, "departure_time": "09:50", "arrival_time": "00:02", "duration": "15h 45m", "source": "google"}}
   ],
   "hotels": [
     // Extract actual hotel information from Accommodations above  
-    // Example: {{"city": "Seoul", "name": "Akira Back", "price_per_night": 142, "rating": 3.6, "amenities": ["Breakfast", "Bar", "WiFi"], "source": "comprehensive"}}
+    // Example: {{"city": "Seoul", "name": "Akira Back", "price_per_night": 142, "rating": 3.6, "amenities": ["Breakfast", "Bar", "WiFi"], "source": "google"}}
   ],
   "activities": [
     // Extract actual activity information from Activities above
-    // Example: {{"city": "Seoul", "name": "Gyeongbokgung Palace", "description": "Historic Korean palace", "category": "culture", "source": "comprehensive"}}
+    // Example: {{"city": "Seoul", "name": "Gyeongbokgung Palace", "description": "Historic Korean palace", "category": "culture", "source": "google"}}
   ],
   "budget": {{
     "total": 3000,
