@@ -321,18 +321,18 @@ class LangChainMultiAgentSystem:
         logger.info("🎯 Phase 5: Master agent synthesizing comprehensive travel plan...")
         
         # Debug: Log what data we're passing to synthesis
-        logger.info(f"🔍 DEBUG - Budget result keys: {budget_result.keys() if budget_result else 'None'}")
-        logger.info(f"🔍 DEBUG - Flight result keys: {flight_result.keys() if flight_result else 'None'}")
-        logger.info(f"🔍 DEBUG - Accommodation results count: {len(accommodation_results) if accommodation_results else 0}")
-        logger.info(f"🔍 DEBUG - Activity results count: {len(activity_results) if activity_results else 0}")
+        logger.debug(f"🔍 DEBUG - Budget result keys: {budget_result.keys() if budget_result else 'None'}")
+        logger.debug(f"🔍 DEBUG - Flight result keys: {flight_result.keys() if flight_result else 'None'}")
+        logger.debug(f"🔍 DEBUG - Accommodation results count: {len(accommodation_results) if accommodation_results else 0}")
+        logger.debug(f"🔍 DEBUG - Activity results count: {len(activity_results) if activity_results else 0}")
         
         budget_data = budget_result.get('output', 'Not available') if budget_result else 'Not available'
         flight_data = flight_result.get('output', 'Not available') if flight_result else 'Not available'
         accommodation_data = [r.get('output', 'Not available') for r in accommodation_results] if accommodation_results else []
         activity_data = [r.get('output', 'Not available') for r in activity_results] if activity_results else []
         
-        logger.info(f"🔍 DEBUG - Budget data preview: {budget_data[:100]}...")
-        logger.info(f"🔍 DEBUG - Flight data preview: {flight_data[:100]}...")
+        logger.debug(f"🔍 DEBUG - Budget data preview: {budget_data[:100]}...")
+        logger.debug(f"🔍 DEBUG - Flight data preview: {flight_data[:100]}...")
         
         master_result = await self.master_agent.synthesize_trip_plan(
             budget_analysis=budget_data,

@@ -119,16 +119,16 @@ CRITICAL: Parse the actual flight, hotel, and activity details from the agent re
         # Get direct response from LLM
         response = await llm.ainvoke(synthesis_query)
         
-        # Structure the result
+        # Structure the result using standard "output" key like other agents
         result = {
-            "response": response,
+            "output": response,
             "reasoning_steps": ["Synthesis of multi-agent collaboration results"],
             "tools_used": [],
             "agent_name": self.agent_name
         }
         
         logger.info("🎯 Trip synthesis completed!")
-        logger.info(f"🔍 DEBUG - Synthesis output length: {len(response)} chars")
-        logger.info(f"🔍 DEBUG - Output starts with: {response[:100]}...")
-        logger.info(f"🔍 DEBUG - Output ends with: ...{response[-100:]}")
+        logger.debug(f"🔍 DEBUG - Synthesis output length: {len(response)} chars")
+        logger.debug(f"🔍 DEBUG - Output starts with: {response[:100]}...")
+        logger.debug(f"🔍 DEBUG - Output ends with: ...{response[-100:]}")
         return result
