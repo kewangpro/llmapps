@@ -312,7 +312,7 @@ class TripCurator:
                 arrival_time=flight_data.get('arrival_time', 'TBD'),
                 airline=flight_data.get('airline', 'Unknown'),
                 estimated_price=estimated_price,
-                data_source=flight_data.get('source', 'search')
+                data_source=flight_data.get('source', 'unknown')
             )
         except Exception as e:
             logger.error(f"Error creating flight from data: {e}")
@@ -336,7 +336,7 @@ class TripCurator:
                 price_per_night=price_per_night,
                 rating=float(hotel_data.get('rating', 3.0)),
                 amenities=hotel_data.get('amenities', []),
-                data_source=hotel_data.get('source', 'search')
+                data_source=hotel_data.get('source', 'unknown')
             )
         except Exception as e:
             logger.error(f"Error creating hotel from data: {e}")
@@ -398,16 +398,16 @@ class TripCurator:
                     
                     # Transform activity for frontend compatibility
                     transformed = self._transform_activity_for_daily_plan(picked)
-                    activity_text = transformed.get('description', '').strip() or transformed.get('name', 'Activity')
-                    activities_list.append(activity_text)
+                    # Keep full activity object with source information for frontend
+                    activities_list.append(transformed)
                 else:
                     # Fallback to any activity if no city-specific activities found
                     if flat_activities:
                         picked = random.choice(flat_activities)
                         logger.warning(f"⚠️ Day {i+1} ({city}): No city-specific activities found, using fallback activity")
                         transformed = self._transform_activity_for_daily_plan(picked)
-                        activity_text = transformed.get('description', '').strip() or transformed.get('name', 'Activity')
-                        activities_list.append(activity_text)
+                        # Keep full activity object with source information for frontend
+                        activities_list.append(transformed)
             
             daily_plans.append({
                 "day": i+1,
@@ -472,7 +472,7 @@ class TripCurator:
                 "description": activity.get("description", activity.get("name", "Activity")),
                 "city": activity.get("city", ""),
                 "category": activity.get("category", "general"),
-                "source": activity.get("source", "search")
+                "source": activity.get("source", "unknown")
             }
         except Exception as e:
             logger.error(f"❌ Error transforming activity for daily plan: {e}")
@@ -481,5 +481,5 @@ class TripCurator:
                 "description": "Activity",
                 "city": "",
                 "category": "general",
-                "source": "search"
+                "source": "unknown"
             }
