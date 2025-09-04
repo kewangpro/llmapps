@@ -364,23 +364,47 @@ async def plan_trip(request: TripRequest, background_tasks: BackgroundTasks):
         if not interests:
             interests = ["culture", "food", "sightseeing"]  # Default interests
         
-        result = await langchain_agent_system.plan_trip_with_reasoning(
-            origin=request.origin,
-            destinations=request.destinations,
-            start_date=request.start_date,
-            duration_days=request.duration_days,
-            budget=numeric_budget,
-            interests=interests,
-            travel_style=request.budget,
-            collaboration_mode=request.collaboration_mode
-        )
-        
-        if result.primary_result.get("status") == "error":
-            raise HTTPException(status_code=500, detail=f"Agent system failed: {result.primary_result.get('error')}")
+        # Route to appropriate agent system based on collaboration mode
+        if request.collaboration_mode == "simple":
+            # Simple Mode: Direct single agent (no multi-agent system)
+            from agents.travel_agent import TravelAgent
+            travel_agent = TravelAgent()
+            
+            logger.debug("🤖 Using Simple Mode: Single TravelAgent with pure LLM reasoning")
+            agent_result = await travel_agent.plan_complete_trip(
+                origin=request.origin,
+                destinations=request.destinations,
+                start_date=request.start_date,
+                duration_days=request.duration_days,
+                budget=numeric_budget,
+                interests=interests,
+                travel_style=request.budget
+            )
+            
+            # Simple mode returns direct result, not wrapped in primary_result
+            result_text = str(agent_result.get("output", "")) if isinstance(agent_result, dict) else str(agent_result)
+            agent_result_dict = agent_result if isinstance(agent_result, dict) else {}
+            
+        else:
+            # Comprehensive Mode: Multi-agent collaboration system
+            logger.debug("🤖 Using Comprehensive Mode: Multi-agent collaboration with Google Search")
+            result = await langchain_agent_system.plan_trip_with_reasoning(
+                origin=request.origin,
+                destinations=request.destinations,
+                start_date=request.start_date,
+                duration_days=request.duration_days,
+                budget=numeric_budget,
+                interests=interests,
+                travel_style=request.budget,
+                collaboration_mode=request.collaboration_mode
+            )
+            
+            if result.primary_result.get("status") == "error":
+                raise HTTPException(status_code=500, detail=f"Agent system failed: {result.primary_result.get('error')}")
 
-        # Parse agent output directly
-        result_text = str(result.primary_result.get("output", "")) if hasattr(result, 'primary_result') and isinstance(result.primary_result, dict) else str(result)
-        agent_result_dict = result.primary_result if hasattr(result, 'primary_result') and isinstance(result.primary_result, dict) else result if isinstance(result, dict) else {}
+            # Parse agent output from multi-agent result
+            result_text = str(result.primary_result.get("output", "")) if hasattr(result, 'primary_result') and isinstance(result.primary_result, dict) else str(result)
+            agent_result_dict = result.primary_result if hasattr(result, 'primary_result') and isinstance(result.primary_result, dict) else result if isinstance(result, dict) else {}
         flights, hotels, activities, budget_float, curated_flights, curated_hotels = _parse_standardized_json_output(result_text, request, agent_result_dict)
         estimated_budget = f"${budget_float:.2f}" if budget_float else "$3000.00"
         # Build TripPlan data
@@ -824,7 +848,7 @@ if __name__ == "__main__":
     print("   - 🏨 Smart accommodation recommendations")
     print("")
     print("🤖 LangChain Agent System (5 Specialized Agents):")
-    print("   - MasterTravelAgent: Comprehensive trip coordination")
+    print("   - MasterSynthesisAgent: Comprehensive trip synthesis")
     print("   - FlightPlanningAgent: Flight search and route optimization")
     print("   - AccommodationAgent: Hotel and accommodation research")
     print("   - ActivityAgent: Local activities and experiences")

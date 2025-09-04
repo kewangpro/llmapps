@@ -71,7 +71,7 @@ Examples:
         '--mode', '-m',
         choices=['simple', 'comprehensive'],
         default='simple',
-        help='Collaboration mode: simple (fast, single agent) or comprehensive (detailed, multi-agent) (default: simple)'
+        help='Collaboration mode: simple (pure LLM reasoning, 30-60s) or comprehensive (5-agent collaboration, 3-5min) (default: simple)'
     )
     
     parser.add_argument(
@@ -110,7 +110,7 @@ def print_trip_request(args):
     print(f"⏱️  Duration: {args.duration} days")
     print(f"💰 Budget: {args.budget}")
     print(f"🎨 Preferences: {args.preferences}")
-    print(f"🤖 Mode: {args.mode} ({'single agent, fast' if args.mode == 'simple' else '5 agents, detailed'})")
+    print(f"🤖 Mode: {args.mode} ({'pure LLM reasoning, 30-60s' if args.mode == 'simple' else '5-agent collaboration, 3-5min'})")
     print()
 
 
@@ -128,13 +128,13 @@ async def call_trip_api(args) -> Dict[str, Any]:
     
     print("🤖 Planning your trip with AI agents...")
     if args.mode == 'simple':
-        print("⏳ Simple mode: This may take 25-60 seconds for single city, 120-240 seconds for multi-city...")
+        print("⏳ Simple mode (Pure LLM reasoning): This may take 30-60 seconds for any trip...")
     else:
-        print("⏳ Comprehensive mode: This may take 180+ seconds for detailed analysis...")
+        print("⏳ Comprehensive mode (5-agent collaboration): This may take 3-5 minutes for detailed multi-agent analysis...")
     print()
     
-    # Set timeout based on mode - increased for multi-city trips with Google Search
-    timeout_seconds = 300 if args.mode == 'simple' else 420  # 5 min simple, 7 min comprehensive
+    # Set timeout based on mode - Simple uses pure LLM (faster), Comprehensive uses multi-agent (longer)
+    timeout_seconds = 180 if args.mode == 'simple' else 600  # 3 min simple, 10 min comprehensive
     timeout = aiohttp.ClientTimeout(total=timeout_seconds)
     
     async with aiohttp.ClientSession(timeout=timeout) as session:
