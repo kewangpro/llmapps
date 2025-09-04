@@ -9,7 +9,7 @@ This module implements LangChain's actual agentic framework with:
 - Autonomous decision making
 
 TRUE LangChain Agents:
-- MasterTravelAgent: Comprehensive trip coordination with all tools
+- MasterSynthesisAgent: Comprehensive mode trip synthesis from specialized agents
 - FlightPlanningAgent: Flight search and route optimization specialist
 - AccommodationAgent: Hotel and accommodation research expert
 - ActivityAgent: Local activities and experience recommendations
@@ -20,7 +20,7 @@ TRUE LangChain Agents:
 from .langchain_base_agent import BaseLangChainAgent, AgentMessage, AgentTask
 from .travel_tools import TravelPlanningTools
 from .google_enhanced_tools import GoogleEnhancedTravelTools
-from .master_travel_agent import MasterTravelAgent
+from .master_synthesis_agent import MasterSynthesisAgent
 from .flight_planning_agent import FlightPlanningAgent
 from .accommodation_agent import AccommodationAgent
 from .activity_agent import ActivityAgent
@@ -38,7 +38,7 @@ __all__ = [
     'AgentTask',
     
     # Specialized LangChain Agents
-    'MasterTravelAgent',
+    'MasterSynthesisAgent',
     'FlightPlanningAgent',
     'AccommodationAgent',
     'ActivityAgent', 

@@ -160,6 +160,7 @@ Question: {input}
                 verbose=self.verbose,
                 handle_parsing_errors=True,
                 max_iterations=self.max_iterations,
+                early_stopping_method="force",  # Force termination when max_iterations reached
                 return_intermediate_steps=True
             )
         except Exception as e:
@@ -259,16 +260,16 @@ Question: {input}
                         if isinstance(step, tuple) and len(step) >= 2:
                             action = step[0]
                             observation = step[1]
-                            logger.info(f"🛠️  Step {i+1}: Tool '{action.tool if hasattr(action, 'tool') else 'unknown'}' executed")
-                            logger.info(f"   📥 Input: {str(action.tool_input)[:200] if hasattr(action, 'tool_input') else 'N/A'}...")
-                            logger.info(f"   📤 Output: {str(observation)[:200]}...")
+                            logger.debug(f"🛠️  Step {i+1}: Tool '{action.tool if hasattr(action, 'tool') else 'unknown'}' executed")
+                            logger.debug(f"   📥 Input: {str(action.tool_input)[:200] if hasattr(action, 'tool_input') else 'N/A'}...")
+                            logger.debug(f"   📤 Output: {str(observation)[:200]}...")
                         else:
                             logger.info(f"⚠️  Step {i+1}: Unexpected step format: {type(step)}")
                     
                     # Log final output
                     final_output = result.get("output", "")
-                    logger.info(f"🏁 Final output length: {len(final_output)} characters")
-                    logger.info(f"🏁 Final output preview: {final_output[:300]}...")
+                    logger.debug(f"🏁 Final output length: {len(final_output)} characters")
+                    logger.debug(f"🏁 Final output preview: {final_output[:300]}...")
                     
                     # Extract the reasoning steps and final output
                     response = {

@@ -12,7 +12,6 @@ from typing import List
 from langchain.tools import BaseTool
 
 from .langchain_base_agent import BaseLangChainAgent
-from .travel_tools import TravelPlanningTools
 from .google_enhanced_tools import GoogleEnhancedTravelTools
 
 logger = logging.getLogger(__name__)
@@ -21,7 +20,6 @@ class AccommodationAgent(BaseLangChainAgent):
     """LangChain agent specialized in hotel and accommodation search with Google Search integration."""
     
     def __init__(self, model_name: str = "gemma3:latest"):
-        self.travel_tools = TravelPlanningTools()
         self.google_tools = GoogleEnhancedTravelTools()
         
         super().__init__(
@@ -33,10 +31,8 @@ class AccommodationAgent(BaseLangChainAgent):
         )
     
     def _setup_tools(self) -> List[BaseTool]:
-        """Set up Google Search enhanced accommodation-specific tools."""
+        """Set up Google Search enhanced accommodation-specific tools only."""
         return [
-            # Google Search enhanced tools (primary)
-            self.google_tools.google_hotel_search,
-            # Standard tools (fallback)
-            self.travel_tools.hotel_search
+            # Google Search enhanced tools only
+            self.google_tools.google_hotel_search
         ]

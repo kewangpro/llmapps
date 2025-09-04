@@ -12,7 +12,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 
-from .master_travel_agent import MasterTravelAgent
+from .master_synthesis_agent import MasterSynthesisAgent
 from .flight_planning_agent import FlightPlanningAgent
 from .accommodation_agent import AccommodationAgent
 from .activity_agent import ActivityAgent
@@ -98,11 +98,13 @@ class LangChainMultiAgentSystem:
         """
         
         # Initialize master agent based on collaboration mode
-        use_google_search = (collaboration_mode == "comprehensive")
-        self.master_agent = MasterTravelAgent(self.model_name, use_google_search=use_google_search)
+        # Simple Mode: Pure LLM reasoning (no Google Search)
+        # Comprehensive Mode: Multi-agent collaboration (no Google Search - will use specialized agents)
+        use_google_search = False  # Both modes now use pure LLM reasoning
+        self.master_agent = MasterSynthesisAgent(self.model_name)
         self.agents["master"] = self.master_agent
         
-        logger.debug(f"🤖 Initialized master agent with Google Search: {use_google_search}")
+        logger.debug(f"🤖 Initialized master agent - Mode: {collaboration_mode}, Google Search: {use_google_search}")
         
         start_time = datetime.now()
         collaboration_id = f"collab_{{start_time.strftime('%Y%m%d_%H%M%S')}}"
@@ -111,19 +113,19 @@ class LangChainMultiAgentSystem:
         logger.debug(f"Collaboration mode: {collaboration_mode}")
         
         try:
-            # For now, use simple planning for both modes but with Google-enhanced tools for comprehensive
-            # The specialized multi-agent approach has integration issues that need more work
-            result = await self._simple_agent_planning(
-                origin, destinations, start_date, duration_days, 
-                budget, interests, travel_style
-            )
-            
-            # TODO: Fix collaborative multi-agent approach for true comprehensive mode
-            # if collaboration_mode == "comprehensive":
-            #     result = await self._collaborative_agent_planning(
-            #         origin, destinations, start_date, duration_days,
-            #         budget, interests, travel_style, collaboration_id
-            #     )
+            # Route to appropriate planning approach based on collaboration mode
+            if collaboration_mode == "comprehensive":
+                # Use true multi-agent collaboration for comprehensive mode
+                result = await self._collaborative_agent_planning(
+                    origin, destinations, start_date, duration_days,
+                    budget, interests, travel_style, collaboration_id
+                )
+            else:
+                # Use simple single-agent approach for simple mode
+                result = await self._simple_agent_planning(
+                    origin, destinations, start_date, duration_days, 
+                    budget, interests, travel_style
+                )
             
             # Update metrics
             self.system_metrics["total_queries"] += 1
@@ -214,10 +216,10 @@ class LangChainMultiAgentSystem:
         all_reasoning_steps.extend(budget_result.get("reasoning_steps", []))
         all_tools_used.extend(budget_result.get("tools_used", []))
         
-        # Phase 2: Flight Planning (uses budget constraints and triggers Google Search)
+        # Phase 2: Flight Planning (uses budget constraints and pure LLM reasoning)
         logger.info("✈️ Phase 2: Flight agent reasoning about travel logistics...")
         
-        # Create structured flight search queries that will trigger Google Search tools
+        # Create structured flight search queries for pure LLM reasoning
         start_dt = datetime.strptime(start_date, "%Y-%m-%d")
         days_per_destination = duration_days // (len(destinations) + 1) if destinations else duration_days
         
@@ -236,13 +238,13 @@ class LangChainMultiAgentSystem:
         flight_search_queries.append(f'{{"origin": "{current_city}", "destination": "{origin}", "departure_date": "{return_date.strftime("%Y-%m-%d")}"}}')
         
         flight_query = f"""
-        Search for flights for this multi-city trip using Google Search integration:
+        Plan flights for this multi-city trip using your airline knowledge and reasoning:
         Budget allocation: {budget_result.get('response', 'Standard allocation')}
         
-        Execute these flight searches to find the best options:
+        Analyze these flight routes and provide realistic flight options:
         {chr(10).join(flight_search_queries)}
         
-        After searching, provide flight recommendations with pricing and routing strategy.
+        Use your knowledge of airlines, typical routes, and pricing to provide flight recommendations with realistic pricing and routing strategy.
         """
         
         flight_result = await self.flight_agent.process_query(flight_query)
@@ -260,18 +262,18 @@ class LangChainMultiAgentSystem:
             check_in = (datetime.strptime(start_date, "%Y-%m-%d") + timedelta(days=i * days_per_dest)).strftime("%Y-%m-%d")
             check_out = (datetime.strptime(check_in, "%Y-%m-%d") + timedelta(days=days_per_dest)).strftime("%Y-%m-%d")
             
-            # Create structured hotel search query that will trigger Google Search tools
+            # Create structured hotel search query for pure LLM reasoning
             hotel_search_query = f'{{"city": "{destination}", "check_in": "{check_in}", "check_out": "{check_out}"}}'
             
             accommodation_query = f"""
-            Search for hotels in {destination} using Google Search integration:
+            Find hotel recommendations for {destination} using your travel knowledge and reasoning:
             - Travel style: {travel_style}
             - Budget context: {budget_result.get('response', 'Consider budget allocation')}
             
-            Execute this hotel search to find the best options:
+            Analyze this accommodation need:
             {hotel_search_query}
             
-            After searching, provide accommodation recommendations with amenities and pricing.
+            Use your knowledge of hotels, typical pricing, and amenities to provide realistic accommodation recommendations with detailed information.
             """
             
             accommodation_tasks.append(
@@ -290,18 +292,18 @@ class LangChainMultiAgentSystem:
         
         activity_tasks = []
         for destination in destinations:
-            # Create structured activity search query that will trigger Google Search tools
+            # Create structured activity search query for pure LLM reasoning
             activity_search_query = f'{{"city": "{destination}", "interests": {interests}}}'
             
             activity_query = f"""
-            Search for activities in {destination} using Google Search integration:
+            Recommend activities for {destination} using your travel knowledge and reasoning:
             - Travel style: {travel_style}
             - Budget consideration: Factor in activity budget from budget analysis
             
-            Execute this activity search to find the best experiences:
+            Analyze this activity need:
             {activity_search_query}
             
-            After searching, provide activity recommendations that match the traveler's interests.
+            Use your knowledge of attractions, experiences, and local culture to provide activity recommendations that match the traveler's interests.
             """
             
             activity_tasks.append(
@@ -315,30 +317,33 @@ class LangChainMultiAgentSystem:
             all_reasoning_steps.extend(result.get("reasoning_steps", []))
             all_tools_used.extend(result.get("tools_used", []))
         
-        # Phase 5: Master Synthesis (master agent reasons about the complete plan)
+        # Phase 5: Master Synthesis
         logger.info("🎯 Phase 5: Master agent synthesizing comprehensive travel plan...")
         
-        synthesis_query = f"""
-        Synthesize all the planning information into a comprehensive trip plan:
+        # Debug: Log what data we're passing to synthesis
+        logger.info(f"🔍 DEBUG - Budget result keys: {budget_result.keys() if budget_result else 'None'}")
+        logger.info(f"🔍 DEBUG - Flight result keys: {flight_result.keys() if flight_result else 'None'}")
+        logger.info(f"🔍 DEBUG - Accommodation results count: {len(accommodation_results) if accommodation_results else 0}")
+        logger.info(f"🔍 DEBUG - Activity results count: {len(activity_results) if activity_results else 0}")
         
-        Budget Analysis: {budget_result.get('response', 'Not available')}
+        budget_data = budget_result.get('output', 'Not available') if budget_result else 'Not available'
+        flight_data = flight_result.get('output', 'Not available') if flight_result else 'Not available'
+        accommodation_data = [r.get('output', 'Not available') for r in accommodation_results] if accommodation_results else []
+        activity_data = [r.get('output', 'Not available') for r in activity_results] if activity_results else []
         
-        Flight Planning: {flight_result.get('response', 'Not available')}
+        logger.info(f"🔍 DEBUG - Budget data preview: {budget_data[:100]}...")
+        logger.info(f"🔍 DEBUG - Flight data preview: {flight_data[:100]}...")
         
-        Accommodation Results: {[r.get('response', 'Not available') for r in accommodation_results]}
-        
-        Activity Recommendations: {[r.get('response', 'Not available') for r in activity_results]}
-        
-        Create a final, cohesive travel plan with:
-        - Day-by-day itinerary
-        - Specific recommendations and bookings
-        - Budget summary
-        - Travel tips and considerations
-        
-        Reason through how all these elements work together for an optimal trip.
-        """
-        
-        master_result = await self.master_agent.process_query(synthesis_query)
+        master_result = await self.master_agent.synthesize_trip_plan(
+            budget_analysis=budget_data,
+            flight_results=flight_data,
+            accommodation_results=accommodation_data,
+            activity_results=activity_data,
+            origin=origin,
+            destinations=destinations,
+            duration_days=duration_days,
+            travel_style=travel_style
+        )
         agent_results["synthesis"] = master_result
         all_reasoning_steps.extend(master_result.get("reasoning_steps", []))
         all_tools_used.extend(master_result.get("tools_used", []))
