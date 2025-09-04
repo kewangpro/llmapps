@@ -77,20 +77,32 @@ Activities: {chr(10).join([f"Destination {i+1}: {result}" for i, result in enume
 
 Trip Context: {' → '.join([origin] + destinations + [origin])} ({duration_days} days, {travel_style} style)
 
-IMPORTANT: Extract and structure the flight, hotel, and activity data from the above results into the exact JSON format below. Parse the agent results to extract specific flights, hotels, and activities mentioned.
+CRITICAL: Extract and structure the flight, hotel, and activity data from the above results into the exact JSON format below. ALWAYS include the "source": "google" field for each item since all data comes from Google Search API.
+
+MANDATORY SOURCE FIELD REQUIREMENTS:
+- Every flight must have "source": "google"  
+- Every hotel must have "source": "google"
+- Every activity must have "source": "google"
+- This indicates data source for the mobile app UI
 
 Final Answer: {{
   "flights": [
-    // Extract actual flight information from Flight Results above
-    // Example: {{"from_city": "Seattle", "to_city": "Seoul", "date": "2025-10-02", "airline": "Partner Airlines", "price": 613, "departure_time": "09:50", "arrival_time": "00:02", "duration": "15h 45m", "source": "google"}}
+    // REQUIRED: Include "source": "google" for EVERY flight
+    {{"from_city": "Seattle", "to_city": "Tokyo", "date": "2025-11-03", "airline": "Partner Airlines", "price": 978, "departure_time": "14:27", "arrival_time": "00:04", "duration": "10h 37m", "source": "google"}},
+    {{"from_city": "Tokyo", "to_city": "Shanghai", "date": "2025-11-06", "airline": "United", "price": 1038, "departure_time": "10:43", "arrival_time": "22:28", "duration": "12h 25m", "source": "google"}}
+    // Continue for all flights found above - ALWAYS include "source": "google"
   ],
   "hotels": [
-    // Extract actual hotel information from Accommodations above  
-    // Example: {{"city": "Seoul", "name": "Akira Back", "price_per_night": 142, "rating": 3.6, "amenities": ["Breakfast", "Bar", "WiFi"], "source": "google"}}
+    // REQUIRED: Include "source": "google" for EVERY hotel  
+    {{"city": "Tokyo", "name": "Tours", "price_per_night": 272, "rating": 4.2, "amenities": ["Gym", "Room Service", "WiFi", "Parking"], "source": "google"}},
+    {{"city": "Shanghai", "name": "Shanghai Fashion Week", "price_per_night": 104, "rating": 4.6, "amenities": ["Concierge", "Gym", "Room Service", "WiFi"], "source": "google"}}
+    // Continue for all hotels found above - ALWAYS include "source": "google"
   ],
   "activities": [
-    // Extract actual activity information from Activities above
-    // Example: {{"city": "Seoul", "name": "Gyeongbokgung Palace", "description": "Historic Korean palace", "category": "culture", "source": "google"}}
+    // REQUIRED: Include "source": "google" for EVERY activity
+    {{"city": "Tokyo", "name": "Setagaya day trip", "description": "Recommended for expanding your horizons and seeing Tokyo's sights and activities", "category": "sightseeing", "source": "google"}},
+    {{"city": "Shanghai", "name": "Yuyuan Garden", "description": "A classical Chinese garden offering a tranquil escape and traditional design", "category": "culture", "source": "google"}}
+    // Continue for all activities found above - ALWAYS include "source": "google"
   ],
   "budget": {{
     "total": 3000,
