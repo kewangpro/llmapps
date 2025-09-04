@@ -127,11 +127,7 @@ class TripResultScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-                // Data source indicator
-                if (flight.dataSource != null)
-                  _buildDataSourceBadge(flight.dataSource!),
-                if (flight.dataSource != null && flight.estimatedPrice != null)
-                  const SizedBox(width: 8),
+                // Price badge first
                 if (flight.estimatedPrice != null)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -148,6 +144,11 @@ class TripResultScreen extends StatelessWidget {
                       ),
                     ),
                   ),
+                // Data source indicator at rightmost position
+                if (flight.estimatedPrice != null && flight.dataSource != null)
+                  const SizedBox(width: 8),
+                if (flight.dataSource != null)
+                  _buildDataSourceBadge(flight.dataSource!),
               ],
             ),
             
@@ -214,32 +215,11 @@ class TripResultScreen extends StatelessWidget {
               ],
             ),
             
-            // Data source and confidence indicators
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                // Data source indicator
-                if (flight.dataSource != null) ...[
-                  Icon(
-                    flight.dataSource!.contains('Google') ? Icons.search : Icons.psychology,
-                    size: 16,
-                    color: flight.dataSource!.contains('Google') ? Colors.blue : Colors.purple,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    flight.dataSource!.contains('Google') ? 'Google Search' : 'AI Agent',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: flight.dataSource!.contains('Google') ? Colors.blue[700] : Colors.purple[700],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  if (flight.confidence != null) ...[
-                    const SizedBox(width: 16),
-                  ],
-                ],
-                // Confidence indicator
-                if (flight.confidence != null) ...[
+            // Confidence indicator only (data source shown in header)
+            if (flight.confidence != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
                   const Icon(Icons.verified, size: 16, color: Colors.grey),
                   const SizedBox(width: 6),
                   Text(
@@ -250,8 +230,8 @@ class TripResultScreen extends StatelessWidget {
                     ),
                   ),
                 ],
-              ],
-            ),
+              ),
+            ],
           ],
         ),
       ),
@@ -351,7 +331,18 @@ class TripResultScreen extends StatelessWidget {
               const SizedBox(height: 6),
               ...dayPlan.activities.map((activity) => Padding(
                 padding: const EdgeInsets.only(left: 22, bottom: 4),
-                child: Text('• $activity'),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text('• ${activity.description.isNotEmpty ? activity.description : activity.name}'),
+                    ),
+                    if (activity.source != null) ...[
+                      const SizedBox(width: 8),
+                      _buildDataSourceBadge(activity.source!),
+                    ],
+                  ],
+                ),
               )),
             ],
             
@@ -422,12 +413,19 @@ class TripResultScreen extends StatelessWidget {
     String displayText;
 
     switch (dataSource.toLowerCase()) {
-      case 'langchain_agents':
-      case 'langchain_agents_text_extraction':
-        badgeColor = Colors.indigo[100]!;
-        textColor = Colors.indigo[800]!;
-        icon = Icons.smart_toy;
-        displayText = 'AI Agent';
+      case 'llm':
+        // Simple Mode - LLM reasoning
+        badgeColor = Colors.purple[100]!;
+        textColor = Colors.purple[800]!;
+        icon = Icons.psychology;
+        displayText = 'LLM';
+        break;
+      case 'google':
+        // Comprehensive Mode - Google Search API
+        badgeColor = Colors.green[100]!;
+        textColor = Colors.green[800]!;
+        icon = Icons.search;
+        displayText = 'Google';
         break;
       case 'api':
         badgeColor = Colors.blue[100]!;
@@ -435,24 +433,13 @@ class TripResultScreen extends StatelessWidget {
         icon = Icons.cloud;
         displayText = 'API';
         break;
-      case 'google_search':
-        badgeColor = Colors.green[100]!;
-        textColor = Colors.green[800]!;
-        icon = Icons.search;
-        displayText = 'Google';
-        break;
-      case 'fallback':
-        badgeColor = Colors.orange[100]!;
-        textColor = Colors.orange[800]!;
-        icon = Icons.offline_bolt;
-        displayText = 'Demo';
-        break;
+      case 'unknown':
       default:
-        // Handle any other technical data source names gracefully
-        badgeColor = Colors.indigo[100]!;
-        textColor = Colors.indigo[800]!;
-        icon = Icons.smart_toy;
-        displayText = 'AI Agent';
+        // Handle unknown or legacy data sources
+        badgeColor = Colors.grey[100]!;
+        textColor = Colors.grey[800]!;
+        icon = Icons.help_outline;
+        displayText = 'Unknown';
         break;
     }
 
@@ -521,12 +508,7 @@ class TripResultScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-                // Data source indicator
-                if (hotel.dataSource != null)
-                  _buildDataSourceBadge(hotel.dataSource!),
-                if (hotel.dataSource != null && hotel.pricePerNight.isNotEmpty)
-                  const SizedBox(width: 8),
-                // Price badge
+                // Price badge first
                 if (hotel.pricePerNight.isNotEmpty)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -543,6 +525,11 @@ class TripResultScreen extends StatelessWidget {
                       ),
                     ),
                   ),
+                // Data source indicator at rightmost position
+                if (hotel.pricePerNight.isNotEmpty && hotel.dataSource != null)
+                  const SizedBox(width: 8),
+                if (hotel.dataSource != null)
+                  _buildDataSourceBadge(hotel.dataSource!),
               ],
             ),
             
@@ -609,32 +596,11 @@ class TripResultScreen extends StatelessWidget {
               ),
             ],
             
-            // Data source and confidence indicators
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                // Data source indicator
-                if (hotel.dataSource != null) ...[
-                  Icon(
-                    hotel.dataSource!.contains('Google') ? Icons.search : Icons.psychology,
-                    size: 16,
-                    color: hotel.dataSource!.contains('Google') ? Colors.blue : Colors.purple,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    hotel.dataSource!.contains('Google') ? 'Google Search' : 'AI Agent',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: hotel.dataSource!.contains('Google') ? Colors.blue[700] : Colors.purple[700],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  if (hotel.confidence != null) ...[
-                    const SizedBox(width: 16),
-                  ],
-                ],
-                // Confidence indicator
-                if (hotel.confidence != null) ...[
+            // Confidence indicator only (data source shown in header)
+            if (hotel.confidence != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
                   const Icon(Icons.verified, size: 16, color: Colors.grey),
                   const SizedBox(width: 6),
                   Text(
@@ -645,8 +611,8 @@ class TripResultScreen extends StatelessWidget {
                     ),
                   ),
                 ],
-              ],
-            ),
+              ),
+            ],
           ],
         ),
       ),

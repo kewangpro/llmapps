@@ -321,12 +321,22 @@ class _TripInputScreenState extends State<TripInputScreen> {
     } catch (e) {
       if (!mounted) return;
       
+      // Show both SnackBar (brief) and Dialog (persistent)
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: ${e.toString()}'),
           backgroundColor: Colors.red,
+          duration: const Duration(seconds: 8), // Longer duration
+          action: SnackBarAction(
+            label: 'Details',
+            textColor: Colors.white,
+            onPressed: () => _showErrorDialog(e.toString()),
+          ),
         ),
       );
+      
+      // Also show persistent error dialog
+      _showErrorDialog(e.toString());
     } finally {
       if (mounted) {
         setState(() {
@@ -334,6 +344,66 @@ class _TripInputScreenState extends State<TripInputScreen> {
         });
       }
     }
+  }
+
+  void _showErrorDialog(String error) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.red),
+              SizedBox(width: 8),
+              Text('Trip Planning Error'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Unable to create your trip plan. Please check the details below:',
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red[200]!),
+                ),
+                child: SingleChildScrollView(
+                  child: Text(
+                    error,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                      color: Colors.red[800],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                // Optional: Retry the request
+                // _planTrip();
+              },
+              child: const Text('Try Again'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
 
