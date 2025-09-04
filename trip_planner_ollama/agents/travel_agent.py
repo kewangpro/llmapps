@@ -113,9 +113,9 @@ class TravelAgent(BaseLangChainAgent):
     // Include ALL flights from your searches - replace examples with actual search results
   ],
   "hotels": [
-    {"city": "Tokyo", "name": "Park Hyatt Tokyo", "price_per_night": 450, "rating": 4.8, "amenities": ["Wi-Fi", "Fitness Center", "Spa"], "source": "llm"},
-    {"city": "Seoul", "name": "Lotte Hotel Seoul", "price_per_night": 280, "rating": 4.6, "amenities": ["Wi-Fi", "Business Center", "Pool"], "source": "llm"}
-    // Include ALL hotels from your searches - replace examples with actual search results
+    {"city": "Tokyo", "name": "Royal Shinjuku Resort", "price_per_night": 97, "rating": 2.7, "amenities": ["Wi-Fi", "Breakfast"], "source": "llm"},
+    {"city": "Shanghai", "name": "Royal Shanghai Hotel", "price_per_night": 123, "rating": 3.2, "amenities": ["Wi-Fi", "Pool"], "source": "llm"}
+    // CRITICAL: Use "price_per_night" NOT "price" - include ALL hotels with complete data
   ],
   "activities": [
     {"city": "Tokyo", "name": "Senso-ji Temple", "description": "Historic Buddhist temple in Asakusa", "category": "culture", "source": "llm"},
@@ -141,6 +141,34 @@ After completing search step {len(search_steps)} (budget analysis), you MUST imm
 Final Answer: {json_template}
 
 CRITICAL JSON FORMAT REQUIREMENTS:
+
+MANDATORY FLIGHT FIELDS (ALL REQUIRED):
+- "from_city": origin city name (e.g., "Seattle")
+- "to_city": destination city name (e.g., "Tokyo")
+- "date": flight date in YYYY-MM-DD format
+- "airline": airline name from search results
+- "price": numeric price value (not string)
+- "departure_time": time in HH:MM format
+- "arrival_time": time in HH:MM format
+- "duration": flight duration (e.g., "11h 50m")
+- "source": MUST be "llm" for Simple Mode
+
+MANDATORY HOTEL FIELDS (ALL REQUIRED):
+- "city": city name (e.g., "Tokyo")
+- "name": hotel name from search results
+- "price_per_night": numeric price per night
+- "rating": numeric rating (0-5 scale)
+- "amenities": array of amenities (e.g., ["Wi-Fi", "Gym"])
+- "source": MUST be "llm" for Simple Mode
+
+MANDATORY ACTIVITY FIELDS (ALL REQUIRED):
+- "city": city name (e.g., "Tokyo")
+- "name": activity name from search results
+- "description": activity description
+- "category": activity category (e.g., "culture", "food", "sightseeing")
+- "source": MUST be "llm" for Simple Mode
+
+BUDGET FORMAT REQUIREMENTS:
 - "budget" must contain EXACTLY these two fields: "total" and "breakdown"
 - "budget.total" must be the overall budget number (e.g., 3000)
 - "budget.breakdown" must contain: "flights", "hotels", "activities", "food", "transport" 
@@ -155,6 +183,27 @@ CORRECT budget format example:
 INCORRECT formats (DO NOT USE):
 - "budget": {{"flights": 900, ...}}, "total_budget": 3000
 - "total": 3000, "budget": {{"flights": 900, ...}}
+
+CRITICAL VALIDATION RULES:
+- EVERY flight object MUST contain ALL 9 required fields shown in the template
+- EVERY hotel object MUST contain ALL 6 required fields shown in the template  
+- EVERY activity object MUST contain ALL 5 required fields shown in the template
+- Do NOT omit any fields - include actual data from your search results
+- If search returns incomplete data, provide reasonable defaults
+
+CRITICAL FIELD NAME REQUIREMENTS:
+- Hotels: Use "price_per_night" NOT "price" 
+- Hotels: MUST include "amenities" array (can be empty [])
+- Hotels: MUST include "source": "llm" 
+- Activities: MUST include "source": "llm"
+- Activities: MUST include "category" field
+- Do NOT use shortened or alternative field names
+
+FINAL CHECKLIST BEFORE PROVIDING JSON:
+✓ All flights have: from_city, to_city, date, airline, price, departure_time, arrival_time, duration, source
+✓ All hotels have: city, name, price_per_night, rating, amenities, source
+✓ All activities have: city, name, description, category, source
+✓ Budget has: total and breakdown with 5 categories
 
 IMMEDIATELY after completing all {len(search_steps)} searches, provide your Final Answer JSON. Do NOT continue thinking, reasoning, or performing additional actions after providing the Final Answer JSON."""
         
