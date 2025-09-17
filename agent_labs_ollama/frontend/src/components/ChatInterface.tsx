@@ -40,19 +40,18 @@ export default function ChatInterface({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (inputMessage.trim() && !isLoading) {
-      // Include file content in the message for backend processing
-      const messageForBackend = fileContent
-        ? `${inputMessage.trim()}\n\n[Attached file: ${attachedFile?.name}]\n${fileContent}`
-        : inputMessage.trim();
+      // Send clean message (not containing file content)
+      const messageForBackend = inputMessage.trim();
 
       // Display message without any file information in chat - ensure it never contains file content
       const messageForDisplay = inputMessage.trim();
 
-      // File metadata for display (only name, no size/type)
+      // Complete file metadata with content for backend processing
       const fileMetadata = attachedFile ? {
         name: attachedFile.name,
-        size: 0, // Hide size
-        type: '' // Hide type
+        size: attachedFile.size,
+        type: attachedFile.type,
+        content: fileContent  // Include file content for backend
       } : undefined;
 
       onSendMessage(messageForBackend, selectedTools, selectedModel, fileMetadata, messageForDisplay);
@@ -67,13 +66,21 @@ export default function ChatInterface({
     if (file) {
       setAttachedFile(file);
 
-      // Read file content
+      // Handle different file types appropriately
       const reader = new FileReader();
       reader.onload = (event) => {
         const content = event.target?.result as string;
         setFileContent(content);
       };
-      reader.readAsText(file);
+
+      // Check if it's an image file
+      if (file.type.startsWith('image/')) {
+        // For images, read as data URL (base64)
+        reader.readAsDataURL(file);
+      } else {
+        // For text and other files, read as text
+        reader.readAsText(file);
+      }
     }
   };
 
@@ -331,7 +338,7 @@ export default function ChatInterface({
             type="file"
             ref={fileInputRef}
             onChange={handleFileSelect}
-            accept=".txt,.csv,.json,.md,.log"
+            accept=".txt,.csv,.json,.md,.log,.jpg,.jpeg,.png,.gif,.bmp,.tiff,.webp,.svg,.ppt,.pptx,.pdf"
             className="hidden"
           />
 
