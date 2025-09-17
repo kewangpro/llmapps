@@ -1,49 +1,39 @@
 #!/usr/bin/env python3
 """
 Image Analysis Tool
-Analyzes image files for content, objects, text, and metadata
+Analyzes image files using Ollama's vision capabilities
 """
 
 import json
 import sys
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any
 from datetime import datetime
 import base64
-import io
+import httpx
 
-try:
-    from PIL import Image, ExifTags
-    from PIL.ExifTags import TAGS
-    PIL_AVAILABLE = True
-except ImportError:
-    PIL_AVAILABLE = False
+def encode_image_to_base64(image_path: str) -> str:
+    """Convert image file to base64 encoding"""
+    try:
+        with open(image_path, "rb") as image_file:
+            return base64.b64encode(image_file.read()).decode('utf-8')
+    except Exception as e:
+        raise Exception(f"Failed to encode image: {str(e)}")
 
-try:
-    import pytesseract
-    TESSERACT_AVAILABLE = True
-except ImportError:
-    TESSERACT_AVAILABLE = False
-
-def analyze_image(image_path: str, analysis_type: str = "comprehensive") -> Dict[str, Any]:
+def analyze_image_with_ollama(image_path: str, analysis_type: str = "comprehensive", model: str = "gemma3:latest") -> Dict[str, Any]:
     """
-    Analyze image file for various properties and content
+    Analyze image using Ollama's vision model
 
     Args:
         image_path: Path to image file
-        analysis_type: Type of analysis (comprehensive, basic, text, metadata)
+        analysis_type: Type of analysis to perform
+        model: Ollama vision model to use (default: llava)
 
     Returns:
         Dictionary with analysis results
     """
     try:
-        if not PIL_AVAILABLE:
-            return {
-                "tool": "image_analysis",
-                "success": False,
-                "error": "PIL (Pillow) library not available. Install with: pip install Pillow"
-            }
-
+        # Check if image file exists
         if not os.path.exists(image_path):
             return {
                 "tool": "image_analysis",
@@ -51,282 +41,108 @@ def analyze_image(image_path: str, analysis_type: str = "comprehensive") -> Dict
                 "error": f"Image file not found: {image_path}"
             }
 
-        # Open and analyze image
-        with Image.open(image_path) as img:
-            analysis_result = {
-                "tool": "image_analysis",
-                "success": True,
-                "image_path": image_path,
-                "analysis_type": analysis_type,
-                "timestamp": datetime.now().isoformat()
-            }
+        # Encode image to base64
+        image_base64 = encode_image_to_base64(image_path)
 
-            # Basic image properties
-            basic_info = get_basic_image_info(img, image_path)
-            analysis_result.update(basic_info)
+        # Create analysis prompt based on type
+        prompts = {
+            "comprehensive": """Analyze this image comprehensively. Provide:
+1. Main subject and objects in the image
+2. Scene description and setting
+3. Colors, lighting, and mood
+4. Any text visible in the image
+5. Technical aspects (composition, quality)
+6. Any notable details or interesting elements
 
-            # Perform specific analysis based on type
-            if analysis_type in ["comprehensive", "metadata"]:
-                metadata = get_image_metadata(img)
-                analysis_result["metadata"] = metadata
+Be detailed but concise in your analysis.""",
 
-            if analysis_type in ["comprehensive", "text"] and TESSERACT_AVAILABLE:
-                text_content = extract_text_from_image(img)
-                analysis_result["text_content"] = text_content
+            "basic": """Describe what you see in this image. Include:
+- Main subject or focus
+- Setting/background
+- Key objects or elements
+- Overall mood or atmosphere
 
-            if analysis_type in ["comprehensive", "basic"]:
-                visual_analysis = analyze_visual_content(img)
-                analysis_result.update(visual_analysis)
+Keep the description clear and concise.""",
 
-            # Generate summary
-            analysis_result["summary"] = generate_analysis_summary(analysis_result)
+            "text": """Focus on extracting and transcribing any text visible in this image. Include:
+- All readable text (signs, labels, documents, etc.)
+- Text location and context
+- Language if not English
+- Quality of text (clear, blurry, partial, etc.)
 
-            return analysis_result
+If no text is visible, clearly state that.""",
+
+            "metadata": """Analyze the technical and contextual aspects of this image:
+- Image quality and resolution apparent
+- Lighting conditions
+- Camera angle/perspective
+- Possible location or setting type
+- Time of day if determinable
+- Any technical artifacts or issues
+
+Focus on observable technical characteristics."""
+        }
+
+        prompt = prompts.get(analysis_type, prompts["comprehensive"])
+
+        # Call Ollama API using chat endpoint (like PyQt app)
+        ollama_url = "http://localhost:11434/api/chat"
+        payload = {
+            "model": model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt,
+                    "images": [image_base64]
+                }
+            ],
+            "stream": False
+        }
+
+        with httpx.Client(timeout=300.0) as client:
+            response = client.post(ollama_url, json=payload)
+
+            if response.status_code != 200:
+                return {
+                    "tool": "image_analysis",
+                    "success": False,
+                    "error": f"Ollama API error: {response.status_code} - {response.text}"
+                }
+
+            result = response.json()
+            analysis_text = result.get("message", {}).get("content", "No analysis provided")
+
+        # Get basic file info
+        file_stats = os.stat(image_path)
+        file_size_mb = round(file_stats.st_size / (1024 * 1024), 2)
+
+        return {
+            "tool": "image_analysis",
+            "success": True,
+            "image_path": image_path,
+            "analysis_type": analysis_type,
+            "model_used": model,
+            "analysis": analysis_text,
+            "file_info": {
+                "filename": os.path.basename(image_path),
+                "file_size_mb": file_size_mb,
+                "modified_time": datetime.fromtimestamp(file_stats.st_mtime).isoformat()
+            },
+            "timestamp": datetime.now().isoformat()
+        }
 
     except Exception as e:
         return {
             "tool": "image_analysis",
             "success": False,
-            "error": str(e)
+            "error": f"Image analysis failed: {str(e)}"
         }
 
-def get_basic_image_info(img: Image.Image, image_path: str) -> Dict[str, Any]:
-    """Extract basic image information"""
-    file_size = os.path.getsize(image_path)
-
-    return {
-        "basic_info": {
-            "filename": os.path.basename(image_path),
-            "format": img.format,
-            "mode": img.mode,
-            "size": {
-                "width": img.width,
-                "height": img.height,
-                "total_pixels": img.width * img.height
-            },
-            "file_size": {
-                "bytes": file_size,
-                "kb": round(file_size / 1024, 2),
-                "mb": round(file_size / (1024 * 1024), 2)
-            },
-            "aspect_ratio": round(img.width / img.height, 2),
-            "has_transparency": img.mode in ('RGBA', 'LA') or 'transparency' in img.info
-        }
-    }
-
-def get_image_metadata(img: Image.Image) -> Dict[str, Any]:
-    """Extract EXIF and other metadata from image"""
-    metadata = {
-        "exif_data": {},
-        "icc_profile": None,
-        "other_info": {}
-    }
-
-    # Extract EXIF data
-    if hasattr(img, '_getexif') and img._getexif() is not None:
-        exif_data = img._getexif()
-        for tag_id, value in exif_data.items():
-            tag = TAGS.get(tag_id, tag_id)
-            try:
-                # Convert bytes to string if possible
-                if isinstance(value, bytes):
-                    try:
-                        value = value.decode('utf-8')
-                    except:
-                        value = str(value)
-                metadata["exif_data"][tag] = value
-            except:
-                metadata["exif_data"][tag] = str(value)
-
-    # Extract other info
-    if img.info:
-        for key, value in img.info.items():
-            if key not in ['exif']:
-                try:
-                    if isinstance(value, bytes):
-                        value = value.decode('utf-8')
-                    metadata["other_info"][key] = value
-                except:
-                    metadata["other_info"][key] = str(value)
-
-    return metadata
-
-def extract_text_from_image(img: Image.Image) -> Dict[str, Any]:
-    """Extract text content using OCR"""
-    if not TESSERACT_AVAILABLE:
-        return {
-            "available": False,
-            "error": "pytesseract not available. Install with: pip install pytesseract"
-        }
-
-    try:
-        # Convert to RGB if necessary
-        if img.mode != 'RGB':
-            img_rgb = img.convert('RGB')
-        else:
-            img_rgb = img
-
-        # Extract text
-        text = pytesseract.image_to_string(img_rgb)
-
-        # Get detailed info
-        text_data = pytesseract.image_to_data(img_rgb, output_type=pytesseract.Output.DICT)
-
-        # Filter out low confidence text
-        confident_text = []
-        for i, confidence in enumerate(text_data['conf']):
-            if int(confidence) > 30:  # Confidence threshold
-                word = text_data['text'][i].strip()
-                if word:
-                    confident_text.append({
-                        "text": word,
-                        "confidence": int(confidence),
-                        "position": {
-                            "x": text_data['left'][i],
-                            "y": text_data['top'][i],
-                            "width": text_data['width'][i],
-                            "height": text_data['height'][i]
-                        }
-                    })
-
-        return {
-            "available": True,
-            "raw_text": text.strip(),
-            "word_count": len(text.split()),
-            "line_count": len([line for line in text.split('\n') if line.strip()]),
-            "confident_words": confident_text,
-            "has_text": bool(text.strip())
-        }
-
-    except Exception as e:
-        return {
-            "available": True,
-            "error": f"OCR failed: {str(e)}"
-        }
-
-def analyze_visual_content(img: Image.Image) -> Dict[str, Any]:
-    """Analyze visual characteristics of the image"""
-    # Convert to RGB for consistent analysis
-    if img.mode != 'RGB':
-        img_rgb = img.convert('RGB')
-    else:
-        img_rgb = img
-
-    # Analyze colors
-    colors = img_rgb.getcolors(maxcolors=256*256*256)
-    if colors:
-        # Sort by frequency
-        colors.sort(reverse=True)
-        dominant_colors = []
-        for count, color in colors[:5]:  # Top 5 colors
-            dominant_colors.append({
-                "rgb": color,
-                "hex": "#{:02x}{:02x}{:02x}".format(*color),
-                "percentage": round((count / (img.width * img.height)) * 100, 2)
-            })
-    else:
-        dominant_colors = []
-
-    # Calculate brightness
-    brightness = calculate_brightness(img_rgb)
-
-    # Detect if image is likely a photo, diagram, text, etc.
-    image_type = classify_image_type(img_rgb)
-
-    return {
-        "visual_analysis": {
-            "dominant_colors": dominant_colors,
-            "brightness": {
-                "average": brightness,
-                "category": "bright" if brightness > 128 else "dark"
-            },
-            "estimated_type": image_type,
-            "complexity": estimate_complexity(img_rgb)
-        }
-    }
-
-def calculate_brightness(img: Image.Image) -> float:
-    """Calculate average brightness of image"""
-    # Convert to grayscale and calculate mean
-    grayscale = img.convert('L')
-    pixels = list(grayscale.getdata())
-    return sum(pixels) / len(pixels)
-
-def classify_image_type(img: Image.Image) -> str:
-    """Estimate the type of image based on visual characteristics"""
-    # This is a simplified classification
-    # In practice, you'd use more sophisticated ML models
-
-    brightness = calculate_brightness(img)
-
-    # Simple heuristics
-    if brightness > 200:
-        return "document/text"
-    elif brightness < 50:
-        return "dark/artistic"
-    else:
-        return "photo/general"
-
-def estimate_complexity(img: Image.Image) -> str:
-    """Estimate visual complexity of the image"""
-    # Simple edge detection approximation
-    try:
-        # Convert to grayscale
-        gray = img.convert('L')
-
-        # Resize for faster processing
-        gray_small = gray.resize((100, 100))
-
-        # Calculate variance (proxy for complexity)
-        pixels = list(gray_small.getdata())
-        mean = sum(pixels) / len(pixels)
-        variance = sum((p - mean) ** 2 for p in pixels) / len(pixels)
-
-        if variance > 2000:
-            return "high"
-        elif variance > 500:
-            return "medium"
-        else:
-            return "low"
-    except:
-        return "unknown"
-
-def generate_analysis_summary(analysis_result: Dict[str, Any]) -> str:
-    """Generate a human-readable summary of the analysis"""
-    basic = analysis_result.get("basic_info", {})
-    visual = analysis_result.get("visual_analysis", {})
-    text = analysis_result.get("text_content", {})
-
-    summary_parts = []
-
-    # Basic info
-    if basic:
-        size_info = basic.get("size", {})
-        file_info = basic.get("file_size", {})
-        summary_parts.append(
-            f"Image: {basic.get('filename', 'Unknown')} "
-            f"({size_info.get('width', 0)}x{size_info.get('height', 0)}, "
-            f"{file_info.get('mb', 0)} MB, {basic.get('format', 'Unknown')} format)"
-        )
-
-    # Text content
-    if text and text.get("available") and text.get("has_text"):
-        word_count = text.get("word_count", 0)
-        summary_parts.append(f"Contains {word_count} words of extractable text")
-    elif text and text.get("available"):
-        summary_parts.append("No readable text detected")
-
-    # Visual characteristics
-    if visual:
-        brightness = visual.get("brightness", {})
-        complexity = visual.get("complexity", "unknown")
-        image_type = visual.get("estimated_type", "unknown")
-        summary_parts.append(
-            f"Visual characteristics: {brightness.get('category', 'unknown')} brightness, "
-            f"{complexity} complexity, appears to be {image_type}"
-        )
-
-    return ". ".join(summary_parts) + "."
+def analyze_image(image_path: str, analysis_type: str = "comprehensive") -> Dict[str, Any]:
+    """
+    Main function for image analysis
+    """
+    return analyze_image_with_ollama(image_path, analysis_type)
 
 def main():
     """CLI interface for the image analysis tool"""
@@ -338,12 +154,13 @@ def main():
         args = json.loads(sys.argv[1])
         image_path = args.get("image_path", "")
         analysis_type = args.get("analysis_type", "comprehensive")
+        model = args.get("model", "gemma3:latest")
 
         if not image_path:
             print(json.dumps({"error": "image_path is required"}))
             sys.exit(1)
 
-        result = analyze_image(image_path, analysis_type)
+        result = analyze_image_with_ollama(image_path, analysis_type, model)
         print(json.dumps(result, indent=2))
 
     except json.JSONDecodeError as e:
