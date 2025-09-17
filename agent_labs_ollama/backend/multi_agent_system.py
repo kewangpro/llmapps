@@ -27,7 +27,7 @@ class OllamaLLM:
     def call(self, prompt: str) -> str:
         """Call Ollama API and return response"""
         try:
-            with httpx.Client(base_url=self.base_url, timeout=30.0) as client:
+            with httpx.Client(base_url=self.base_url, timeout=300.0) as client:
                 response = client.post(
                     '/api/chat',
                     json={
@@ -75,7 +75,7 @@ class BaseAgent(ABC):
                 [venv_python, tool_script, args_json],
                 capture_output=True,
                 text=True,
-                timeout=30,  # 30 second timeout
+                timeout=300,  # 5 minute timeout for image analysis
                 cwd=project_root  # Run from project root so .env is accessible
             )
 
@@ -703,8 +703,27 @@ class ImageAnalysisAgent(BaseAgent):
         try:
             logger.info(f"🖼️ ImageAnalysisAgent analyzing: '{query}'")
 
-            # Extract parameters from query using LLM
-            prompt = f"""Extract image analysis parameters from: "{query}"
+            # Check for attached file path in query
+            if "FILE_PATH:" in query:
+                file_path = query.split("FILE_PATH:")[-1].strip()
+                # Remove the FILE_PATH marker from the query for analysis type detection
+                clean_query = query.split("FILE_PATH:")[0].strip()
+                logger.info(f"📎 Found attached file: {file_path}")
+
+                # Determine analysis type from clean query
+                analysis_type = "comprehensive"  # Default
+                if "text" in clean_query.lower() or "ocr" in clean_query.lower():
+                    analysis_type = "text"
+                elif "metadata" in clean_query.lower() or "exif" in clean_query.lower():
+                    analysis_type = "metadata"
+                elif "basic" in clean_query.lower():
+                    analysis_type = "basic"
+
+                params = {"image_path": file_path, "analysis_type": analysis_type, "model": self.model}
+                logger.info(f"🖼️ Using attached file parameters: {params}")
+            else:
+                # Extract parameters from query using LLM (fallback)
+                prompt = f"""Extract image analysis parameters from: "{query}"
 
 Determine:
 1. Image path (look for file references or paths)
@@ -719,20 +738,20 @@ Analysis types:
 - "text": Focus on text extraction (OCR)
 - "metadata": Focus on EXIF and metadata extraction"""
 
-            response = self.llm.call(prompt)
-            logger.info(f"🖼️ Parameter extraction: {response.strip()}")
+                response = self.llm.call(prompt)
+                logger.info(f"🖼️ Parameter extraction: {response.strip()}")
 
-            try:
-                params = json.loads(response.strip())
-            except json.JSONDecodeError:
-                # Fallback parameters - look for image extensions in query
-                image_path = "image.jpg"  # Default
-                for word in query.split():
-                    if any(word.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff']):
-                        image_path = word
-                        break
+                try:
+                    params = json.loads(response.strip())
+                except json.JSONDecodeError:
+                    # Fallback parameters - look for image extensions in query
+                    image_path = "image.jpg"  # Default
+                    for word in query.split():
+                        if any(word.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff']):
+                            image_path = word
+                            break
 
-                params = {"image_path": image_path, "analysis_type": "comprehensive"}
+                    params = {"image_path": image_path, "analysis_type": "comprehensive", "model": self.model}
 
             # Execute image analysis tool
             result = self._execute_tool_script("image_analysis", params)
@@ -828,7 +847,7 @@ Respond with just the tool names, one per line. If multiple tools needed, list t
             logger.info(f"🔄 Emergency fallback: {fallback}")
             return fallback
 
-    def execute(self, query: str, available_tools: List[str] = None) -> Dict[str, Any]:
+    def execute(self, query: str, available_tools: List[str] = None, attached_file: Dict = None) -> Dict[str, Any]:
         """Orchestrate sub-agents to handle the user query"""
         try:
             logger.info(f"\n🎯 ORCHESTRATOR STARTING EXECUTION")
@@ -854,6 +873,12 @@ Respond with just the tool names, one per line. If multiple tools needed, list t
                     if i == 1:
                         # First agent uses original query
                         agent_query = query
+                        # Add attached file information for relevant agents
+                        if attached_file and agent_name in ["image_analysis", "data_processing", "presentation"]:
+                            file_path = attached_file.get("path", "")
+                            if file_path:
+                                agent_query += f" FILE_PATH:{file_path}"
+                                logger.info(f"📎 Added file attachment: {file_path}")
                         logger.info(f"🎯 Delegating original query to {agent_name} specialist...")
                     else:
                         # Subsequent agents get context from previous results
@@ -936,9 +961,9 @@ class MultiAgentSystem:
     def __init__(self, model: str = "gemma3:latest"):
         self.orchestrator = OrchestratorAgent(model)
 
-    def execute_query(self, query: str, selected_tools: List[str] = None) -> Dict[str, Any]:
+    def execute_query(self, query: str, selected_tools: List[str] = None, attached_file: Dict = None) -> Dict[str, Any]:
         """Execute a query using the multi-agent system"""
-        return self.orchestrator.execute(query, selected_tools)
+        return self.orchestrator.execute(query, selected_tools, attached_file)
 
     def get_available_tools(self) -> List[Dict[str, str]]:
         """Get list of available tools"""

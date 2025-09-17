@@ -7,6 +7,9 @@ import httpx
 import asyncio
 from datetime import datetime
 import uuid
+import base64
+import tempfile
+import os
 from multi_agent_system import MultiAgentSystem
 
 app = FastAPI(title="Agent Labs", version="1.0.0")
@@ -123,6 +126,50 @@ async def stream_ollama_response(messages: List[Dict], model: str = "gemma3:late
     except Exception as e:
         yield f"Error: {str(e)}"
 
+def handle_attached_file(attached_file_data: Dict[str, Any], file_content: str) -> Optional[Dict[str, str]]:
+    """Handle attached file by saving it to a temporary location"""
+    if not attached_file_data or not file_content:
+        return None
+
+    try:
+        file_name = attached_file_data.get("name", "unknown_file")
+        file_type = attached_file_data.get("type", "")
+
+        # Check if it's an image file sent as base64
+        if file_type.startswith("image/") and file_content.startswith("data:"):
+            # Extract base64 data from data URL
+            header, base64_data = file_content.split(",", 1)
+
+            # Decode base64 to binary
+            file_binary = base64.b64decode(base64_data)
+
+            # Create temporary file
+            suffix = os.path.splitext(file_name)[1] or ".jpg"
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
+                temp_file.write(file_binary)
+                temp_path = temp_file.name
+
+            return {
+                "name": file_name,
+                "path": temp_path,
+                "type": file_type
+            }
+        else:
+            # For text files, save the content directly
+            suffix = os.path.splitext(file_name)[1] or ".txt"
+            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=suffix, encoding='utf-8') as temp_file:
+                temp_file.write(file_content)
+                temp_path = temp_file.name
+
+            return {
+                "name": file_name,
+                "path": temp_path,
+                "type": file_type
+            }
+    except Exception as e:
+        print(f"Error handling attached file: {e}")
+        return None
+
 def get_ollama_summary(tool_name: str, tool_result: Dict[str, Any], model: str = "gemma3:latest") -> str:
     """Get a summary of tool results from Ollama"""
     try:
@@ -164,7 +211,20 @@ class ChatMessage(BaseModel):
 @app.get("/api/tools")
 async def get_tools():
     """Get available tools"""
-    return {"tools": AVAILABLE_TOOLS}
+    mas = get_multi_agent_system()
+    tools = mas.get_available_tools()
+
+    # Convert to the format expected by frontend
+    tools_dict = {}
+    for tool in tools:
+        tools_dict[tool["name"]] = {
+            "name": tool["name"],
+            "description": tool["description"],
+            "parameters": {},
+            "category": "general"
+        }
+
+    return {"tools": tools_dict}
 
 @app.get("/api/models")
 async def get_models():
@@ -194,6 +254,32 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
             user_message = message_data.get("message", "")
             selected_tools = message_data.get("tools", [])
             model = message_data.get("model", "gemma3:latest")
+            attached_file_data = message_data.get("attachedFile", None)
+
+            # Debug: Log ALL received data
+            print(f"DEBUG: Full message data keys: {list(message_data.keys())}")
+            print(f"DEBUG: Message: '{user_message}'")
+            print(f"DEBUG: Tools: {selected_tools}")
+            print(f"DEBUG: Model: {model}")
+            print(f"DEBUG: Received attachedFile data: {attached_file_data}")
+            print(f"DEBUG: AttachedFile type: {type(attached_file_data)}")
+
+            if attached_file_data:
+                print(f"DEBUG: File name: {attached_file_data.get('name')}")
+                print(f"DEBUG: File type: {attached_file_data.get('type')}")
+                print(f"DEBUG: File size: {attached_file_data.get('size')}")
+                content = attached_file_data.get("content", "")
+                print(f"DEBUG: Content length: {len(content) if content else 0}")
+                print(f"DEBUG: Content preview: {content[:50]}..." if content else "DEBUG: No content")
+
+            # Process attached file if present
+            attached_file = None
+            if attached_file_data and attached_file_data.get("content"):
+                print("DEBUG: Processing attached file...")
+                attached_file = handle_attached_file(attached_file_data, attached_file_data.get("content"))
+                print(f"DEBUG: Processed file result: {attached_file}")
+            else:
+                print("DEBUG: No attached file or content to process")
 
             # Send acknowledgment
             await manager.send_personal_message({
@@ -252,7 +338,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     mas = get_multi_agent_system(model)
 
                     # Execute query using multi-agent system
-                    mas_result = mas.execute_query(user_message, selected_tools)
+                    mas_result = mas.execute_query(user_message, selected_tools, attached_file)
 
                     if mas_result.get("success"):
                         # Send orchestrator's final answer
@@ -303,6 +389,15 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                         "message": f"Multi-agent execution error: {str(e)}",
                         "timestamp": datetime.now().isoformat()
                     }, client_id)
+
+                finally:
+                    # Clean up temporary files
+                    if attached_file and attached_file.get("path"):
+                        try:
+                            if os.path.exists(attached_file["path"]):
+                                os.unlink(attached_file["path"])
+                        except Exception as e:
+                            print(f"Error cleaning up temporary file: {e}")
 
     except WebSocketDisconnect:
         manager.disconnect(client_id)
