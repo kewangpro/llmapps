@@ -175,7 +175,8 @@ export const useWebSocket = ({ url, clientId }: UseWebSocketProps) => {
       wsRef.current.send(JSON.stringify({
         message,
         tools: selectedTools,
-        model
+        model,
+        attachedFile
       }));
     }
   }, []);
