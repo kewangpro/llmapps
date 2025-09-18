@@ -19,8 +19,8 @@ export default function Home() {
     messages,
     currentResponse,
     isLoading,
-    toolResults,
-    sendMessage
+    sendMessage,
+    reconnect
   } = useWebSocket({
     url: 'ws://localhost:8000/ws',
     clientId
@@ -34,7 +34,7 @@ export default function Home() {
     );
   };
 
-  const handleSendMessage = (message: string, tools: string[], model: string, attachedFile?: {name: string, size: number, type: string}, displayMessage?: string) => {
+  const handleSendMessage = (message: string, tools: string[], model: string, attachedFile?: {name: string, size: number, type: string, content?: string}, displayMessage?: string) => {
     sendMessage(message, tools, model, attachedFile, displayMessage);
   };
 
@@ -49,7 +49,6 @@ export default function Home() {
         messages={messages}
         currentResponse={currentResponse}
         isLoading={isLoading}
-        toolResults={toolResults}
         onSendMessage={handleSendMessage}
         selectedTools={selectedTools}
       />
@@ -63,6 +62,14 @@ export default function Home() {
         }`}>
           {isConnected ? 'Connected' : 'Disconnected'}
         </div>
+        {!isConnected && (
+          <button
+            onClick={reconnect}
+            className="mt-2 px-3 py-1 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 shadow-lg"
+          >
+            Reconnect
+          </button>
+        )}
       </div>
     </div>
   );
