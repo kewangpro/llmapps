@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """
 Presentation Tool
-Generates PowerPoint presentations from input text or files
+Generates PowerPoint presentations from input text or files using Ollama LLM
 """
 
 import json
 import sys
 import os
+import asyncio
+import aiohttp
+import re
 from typing import Dict, Any, List
 from datetime import datetime
-import re
 
 try:
     from pptx import Presentation
@@ -20,14 +22,15 @@ try:
 except ImportError:
     PPTX_AVAILABLE = False
 
-def generate_presentation(input_text: str, title: str = "", output_filename: str = "presentation.pptx") -> Dict[str, Any]:
+async def generate_presentation_with_ollama(input_text: str, title: str = "", output_filename: str = "presentation.pptx", model: str = "gemma3:latest") -> Dict[str, Any]:
     """
-    Generate PowerPoint presentation from input text
+    Generate PowerPoint presentation from input text using Ollama LLM
 
     Args:
         input_text: Text content to convert to presentation
         title: Presentation title
         output_filename: Output file name
+        model: Ollama model to use
 
     Returns:
         Dictionary with generation results
@@ -40,48 +43,125 @@ def generate_presentation(input_text: str, title: str = "", output_filename: str
                 "error": "python-pptx library not available. Install with: pip install python-pptx"
             }
 
-        # Parse input text to extract slides
-        slides_data = parse_text_to_slides(input_text, title)
+        # Chunk text if it's too long
+        max_chunk_length = 3000
+        text_chunks = chunk_text(input_text, max_chunk_length)
+        all_slides = []
 
-        # Create presentation
+        for chunk_idx, chunk in enumerate(text_chunks):
+            chunk_prompt = f'''
+You are a presentation assistant. Your ONLY task is to create a slide outline based on the following content.
+
+IMPORTANT: DO NOT provide any commentary, review, explanation, or text before or after the slides. If you do, the user's program will break.
+
+INSTRUCTIONS:
+- Output ONLY slides in the following format. Do NOT add any extra text, commentary, or explanation.
+- Always generate at least 3 slides.
+- Each slide must have a title and 3 to 5 bullet points.
+- Use this exact format (do not change it):
+
+Slide 1:
+Title: <title of slide 1>
+- <bullet point 1>
+- <bullet point 2>
+- <bullet point 3>
+Slide 2:
+Title: <title of slide 2>
+- <bullet point 1>
+- <bullet point 2>
+- <bullet point 3>
+Slide 3:
+Title: <title of slide 3>
+- <bullet point 1>
+- <bullet point 2>
+- <bullet point 3>
+
+Continue for as many slides as needed, but do not add any text outside this format. Do NOT include any summary, review, or extra lines.
+
+Content:
+{chunk}
+'''
+
+            # Call Ollama API
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post('http://localhost:11434/api/generate', json={
+                        'model': model,
+                        'prompt': chunk_prompt,
+                        'stream': False
+                    }) as resp:
+                        result = await resp.json()
+            except Exception as e:
+                return {
+                    "tool": "presentation",
+                    "success": False,
+                    "error": f"LLM API error: {e}"
+                }
+
+            if 'response' not in result:
+                return {
+                    "tool": "presentation",
+                    "success": False,
+                    "error": f"Unexpected API response: {result}"
+                }
+
+            outline = result['response']
+
+            # Parse slides from LLM output
+            slides_raw = re.split(r'Slide\s*\d+:', outline, flags=re.IGNORECASE)[1:]
+            if not slides_raw or all(not s.strip() for s in slides_raw):
+                # Continue with next chunk if this one fails
+                continue
+            all_slides.extend(slides_raw)
+
+        if not all_slides:
+            return {
+                "tool": "presentation",
+                "success": False,
+                "error": "No valid slides were generated from input text"
+            }
+
+        # Create PowerPoint presentation
         prs = Presentation()
-
-        # Set slide size (16:9 widescreen)
         prs.slide_width = Inches(13.33)
         prs.slide_height = Inches(7.5)
 
         slides_created = 0
 
-        for i, slide_data in enumerate(slides_data):
-            slide_layout = prs.slide_layouts[1]  # Title and Content layout
-            if i == 0:
-                slide_layout = prs.slide_layouts[0]  # Title slide layout
+        # Add title slide if title provided
+        if title:
+            title_slide = prs.slides.add_slide(prs.slide_layouts[0])
+            title_slide.shapes.title.text = title
+            slides_created += 1
 
-            slide = prs.slides.add_slide(slide_layout)
+        # Process each slide
+        for idx, slide_text in enumerate(all_slides, 1):
+            lines = [line.strip() for line in slide_text.strip().splitlines() if line.strip()]
+            slide_title = None
+            bullets = []
 
-            # Add title
-            if slide.shapes.title:
-                slide.shapes.title.text = slide_data["title"]
+            # Parse title and bullets
+            for i, line in enumerate(lines):
+                if line.lower().startswith('title:'):
+                    slide_title = line[len('title:'):].strip()
+                    bullets = [l[1:].strip() for l in lines[i+1:] if l.startswith('-')]
+                    break
 
-                # Style the title
-                title_paragraph = slide.shapes.title.text_frame.paragraphs[0]
-                title_paragraph.font.size = Pt(32) if i == 0 else Pt(28)
-                title_paragraph.font.bold = True
-                title_paragraph.font.color.rgb = RGBColor(0, 51, 102)  # Dark blue
+            if not slide_title:
+                if lines:
+                    slide_title = lines[0]
+                    bullets = [l[1:].strip() for l in lines[1:] if l.startswith('-')]
+                else:
+                    slide_title = f"Slide {idx}"
+                    bullets = []
+
+            # Create slide
+            slide = prs.slides.add_slide(prs.slide_layouts[1])
+            slide.shapes.title.text = slide_title
 
             # Add content
-            if len(slide.placeholders) > 1 and slide_data["content"]:
-                content_placeholder = slide.placeholders[1]
-                text_frame = content_placeholder.text_frame
-                text_frame.clear()
-
-                # Add bullet points
-                for j, point in enumerate(slide_data["content"]):
-                    p = text_frame.paragraphs[0] if j == 0 else text_frame.add_paragraph()
-                    p.text = point
-                    p.level = 0
-                    p.font.size = Pt(18)
-                    p.space_before = Pt(6)
+            if len(slide.placeholders) > 1 and bullets:
+                slide.placeholders[1].text = '\n'.join(bullets)
 
             slides_created += 1
 
@@ -95,7 +175,7 @@ def generate_presentation(input_text: str, title: str = "", output_filename: str
             "success": True,
             "output_file": output_path,
             "slides_created": slides_created,
-            "total_slides": len(slides_data),
+            "total_slides": len(all_slides) + (1 if title else 0),
             "file_size_mb": round(os.path.getsize(output_path) / (1024 * 1024), 2),
             "message": f"Generated presentation with {slides_created} slides: {output_path}",
             "timestamp": datetime.now().isoformat()
@@ -108,102 +188,41 @@ def generate_presentation(input_text: str, title: str = "", output_filename: str
             "error": str(e)
         }
 
-def parse_text_to_slides(text: str, presentation_title: str = "") -> List[Dict[str, Any]]:
-    """Parse text content into slide structure"""
-    slides = []
-
-    # Split text into sections
-    lines = text.split('\n')
-    current_slide = {
-        "title": presentation_title or "Presentation",
-        "content": []
-    }
-
-    # Add title slide if presentation title is provided
-    if presentation_title:
-        slides.append({
-            "title": presentation_title,
-            "content": []
-        })
-
-    slide_title_patterns = [
-        r'^#+\s+(.+)',  # Markdown headers
-        r'^([A-Z][A-Za-z\s]{3,}):?\s*$',  # Title case lines
-        r'^\d+\.\s+(.+)',  # Numbered sections
-        r'^[•\-\*]\s*([A-Z][A-Za-z\s]{5,})',  # Bullet points that look like titles
-    ]
-
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-
-        # Check if this line looks like a slide title
-        is_title = False
-        for pattern in slide_title_patterns:
-            match = re.match(pattern, line)
-            if match:
-                # Save current slide if it has content
-                if current_slide["content"] or (current_slide["title"] and current_slide["title"] != presentation_title):
-                    slides.append(current_slide)
-
-                # Start new slide
-                current_slide = {
-                    "title": match.group(1) if match.lastindex else line.replace('#', '').strip(),
-                    "content": []
-                }
-                is_title = True
-                break
-
-        if not is_title:
-            # Add as content to current slide
-            # Clean up bullet points
-            cleaned_line = re.sub(r'^[•\-\*\+]\s*', '', line)
-            if cleaned_line:
-                current_slide["content"].append(cleaned_line)
-
-    # Add the last slide
-    if current_slide["content"] or current_slide["title"]:
-        slides.append(current_slide)
-
-    # If no clear structure found, create slides based on paragraphs
-    if len(slides) <= 1 and not presentation_title:
-        slides = create_slides_from_paragraphs(text)
-
-    # Limit bullet points per slide
-    final_slides = []
-    for slide in slides:
-        if len(slide["content"]) > 8:  # Too many points for one slide
-            # Split into multiple slides
-            chunks = [slide["content"][i:i+6] for i in range(0, len(slide["content"]), 6)]
-            for i, chunk in enumerate(chunks):
-                title_suffix = f" (Part {i+1})" if len(chunks) > 1 else ""
-                final_slides.append({
-                    "title": slide["title"] + title_suffix,
-                    "content": chunk
-                })
+def chunk_text(text: str, max_length: int = 3000) -> List[str]:
+    """Splits text into chunks of max_length characters, trying to preserve paragraphs."""
+    paragraphs = text.split('\n')
+    chunks = []
+    current = ''
+    for para in paragraphs:
+        if len(current) + len(para) + 1 > max_length:
+            if current:
+                chunks.append(current)
+            current = para
         else:
-            final_slides.append(slide)
+            current += ('\n' if current else '') + para
+    if current:
+        chunks.append(current)
+    return chunks
 
-    return final_slides
+def generate_presentation(input_text: str, title: str = "", output_filename: str = "presentation.pptx") -> Dict[str, Any]:
+    """
+    Synchronous wrapper for generate_presentation_with_ollama
+    """
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(
+            generate_presentation_with_ollama(input_text, title, output_filename)
+        )
+        loop.close()
+        return result
+    except Exception as e:
+        return {
+            "tool": "presentation",
+            "success": False,
+            "error": str(e)
+        }
 
-def create_slides_from_paragraphs(text: str) -> List[Dict[str, Any]]:
-    """Create slides from paragraph breaks when no clear structure exists"""
-    paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
-    slides = []
-
-    for i, paragraph in enumerate(paragraphs):
-        # Use first sentence as title, rest as content
-        sentences = paragraph.split('.')
-        title = sentences[0][:50] + "..." if len(sentences[0]) > 50 else sentences[0]
-        content = ['. '.join(sentences[1:]).strip()] if len(sentences) > 1 else []
-
-        slides.append({
-            "title": title or f"Slide {i+1}",
-            "content": content
-        })
-
-    return slides
 
 def main():
     """CLI interface for the presentation tool"""
