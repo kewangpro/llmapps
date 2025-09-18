@@ -4,13 +4,21 @@ from pydantic import BaseModel
 from typing import Dict, List, Any, Optional
 import json
 import httpx
-import asyncio
 from datetime import datetime
-import uuid
 import base64
 import tempfile
 import os
+import logging
 from multi_agent_system import MultiAgentSystem
+
+# Configure logging with timestamps
+log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+logging.basicConfig(
+    level=getattr(logging, log_level, logging.INFO),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger("AgentLabsServer")
 
 app = FastAPI(title="Agent Labs", version="1.0.0")
 
@@ -39,9 +47,22 @@ class ConnectionManager:
     async def send_personal_message(self, message: dict, client_id: str):
         if client_id in self.active_connections:
             try:
-                await self.active_connections[client_id].send_text(json.dumps(message))
+                websocket = self.active_connections[client_id]
+                if websocket.client_state.name == 'CONNECTED':
+                    # Add sequence number and flush immediately
+                    message_json = json.dumps(message)
+                    await websocket.send_text(message_json)
+                    # Force flush the WebSocket
+                    if hasattr(websocket, 'ping'):
+                        try:
+                            await websocket.ping()
+                        except:
+                            pass
+                    logger.info(f"✅ Successfully sent {message.get('type')} to {client_id}")
+                else:
+                    logger.warning(f"⚠️ WebSocket not connected (state: {websocket.client_state.name}) for {client_id}")
             except Exception as e:
-                print(f"Failed to send message to {client_id}: {e}")
+                logger.error(f"❌ Failed to send message to {client_id}: {e}")
                 # Remove the disconnected client
                 self.disconnect(client_id)
 
@@ -51,46 +72,7 @@ manager = ConnectionManager()
 OLLAMA_BASE_URL = "http://localhost:11434"
 ollama_client = httpx.AsyncClient(base_url=OLLAMA_BASE_URL, timeout=30.0)
 
-# Tool registry
-class Tool(BaseModel):
-    name: str
-    description: str
-    parameters: Dict[str, Any]
-    category: str
-
-# Sample tools
-AVAILABLE_TOOLS = {
-    "file_search": Tool(
-        name="file_search",
-        description="Search for files in the filesystem",
-        parameters={"path": "string", "pattern": "string"},
-        category="filesystem"
-    ),
-    "web_search": Tool(
-        name="web_search",
-        description="Search the web for information",
-        parameters={"query": "string", "limit": "number"},
-        category="web"
-    ),
-    "code_analysis": Tool(
-        name="code_analysis",
-        description="Analyze code files for patterns and issues",
-        parameters={"file_path": "string", "analysis_type": "string"},
-        category="development"
-    ),
-    "data_processing": Tool(
-        name="data_processing",
-        description="Process and transform data",
-        parameters={"input_data": "string", "operation": "string"},
-        category="data"
-    ),
-    "system_info": Tool(
-        name="system_info",
-        description="Get system information and metrics",
-        parameters={"metric": "string"},
-        category="system"
-    )
-}
+# Multi-Agent System management
 
 # Initialize Multi-Agent System
 multi_agent_system = None
@@ -167,7 +149,7 @@ def handle_attached_file(attached_file_data: Dict[str, Any], file_content: str) 
                 "type": file_type
             }
     except Exception as e:
-        print(f"Error handling attached file: {e}")
+        logger.error(f"Error handling attached file: {e}")
         return None
 
 def get_ollama_summary(tool_name: str, tool_result: Dict[str, Any], model: str = "gemma3:latest") -> str:
@@ -235,11 +217,6 @@ async def get_models():
     except Exception as e:
         return {"error": str(e), "models": []}
 
-@app.post("/api/tool/execute")
-async def execute_tool(tool_name: str, parameters: Dict[str, Any]):
-    """Execute a specific tool"""
-    result = await agent_framework.execute_tool(tool_name, parameters)
-    return result
 
 # WebSocket endpoint for real-time chat
 @app.websocket("/ws/{client_id}")
@@ -257,147 +234,159 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
             attached_file_data = message_data.get("attachedFile", None)
 
             # Debug: Log ALL received data
-            print(f"DEBUG: Full message data keys: {list(message_data.keys())}")
-            print(f"DEBUG: Message: '{user_message}'")
-            print(f"DEBUG: Tools: {selected_tools}")
-            print(f"DEBUG: Model: {model}")
-            print(f"DEBUG: Received attachedFile data: {attached_file_data}")
-            print(f"DEBUG: AttachedFile type: {type(attached_file_data)}")
+            logger.debug(f"Full message data keys: {list(message_data.keys())}")
+            logger.info(f"Message: '{user_message}'")
+            logger.info(f"Tools: {selected_tools}")
+            logger.info(f"Model: {model}")
+            logger.debug(f"Received attachedFile data: {attached_file_data}")
+            logger.debug(f"AttachedFile type: {type(attached_file_data)}")
 
             if attached_file_data:
-                print(f"DEBUG: File name: {attached_file_data.get('name')}")
-                print(f"DEBUG: File type: {attached_file_data.get('type')}")
-                print(f"DEBUG: File size: {attached_file_data.get('size')}")
+                logger.debug(f"File name: {attached_file_data.get('name')}")
+                logger.debug(f"File type: {attached_file_data.get('type')}")
+                logger.debug(f"File size: {attached_file_data.get('size')}")
                 content = attached_file_data.get("content", "")
-                print(f"DEBUG: Content length: {len(content) if content else 0}")
-                print(f"DEBUG: Content preview: {content[:50]}..." if content else "DEBUG: No content")
+                logger.debug(f"Content length: {len(content) if content else 0}")
+                logger.debug(f"Content preview: {content[:50]}..." if content else "No content")
 
             # Process attached file if present
             attached_file = None
             if attached_file_data and attached_file_data.get("content"):
-                print("DEBUG: Processing attached file...")
+                logger.info("Processing attached file...")
                 attached_file = handle_attached_file(attached_file_data, attached_file_data.get("content"))
-                print(f"DEBUG: Processed file result: {attached_file}")
+                logger.debug(f"Processed file result: {attached_file}")
             else:
-                print("DEBUG: No attached file or content to process")
+                logger.debug("No attached file or content to process")
 
             # Send acknowledgment
             await manager.send_personal_message({
                 "type": "message_received",
                 "timestamp": datetime.now().isoformat()
             }, client_id)
+            logger.info(f"📤 Sent message_received acknowledgment to client {client_id}")
 
-            # Prepare system message with tool context
-            system_message = "You are an AI assistant with access to various tools. "
-            if selected_tools:
-                tool_descriptions = []
-                for tool_name in selected_tools:
-                    if tool_name in AVAILABLE_TOOLS:
-                        tool = AVAILABLE_TOOLS[tool_name]
-                        tool_descriptions.append(f"- {tool.name}: {tool.description}")
+            # Always use the multi-agent system with real-time communication
+            try:
+                logger.info(f"🤖 Processing message with Main Agent")
+                mas = get_multi_agent_system(model)
 
-                system_message += f"You have access to these tools:\n" + "\n".join(tool_descriptions)
-                system_message += "\n\nWhen a user asks something that could benefit from using these tools, suggest which tool to use and I'll execute it for you."
-
-            # Prepare messages for Ollama
-            messages = [
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": user_message}
-            ]
-
-            # Send streaming response
-            await manager.send_personal_message({
-                "type": "assistant_response_start",
-                "timestamp": datetime.now().isoformat()
-            }, client_id)
-
-            full_response = ""
-            async for chunk in stream_ollama_response(messages, model):
-                full_response += chunk
-                await manager.send_personal_message({
-                    "type": "assistant_response_chunk",
-                    "content": chunk,
-                    "timestamp": datetime.now().isoformat()
-                }, client_id)
-
-            # Send assistant response complete BEFORE tool execution
-            await manager.send_personal_message({
-                "type": "assistant_response_complete",
-                "timestamp": datetime.now().isoformat()
-            }, client_id)
-
-            # If tools are selected, use multi-agent system for intelligent orchestration
-            if selected_tools:
-                await manager.send_personal_message({
-                    "type": "tool_execution_start",
-                    "timestamp": datetime.now().isoformat()
-                }, client_id)
-
-                try:
-                    # Get multi-agent system for the selected model
-                    mas = get_multi_agent_system(model)
-
-                    # Execute query using multi-agent system
-                    mas_result = mas.execute_query(user_message, selected_tools, attached_file)
-
-                    if mas_result.get("success"):
-                        # Send orchestrator's final answer
+                # Create a callback function for real-time messaging
+                async def send_response_callback(response_type: str, content: str = "", **kwargs):
+                    """Callback for the orchestrator to send real-time messages"""
+                    if response_type == "initial_response":
+                        # Send initial response immediately
                         await manager.send_personal_message({
-                            "type": "agent_response",
-                            "content": mas_result.get("final_answer", ""),
+                            "type": "assistant_response_start",
                             "timestamp": datetime.now().isoformat()
                         }, client_id)
 
-                        # Send results from each sub-agent
-                        for agent_result in mas_result.get("agent_results", []):
-                            if agent_result.get("success"):
-                                tool_name = agent_result.get("tool", "unknown")
-
+                        words = content.split()
+                        current_chunk = ""
+                        for word in words:
+                            current_chunk += word + " "
+                            if len(current_chunk) > 50:
                                 await manager.send_personal_message({
-                                    "type": "tool_result",
-                                    "tool": tool_name,
-                                    "result": agent_result.get("result", {}),
+                                    "type": "assistant_response_chunk",
+                                    "content": current_chunk,
                                     "timestamp": datetime.now().isoformat()
                                 }, client_id)
+                                current_chunk = ""
 
-                                # Generate summary of tool result
-                                base_summary = get_ollama_summary(tool_name, agent_result.get("result", {}), model)
+                        if current_chunk:
+                            await manager.send_personal_message({
+                                "type": "assistant_response_chunk",
+                                "content": current_chunk,
+                                "timestamp": datetime.now().isoformat()
+                            }, client_id)
 
-                                # Include file summary if available from data processing
-                                if tool_name == "data_processing" and agent_result.get("file_summary"):
-                                    summary = f"File Summary:\n{agent_result.get('file_summary')}\n\nProcessing Result:\n{base_summary}"
-                                else:
-                                    summary = base_summary
-
-                                await manager.send_personal_message({
-                                    "type": "tool_summary",
-                                    "tool": tool_name,
-                                    "summary": summary,
-                                    "timestamp": datetime.now().isoformat()
-                                }, client_id)
-                    else:
-                        # Send error message
                         await manager.send_personal_message({
-                            "type": "error",
-                            "message": f"Multi-agent execution failed: {mas_result.get('error', 'Unknown error')}",
+                            "type": "assistant_response_complete",
                             "timestamp": datetime.now().isoformat()
                         }, client_id)
 
-                except Exception as e:
+                    elif response_type == "final_answer":
+                        # Send final answer as separate response
+                        await manager.send_personal_message({
+                            "type": "assistant_response_start",
+                            "timestamp": datetime.now().isoformat()
+                        }, client_id)
+
+                        words = content.split()
+                        current_chunk = ""
+                        for word in words:
+                            current_chunk += word + " "
+                            if len(current_chunk) > 50:
+                                await manager.send_personal_message({
+                                    "type": "assistant_response_chunk",
+                                    "content": current_chunk,
+                                    "timestamp": datetime.now().isoformat()
+                                }, client_id)
+                                current_chunk = ""
+
+                        if current_chunk:
+                            await manager.send_personal_message({
+                                "type": "assistant_response_chunk",
+                                "content": current_chunk,
+                                "timestamp": datetime.now().isoformat()
+                            }, client_id)
+
+                        await manager.send_personal_message({
+                            "type": "assistant_response_complete",
+                            "timestamp": datetime.now().isoformat()
+                        }, client_id)
+
+                # Execute with callback - this will send responses in real-time
+                mas_result = await mas.execute_query_with_callback(user_message, selected_tools, attached_file, send_response_callback)
+                logger.info(f"🎯 Main Agent result: success={mas_result.get('success')}")
+
+                # Send tool results if any (for transparency)
+                # But responses are already sent via callback
+                if mas_result.get("success"):
+                    for agent_result in mas_result.get("agent_results", []):
+                        if agent_result.get("success"):
+                            tool_name = agent_result.get("tool", "unknown")
+
+                            await manager.send_personal_message({
+                                "type": "tool_result",
+                                "tool": tool_name,
+                                "result": agent_result.get("result", {}),
+                                "timestamp": datetime.now().isoformat()
+                            }, client_id)
+
+                            # Generate summary of tool result
+                            base_summary = get_ollama_summary(tool_name, agent_result.get("result", {}), model)
+
+                            await manager.send_personal_message({
+                                "type": "tool_summary",
+                                "tool": tool_name,
+                                "summary": base_summary,
+                                "timestamp": datetime.now().isoformat()
+                            }, client_id)
+
+                else:
+                    # Send error message
                     await manager.send_personal_message({
                         "type": "error",
-                        "message": f"Multi-agent execution error: {str(e)}",
+                        "message": f"Main Agent error: {mas_result.get('error', 'Unknown error')}",
                         "timestamp": datetime.now().isoformat()
                     }, client_id)
 
-                finally:
-                    # Clean up temporary files
-                    if attached_file and attached_file.get("path"):
-                        try:
-                            if os.path.exists(attached_file["path"]):
-                                os.unlink(attached_file["path"])
-                        except Exception as e:
-                            print(f"Error cleaning up temporary file: {e}")
+            except Exception as e:
+                logger.error(f"❌ Main Agent error: {str(e)}")
+                await manager.send_personal_message({
+                    "type": "error",
+                    "message": f"Main Agent error: {str(e)}",
+                    "timestamp": datetime.now().isoformat()
+                }, client_id)
+
+            finally:
+                # Clean up temporary files
+                if attached_file and attached_file.get("path"):
+                    try:
+                        if os.path.exists(attached_file["path"]):
+                            os.unlink(attached_file["path"])
+                    except Exception as e:
+                        logger.error(f"Error cleaning up temporary file: {e}")
 
     except WebSocketDisconnect:
         manager.disconnect(client_id)
