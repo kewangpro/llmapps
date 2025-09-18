@@ -1,295 +1,397 @@
-# Agent Labs Web App
+# Agent Labs
 
-A modern web application that provides a chat interface with Ollama language models, featuring an intelligent multi-agent framework with tool selection and execution capabilities.
+A modern AI-powered chat interface with intelligent multi-agent orchestration and real-time tool execution. Built with Next.js, FastAPI, and Ollama integration.
 
 ## Features
 
-- **Real-time Chat Interface**: WebSocket-based chat with streaming responses from Ollama models
-- **Tool Selection Sidebar**: Choose from various categories of tools to enhance your AI assistant
-- **Multi-Agent Framework**: Intelligent tool orchestration with specialized sub-agents and sequential dependency
-- **Collapsible Tool Results**: Clean display with AI-generated summaries and expandable raw output
-- **Multiple Models**: Support for various Ollama models (Gemma 3, Llama 3.1, Mistral, etc.)
-- **Modern UI**: Clean, responsive interface built with React, Next.js, and Tailwind CSS
+- **Real-time Chat Interface**: WebSocket-based streaming communication with immediate response feedback
+- **Intelligent Multi-Agent System**: Orchestrator pattern with specialized sub-agents for different tool categories
+- **Tool Selection & Execution**: Dynamic tool selection with automatic parameter extraction and execution
+- **File Upload Support**: Analyze images, process data files, and generate presentations from uploaded content
+- **Multiple Model Support**: Compatible with various Ollama models (Gemma, Llama, Mistral, etc.)
+- **Modern Responsive UI**: Clean interface built with React, Next.js, and Tailwind CSS
+- **Real-time Tool Results**: Live updates with collapsible results and AI-generated summaries
 
 ## Architecture
 
-- **Frontend**: Next.js 14 with TypeScript and Tailwind CSS
-- **Backend**: FastAPI with WebSocket support and multi-agent system integration
-- **LLM Integration**: Direct integration with Ollama API through custom OllamaLLM class
-- **Agent Framework**: Multi-agent orchestrator with specialized sub-agents for each tool category
-- **Real-time Communication**: WebSocket connections for streaming responses and tool execution
+### System Design
+
+```
+┌─────────────────┐    WebSocket    ┌──────────────────┐    HTTP/API    ┌─────────────┐
+│  Next.js        │◄──────────────►│  FastAPI         │◄──────────────►│  Ollama     │
+│  Frontend       │                │  Backend         │                │  LLM        │
+│                 │                │                  │                │             │
+│ - Chat UI       │                │ - WebSocket      │                │ - Models    │
+│ - Tool Sidebar  │                │ - Multi-Agent    │                │ - Chat API  │
+│ - File Upload   │                │ - Orchestrator   │                │             │
+└─────────────────┘                └──────────────────┘                └─────────────┘
+                                            │
+                                            │
+                                    ┌───────▼────────┐
+                                    │  Sub-Agents    │
+                                    │                │
+                                    │ - FileSearch   │
+                                    │ - WebSearch    │
+                                    │ - SystemInfo   │
+                                    │ - CodeAnalysis │
+                                    │ - DataProcess  │
+                                    │ - Presentation │
+                                    │ - ImageAnalysis│
+                                    └────────────────┘
+```
+
+### Communication Flow
+
+1. **User Input** → Frontend captures message and selected tools
+2. **WebSocket** → Real-time bidirectional communication
+3. **Orchestrator** → Analyzes query and selects appropriate sub-agents
+4. **Initial Response** → Immediate acknowledgment sent to user
+5. **Tool Execution** → Sub-agents execute tools with extracted parameters
+6. **Real-time Updates** → Tool results streamed back to frontend
+7. **Final Synthesis** → Orchestrator combines results into comprehensive answer
+
+### Multi-Agent Pattern
+
+- **OrchestratorAgent**: Main coordinator that selects and manages sub-agents
+- **Specialized Sub-Agents**: Each handles specific tool categories with domain expertise
+- **Context Sharing**: Subsequent agents receive results from previous executions
+- **Sequential Dependencies**: Agents can build upon each other's results
+
+## Project Structure
+
+```
+agent_labs_ollama/
+├── backend/
+│   ├── main.py                     # FastAPI app with WebSocket endpoints
+│   ├── multi_agent_system.py       # Main multi-agent system interface
+│   ├── agents/
+│   │   ├── __init__.py
+│   │   ├── base_agent.py           # Base agent class with LLM integration
+│   │   ├── orchestrator_agent.py   # Main orchestrator with callback support
+│   │   ├── file_search_agent.py    # File system search operations
+│   │   ├── web_search_agent.py     # Web search with Google API
+│   │   ├── system_info_agent.py    # System metrics and information
+│   │   ├── code_analysis_agent.py  # Code quality and security analysis
+│   │   ├── data_processing_agent.py # Data analysis and transformation
+│   │   ├── presentation_agent.py   # PowerPoint generation
+│   │   └── image_analysis_agent.py # Image content analysis
+│   ├── tools/
+│   │   ├── file_search.py          # File system search implementation
+│   │   ├── web_search.py           # Google Custom Search integration
+│   │   ├── system_info.py          # System metrics collection
+│   │   ├── code_analysis.py        # Code analysis utilities
+│   │   ├── data_processing.py      # Data manipulation tools
+│   │   ├── presentation.py         # PowerPoint generation
+│   │   └── image_analysis.py       # Image processing and analysis
+│   └── requirements.txt            # Python dependencies
+├── frontend/
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── page.tsx            # Main application page
+│   │   │   ├── layout.tsx          # Root layout
+│   │   │   └── globals.css         # Global styles
+│   │   ├── components/
+│   │   │   ├── ChatInterface.tsx   # Main chat UI with file upload
+│   │   │   ├── ToolSidebar.tsx     # Tool selection interface
+│   │   │   ├── MessageBubble.tsx   # Individual message display
+│   │   │   └── ToolResult.tsx      # Collapsible tool results
+│   │   ├── hooks/
+│   │   │   ├── useWebSocket.ts     # WebSocket communication
+│   │   │   └── messageReducer.ts   # Message state management
+│   │   └── types/
+│   │       └── index.ts            # TypeScript type definitions
+│   ├── package.json                # Node.js dependencies
+│   └── tailwind.config.js          # Tailwind CSS configuration
+├── docker-compose.yml              # Multi-service Docker setup
+├── Dockerfile.backend              # Backend container configuration
+├── Dockerfile.frontend             # Frontend container configuration
+└── README.md                       # Project documentation
+```
 
 ## Available Tools
 
-### Filesystem
-- **file_search**: Search for files in the filesystem
+### File System
+- **file_search**: Search for files and directories in the filesystem
+  - Supports pattern matching and recursive search
+  - Returns file paths, sizes, and modification dates
 
-### Web
-- **web_search**: Search the web for information
+### Web Search
+- **web_search**: Search the internet for current information
+  - Google Custom Search API integration
+  - Real-time web results with relevance ranking
 
-### Development
-- **code_analysis**: Analyze code files for patterns and issues
+### System Information
+- **system_info**: Comprehensive system metrics
+  - CPU, memory, disk usage, and network information
+  - Operating system details and hardware specifications
 
-### Data
-- **data_processing**: Process and transform data
+### Code Analysis
+- **code_analysis**: Analyze code files for quality and security
+  - Security vulnerability detection
+  - Code quality metrics and performance analysis
+  - Support for multiple programming languages
 
-### System
-- **system_info**: Get system information and metrics
+### Data Processing
+- **data_processing**: Process and analyze data files
+  - CSV, JSON, and structured data analysis
+  - Statistical operations and data transformation
+  - Chart and visualization generation
+
+### Presentation
+- **presentation**: Generate PowerPoint presentations
+  - Automatic slide creation from text content
+  - Template-based formatting and layout
+  - Support for text files and data sources
+
+### Image Analysis
+- **image_analysis**: Analyze uploaded images
+  - Object detection and scene recognition
+  - Text extraction (OCR) from images
+  - Image metadata and technical analysis
 
 ## Quick Start
 
-### Prerequisites
-
-- Docker and Docker Compose
-- Ollama installed locally (or use the Docker service)
-
 ### Using Docker Compose (Recommended)
 
-1. Clone the repository:
+1. **Clone the repository**:
 ```bash
 git clone <repository-url>
 cd agent_labs_ollama
 ```
 
-2. Start all services:
+2. **Start all services**:
 ```bash
 docker-compose up --build
 ```
 
-3. Open your browser and navigate to:
+3. **Access the application**:
    - Frontend: http://localhost:3000
    - Backend API: http://localhost:8000
    - Ollama API: http://localhost:11434
 
 ### Manual Setup
 
+#### Prerequisites
+- Python 3.9+
+- Node.js 18+
+- Ollama installed locally
+
 #### Backend Setup
 
-1. Create and activate virtual environment:
+1. **Create virtual environment**:
 ```bash
+cd backend
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 ```
 
-2. Navigate to the backend directory:
-```bash
-cd backend
-```
-
-3. Install Python dependencies:
+2. **Install dependencies**:
 ```bash
 pip install -r requirements.txt
 ```
 
-4. Start the FastAPI server:
+3. **Start the server**:
 ```bash
 python main.py
 ```
 
 #### Frontend Setup
 
-1. Navigate to the frontend directory:
+1. **Install dependencies**:
 ```bash
 cd frontend
-```
-
-2. Install Node.js dependencies:
-```bash
 npm install
 ```
 
-3. Start the development server:
+2. **Start development server**:
 ```bash
 npm run dev
 ```
 
 #### Ollama Setup
 
-1. Install Ollama following the official instructions
-2. Pull recommended models:
+1. **Install Ollama** following [official instructions](https://ollama.ai/)
+
+2. **Pull recommended models**:
 ```bash
 ollama pull gemma2:latest
 ollama pull llama3.1:latest
 ollama pull mistral:latest
 ```
 
-3. Start Ollama server:
+3. **Start Ollama server**:
 ```bash
 ollama serve
 ```
 
-#### Google Search API Setup (Optional)
+### Optional: Google Search API
 
-For enhanced web search functionality, configure Google Custom Search API:
+For enhanced web search capabilities:
 
-1. **Get Google API Key:**
+1. **Get Google API credentials**:
    - Visit [Google Cloud Console](https://console.cloud.google.com/)
-   - Create a new project or select existing project
    - Enable Custom Search API
-   - Create credentials (API Key)
+   - Create API key and Search Engine ID
 
-2. **Create Custom Search Engine:**
-   - Visit [Custom Search Engine](https://cse.google.com/cse/)
-   - Create a new search engine
-   - Configure to search the entire web
-   - Get your Search Engine ID
-
-3. **Configure Environment Variables:**
-   ```bash
-   cp .env.example .env
-   # Edit .env file with your credentials:
-   GOOGLE_SEARCH_API_KEY=your_api_key_here
-   GOOGLE_SEARCH_ENGINE_ID=your_engine_id_here
-   ```
-
-**Note:** Without Google API credentials, the web search tool will return an error message. The system will still function with other tools.
+2. **Configure environment**:
+```bash
+# Backend .env file
+GOOGLE_SEARCH_API_KEY=your_api_key_here
+GOOGLE_SEARCH_ENGINE_ID=your_engine_id_here
+```
 
 ## Usage
 
-1. **Select Tools**: Use the sidebar to select tools you want the AI to have access to
-2. **Start Chatting**: Type your message in the chat interface
-3. **Intelligent Tool Execution**: The multi-agent orchestrator will automatically analyze your request and execute appropriate tools with sequential dependency
-4. **View Results**: Tool execution results are displayed with AI-generated summaries and collapsible raw output
+### Basic Chat
+1. Open the application at http://localhost:3000
+2. Select tools from the sidebar based on your needs
+3. Type your message and press Enter
+4. Watch as the AI orchestrator selects and executes appropriate tools
 
-## Example Interactions
+### File Upload
+1. Click the attachment icon in the chat input
+2. Select an image, document, or data file
+3. The system automatically chooses the appropriate analysis tool
+4. Results include both analysis and file-specific insights
 
-**With system_info and web_search tools selected:**
+### Example Interactions
+
+**System Analysis**:
 ```
-User: "Find my system info and check online if there are newer available"
-Orchestrator: Selecting SystemInfoAgent and WebSearchAgent for sequential execution.
+User: "What are my system specs and are there any performance issues?"
 
-SystemInfoAgent: Retrieving system overview...
-Result: macOS Darwin 25.0.0, ARM64, 16GB RAM, 10 cores
+Orchestrator: I'll check your system information and analyze performance.
 
-WebSearchAgent: Searching for "macOS Darwin 25.0.0 updates" based on system info...
-Result: Found information about macOS Tahoe updates and compatibility
+SystemInfoAgent: Retrieved system overview - macOS Darwin 25.0.0, ARM64, 16GB RAM
+Result: CPU usage at 15%, Memory 8.2GB used (51%), Disk 85% full
 
-Final Answer: Your system is running macOS Darwin 25.0.0 (Tahoe) with ARM64 architecture and 16GB RAM. Based on the search results, this appears to be a recent pre-release version with ongoing development updates.
-```
-
-**With code_analysis tool selected:**
-```
-User: "Analyze the security of my Python authentication code"
-Orchestrator: Selecting CodeAnalysisAgent for security analysis.
-
-CodeAnalysisAgent: Analyzing authentication code for security vulnerabilities...
-Result: {"file_path": "auth.py", "analysis_type": "security", "findings": [...]}
-
-Final Answer: Found 2 security issues: password hashing uses deprecated MD5 and no rate limiting on login attempts. Recommend using bcrypt and implementing exponential backoff.
+Final Answer: Your MacBook Air is running well with moderate resource usage.
+However, disk space is getting low at 85% capacity. Consider cleaning up
+large files or moving data to external storage.
 ```
 
-## Development
+**Code Security Review**:
+```
+User: "Analyze the security of my authentication module"
 
-### Backend Development
+Orchestrator: I'll perform a security analysis of your authentication code.
 
-The backend is built with FastAPI and a custom multi-agent system and includes:
-- WebSocket endpoint for real-time communication
-- Multi-agent orchestrator with specialized sub-agents
-- Custom OllamaLLM integration
-- Sequential dependency coordination between agents
-- Tool result summarization with AI
-- CORS middleware for frontend communication
+CodeAnalysisAgent: Scanning for security vulnerabilities...
+Result: Found 3 issues: weak password hashing, missing rate limiting,
+SQL injection vulnerability in login query
 
-Key files:
-- `main.py`: Main application with WebSocket and API endpoints
-- `multi_agent_system.py`: Multi-agent orchestrator and specialized sub-agents
-- `requirements.txt`: Python dependencies for multi-agent system
-
-### Frontend Development
-
-The frontend is built with Next.js 14 and includes:
-- Real-time chat interface with WebSocket
-- Tool selection sidebar with categories
-- Collapsible tool results with AI summaries
-- TypeScript for type safety
-- Tailwind CSS for styling
-
-Key files:
-- `src/app/page.tsx`: Main application component
-- `src/components/ChatInterface.tsx`: Chat UI component with collapsible results
-- `src/components/ToolSidebar.tsx`: Tool selection component
-- `src/hooks/useWebSocket.ts`: WebSocket communication hook with agent support
-
-### Adding New Tools
-
-1. **Create Tool Script**: Add a new Python script in the `tools/` directory
-2. **Backend**: Add specialized agent class to `multi_agent_system.py`
-3. **Frontend**: Tool will automatically appear in the sidebar
-
-Example tool implementation:
-```python
-class NewToolAgent(BaseAgent):
-    """Specialized agent for new tool operations"""
-
-    def execute(self, query: str) -> Dict[str, Any]:
-        """Execute new tool with intelligent parameter extraction"""
-        try:
-            # Extract parameters from query using LLM
-            params = self._extract_parameters(query)
-
-            # Execute tool script
-            result = self._execute_tool_script("new_tool", params)
-
-            return {
-                "agent": "NewToolAgent",
-                "tool": "new_tool",
-                "parameters": params,
-                "result": result,
-                "success": True,
-                "timestamp": datetime.now().isoformat()
-            }
-        except Exception as e:
-            return {
-                "agent": "NewToolAgent",
-                "success": False,
-                "error": str(e),
-                "timestamp": datetime.now().isoformat()
-            }
+Final Answer: Critical security issues found. Recommend: 1) Upgrade to
+bcrypt for password hashing, 2) Implement rate limiting with exponential
+backoff, 3) Use parameterized queries to prevent SQL injection.
 ```
 
-## API Endpoints
+## API Reference
 
-### REST API
-- `GET /api/tools`: Get available tools
-- `GET /api/models`: Get available Ollama models
-- `POST /api/tool/execute`: Execute a specific tool
-- `GET /health`: Health check
+### REST Endpoints
 
-### WebSocket
-- `WS /ws/{client_id}`: Real-time chat communication with agent orchestration
+- `GET /api/tools` - List available tools
+- `GET /api/models` - List available Ollama models
+- `GET /health` - Health check
 
-#### WebSocket Message Types
-- `message_received`: Acknowledges user message
-- `assistant_response_start`: Begin streaming response
-- `assistant_response_chunk`: Response content chunk
-- `assistant_response_complete`: Response finished
-- `tool_execution_start`: Agent begins tool execution
-- `tool_result`: Tool execution result
-- `tool_summary`: AI-generated summary of tool result
-- `agent_response`: Final agent conclusion
-- `error`: Error message
+### WebSocket Protocol
+
+Connect to `/ws/{client_id}` for real-time communication.
+
+**Message Types**:
+- `message_received` - Acknowledges user input
+- `assistant_response_start` - Begin streaming response
+- `assistant_response_chunk` - Response content chunk
+- `assistant_response_complete` - Response finished
+- `tool_result` - Tool execution result with raw data
+- `tool_summary` - AI-generated summary of tool result
+- `error` - Error message
+
+**Message Format**:
+```json
+{
+  "type": "assistant_response_chunk",
+  "content": "I'll analyze your system...",
+  "timestamp": "2024-01-01T12:00:00Z"
+}
+```
 
 ## Configuration
 
 ### Environment Variables
 
-**Backend:**
-- `OLLAMA_BASE_URL`: Ollama API URL (default: http://localhost:11434)
-- `GOOGLE_SEARCH_API_KEY`: Google Custom Search API key (optional)
-- `GOOGLE_SEARCH_ENGINE_ID`: Google Custom Search Engine ID (optional)
+**Backend** (`.env`):
+```env
+OLLAMA_BASE_URL=http://localhost:11434
+GOOGLE_SEARCH_API_KEY=optional_api_key
+GOOGLE_SEARCH_ENGINE_ID=optional_engine_id
+LOG_LEVEL=INFO
+```
 
-**Frontend:**
-- `NEXT_PUBLIC_API_URL`: Backend API URL
-- `NEXT_PUBLIC_WS_URL`: WebSocket URL
+**Frontend** (`.env.local`):
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_WS_URL=ws://localhost:8000
+```
+
+### Model Configuration
+
+The system supports any Ollama-compatible model. Configure in the frontend model selector or set default in backend configuration.
+
+## Development
+
+### Adding New Tools
+
+1. **Create tool implementation** in `backend/tools/new_tool.py`
+2. **Create specialized agent** in `backend/agents/new_tool_agent.py`
+3. **Register agent** in `backend/agents/__init__.py`
+4. **Add to orchestrator** in `backend/agents/orchestrator_agent.py`
+
+**Example tool structure**:
+```python
+class NewToolAgent(BaseAgent):
+    def execute(self, query: str) -> Dict[str, Any]:
+        try:
+            # Extract parameters using LLM
+            params = self._extract_parameters(query)
+
+            # Execute tool
+            result = self._execute_tool_script("new_tool", params)
+
+            return {
+                "agent": "NewToolAgent",
+                "tool": "new_tool",
+                "success": True,
+                "result": result,
+                "timestamp": datetime.now().isoformat()
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+```
+
+### Frontend Development
+
+The frontend uses modern React patterns:
+- **TypeScript** for type safety
+- **Custom hooks** for WebSocket communication
+- **useReducer** for complex state management
+- **Tailwind CSS** for styling
+
+### Backend Development
+
+The backend implements:
+- **AsyncIO** for concurrent operations
+- **WebSocket** for real-time communication
+- **Pydantic** for data validation
+- **Multi-agent pattern** for tool orchestration
 
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
 
-MIT License - see LICENSE file for details
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
