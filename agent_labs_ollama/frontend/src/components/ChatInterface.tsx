@@ -8,8 +8,7 @@ interface ChatInterfaceProps {
   messages: Message[];
   currentResponse: string;
   isLoading: boolean;
-  toolResults: ToolResult[];
-  onSendMessage: (message: string, selectedTools: string[], model: string, attachedFile?: {name: string, size: number, type: string}, displayMessage?: string) => void;
+  onSendMessage: (message: string, selectedTools: string[], model: string, attachedFile?: {name: string, size: number, type: string, content?: string}, displayMessage?: string) => void;
   selectedTools: string[];
 }
 
@@ -17,17 +16,21 @@ export default function ChatInterface({
   messages,
   currentResponse,
   isLoading,
-  toolResults,
   onSendMessage,
   selectedTools
 }: ChatInterfaceProps) {
   const [inputMessage, setInputMessage] = useState('');
   const [selectedModel, setSelectedModel] = useState('gemma3:latest');
-  const [collapsedToolResults, setCollapsedToolResults] = useState<Set<number>>(new Set());
+  const [collapsedToolResults, setCollapsedToolResults] = useState<Set<string | number>>(new Set());
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [fileContent, setFileContent] = useState<string>('');
+  const [fileWarning, setFileWarning] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // File size limits
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+  const LARGE_FILE_WARNING = 1024 * 1024; // 1MB
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -64,13 +67,29 @@ export default function ChatInterface({
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Validate file size
+      if (file.size > MAX_FILE_SIZE) {
+        setFileWarning(`File too large (${(file.size / 1024 / 1024).toFixed(2)}MB). Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB.`);
+        return;
+      }
+
       setAttachedFile(file);
+      setFileWarning('');
+
+      // Set warning for large files
+      if (file.size > LARGE_FILE_WARNING) {
+        setFileWarning(`Large file (${(file.size / 1024 / 1024).toFixed(2)}MB) will be truncated to 500KB for processing.`);
+      }
 
       // Handle different file types appropriately
       const reader = new FileReader();
       reader.onload = (event) => {
         const content = event.target?.result as string;
         setFileContent(content);
+      };
+
+      reader.onerror = () => {
+        setFileWarning('Error reading file. Please try a different file.');
       };
 
       // Check if it's an image file
@@ -87,6 +106,7 @@ export default function ChatInterface({
   const removeAttachedFile = () => {
     setAttachedFile(null);
     setFileContent('');
+    setFileWarning('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -103,13 +123,13 @@ export default function ChatInterface({
     });
   };
 
-  const toggleToolResultCollapse = (index: number) => {
+  const toggleToolResultCollapse = (key: string | number) => {
     setCollapsedToolResults(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(index)) {
-        newSet.delete(index);
+      if (newSet.has(key)) {
+        newSet.delete(key);
       } else {
-        newSet.add(index);
+        newSet.add(key);
       }
       return newSet;
     });
@@ -214,6 +234,59 @@ export default function ChatInterface({
                   </div>
                 </div>
               )}
+
+              {/* Show tool results inline for assistant messages */}
+              {message.role === 'assistant' && message.toolResults && message.toolResults.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {message.toolResults.map((result, index) => {
+                    const isCollapsed = collapsedToolResults.has(`${message.id}-${index}`);
+                    return (
+                      <div key={`${message.id}-${index}`} className="rounded-lg bg-green-50 border border-green-200">
+                        <div
+                          className="p-3 cursor-pointer hover:bg-green-100 transition-colors"
+                          onClick={() => toggleToolResultCollapse(`${message.id}-${index}`)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Wrench className="w-4 h-4 text-green-600" />
+                              <div className="text-sm font-medium text-green-800">
+                                Tool: {result.tool.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="text-xs text-green-600">
+                                {formatTimestamp(result.timestamp)}
+                              </div>
+                              {isCollapsed ? (
+                                <ChevronRight className="w-4 h-4 text-green-600" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4 text-green-600" />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {!isCollapsed && (
+                          <div className="px-3 pb-3">
+                            {result.summary && (
+                              <div className="text-sm text-green-800 bg-green-100 p-3 rounded-lg mb-3 border-t border-green-200">
+                                <div className="font-medium mb-1">Summary:</div>
+                                <p className="whitespace-pre-wrap">{result.summary}</p>
+                              </div>
+                            )}
+                            <div className="text-sm text-green-700 border-t border-green-200 pt-2">
+                              <div className="text-xs text-green-600 mb-1 font-medium">Raw Tool Output:</div>
+                              <pre className="whitespace-pre-wrap font-mono text-xs bg-white p-2 rounded border">
+                                {JSON.stringify(result.result, null, 2)}
+                              </pre>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -233,58 +306,7 @@ export default function ChatInterface({
           </div>
         )}
 
-        {/* Tool results */}
-        {toolResults.map((result, index) => {
-          const isCollapsed = collapsedToolResults.has(index);
-          return (
-            <div key={index} className="flex gap-3">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
-                <Wrench className="w-4 h-4" />
-              </div>
-              <div className="flex-1 max-w-3xl">
-                <div className="rounded-lg bg-green-50 border border-green-200">
-                  <div
-                    className="p-3 cursor-pointer hover:bg-green-100 transition-colors"
-                    onClick={() => toggleToolResultCollapse(index)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm font-medium text-green-800">
-                        Tool: {result.tool.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="text-xs text-green-600">
-                          {formatTimestamp(result.timestamp)}
-                        </div>
-                        {isCollapsed ? (
-                          <ChevronRight className="w-4 h-4 text-green-600" />
-                        ) : (
-                          <ChevronDown className="w-4 h-4 text-green-600" />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {!isCollapsed && (
-                    <div className="px-3 pb-3">
-                      {result.summary && (
-                        <div className="text-sm text-green-800 bg-green-100 p-3 rounded-lg mb-3 border-t border-green-200">
-                          <div className="font-medium mb-1">Summary:</div>
-                          <p className="whitespace-pre-wrap">{result.summary}</p>
-                        </div>
-                      )}
-                      <div className="text-sm text-green-700 border-t border-green-200 pt-2">
-                        <div className="text-xs text-green-600 mb-1 font-medium">Raw Tool Output:</div>
-                        <pre className="whitespace-pre-wrap font-mono text-xs bg-white p-2 rounded border">
-                          {JSON.stringify(result.result, null, 2)}
-                        </pre>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })}
+        {/* Tool results are now displayed inline with messages above */}
 
         {/* Loading indicator */}
         {isLoading && !currentResponse && (
@@ -314,22 +336,30 @@ export default function ChatInterface({
       <div className="border-t border-gray-200 p-4 bg-white">
         {/* File attachment preview */}
         {attachedFile && (
-          <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className={`mb-3 p-3 border rounded-lg ${fileWarning ? 'bg-yellow-50 border-yellow-200' : 'bg-blue-50 border-blue-200'}`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Paperclip className="w-4 h-4 text-blue-600" />
-                <span className="text-sm text-blue-800 font-medium">{attachedFile.name}</span>
+                <Paperclip className={`w-4 h-4 ${fileWarning ? 'text-yellow-600' : 'text-blue-600'}`} />
+                <span className={`text-sm font-medium ${fileWarning ? 'text-yellow-800' : 'text-blue-800'}`}>
+                  {attachedFile.name} ({(attachedFile.size / 1024).toFixed(1)}KB)
+                </span>
               </div>
               <button
                 onClick={removeAttachedFile}
-                className="p-1 hover:bg-blue-100 rounded-full"
+                className={`p-1 rounded-full ${fileWarning ? 'hover:bg-yellow-100' : 'hover:bg-blue-100'}`}
               >
-                <X className="w-4 h-4 text-blue-600" />
+                <X className={`w-4 h-4 ${fileWarning ? 'text-yellow-600' : 'text-blue-600'}`} />
               </button>
             </div>
-            <div className="mt-2 text-xs text-blue-600">
-              File content will be included in your message for data processing
-            </div>
+            {fileWarning ? (
+              <div className="mt-2 text-xs text-yellow-700 font-medium">
+                ⚠️ {fileWarning}
+              </div>
+            ) : (
+              <div className="mt-2 text-xs text-blue-600">
+                File content will be included in your message for data processing
+              </div>
+            )}
           </div>
         )}
 
