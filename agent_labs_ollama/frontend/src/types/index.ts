@@ -16,6 +16,7 @@ export interface Message {
     size: number;
     type: string;
   };
+  toolResults?: ToolResult[];
 }
 
 export interface ToolResult {
