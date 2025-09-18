@@ -19,20 +19,28 @@ class SystemInfoAgent(BaseAgent):
             logger.info(f"💻 SystemInfoAgent analyzing: '{query}'")
             prompt = f"""Determine what system metric to check for: "{query}"
 Choose the best metric:
-- "overview" for general system information
-- "cpu" for CPU usage and details
-- "memory" for RAM usage
-- "disk" for storage information
-- "network" for network details
+- "overview" for general system information, OS version, hardware specs, overall status
+- "cpu" for CPU usage and performance details only
+- "memory" for RAM usage only
+- "disk" for storage information only
+- "network" for network configuration only
+
+For queries about "system info", "system specs", "what is my system", or checking OS versions, use "overview".
 Respond with just the metric name."""
             metric = self.llm.call(prompt).strip().lower()
             logger.info(f"💻 Selected metric: '{metric}'")
 
-            # Validate metric
+            # Validate metric and apply intelligent defaults
             valid_metrics = ["overview", "cpu", "memory", "disk", "network"]
             if metric not in valid_metrics:
                 metric = "overview"
                 logger.info(f"💻 Invalid metric, defaulting to: '{metric}'")
+
+            # For queries about general system info or OS version, force overview
+            general_queries = ["system info", "system", "my system", "what is my", "find my system", "os version", "version"]
+            if any(phrase in query.lower() for phrase in general_queries):
+                metric = "overview"
+                logger.info(f"💻 General system query detected, using: '{metric}'")
 
             params = {"metric": metric}
             logger.info(f"💻 Executing system_info tool with metric: {metric}")

@@ -261,11 +261,17 @@ Respond as the orchestrator agent in first person."""
 
 {context}
 
-Based on the original query and the previous results above, create a specific query for the {agent_name} agent that takes advantage of the previous results.
+Create a specific query for the {agent_name} agent that uses the ACTUAL data from previous results.
 
-For example:
-- If system_info was run first and now we need web_search, use the specific OS version from system_info to search for updates
-- If file_search found files and now we need code_analysis, focus on analyzing the specific files found
+IMPORTANT: Extract specific values from the previous results and use them directly in your query.
+
+Examples:
+- If system_info shows "macOS Darwin 25.0.0", search for "latest macOS Darwin 25.0.0 updates"
+- If system_info shows "Ubuntu 22.04", search for "Ubuntu 22.04 latest version updates"
+- If file_search found "auth.py, login.py", analyze those specific files
+
+For {agent_name} agent, create a query that uses the specific data values from the previous results above.
+Do NOT use placeholders like [OS version] - use the actual values.
 
 Respond with just the refined query, no additional text."""
 
@@ -396,11 +402,17 @@ Provide a clear, helpful response that synthesizes the information from the tool
 
 {context}
 
-Based on the original query and the previous results above, create a specific query for the {agent_name} agent that takes advantage of the previous results.
+Create a specific query for the {agent_name} agent that uses the ACTUAL data from previous results.
 
-For example:
-- If system_info was run first and now we need web_search, use the specific OS version from system_info to search for updates
-- If file_search found files and now we need code_analysis, focus on analyzing the specific files found
+IMPORTANT: Extract specific values from the previous results and use them directly in your query.
+
+Examples:
+- If system_info shows "macOS Darwin 25.0.0", search for "latest macOS Darwin 25.0.0 updates"
+- If system_info shows "Ubuntu 22.04", search for "Ubuntu 22.04 latest version updates"
+- If file_search found "auth.py, login.py", analyze those specific files
+
+For {agent_name} agent, create a query that uses the specific data values from the previous results above.
+Do NOT use placeholders like [OS version] - use the actual values.
 
 Respond with just the refined query, no additional text."""
 
