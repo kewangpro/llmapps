@@ -136,7 +136,12 @@ def get_system_info(metric: str = "overview") -> Dict[str, Any]:
 
         elif metric == "network":
             network_io = psutil.net_io_counters()
-            network_connections = len(psutil.net_connections())
+            try:
+                # This may require elevated permissions on some systems
+                network_connections = len(psutil.net_connections())
+            except (psutil.AccessDenied, PermissionError):
+                network_connections = "Permission denied - run with elevated privileges"
+
             return {
                 "tool": "system_info",
                 "success": True,
