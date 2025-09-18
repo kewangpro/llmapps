@@ -24,6 +24,10 @@ def search_files(path: str = ".", pattern: str = "*", max_results: int = 50) -> 
         Dictionary with search results
     """
     try:
+        # Expand home directory if needed
+        if path.startswith("~/"):
+            path = os.path.expanduser(path)
+
         # Ensure path exists and is safe
         search_path = Path(path).resolve()
         if not search_path.exists():
@@ -33,8 +37,26 @@ def search_files(path: str = ".", pattern: str = "*", max_results: int = 50) -> 
             return {"error": f"Path is not a directory: {path}"}
 
         # Perform the search
-        search_pattern = str(search_path / pattern)
-        found_files = glob.glob(search_pattern, recursive=True)
+        # Handle brace expansion patterns like *.{jpg,png,gif}
+        if '{' in pattern and '}' in pattern:
+            # Extract extensions from brace pattern
+            import re
+            brace_match = re.search(r'\*\.{([^}]+)}', pattern)
+            if brace_match:
+                extensions = brace_match.group(1).split(',')
+                found_files = []
+                for ext in extensions:
+                    ext_pattern = pattern.replace('{' + brace_match.group(1) + '}', ext.strip())
+                    search_pattern = str(search_path / ext_pattern)
+                    found_files.extend(glob.glob(search_pattern, recursive=True))
+                # Remove duplicates
+                found_files = list(set(found_files))
+            else:
+                search_pattern = str(search_path / pattern)
+                found_files = glob.glob(search_pattern, recursive=True)
+        else:
+            search_pattern = str(search_path / pattern)
+            found_files = glob.glob(search_pattern, recursive=True)
 
         # Limit results
         found_files = found_files[:max_results]
