@@ -116,6 +116,18 @@ Focus on observable technical characteristics."""
         file_stats = os.stat(image_path)
         file_size_mb = round(file_stats.st_size / (1024 * 1024), 2)
 
+        # Determine image type for data URL
+        file_extension = os.path.splitext(image_path)[1].lower()
+        mime_types = {
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.gif': 'image/gif',
+            '.bmp': 'image/bmp',
+            '.webp': 'image/webp'
+        }
+        mime_type = mime_types.get(file_extension, 'image/jpeg')
+
         return {
             "tool": "image_analysis",
             "success": True,
@@ -127,6 +139,11 @@ Focus on observable technical characteristics."""
                 "filename": os.path.basename(image_path),
                 "file_size_mb": file_size_mb,
                 "modified_time": datetime.fromtimestamp(file_stats.st_mtime).isoformat()
+            },
+            "image_data": {
+                "base64": image_base64,
+                "data_url": f"data:{mime_type};base64,{image_base64}",
+                "mime_type": mime_type
             },
             "timestamp": datetime.now().isoformat()
         }

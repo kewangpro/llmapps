@@ -12,6 +12,10 @@ import warnings
 from typing import Dict, Any, List
 from datetime import datetime, timedelta
 import statistics
+import base64
+from io import BytesIO
+import plotly.graph_objects as go
+import plotly.offline as pyo
 
 # Suppress warnings and yfinance verbose output
 warnings.filterwarnings('ignore')
@@ -52,6 +56,98 @@ try:
 except ImportError as e:
     YFINANCE_AVAILABLE = False
     CURL_CFFI_AVAILABLE = False
+
+def generate_stock_chart(hist: 'pd.DataFrame', symbol: str, company_name: str) -> Dict[str, Any]:
+    """Generate interactive stock price chart using Plotly"""
+    try:
+        # Prepare data for chart
+        dates = hist.index.tolist()
+
+        # Handle MultiIndex columns
+        if isinstance(hist.columns, pd.MultiIndex):
+            # Extract data from MultiIndex format
+            close_prices = hist['Close'].iloc[:, 0] if len(hist['Close'].shape) > 1 else hist['Close']
+            high_prices = hist['High'].iloc[:, 0] if len(hist['High'].shape) > 1 else hist['High']
+            low_prices = hist['Low'].iloc[:, 0] if len(hist['Low'].shape) > 1 else hist['Low']
+            open_prices = hist['Open'].iloc[:, 0] if len(hist['Open'].shape) > 1 else hist['Open']
+            volumes = hist['Volume'].iloc[:, 0] if len(hist['Volume'].shape) > 1 else hist['Volume']
+        else:
+            close_prices = hist['Close']
+            high_prices = hist['High']
+            low_prices = hist['Low']
+            open_prices = hist['Open']
+            volumes = hist['Volume']
+
+        # Create the main price chart
+        fig = go.Figure()
+
+        # Add candlestick chart
+        fig.add_trace(go.Candlestick(
+            x=dates,
+            open=open_prices,
+            high=high_prices,
+            low=low_prices,
+            close=close_prices,
+            name=f'{symbol} Price',
+            increasing_line_color='#00C851',
+            decreasing_line_color='#FF4444'
+        ))
+
+        # Add moving averages if we have enough data
+        if len(close_prices) >= 20:
+            ma_20 = close_prices.rolling(window=20).mean()
+            fig.add_trace(go.Scatter(
+                x=dates,
+                y=ma_20,
+                mode='lines',
+                name='20-day MA',
+                line=dict(color='orange', width=2)
+            ))
+
+        if len(close_prices) >= 50:
+            ma_50 = close_prices.rolling(window=50).mean()
+            fig.add_trace(go.Scatter(
+                x=dates,
+                y=ma_50,
+                mode='lines',
+                name='50-day MA',
+                line=dict(color='blue', width=2)
+            ))
+
+        # Update layout
+        fig.update_layout(
+            title=f'{company_name} ({symbol}) - Stock Price Chart',
+            xaxis_title='Date',
+            yaxis_title='Price ($)',
+            template='plotly_white',
+            height=500,
+            showlegend=True,
+            xaxis_rangeslider_visible=False
+        )
+
+        # Generate HTML chart with inline Plotly.js (self-contained)
+        chart_html = pyo.plot(fig, output_type='div', include_plotlyjs='inline')
+
+        # Extract chart data for frontend
+        chart_data = {
+            'dates': [d.strftime('%Y-%m-%d') for d in dates],
+            'prices': close_prices.tolist(),
+            'symbol': symbol,
+            'company_name': company_name,
+            'chart_html': chart_html
+        }
+
+        return {
+            'success': True,
+            'chart_data': chart_data
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to generate chart: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
 
 def analyze_stock(symbol: str, period: str = "1y", analysis_type: str = "comprehensive", interval: str = "1d") -> Dict[str, Any]:
     """
@@ -135,17 +231,25 @@ def analyze_stock(symbol: str, period: str = "1y", analysis_type: str = "compreh
         except Exception:
             info = {"symbol": symbol.upper()}
 
+        # Generate chart data
+        company_name = info.get("longName", symbol.upper())
+        chart_result = generate_stock_chart(hist, symbol.upper(), company_name)
+
         # Perform analysis
         result = {
             "tool": "stock_analysis",
             "success": True,
             "symbol": symbol.upper(),
-            "company_name": info.get("longName", symbol.upper()),
+            "company_name": company_name,
             "period": period,
             "analysis_type": analysis_type,
             "data_points": len(hist),
             "timestamp": datetime.now().isoformat()
         }
+
+        # Add chart data if successful
+        if chart_result.get("success"):
+            result["chart_data"] = chart_result["chart_data"]
 
         if analysis_type == "basic":
             result.update(perform_basic_analysis(hist, info))

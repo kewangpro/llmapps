@@ -10,6 +10,7 @@ import os
 import asyncio
 import aiohttp
 import re
+import base64
 from typing import Dict, Any, List
 from datetime import datetime
 
@@ -127,12 +128,18 @@ Content:
         prs.slide_height = Inches(7.5)
 
         slides_created = 0
+        slide_descriptions = []
 
         # Add title slide if title provided
         if title:
             title_slide = prs.slides.add_slide(prs.slide_layouts[0])
             title_slide.shapes.title.text = title
             slides_created += 1
+            slide_descriptions.append({
+                "title": title,
+                "bullets": [],
+                "slide_type": "title"
+            })
 
         # Process each slide
         for idx, slide_text in enumerate(all_slides, 1):
@@ -163,12 +170,23 @@ Content:
             if len(slide.placeholders) > 1 and bullets:
                 slide.placeholders[1].text = '\n'.join(bullets)
 
+            # Store slide description
+            slide_descriptions.append({
+                "title": slide_title,
+                "bullets": bullets,
+                "slide_type": "content"
+            })
+
             slides_created += 1
 
         # Save presentation
         output_path = os.path.join("outputs", output_filename)
         os.makedirs("outputs", exist_ok=True)
         prs.save(output_path)
+
+        # Encode PPT file to base64 for frontend display
+        with open(output_path, "rb") as ppt_file:
+            ppt_base64 = base64.b64encode(ppt_file.read()).decode('utf-8')
 
         return {
             "tool": "presentation",
@@ -178,6 +196,12 @@ Content:
             "total_slides": len(all_slides) + (1 if title else 0),
             "file_size_mb": round(os.path.getsize(output_path) / (1024 * 1024), 2),
             "message": f"Generated presentation with {slides_created} slides: {output_path}",
+            "presentation_data": {
+                "base64": ppt_base64,
+                "filename": output_filename,
+                "mime_type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                "slides": slide_descriptions
+            },
             "timestamp": datetime.now().isoformat()
         }
 
