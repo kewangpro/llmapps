@@ -38,9 +38,10 @@ class MultiAgentSystem:
             {"name": "file_search", "description": "Search for files and directories in the filesystem"},
             {"name": "web_search", "description": "Search the web for current information and news"},
             {"name": "system_info", "description": "Get system information including CPU, memory, disk usage"},
-            {"name": "code_analysis", "description": "Analyze code files for quality, security, and performance"},
+            {"name": "cost_analysis", "description": "Analyze cost data, COGS, and spending patterns"},
             {"name": "data_processing", "description": "Process, analyze, and transform data"},
             {"name": "presentation", "description": "Generate PowerPoint presentations from text or files"},
             {"name": "image_analysis", "description": "Analyze image files for content, objects, text, and metadata"},
-            {"name": "stock_analysis", "description": "Analyze stock market data and performance using Yahoo Finance"}
+            {"name": "stock_analysis", "description": "Analyze stock market data and performance using Yahoo Finance"},
+            {"name": "visualization", "description": "Create charts and visualizations from data"}
         ]

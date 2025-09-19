@@ -203,9 +203,10 @@ async def get_tools():
         "web_search": "general",
         "system_info": "general",
         "presentation": "general",
+        "visualization": "general",
 
         # Analytics Tools
-        "code_analysis": "analytics",
+        "cost_analysis": "analytics",
         "image_analysis": "analytics",
         "data_processing": "analytics",
         "stock_analysis": "analytics"
