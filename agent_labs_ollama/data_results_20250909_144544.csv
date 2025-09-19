@@ -1,0 +1,545 @@
+month,business_unit,total_cost,is_prediction
+2025-01,Infrastructure Svcs-Confluence,2294619.0,False
+2025-02,Infrastructure Svcs-Confluence,2083099.0,False
+2025-03,Infrastructure Svcs-Confluence,2331878.0,False
+2025-04,Infrastructure Svcs-Confluence,2256541.0,False
+2025-05,Infrastructure Svcs-Confluence,2336897.0,False
+2025-06,Infrastructure Svcs-Confluence,2186852.0,False
+2025-07,Infrastructure Svcs-Confluence,2051366.0,False
+2025-08,Infrastructure Svcs-Confluence,1953869.0,False
+2025-09,Infrastructure Svcs-Confluence,1630017.3435141216,True
+2025-10,Infrastructure Svcs-Confluence,1492926.6373445261,True
+2025-11,Infrastructure Svcs-Confluence,1355835.9311749304,True
+2025-12,Infrastructure Svcs-Confluence,1218745.2250053347,True
+2025-01,Infrastructure Svcs-Jira Platform,8508724.0,False
+2025-02,Infrastructure Svcs-Jira Platform,7639412.0,False
+2025-03,Infrastructure Svcs-Jira Platform,8174472.0,False
+2025-04,Infrastructure Svcs-Jira Platform,8008113.0,False
+2025-05,Infrastructure Svcs-Jira Platform,8051209.0,False
+2025-06,Infrastructure Svcs-Jira Platform,7207594.0,False
+2025-07,Infrastructure Svcs-Jira Platform,7207473.0,False
+2025-08,Infrastructure Svcs-Jira Platform,6856539.0,False
+2025-09,Infrastructure Svcs-Jira Platform,6818342.285714286,True
+2025-10,Infrastructure Svcs-Jira Platform,6620931.238095239,True
+2025-11,Infrastructure Svcs-Jira Platform,6423520.190476192,True
+2025-12,Infrastructure Svcs-Jira Platform,6226109.142857145,True
+2025-01,Networking - COGS,1901369.0,False
+2025-02,Networking - COGS,1953776.0,False
+2025-03,Networking - COGS,2293303.0,False
+2025-04,Networking - COGS,2402944.0,False
+2025-05,Networking - COGS,2443375.0,False
+2025-06,Networking - COGS,2375989.0,False
+2025-07,Networking - COGS,2396583.0,False
+2025-08,Networking - COGS,2212077.0,False
+2025-09,Networking - COGS,2488045.8405735125,True
+2025-10,Networking - COGS,2548251.641134312,True
+2025-11,Networking - COGS,2608457.441695112,True
+2025-12,Networking - COGS,2668663.242255911,True
+2025-01,Infrastructure Svcs-Opsgenie,350899.0,False
+2025-02,Infrastructure Svcs-Opsgenie,314358.0,False
+2025-03,Infrastructure Svcs-Opsgenie,320871.0,False
+2025-04,Infrastructure Svcs-Opsgenie,317029.0,False
+2025-05,Infrastructure Svcs-Opsgenie,320637.0,False
+2025-06,Infrastructure Svcs-Opsgenie,319883.0,False
+2025-07,Infrastructure Svcs-Opsgenie,300908.0,False
+2025-08,Infrastructure Svcs-Opsgenie,322055.0,False
+2025-09,Infrastructure Svcs-Opsgenie,231178.5792831675,True
+2025-10,Infrastructure Svcs-Opsgenie,207754.07406739454,True
+2025-11,Infrastructure Svcs-Opsgenie,184329.56885162156,True
+2025-12,Infrastructure Svcs-Opsgenie,160905.06363584858,True
+2025-01,IT COGS,75341.0,False
+2025-02,IT COGS,70904.0,False
+2025-03,IT COGS,72532.0,False
+2025-04,IT COGS,73310.0,False
+2025-05,IT COGS,73917.0,False
+2025-06,IT COGS,77802.0,False
+2025-07,IT COGS,92669.0,False
+2025-08,IT COGS,105080.0,False
+2025-09,IT COGS,98055.89285714283,True
+2025-10,IT COGS,102025.11904761902,True
+2025-11,IT COGS,105994.34523809521,True
+2025-12,IT COGS,109963.5714285714,True
+2025-01,Compute & Orchestration - COGS,366506.0,False
+2025-02,Compute & Orchestration - COGS,363824.0,False
+2025-03,Compute & Orchestration - COGS,354842.0,False
+2025-04,Compute & Orchestration - COGS,323011.0,False
+2025-05,Compute & Orchestration - COGS,351107.0,False
+2025-06,Compute & Orchestration - COGS,344843.0,False
+2025-07,Compute & Orchestration - COGS,380793.0,False
+2025-08,Compute & Orchestration - COGS,432488.0,False
+2025-09,Compute & Orchestration - COGS,374465.5456707889,True
+2025-10,Compute & Orchestration - COGS,374704.70735088794,True
+2025-11,Compute & Orchestration - COGS,374943.8690309869,True
+2025-12,Compute & Orchestration - COGS,375183.03071108594,True
+2025-01,Ecosystem - COGS,107141.0,False
+2025-02,Ecosystem - COGS,106766.0,False
+2025-03,Ecosystem - COGS,115520.0,False
+2025-04,Ecosystem - COGS,113432.0,False
+2025-05,Ecosystem - COGS,124946.0,False
+2025-06,Ecosystem - COGS,136291.0,False
+2025-07,Ecosystem - COGS,160171.0,False
+2025-08,Ecosystem - COGS,173426.0,False
+2025-09,Ecosystem - COGS,172828.42857142858,True
+2025-10,Ecosystem - COGS,182409.94047619053,True
+2025-11,Ecosystem - COGS,191991.45238095243,True
+2025-12,Ecosystem - COGS,201572.96428571432,True
+2025-01,Loom_standalone_COGS,833967.0,
+2025-01,Infrastructure Svcs-COGS,166533.0,False
+2025-02,Infrastructure Svcs-COGS,226725.0,False
+2025-03,Infrastructure Svcs-COGS,209980.0,False
+2025-04,Infrastructure Svcs-COGS,135863.0,False
+2025-05,Infrastructure Svcs-COGS,141023.0,False
+2025-06,Infrastructure Svcs-COGS,142051.0,False
+2025-07,Infrastructure Svcs-COGS,146503.0,False
+2025-08,Infrastructure Svcs-COGS,221871.0,False
+2025-09,Infrastructure Svcs-COGS,306872.5516851571,True
+2025-10,Infrastructure Svcs-COGS,341927.76091668714,True
+2025-11,Infrastructure Svcs-COGS,376982.97014821717,True
+2025-12,Infrastructure Svcs-COGS,412038.1793797472,True
+2025-01,Data Exchange Platform COGS,542889.0,False
+2025-02,Data Exchange Platform COGS,548432.0,False
+2025-03,Data Exchange Platform COGS,666145.0,False
+2025-04,Data Exchange Platform COGS,553387.0,False
+2025-05,Data Exchange Platform COGS,492862.0,False
+2025-06,Data Exchange Platform COGS,595129.0,False
+2025-07,Data Exchange Platform COGS,851766.0,False
+2025-08,Data Exchange Platform COGS,631290.0,False
+2025-09,Data Exchange Platform COGS,674613.127849999,True
+2025-10,Data Exchange Platform COGS,686948.8363439642,True
+2025-11,Data Exchange Platform COGS,699284.5448379295,True
+2025-12,Data Exchange Platform COGS,711620.2533318948,True
+2025-01,Observability-COGS,720190.0,False
+2025-02,Observability-COGS,731522.0,False
+2025-03,Observability-COGS,830276.0,False
+2025-04,Observability-COGS,848324.0,False
+2025-05,Observability-COGS,951991.0,False
+2025-06,Observability-COGS,1093819.0,False
+2025-07,Observability-COGS,1057910.0,False
+2025-08,Observability-COGS,901430.0,False
+2025-09,Observability-COGS,1095231.8214285714,True
+2025-10,Observability-COGS,1140409.3928571427,True
+2025-11,Observability-COGS,1185586.964285714,True
+2025-12,Observability-COGS,1230764.5357142854,True
+2025-01,Trust_COGS,345257.0,False
+2025-02,Trust_COGS,332612.0,False
+2025-03,Trust_COGS,371722.0,False
+2025-04,Trust_COGS,362968.0,False
+2025-05,Trust_COGS,357670.0,False
+2025-06,Trust_COGS,361524.0,False
+2025-07,Trust_COGS,375625.0,False
+2025-08,Trust_COGS,391546.0,False
+2025-09,Trust_COGS,389322.42857142846,True
+2025-10,Trust_COGS,395312.85714285704,True
+2025-11,Trust_COGS,401303.2857142856,True
+2025-12,Trust_COGS,407293.7142857142,True
+2025-01,Infrastructure Svcs-Bitbucket,994708.0,False
+2025-02,Infrastructure Svcs-Bitbucket,972323.0,False
+2025-03,Infrastructure Svcs-Bitbucket,1071376.0,False
+2025-04,Infrastructure Svcs-Bitbucket,1065996.0,False
+2025-05,Infrastructure Svcs-Bitbucket,1102421.0,False
+2025-06,Infrastructure Svcs-Bitbucket,1021089.0,False
+2025-07,Infrastructure Svcs-Bitbucket,1122173.0,False
+2025-08,Infrastructure Svcs-Bitbucket,1124310.0,False
+2025-09,Infrastructure Svcs-Bitbucket,1141908.1428571427,True
+2025-10,Infrastructure Svcs-Bitbucket,1160265.619047619,True
+2025-11,Infrastructure Svcs-Bitbucket,1178623.0952380951,True
+2025-12,Infrastructure Svcs-Bitbucket,1196980.5714285714,True
+2025-01,Engineering - Automation COGS,297203.0,False
+2025-02,Engineering - Automation COGS,345215.0,False
+2025-03,Engineering - Automation COGS,442175.0,False
+2025-04,Engineering - Automation COGS,497639.0,False
+2025-05,Engineering - Automation COGS,542375.0,False
+2025-06,Engineering - Automation COGS,652280.0,False
+2025-07,Engineering - Automation COGS,632435.0,False
+2025-08,Engineering - Automation COGS,546106.0,False
+2025-09,Engineering - Automation COGS,700864.5,True
+2025-10,Engineering - Automation COGS,746739.1666666667,True
+2025-11,Engineering - Automation COGS,792613.8333333334,True
+2025-12,Engineering - Automation COGS,838488.5,True
+2025-01,Infrastructure Svcs-Statuspage,68960.0,False
+2025-02,Infrastructure Svcs-Statuspage,56898.0,False
+2025-03,Infrastructure Svcs-Statuspage,62918.0,False
+2025-04,Infrastructure Svcs-Statuspage,60385.0,False
+2025-05,Infrastructure Svcs-Statuspage,64338.0,False
+2025-06,Infrastructure Svcs-Statuspage,64465.0,False
+2025-07,Infrastructure Svcs-Statuspage,64748.0,False
+2025-08,Infrastructure Svcs-Statuspage,65013.0,False
+2025-09,Infrastructure Svcs-Statuspage,36722.62515213282,True
+2025-10,Infrastructure Svcs-Statuspage,29520.105430118845,True
+2025-11,Infrastructure Svcs-Statuspage,22317.585708104867,True
+2025-12,Infrastructure Svcs-Statuspage,15115.065986090885,True
+2025-01,Engineering-Core Experiences and Media_COGS,803494.0,False
+2025-02,Engineering-Core Experiences and Media_COGS,620403.0,False
+2025-03,Engineering-Core Experiences and Media_COGS,601448.0,False
+2025-04,Engineering-Core Experiences and Media_COGS,574614.0,False
+2025-05,Engineering-Core Experiences and Media_COGS,539806.0,False
+2025-06,Engineering-Core Experiences and Media_COGS,491542.0,False
+2025-07,Engineering-Core Experiences and Media_COGS,512168.0,False
+2025-08,Engineering-Core Experiences and Media_COGS,453763.0,False
+2025-09,Engineering-Core Experiences and Media_COGS,394985.92857142887,True
+2025-10,Engineering-Core Experiences and Media_COGS,355059.52380952414,True
+2025-11,Engineering-Core Experiences and Media_COGS,315133.11904761946,True
+2025-12,Engineering-Core Experiences and Media_COGS,275206.7142857148,True
+2025-01,Site Reliability Engineering - COGS,23870.0,False
+2025-02,Site Reliability Engineering - COGS,23086.0,False
+2025-03,Site Reliability Engineering - COGS,23956.0,False
+2025-04,Site Reliability Engineering - COGS,30112.0,False
+2025-05,Site Reliability Engineering - COGS,30475.0,False
+2025-06,Site Reliability Engineering - COGS,31124.0,False
+2025-07,Site Reliability Engineering - COGS,33594.0,False
+2025-08,Site Reliability Engineering - COGS,43485.0,False
+2025-09,Site Reliability Engineering - COGS,41304.46428571428,True
+2025-10,Site Reliability Engineering - COGS,43824.84523809524,True
+2025-11,Site Reliability Engineering - COGS,46345.22619047619,True
+2025-12,Site Reliability Engineering - COGS,48865.607142857145,True
+2025-01,Decisions Platform COGS,16274.0,False
+2025-02,Decisions Platform COGS,16231.0,False
+2025-03,Decisions Platform COGS,19904.0,False
+2025-04,Decisions Platform COGS,20838.0,False
+2025-05,Decisions Platform COGS,24094.0,False
+2025-06,Decisions Platform COGS,24286.0,False
+2025-07,Decisions Platform COGS,25272.0,False
+2025-08,Decisions Platform COGS,28306.0,False
+2025-09,Decisions Platform COGS,29713.0,True
+2025-10,Decisions Platform COGS,31449.083333333336,True
+2025-11,Decisions Platform COGS,33185.16666666667,True
+2025-12,Decisions Platform COGS,34921.25000000001,True
+2025-01,Tenant and Sharding Platform_COGS,187081.0,False
+2025-02,Tenant and Sharding Platform_COGS,166544.0,False
+2025-03,Tenant and Sharding Platform_COGS,129651.0,False
+2025-04,Tenant and Sharding Platform_COGS,134967.0,False
+2025-05,Tenant and Sharding Platform_COGS,140074.0,False
+2025-06,Tenant and Sharding Platform_COGS,141437.0,False
+2025-07,Tenant and Sharding Platform_COGS,145086.0,False
+2025-08,Tenant and Sharding Platform_COGS,166917.0,False
+2025-09,Tenant and Sharding Platform_COGS,99395.26441845504,True
+2025-10,Tenant and Sharding Platform_COGS,85188.79574634666,True
+2025-11,Tenant and Sharding Platform_COGS,70982.32707423829,True
+2025-12,Tenant and Sharding Platform_COGS,56775.85840212991,True
+2025-01,Development Tooling - COGS,556.0,False
+2025-02,Development Tooling - COGS,3.0,False
+2025-03,Development Tooling - COGS,1.0,False
+2025-05,Development Tooling - COGS,13.0,False
+2025-06,Development Tooling - COGS,26.0,False
+2025-07,Development Tooling - COGS,35.0,False
+2025-08,Development Tooling - COGS,12.0,False
+2025-09,Development Tooling - COGS,0.0,True
+2025-10,Development Tooling - COGS,0.0,True
+2025-11,Development Tooling - COGS,0.0,True
+2025-12,Development Tooling - COGS,0.0,True
+2025-01,Engineering-AI COGS,1372181.0,False
+2025-02,Engineering-AI COGS,1410604.0,False
+2025-03,Engineering-AI COGS,1850776.0,False
+2025-04,Engineering-AI COGS,1893415.0,False
+2025-05,Engineering-AI COGS,2050341.0,False
+2025-06,Engineering-AI COGS,2306013.0,False
+2025-07,Engineering-AI COGS,2288185.0,False
+2025-08,Engineering-AI COGS,2448697.0,False
+2025-09,Engineering-AI COGS,2672856.178571428,True
+2025-10,Engineering-AI COGS,2832929.4404761903,True
+2025-11,Engineering-AI COGS,2993002.7023809524,True
+2025-12,Engineering-AI COGS,3153075.9642857146,True
+2025-01,CDS Data Platform - COGS,858856.0,False
+2025-02,CDS Data Platform - COGS,833408.0,False
+2025-03,CDS Data Platform - COGS,1042347.0,False
+2025-04,CDS Data Platform - COGS,1021291.0,False
+2025-05,CDS Data Platform - COGS,1156792.0,False
+2025-06,CDS Data Platform - COGS,1930450.0,False
+2025-07,CDS Data Platform - COGS,2407742.0,False
+2025-08,CDS Data Platform - COGS,2783495.0,False
+2025-09,CDS Data Platform - COGS,2797723.678571428,True
+2025-10,CDS Data Platform - COGS,3085151.6904761903,True
+2025-11,CDS Data Platform - COGS,3372579.702380952,True
+2025-12,CDS Data Platform - COGS,3660007.7142857136,True
+2025-01,Engineering-Enterprise Readiness COGS,144244.0,False
+2025-02,Engineering-Enterprise Readiness COGS,145924.0,False
+2025-03,Engineering-Enterprise Readiness COGS,253699.0,False
+2025-04,Engineering-Enterprise Readiness COGS,274012.0,False
+2025-05,Engineering-Enterprise Readiness COGS,275675.0,False
+2025-06,Engineering-Enterprise Readiness COGS,331836.0,False
+2025-07,Engineering-Enterprise Readiness COGS,361386.0,False
+2025-08,Engineering-Enterprise Readiness COGS,169438.0,False
+2025-09,Engineering-Enterprise Readiness COGS,285013.1034121993,True
+2025-10,Engineering-Enterprise Readiness COGS,294690.4379219112,True
+2025-11,Engineering-Enterprise Readiness COGS,304367.7724316231,True
+2025-12,Engineering-Enterprise Readiness COGS,314045.106941335,True
+2025-01,Analytics Platform COGS,876899.0,False
+2025-02,Analytics Platform COGS,903285.0,False
+2025-03,Analytics Platform COGS,1300531.0,False
+2025-04,Analytics Platform COGS,1645823.0,False
+2025-05,Analytics Platform COGS,1303040.0,False
+2025-06,Analytics Platform COGS,1217525.0,False
+2025-07,Analytics Platform COGS,1227864.0,False
+2025-08,Analytics Platform COGS,1167623.0,False
+2025-09,Analytics Platform COGS,1349871.6051664506,True
+2025-10,Analytics Platform COGS,1389960.7568408044,True
+2025-11,Analytics Platform COGS,1430049.908515158,True
+2025-12,Analytics Platform COGS,1470139.060189512,True
+2025-01,Marketplace COGS,15596.0,False
+2025-02,Marketplace COGS,13697.0,False
+2025-03,Marketplace COGS,14970.0,False
+2025-04,Marketplace COGS,14648.0,False
+2025-05,Marketplace COGS,15150.0,False
+2025-06,Marketplace COGS,16695.0,False
+2025-07,Marketplace COGS,16770.0,False
+2025-08,Marketplace COGS,17259.0,False
+2025-09,Marketplace COGS,17349.0,True
+2025-10,Marketplace COGS,17738.083333333332,True
+2025-11,Marketplace COGS,18127.166666666668,True
+2025-12,Marketplace COGS,18516.25,True
+2025-01,Identity COGS,1070337.0,False
+2025-02,Identity COGS,1030209.0,False
+2025-03,Identity COGS,1063760.0,False
+2025-04,Identity COGS,1222588.0,False
+2025-05,Identity COGS,1276347.0,False
+2025-06,Identity COGS,1177546.0,False
+2025-07,Identity COGS,1258848.0,False
+2025-08,Identity COGS,1215241.0,False
+2025-09,Identity COGS,1301108.071428571,True
+2025-10,Identity COGS,1331496.6428571425,True
+2025-11,Identity COGS,1361885.2142857139,True
+2025-12,Identity COGS,1392273.7857142854,True
+2025-01,Dev Infra_COGS,242721.0,False
+2025-02,Dev Infra_COGS,251300.0,False
+2025-03,Dev Infra_COGS,487783.0,False
+2025-04,Dev Infra_COGS,443548.0,False
+2025-05,Dev Infra_COGS,299888.0,False
+2025-06,Dev Infra_COGS,319218.0,False
+2025-07,Dev Infra_COGS,332842.0,False
+2025-08,Dev Infra_COGS,396064.0,False
+2025-09,Dev Infra_COGS,394709.4655001919,True
+2025-10,Dev Infra_COGS,407871.37314505887,True
+2025-11,Dev Infra_COGS,421033.2807899259,True
+2025-12,Dev Infra_COGS,434195.18843479286,True
+2025-01,Infrastructure Svcs-JSM,194950.0,False
+2025-02,Infrastructure Svcs-JSM,197036.0,False
+2025-03,Infrastructure Svcs-JSM,239932.0,False
+2025-04,Infrastructure Svcs-JSM,263863.0,False
+2025-05,Infrastructure Svcs-JSM,474448.0,False
+2025-06,Infrastructure Svcs-JSM,441500.0,False
+2025-07,Infrastructure Svcs-JSM,402679.0,False
+2025-08,Infrastructure Svcs-JSM,376906.0,False
+2025-09,Infrastructure Svcs-JSM,490906.8928571427,True
+2025-10,Infrastructure Svcs-JSM,528016.3690476189,True
+2025-11,Infrastructure Svcs-JSM,565125.8452380951,True
+2025-12,Infrastructure Svcs-JSM,602235.3214285714,True
+2025-01,Engineering-Teamwork Graph_COGS,288773.0,False
+2025-02,Engineering-Teamwork Graph_COGS,326968.0,False
+2025-03,Engineering-Teamwork Graph_COGS,517927.0,False
+2025-04,Engineering-Teamwork Graph_COGS,593421.0,False
+2025-05,Engineering-Teamwork Graph_COGS,642570.0,False
+2025-06,Engineering-Teamwork Graph_COGS,613569.0,False
+2025-07,Engineering-Teamwork Graph_COGS,662717.0,False
+2025-08,Engineering-Teamwork Graph_COGS,687053.0,False
+2025-09,Engineering-Teamwork Graph_COGS,798916.5357142854,True
+2025-10,Engineering-Teamwork Graph_COGS,856092.4880952379,True
+2025-11,Engineering-Teamwork Graph_COGS,913268.4404761903,True
+2025-12,Engineering-Teamwork Graph_COGS,970444.3928571425,True
+2025-01,Infrastructure Svcs - Jira Issue Domain,60.0,False
+2025-02,Infrastructure Svcs - Jira Issue Domain,56.0,False
+2025-03,Infrastructure Svcs - Jira Issue Domain,63.0,False
+2025-04,Infrastructure Svcs - Jira Issue Domain,61.0,False
+2025-05,Infrastructure Svcs - Jira Issue Domain,63.0,False
+2025-06,Infrastructure Svcs - Jira Issue Domain,62.0,False
+2025-07,Infrastructure Svcs - Jira Issue Domain,59.0,False
+2025-08,Infrastructure Svcs - Jira Issue Domain,51.0,False
+2025-09,Infrastructure Svcs - Jira Issue Domain,48.889895631240975,True
+2025-10,Infrastructure Svcs - Jira Issue Domain,46.36323307687198,True
+2025-11,Infrastructure Svcs - Jira Issue Domain,43.836570522502974,True
+2025-12,Infrastructure Svcs - Jira Issue Domain,41.30990796813397,True
+2025-01,Atlassian Cloud Storage Engineering_COGS,111401.0,False
+2025-02,Atlassian Cloud Storage Engineering_COGS,115861.0,False
+2025-03,Atlassian Cloud Storage Engineering_COGS,138784.0,False
+2025-04,Atlassian Cloud Storage Engineering_COGS,237896.0,False
+2025-05,Atlassian Cloud Storage Engineering_COGS,282874.0,False
+2025-06,Atlassian Cloud Storage Engineering_COGS,353385.0,False
+2025-07,Atlassian Cloud Storage Engineering_COGS,473040.0,False
+2025-08,Atlassian Cloud Storage Engineering_COGS,585929.0,False
+2025-09,Atlassian Cloud Storage Engineering_COGS,597916.1785714284,True
+2025-10,Atlassian Cloud Storage Engineering_COGS,666920.6071428569,True
+2025-11,Atlassian Cloud Storage Engineering_COGS,735925.0357142856,True
+2025-12,Atlassian Cloud Storage Engineering_COGS,804929.4642857141,True
+2025-01,Engineering-Migrations & Data Portability COGS,175732.0,False
+2025-02,Engineering-Migrations & Data Portability COGS,160648.0,False
+2025-03,Engineering-Migrations & Data Portability COGS,189177.0,False
+2025-04,Engineering-Migrations & Data Portability COGS,189602.0,False
+2025-05,Engineering-Migrations & Data Portability COGS,225408.0,False
+2025-06,Engineering-Migrations & Data Portability COGS,233991.0,False
+2025-07,Engineering-Migrations & Data Portability COGS,230766.0,False
+2025-08,Engineering-Migrations & Data Portability COGS,237215.0,False
+2025-09,Engineering-Migrations & Data Portability COGS,256275.53571428568,True
+2025-10,Engineering-Migrations & Data Portability COGS,267599.5714285714,True
+2025-11,Engineering-Migrations & Data Portability COGS,278923.60714285716,True
+2025-12,Engineering-Migrations & Data Portability COGS,290247.64285714284,True
+2025-01,Eng-Growth-Platform_COGS,106193.0,False
+2025-02,Eng-Growth-Platform_COGS,109126.0,False
+2025-03,Eng-Growth-Platform_COGS,126130.0,False
+2025-04,Eng-Growth-Platform_COGS,190542.0,False
+2025-05,Eng-Growth-Platform_COGS,363002.0,False
+2025-06,Eng-Growth-Platform_COGS,232558.0,False
+2025-07,Eng-Growth-Platform_COGS,306152.0,False
+2025-08,Eng-Growth-Platform_COGS,347715.0,False
+2025-09,Eng-Growth-Platform_COGS,392366.2499999999,True
+2025-10,Eng-Growth-Platform_COGS,430074.91666666657,True
+2025-11,Eng-Growth-Platform_COGS,467783.5833333332,True
+2025-12,Eng-Growth-Platform_COGS,505492.2499999999,True
+2025-01,Infrastructure Svcs-Jira,95969.0,False
+2025-02,Infrastructure Svcs-Jira,98149.0,False
+2025-03,Infrastructure Svcs-Jira,103542.0,False
+2025-04,Infrastructure Svcs-Jira,104824.0,False
+2025-05,Infrastructure Svcs-Jira,102732.0,False
+2025-06,Infrastructure Svcs-Jira,88947.0,False
+2025-07,Infrastructure Svcs-Jira,77415.0,False
+2025-08,Infrastructure Svcs-Jira,78252.0,False
+2025-09,Infrastructure Svcs-Jira,79073.42857142861,True
+2025-10,Infrastructure Svcs-Jira,75816.69047619052,True
+2025-11,Infrastructure Svcs-Jira,72559.95238095243,True
+2025-12,Infrastructure Svcs-Jira,69303.21428571435,True
+2025-01,Engineering - AVP COGS,9591.0,False
+2025-02,Engineering - AVP COGS,8377.0,False
+2025-03,Engineering - AVP COGS,9747.0,False
+2025-04,Engineering - AVP COGS,10254.0,False
+2025-05,Engineering - AVP COGS,11504.0,False
+2025-06,Engineering - AVP COGS,10161.0,False
+2025-07,Engineering - AVP COGS,10126.0,False
+2025-08,Engineering - AVP COGS,11850.0,False
+2025-09,Engineering - AVP COGS,11650.357142857143,True
+2025-10,Engineering - AVP COGS,11972.380952380954,True
+2025-11,Engineering - AVP COGS,12294.404761904763,True
+2025-12,Engineering - AVP COGS,12616.428571428572,True
+2025-01,Engineering Health - COGS,1064.0,False
+2025-02,Engineering Health - COGS,1074.0,False
+2025-03,Engineering Health - COGS,1263.0,False
+2025-04,Engineering Health - COGS,1216.0,False
+2025-05,Engineering Health - COGS,1298.0,False
+2025-06,Engineering Health - COGS,1256.0,False
+2025-07,Engineering Health - COGS,1235.0,False
+2025-08,Engineering Health - COGS,1302.0,False
+2025-09,Engineering Health - COGS,1349.142857142857,True
+2025-10,Engineering Health - COGS,1379.2857142857142,True
+2025-11,Engineering Health - COGS,1409.4285714285716,True
+2025-12,Engineering Health - COGS,1439.5714285714287,True
+2025-01,Atlassian Disaster Recovery - COGS,336.0,False
+2025-02,Atlassian Disaster Recovery - COGS,305.0,False
+2025-03,Atlassian Disaster Recovery - COGS,314.0,False
+2025-04,Atlassian Disaster Recovery - COGS,307.0,False
+2025-05,Atlassian Disaster Recovery - COGS,317.0,False
+2025-06,Atlassian Disaster Recovery - COGS,307.0,False
+2025-07,Atlassian Disaster Recovery - COGS,317.0,False
+2025-08,Atlassian Disaster Recovery - COGS,316.0,False
+2025-09,Atlassian Disaster Recovery - COGS,242.4225955464399,True
+2025-10,Atlassian Disaster Recovery - COGS,223.1656013404799,True
+2025-11,Atlassian Disaster Recovery - COGS,203.9086071345199,True
+2025-12,Atlassian Disaster Recovery - COGS,184.65161292855987,True
+2025-01,Eng-Admin Experience COGs,23362.0,False
+2025-02,Eng-Admin Experience COGs,11002.0,False
+2025-03,Eng-Admin Experience COGs,14517.0,False
+2025-04,Eng-Admin Experience COGs,13189.0,False
+2025-05,Eng-Admin Experience COGs,16377.0,False
+2025-06,Eng-Admin Experience COGs,16719.0,False
+2025-07,Eng-Admin Experience COGs,21173.0,False
+2025-08,Eng-Admin Experience COGs,27884.0,False
+2025-09,Eng-Admin Experience COGs,0.0,True
+2025-10,Eng-Admin Experience COGs,0.0,True
+2025-11,Eng-Admin Experience COGs,0.0,True
+2025-12,Eng-Admin Experience COGs,0.0,True
+2025-01,Data Engineering - COGS,800.0,False
+2025-02,Data Engineering - COGS,760.0,False
+2025-03,Data Engineering - COGS,819.0,False
+2025-04,Data Engineering - COGS,798.0,False
+2025-05,Data Engineering - COGS,839.0,False
+2025-06,Data Engineering - COGS,820.0,False
+2025-07,Data Engineering - COGS,886.0,False
+2025-08,Data Engineering - COGS,922.0,False
+2025-09,Data Engineering - COGS,912.3571428571428,True
+2025-10,Data Engineering - COGS,930.547619047619,True
+2025-11,Data Engineering - COGS,948.7380952380952,True
+2025-12,Data Engineering - COGS,966.9285714285714,True
+2025-01,Security_COGS,18081.0,False
+2025-02,Security_COGS,17487.0,False
+2025-03,Security_COGS,17455.0,False
+2025-04,Security_COGS,16878.0,False
+2025-05,Security_COGS,16017.0,False
+2025-06,Security_COGS,15769.0,False
+2025-07,Security_COGS,14806.0,False
+2025-08,Security_COGS,14642.0,False
+2025-09,Security_COGS,14067.035714285717,True
+2025-10,Security_COGS,13550.404761904763,True
+2025-11,Security_COGS,13033.773809523813,True
+2025-12,Security_COGS,12517.14285714286,True
+2025-01,Engineering-Linking & Integration COGS,10686.0,False
+2025-02,Engineering-Linking & Integration COGS,11606.0,False
+2025-03,Engineering-Linking & Integration COGS,12473.0,False
+2025-04,Engineering-Linking & Integration COGS,9177.0,False
+2025-05,Engineering-Linking & Integration COGS,9173.0,False
+2025-06,Engineering-Linking & Integration COGS,9775.0,False
+2025-07,Engineering-Linking & Integration COGS,13371.0,False
+2025-08,Engineering-Linking & Integration COGS,14068.0,False
+2025-09,Engineering-Linking & Integration COGS,14136.437196826653,True
+2025-10,Engineering-Linking & Integration COGS,14790.79224943034,True
+2025-11,Engineering-Linking & Integration COGS,15445.147302034027,True
+2025-12,Engineering-Linking & Integration COGS,16099.502354637712,True
+2025-01,COGS General,8.0,False
+2025-02,COGS General,4.0,False
+2025-03,COGS General,7.0,False
+2025-04,COGS General,17.0,False
+2025-05,COGS General,11.0,False
+2025-08,COGS General,36.0,False
+2025-09,COGS General,30.93333333333332,True
+2025-10,COGS General,35.8190476190476,True
+2025-11,COGS General,40.70476190476189,True
+2025-12,COGS General,45.590476190476174,True
+2025-01,Infrastructure Svcs - JPD COGS,1382.0,False
+2025-02,Infrastructure Svcs - JPD COGS,1217.0,False
+2025-03,Infrastructure Svcs - JPD COGS,1247.0,False
+2025-04,Infrastructure Svcs - JPD COGS,1225.0,False
+2025-05,Infrastructure Svcs - JPD COGS,1257.0,False
+2025-06,Infrastructure Svcs - JPD COGS,1245.0,False
+2025-07,Infrastructure Svcs - JPD COGS,1324.0,False
+2025-08,Infrastructure Svcs - JPD COGS,1391.0,False
+2025-09,Infrastructure Svcs - JPD COGS,931.3002405494449,True
+2025-10,Infrastructure Svcs - JPD COGS,833.1838125904399,True
+2025-11,Infrastructure Svcs - JPD COGS,735.0673846314348,True
+2025-12,Infrastructure Svcs - JPD COGS,636.9509566724298,True
+2025-01,Halp_COGs,2082.0,False
+2025-02,Halp_COGs,1758.0,False
+2025-03,Halp_COGs,1440.0,False
+2025-04,Halp_COGs,814.0,False
+2025-05,Halp_COGs,182.0,False
+2025-06,Halp_COGs,186.0,False
+2025-07,Halp_COGs,193.0,False
+2025-08,Halp_COGs,185.0,False
+2025-09,Halp_COGs,0.0,True
+2025-10,Halp_COGs,0.0,True
+2025-11,Halp_COGs,0.0,True
+2025-12,Halp_COGs,0.0,True
+2025-02,Infrastructure Svcs-Loom,885894.0,False
+2025-03,Infrastructure Svcs-Loom,925346.0,False
+2025-04,Infrastructure Svcs-Loom,825476.0,False
+2025-05,Infrastructure Svcs-Loom,949971.0,False
+2025-06,Infrastructure Svcs-Loom,924883.0,False
+2025-07,Infrastructure Svcs-Loom,975204.0,False
+2025-08,Infrastructure Svcs-Loom,942575.0,False
+2025-09,Infrastructure Svcs-Loom,1031716.4915003951,True
+2025-10,Infrastructure Svcs-Loom,1061345.3907927566,True
+2025-11,Infrastructure Svcs-Loom,1090974.290085118,True
+2025-12,Infrastructure Svcs-Loom,1120603.1893774793,True
+2025-03,eng-growth-platform_cogs,44.0,
+2025-04,Engineering-Dev AI_COGS,17672.0,False
+2025-05,Engineering-Dev AI_COGS,26388.0,False
+2025-06,Engineering-Dev AI_COGS,24601.0,False
+2025-07,Engineering-Dev AI_COGS,21654.0,False
+2025-08,Engineering-Dev AI_COGS,19670.0,False
+2025-09,Engineering-Dev AI_COGS,42862.23388899999,True
+2025-10,Engineering-Dev AI_COGS,50014.72608799999,True
+2025-11,Engineering-Dev AI_COGS,57167.21828699998,True
+2025-12,Engineering-Dev AI_COGS,64319.71048599998,True
+2025-06,Engineering-Growth_COGS,823.0,False
+2025-07,Engineering-Growth_COGS,14036.0,False
+2025-08,Engineering-Growth_COGS,15719.0,False
+2025-09,Engineering-Growth_COGS,10396.52,True
+2025-10,Engineering-Growth_COGS,10604.4504,True
+2025-11,Engineering-Growth_COGS,10816.539408,True
+2025-12,Engineering-Growth_COGS,11032.87019616,True
+2025-06,COGS: Operations Enablement,45.0,
+2025-08,Infrastructure Svcs-Guard Premium,111215.0,
