@@ -19,3 +19,5 @@ numpy>=1.24.0
 pandas>=2.0.0
 yfinance==0.2.58
 curl_cffi>=0.5.10
+matplotlib>=3.7.0
+plotly>=5.15.0
