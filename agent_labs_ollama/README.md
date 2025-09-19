@@ -33,10 +33,11 @@ A modern AI-powered chat interface with intelligent multi-agent orchestration an
                                     │ - FileSearch   │
                                     │ - WebSearch    │
                                     │ - SystemInfo   │
-                                    │ - CodeAnalysis │
-                                    │ - DataProcess  │
                                     │ - Presentation │
+                                    │ - CodeAnalysis │
                                     │ - ImageAnalysis│
+                                    │ - DataProcess  │
+                                    │ - StockAnalysis│
                                     └────────────────┘
 ```
 
@@ -74,7 +75,8 @@ agent_labs_ollama/
 │   │   ├── code_analysis_agent.py  # Code quality and security analysis
 │   │   ├── data_processing_agent.py # Data analysis and transformation
 │   │   ├── presentation_agent.py   # PowerPoint generation
-│   │   └── image_analysis_agent.py # Image content analysis
+│   │   ├── image_analysis_agent.py # Image content analysis
+│   │   └── stock_analysis_agent.py  # Stock market analysis
 │   ├── tools/
 │   │   ├── file_search.py          # File system search implementation
 │   │   ├── web_search.py           # Google Custom Search integration
@@ -82,7 +84,8 @@ agent_labs_ollama/
 │   │   ├── code_analysis.py        # Code analysis utilities
 │   │   ├── data_processing.py      # Data manipulation tools
 │   │   ├── presentation.py         # PowerPoint generation
-│   │   └── image_analysis.py       # Image processing and analysis
+│   │   ├── image_analysis.py       # Image processing and analysis
+│   │   └── stock_analysis.py       # Stock market data analysis
 │   └── requirements.txt            # Python dependencies
 ├── frontend/
 │   ├── src/
@@ -110,44 +113,47 @@ agent_labs_ollama/
 
 ## Available Tools
 
-### File System
+The tools are organized into two main categories accessible via the sidebar:
+
+### General Tools
 - **file_search**: Search for files and directories in the filesystem
   - Supports pattern matching and recursive search
   - Returns file paths, sizes, and modification dates
 
-### Web Search
 - **web_search**: Search the internet for current information
   - Google Custom Search API integration
   - Real-time web results with relevance ranking
 
-### System Information
 - **system_info**: Comprehensive system metrics
   - CPU, memory, disk usage, and network information
   - Operating system details and hardware specifications
 
-### Code Analysis
+- **presentation**: Generate PowerPoint presentations
+  - Intelligent slide creation using Ollama LLM analysis
+  - Template-based formatting and layout
+  - Support for text files and data sources
+
+### Analytics & Data Tools
 - **code_analysis**: Analyze code files for quality and security
   - Security vulnerability detection
   - Code quality metrics and performance analysis
   - Support for multiple programming languages
 
-### Data Processing
-- **data_processing**: Process and analyze data files
-  - CSV, JSON, and structured data analysis
-  - Statistical operations and data transformation
-  - Chart and visualization generation
-
-### Presentation
-- **presentation**: Generate PowerPoint presentations
-  - Automatic slide creation from text content
-  - Template-based formatting and layout
-  - Support for text files and data sources
-
-### Image Analysis
 - **image_analysis**: Analyze uploaded images
   - Object detection and scene recognition
   - Text extraction (OCR) from images
   - Image metadata and technical analysis
+
+- **data_processing**: Process and analyze data files
+  - CSV, JSON, and structured data analysis
+  - Statistical operations and data transformation
+  - Text analysis and pattern extraction
+
+- **stock_analysis**: Analyze stock market data and performance
+  - Real-time stock data from Yahoo Finance
+  - Technical analysis with indicators (RSI, moving averages, Bollinger Bands)
+  - Risk metrics and investment recommendations
+  - AI-powered market insights
 
 ## Quick Start
 
@@ -283,6 +289,25 @@ SQL injection vulnerability in login query
 Final Answer: Critical security issues found. Recommend: 1) Upgrade to
 bcrypt for password hashing, 2) Implement rate limiting with exponential
 backoff, 3) Use parameterized queries to prevent SQL injection.
+```
+
+**Stock Market Analysis**:
+```
+User: "Analyze Apple stock performance over the last year"
+
+Orchestrator: I'll analyze AAPL stock performance using market data.
+
+StockAnalysisAgent: Retrieving Yahoo Finance data for AAPL...
+Result: Current price $189.50 (+12.3% YTD), RSI: 65 (neutral),
+20-day MA: $185.20, Volatility: 23.4%, Recommendation: HOLD
+
+AI Insights: Apple shows strong fundamentals with steady growth.
+Recent momentum is positive but approaching overbought territory.
+Consider taking profits if holding large positions.
+
+Final Answer: Apple stock has performed well with 12.3% gains this year.
+Technical indicators suggest neutral sentiment with some upward momentum.
+The stock is fairly valued at current levels around $189.50.
 ```
 
 ## API Reference
