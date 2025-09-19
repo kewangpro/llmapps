@@ -129,7 +129,7 @@ def generate_stock_chart(hist: 'pd.DataFrame', symbol: str, company_name: str) -
         chart_html = pyo.plot(fig, output_type='div', include_plotlyjs='inline')
 
         # Extract chart data for frontend
-        chart_data = {
+        stock_chart_data = {
             'dates': [d.strftime('%Y-%m-%d') for d in dates],
             'prices': close_prices.tolist(),
             'symbol': symbol,
@@ -139,7 +139,7 @@ def generate_stock_chart(hist: 'pd.DataFrame', symbol: str, company_name: str) -
 
         return {
             'success': True,
-            'chart_data': chart_data
+            'stock_chart_data': stock_chart_data
         }
 
     except Exception as e:
@@ -249,7 +249,7 @@ def analyze_stock(symbol: str, period: str = "1y", analysis_type: str = "compreh
 
         # Add chart data if successful
         if chart_result.get("success"):
-            result["chart_data"] = chart_result["chart_data"]
+            result["stock_chart_data"] = chart_result["stock_chart_data"]
 
         if analysis_type == "basic":
             result.update(perform_basic_analysis(hist, info))
