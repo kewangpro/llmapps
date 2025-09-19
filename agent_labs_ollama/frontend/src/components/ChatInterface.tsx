@@ -6,6 +6,7 @@ import { Send, Bot, User, Loader2, Wrench, ChevronDown, ChevronRight, Paperclip,
 import StockChart from './StockChart';
 import AnalyzedImage from './AnalyzedImage';
 import PresentationViewer from './PresentationViewer';
+import VisualizationChart from './VisualizationChart';
 
 interface ChatInterfaceProps {
   messages: Message[];
@@ -279,9 +280,9 @@ export default function ChatInterface({
                             )}
 
                             {/* Display stock chart if available */}
-                            {result.tool === 'stock_analysis' && result.result?.chart_data && (
+                            {result.tool === 'stock_analysis' && result.result?.stock_chart_data && (
                               <div className="mb-3">
-                                <StockChart chartData={result.result.chart_data} />
+                                <StockChart chartData={result.result.stock_chart_data} />
                               </div>
                             )}
 
@@ -303,6 +304,15 @@ export default function ChatInterface({
                                   slidesCreated={result.result.slides_created}
                                   totalSlides={result.result.total_slides}
                                   fileSizeMb={result.result.file_size_mb}
+                                />
+                              </div>
+                            )}
+
+                            {/* Display visualization chart if available */}
+                            {result.tool === 'visualization' && result.result && (
+                              <div className="mb-3">
+                                <VisualizationChart
+                                  visualizationData={result.result}
                                 />
                               </div>
                             )}
@@ -413,7 +423,7 @@ export default function ChatInterface({
             type="text"
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
-            placeholder={attachedFile ? "Describe what you want to do with the attached file..." : "Type your message..."}
+            placeholder={attachedFile ? "Describe what you want to do with the attached file (e.g., analyze data, create a chart, generate presentation)..." : "Type your message..."}
             className="flex-1 px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
             disabled={isLoading}
           />

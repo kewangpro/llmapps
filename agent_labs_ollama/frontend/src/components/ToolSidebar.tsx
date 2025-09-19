@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Tool } from '@/types';
-import { Check, Wrench, Globe, Code, Database, Monitor, BarChart3, Settings } from 'lucide-react';
+import { Check, Wrench, Globe, Code, Database, Monitor, BarChart3, Settings, Search, FileText, Image, TrendingUp, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface ToolSidebarProps {
   selectedTools: string[];
@@ -19,9 +19,107 @@ const toolIcons: Record<string, any> = {
   system: Monitor
 };
 
+const getToolTips = (toolName: string) => {
+  const tips: Record<string, { icon: any, title: string, examples: string[], extra?: string }> = {
+    file_search: {
+      icon: Search,
+      title: "🔍 Search for files and directories:",
+      examples: [
+        "Find files: \"search for Python files in the project\"",
+        "Locate directories: \"find all config folders\"",
+        "Filter by type: \"show me all .json files\""
+      ],
+      extra: "Supports: file names, extensions, directory patterns, content search"
+    },
+    web_search: {
+      icon: Globe,
+      title: "🌐 Search the web for information:",
+      examples: [
+        "Current events: \"latest news about AI developments\"",
+        "Research topics: \"explain quantum computing\"",
+        "Find resources: \"best practices for React development\""
+      ],
+      extra: "Real-time web results, news, articles, and documentation"
+    },
+    system_info: {
+      icon: Monitor,
+      title: "💻 Get system information:",
+      examples: [
+        "Performance: \"show CPU and memory usage\"",
+        "Storage: \"check disk space availability\"",
+        "Network: \"display network interface details\""
+      ],
+      extra: "Monitors: CPU, memory, disk, network, processes, uptime"
+    },
+    cost_analysis: {
+      icon: BarChart3,
+      title: "💰 Analyze cost data and spending patterns:",
+      examples: [
+        "COGS analysis: \"analyze cost per business unit per month\"",
+        "AWS costs: \"show cost per AWS product per month\"", 
+        "Service costs: \"analyze cost per service group per month\""
+      ],
+      extra: "Processes: COGS data, AWS cost breakdowns, spending trends, cost optimization recommendations"
+    },
+    data_processing: {
+      icon: Database,
+      title: "📊 Process and transform data:",
+      examples: [
+        "Convert formats: \"convert this CSV to JSON\"",
+        "Clean data: \"remove duplicates from this dataset\"",
+        "Extract info: \"get email addresses from text\""
+      ],
+      extra: "Supports: CSV, JSON, text analysis, data cleaning, format conversion"
+    },
+    presentation: {
+      icon: FileText,
+      title: "📑 Generate PowerPoint presentations:",
+      examples: [
+        "From text: \"create slides about project overview\"",
+        "From data: attach file and say \"make a presentation\"",
+        "Custom content: \"build slides for quarterly review\""
+      ],
+      extra: "Creates: title slides, content slides, bullet points, professional layouts"
+    },
+    image_analysis: {
+      icon: Image,
+      title: "🖼️ Analyze image content and metadata:",
+      examples: [
+        "Describe image: \"what's in this photo?\"",
+        "Extract text: \"read the text from this screenshot\"",
+        "Get metadata: \"show EXIF data for this image\""
+      ],
+      extra: "Supports: JPG, PNG, GIF, content analysis, OCR, metadata extraction"
+    },
+    stock_analysis: {
+      icon: TrendingUp,
+      title: "📈 Analyze stock market data:",
+      examples: [
+        "Stock price: \"show AAPL stock performance\"",
+        "Technical analysis: \"analyze TSLA trends\"",
+        "Market data: \"get financial metrics for MSFT\""
+      ],
+      extra: "Features: price charts, technical indicators, financial metrics, trends"
+    },
+    visualization: {
+      icon: BarChart3,
+      title: "📊 Create charts from your data:",
+      examples: [
+        "Upload a CSV file and ask: \"create a bar chart\"",
+        "Attach data and say: \"make a pie chart showing distribution\"",
+        "Upload data and request: \"visualize trends over time\""
+      ],
+      extra: "Supported chart types: line, bar, scatter, pie, histogram, box, heatmap, area, bubble, treemap"
+    }
+  };
+  
+  return tips[toolName];
+};
+
 export default function ToolSidebar({ selectedTools, onToolToggle }: ToolSidebarProps) {
   const [tools, setTools] = useState<Record<string, Tool>>({});
   const [loading, setLoading] = useState(true);
+  const [showAllTips, setShowAllTips] = useState(false);
 
   useEffect(() => {
     // Fetch available tools from the backend
@@ -161,6 +259,69 @@ export default function ToolSidebar({ selectedTools, onToolToggle }: ToolSidebar
               </span>
             ))}
           </div>
+
+          {/* Quick Tips for Selected Tools */}
+          {selectedTools.some(tool => getToolTips(tool)) && (() => {
+            const toolsWithTips = selectedTools.filter(tool => getToolTips(tool));
+            const hasMultipleTools = toolsWithTips.length > 1;
+            const displayedTools = hasMultipleTools && !showAllTips ? toolsWithTips.slice(0, 1) : toolsWithTips;
+
+            return (
+              <div className="mt-3 pt-3 border-t border-blue-200">
+                {hasMultipleTools && (
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-medium text-blue-900">
+                      Quick Tips ({toolsWithTips.length} tool{toolsWithTips.length > 1 ? 's' : ''})
+                    </span>
+                    <button
+                      onClick={() => setShowAllTips(!showAllTips)}
+                      className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
+                    >
+                      {showAllTips ? (
+                        <>
+                          <ChevronUp className="w-3 h-3" />
+                          Show Less
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="w-3 h-3" />
+                          Show All
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+                
+                <div className="space-y-3">
+                  {displayedTools.map((toolName) => {
+                    const tips = getToolTips(toolName);
+                    if (!tips) return null;
+
+                    const IconComponent = tips.icon;
+                    
+                    return (
+                      <div key={toolName} className="text-xs text-blue-800">
+                        <div className="font-medium mb-2 flex items-center gap-1">
+                          <IconComponent className="w-3 h-3" />
+                          {tips.title}
+                        </div>
+                        <ul className="space-y-1 mb-2 list-disc list-inside ml-1">
+                          {tips.examples.map((example, index) => (
+                            <li key={index}>{example}</li>
+                          ))}
+                        </ul>
+                        {tips.extra && (
+                          <div className="text-xs">
+                            <strong>{tips.extra.includes(':') ? tips.extra.split(':')[0] + ':' : 'Note:'}</strong> {tips.extra.includes(':') ? tips.extra.split(':')[1] : tips.extra}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>

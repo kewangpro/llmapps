@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { ChartData } from '@/types';
+import { StockChartData } from '@/types';
 
 interface StockChartProps {
-  chartData: ChartData;
+  chartData: StockChartData;
 }
 
 const StockChart: React.FC<StockChartProps> = ({ chartData }) => {
