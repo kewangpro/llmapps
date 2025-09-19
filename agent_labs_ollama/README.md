@@ -8,9 +8,10 @@ A modern AI-powered chat interface with intelligent multi-agent orchestration an
 - **Intelligent Multi-Agent System**: Orchestrator pattern with specialized sub-agents for different tool categories
 - **Tool Selection & Execution**: Dynamic tool selection with automatic parameter extraction and execution
 - **File Upload Support**: Analyze images, process data files, and generate presentations from uploaded content
+- **Rich Media Display**: Interactive charts, image analysis, and downloadable presentations in the chat interface
 - **Multiple Model Support**: Compatible with various Ollama models (Gemma, Llama, Mistral, etc.)
 - **Modern Responsive UI**: Clean interface built with React, Next.js, and Tailwind CSS
-- **Real-time Tool Results**: Live updates with collapsible results and AI-generated summaries
+- **Smart Response Handling**: Direct pass-through for formatted responses, synthesis only when needed
 
 ## Architecture
 
@@ -43,13 +44,13 @@ A modern AI-powered chat interface with intelligent multi-agent orchestration an
 
 ### Communication Flow
 
-1. **User Input** → Frontend captures message and selected tools
+1. **User Input** → Frontend captures message and selected tools with optional file attachments
 2. **WebSocket** → Real-time bidirectional communication
 3. **Orchestrator** → Analyzes query and selects appropriate sub-agents
 4. **Initial Response** → Immediate acknowledgment sent to user
-5. **Tool Execution** → Sub-agents execute tools with extracted parameters
-6. **Real-time Updates** → Tool results streamed back to frontend
-7. **Final Synthesis** → Orchestrator combines results into comprehensive answer
+5. **Tool Execution** → Sub-agents execute tools with intelligent parameter extraction
+6. **Real-time Updates** → Tool results streamed back to frontend with rich media display
+7. **Response Handling** → Direct pass-through for formatted results, synthesis for raw data
 
 ### Multi-Agent Pattern
 
@@ -94,10 +95,12 @@ agent_labs_ollama/
 │   │   │   ├── layout.tsx          # Root layout
 │   │   │   └── globals.css         # Global styles
 │   │   ├── components/
-│   │   │   ├── ChatInterface.tsx   # Main chat UI with file upload
+│   │   │   ├── ChatInterface.tsx   # Main chat UI with file upload and rich media
 │   │   │   ├── ToolSidebar.tsx     # Tool selection interface
 │   │   │   ├── MessageBubble.tsx   # Individual message display
-│   │   │   └── ToolResult.tsx      # Collapsible tool results
+│   │   │   ├── StockChart.tsx      # Interactive stock chart display
+│   │   │   ├── AnalyzedImage.tsx   # Image analysis with zoom and download
+│   │   │   └── PresentationViewer.tsx # PowerPoint preview and download
 │   │   ├── hooks/
 │   │   │   ├── useWebSocket.ts     # WebSocket communication
 │   │   │   └── messageReducer.ts   # Message state management
@@ -129,9 +132,10 @@ The tools are organized into two main categories accessible via the sidebar:
   - Operating system details and hardware specifications
 
 - **presentation**: Generate PowerPoint presentations
-  - Intelligent slide creation using Ollama LLM analysis
+  - Intelligent slide creation with title and bullet point extraction
   - Template-based formatting and layout
-  - Support for text files and data sources
+  - Support for text files and markdown content
+  - Downloadable .pptx files with slide preview in chat
 
 ### Analytics & Data Tools
 - **code_analysis**: Analyze code files for quality and security
@@ -140,9 +144,10 @@ The tools are organized into two main categories accessible via the sidebar:
   - Support for multiple programming languages
 
 - **image_analysis**: Analyze uploaded images
-  - Object detection and scene recognition
+  - Comprehensive scene description and object detection
   - Text extraction (OCR) from images
-  - Image metadata and technical analysis
+  - Technical analysis including composition and quality
+  - Interactive image display with zoom, rotation, and download
 
 - **data_processing**: Process and analyze data files
   - CSV, JSON, and structured data analysis
@@ -151,9 +156,10 @@ The tools are organized into two main categories accessible via the sidebar:
 
 - **stock_analysis**: Analyze stock market data and performance
   - Real-time stock data from Yahoo Finance
-  - Technical analysis with indicators (RSI, moving averages, Bollinger Bands)
+  - Interactive candlestick charts with technical indicators
+  - Technical analysis with RSI, moving averages, and Bollinger Bands
   - Risk metrics and investment recommendations
-  - AI-powered market insights
+  - AI-powered market insights and trend analysis
 
 ## Quick Start
 
@@ -254,11 +260,14 @@ GOOGLE_SEARCH_ENGINE_ID=your_engine_id_here
 3. Type your message and press Enter
 4. Watch as the AI orchestrator selects and executes appropriate tools
 
-### File Upload
+### File Upload & Analysis
 1. Click the attachment icon in the chat input
 2. Select an image, document, or data file
 3. The system automatically chooses the appropriate analysis tool
-4. Results include both analysis and file-specific insights
+4. Results include interactive displays:
+   - **Images**: Zoomable analysis with download options
+   - **Documents**: PowerPoint generation with slide previews
+   - **Data files**: Statistical analysis and visualizations
 
 ### Example Interactions
 
@@ -291,13 +300,15 @@ bcrypt for password hashing, 2) Implement rate limiting with exponential
 backoff, 3) Use parameterized queries to prevent SQL injection.
 ```
 
-**Stock Market Analysis**:
+**Stock Market Analysis with Interactive Charts**:
 ```
 User: "Analyze Apple stock performance over the last year"
 
 Orchestrator: I'll analyze AAPL stock performance using market data.
 
 StockAnalysisAgent: Retrieving Yahoo Finance data for AAPL...
+[Interactive candlestick chart displayed in chat interface]
+
 Result: Current price $189.50 (+12.3% YTD), RSI: 65 (neutral),
 20-day MA: $185.20, Volatility: 23.4%, Recommendation: HOLD
 
@@ -306,8 +317,25 @@ Recent momentum is positive but approaching overbought territory.
 Consider taking profits if holding large positions.
 
 Final Answer: Apple stock has performed well with 12.3% gains this year.
-Technical indicators suggest neutral sentiment with some upward momentum.
-The stock is fairly valued at current levels around $189.50.
+The interactive chart shows technical indicators and price action.
+Stock is fairly valued at current levels around $189.50.
+```
+
+**Image Analysis with Rich Display**:
+```
+User: [Uploads camera lens photo]
+
+Orchestrator: I'll analyze the uploaded image for you.
+
+ImageAnalysisAgent: Processing image content and metadata...
+[Zoomable image displayed with analysis overlay]
+
+Analysis: This image shows two Panasonic camera lenses - a 16-35mm f/4
+and a 24-60mm f/2.8. The professional product photography features
+clean composition on a dark reflective surface with studio lighting.
+
+Interactive Features: Zoom, rotate, and download options available
+in the chat interface for detailed examination.
 ```
 
 ## API Reference
@@ -327,8 +355,8 @@ Connect to `/ws/{client_id}` for real-time communication.
 - `assistant_response_start` - Begin streaming response
 - `assistant_response_chunk` - Response content chunk
 - `assistant_response_complete` - Response finished
-- `tool_result` - Tool execution result with raw data
-- `tool_summary` - AI-generated summary of tool result
+- `tool_result` - Tool execution result with structured data
+- `tool_summary` - AI-generated summary of tool result (when needed)
 - `error` - Error message
 
 **Message Format**:
