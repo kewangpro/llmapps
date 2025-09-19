@@ -41,5 +41,6 @@ class MultiAgentSystem:
             {"name": "code_analysis", "description": "Analyze code files for quality, security, and performance"},
             {"name": "data_processing", "description": "Process, analyze, and transform data"},
             {"name": "presentation", "description": "Generate PowerPoint presentations from text or files"},
-            {"name": "image_analysis", "description": "Analyze image files for content, objects, text, and metadata"}
+            {"name": "image_analysis", "description": "Analyze image files for content, objects, text, and metadata"},
+            {"name": "stock_analysis", "description": "Analyze stock market data and performance using Yahoo Finance"}
         ]

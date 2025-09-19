@@ -58,7 +58,7 @@ class ConnectionManager:
                             await websocket.ping()
                         except:
                             pass
-                    logger.info(f"✅ Successfully sent {message.get('type')} to {client_id}")
+                    logger.debug(f"✅ Successfully sent {message.get('type')} to {client_id}")
                 else:
                     logger.warning(f"⚠️ WebSocket not connected (state: {websocket.client_state.name}) for {client_id}")
             except Exception as e:
@@ -196,14 +196,30 @@ async def get_tools():
     mas = get_multi_agent_system()
     tools = mas.get_available_tools()
 
+    # Define tool categories
+    tool_categories = {
+        # General Tools
+        "file_search": "general",
+        "web_search": "general",
+        "system_info": "general",
+        "presentation": "general",
+
+        # Analytics Tools
+        "code_analysis": "analytics",
+        "image_analysis": "analytics",
+        "data_processing": "analytics",
+        "stock_analysis": "analytics"
+    }
+
     # Convert to the format expected by frontend
     tools_dict = {}
     for tool in tools:
-        tools_dict[tool["name"]] = {
-            "name": tool["name"],
+        tool_name = tool["name"]
+        tools_dict[tool_name] = {
+            "name": tool_name,
             "description": tool["description"],
             "parameters": {},
-            "category": "general"
+            "category": tool_categories.get(tool_name, "general")
         }
 
     return {"tools": tools_dict}
