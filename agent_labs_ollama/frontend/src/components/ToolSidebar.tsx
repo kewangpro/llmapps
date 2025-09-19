@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Tool } from '@/types';
-import { Check, Wrench, Globe, Code, Database, Monitor } from 'lucide-react';
+import { Check, Wrench, Globe, Code, Database, Monitor, BarChart3, Settings } from 'lucide-react';
 
 interface ToolSidebarProps {
   selectedTools: string[];
@@ -10,6 +10,8 @@ interface ToolSidebarProps {
 }
 
 const toolIcons: Record<string, any> = {
+  general: Settings,
+  analytics: BarChart3,
   filesystem: Monitor,
   web: Globe,
   development: Code,
@@ -77,7 +79,7 @@ export default function ToolSidebar({ selectedTools, onToolToggle }: ToolSidebar
               <div className="flex items-center gap-2 mb-3">
                 <IconComponent className="w-4 h-4 text-gray-600" />
                 <h3 className="text-sm font-medium text-gray-700 capitalize">
-                  {category}
+                  {category === 'analytics' ? 'Analytics & Data' : category}
                 </h3>
               </div>
 
