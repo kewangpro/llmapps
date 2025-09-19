@@ -3,6 +3,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { Message, ToolResult } from '@/types';
 import { Send, Bot, User, Loader2, Wrench, ChevronDown, ChevronRight, Paperclip, X } from 'lucide-react';
+import StockChart from './StockChart';
+import AnalyzedImage from './AnalyzedImage';
+import PresentationViewer from './PresentationViewer';
 
 interface ChatInterfaceProps {
   messages: Message[];
@@ -197,12 +200,12 @@ export default function ChatInterface({
             </div>
 
             <div className={`flex-1 max-w-3xl ${message.role === 'user' ? 'text-right' : ''}`}>
-              <div className={`inline-block p-3 rounded-lg ${
+              <div className={`block p-3 rounded-lg ${
                 message.role === 'user'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-900'
+                  ? 'bg-blue-600 text-white max-w-md ml-auto'
+                  : 'bg-gray-100 text-gray-900 max-w-4xl'
               }`}>
-                <p className="whitespace-pre-wrap">{message.content}</p>
+                <pre className="whitespace-pre-wrap break-words overflow-hidden font-sans text-sm leading-relaxed">{message.content}</pre>
               </div>
 
               <div className={`text-xs text-gray-500 mt-1 ${message.role === 'user' ? 'text-right' : ''}`}>
@@ -274,12 +277,36 @@ export default function ChatInterface({
                                 <p className="whitespace-pre-wrap">{result.summary}</p>
                               </div>
                             )}
-                            <div className="text-sm text-green-700 border-t border-green-200 pt-2">
-                              <div className="text-xs text-green-600 mb-1 font-medium">Raw Tool Output:</div>
-                              <pre className="whitespace-pre-wrap font-mono text-xs bg-white p-2 rounded border">
-                                {JSON.stringify(result.result, null, 2)}
-                              </pre>
-                            </div>
+
+                            {/* Display stock chart if available */}
+                            {result.tool === 'stock_analysis' && result.result?.chart_data && (
+                              <div className="mb-3">
+                                <StockChart chartData={result.result.chart_data} />
+                              </div>
+                            )}
+
+                            {/* Display analyzed image if available */}
+                            {result.tool === 'image_analysis' && result.result?.image_data && (
+                              <div className="mb-3">
+                                <AnalyzedImage
+                                  imageData={result.result.image_data}
+                                  filename={result.result.file_info?.filename}
+                                  fileSize={result.result.file_info?.file_size_mb}
+                                />
+                              </div>
+                            )}
+                            {/* Display generated presentation if available */}
+                            {result.tool === 'presentation' && result.result?.presentation_data && (
+                              <div className="mb-3">
+                                <PresentationViewer
+                                  presentationData={result.result.presentation_data}
+                                  slidesCreated={result.result.slides_created}
+                                  totalSlides={result.result.total_slides}
+                                  fileSizeMb={result.result.file_size_mb}
+                                />
+                              </div>
+                            )}
+
                           </div>
                         )}
                       </div>
@@ -298,8 +325,8 @@ export default function ChatInterface({
               <Bot className="w-4 h-4" />
             </div>
             <div className="flex-1 max-w-3xl">
-              <div className="inline-block p-3 rounded-lg bg-gray-100 text-gray-900">
-                <p className="whitespace-pre-wrap">{currentResponse}</p>
+              <div className="block p-3 rounded-lg bg-gray-100 text-gray-900 max-w-4xl">
+                <pre className="whitespace-pre-wrap break-words overflow-hidden font-sans text-sm leading-relaxed">{currentResponse}</pre>
                 <div className="inline-block w-2 h-4 bg-gray-400 animate-pulse ml-1"></div>
               </div>
             </div>
