@@ -19,11 +19,41 @@ export interface Message {
   toolResults?: ToolResult[];
 }
 
+export interface ChartData {
+  dates: string[];
+  prices: number[];
+  symbol: string;
+  company_name: string;
+  chart_html?: string;
+}
+
+export interface ImageData {
+  base64: string;
+  data_url: string;
+  mime_type: string;
+}
+
+export interface SlideDescription {
+  title: string;
+  bullets: string[];
+  slide_type: 'title' | 'content';
+}
+
+export interface PresentationData {
+  base64: string;
+  filename: string;
+  mime_type: string;
+  slides: SlideDescription[];
+}
+
 export interface ToolResult {
   tool: string;
   result: any;
   timestamp: string;
   summary?: string;
+  chart_data?: ChartData;
+  image_data?: ImageData;
+  presentation_data?: PresentationData;
 }
 
 export interface WebSocketMessage {
