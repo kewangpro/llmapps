@@ -208,8 +208,92 @@ Keep the summary coherent and informative."""
     def execute(self, query: str) -> Dict[str, Any]:
         """Execute data processing with intelligent operation selection"""
         try:
+            # Check for attached file path in query (added from orchestrator)
+            if "FILE_PATH:" in query:
+                file_path = query.split("FILE_PATH:")[-1].strip()
+                # Remove the FILE_PATH marker from the query for operation detection
+                clean_query = query.split("FILE_PATH:")[0].strip()
+                logger.info(f"📎 Found attached file: {file_path}")
+                
+                # Read the file content
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        file_content = f.read()
+                    logger.info(f"📄 Read file content: {len(file_content)} characters")
+                    
+                    # Determine operation from clean query
+                    prompt = f"""The user has attached a file and wants to: "{clean_query}"
+
+Available operations:
+- "json_format" - Format and validate JSON
+- "csv_to_json" - Convert CSV to JSON
+- "json_to_csv" - Convert JSON to CSV
+- "text_analysis" - Analyze text metrics (word count, character count, etc.)
+- "base64_encode" - Encode data to base64
+- "base64_decode" - Decode base64 data
+- "word_count" - Count words and unique words
+- "extract_emails" - Extract email addresses from text
+- "extract_urls" - Extract URLs from text
+- "clean_text" - Clean and normalize text
+- "sort_lines" - Sort lines alphabetically
+- "remove_duplicates" - Remove duplicate lines
+- "calculate_stats" - Calculate statistics for numeric data
+
+Respond with just the operation name that best matches the request."""
+                    
+                    operation = self.llm.call(prompt).strip().lower()
+                    
+                    # Validate operation
+                    valid_ops = ["json_format", "csv_to_json", "json_to_csv", "text_analysis",
+                                "base64_encode", "base64_decode", "word_count", "extract_emails",
+                                "extract_urls", "clean_text", "sort_lines", "remove_duplicates", "calculate_stats"]
+                    
+                    if operation not in valid_ops:
+                        operation = "text_analysis"  # Default to text analysis
+                    
+                    logger.info(f"📊 Selected operation: {operation}")
+                    
+                    # Handle large files by chunking for certain operations
+                    if len(file_content) > 10000 and operation in ["text_analysis", "word_count", "clean_text", "extract_emails", "extract_urls"]:
+                        logger.info(f"📄 Large file detected for {operation}, using chunked processing")
+                        result = self._process_large_input(file_content, operation)
+                        params = {"input_data": f"[{len(file_content)} chars, chunked]", "operation": operation}
+                    else:
+                        params = {"input_data": file_content, "operation": operation}
+                        # Execute data processing tool
+                        result = self._execute_tool_script("data_processing", params)
+                    
+                    # Include file summary if it's a large file
+                    file_summary = None
+                    if len(file_content) > 8000:
+                        file_summary = self._generate_file_summary(file_content)
+                    
+                    response = {
+                        "agent": "DataProcessingAgent",
+                        "tool": "data_processing",
+                        "parameters": params,
+                        "result": result,
+                        "success": True,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    
+                    # Add file summary if generated
+                    if file_summary:
+                        response["file_summary"] = file_summary
+                    
+                    return response
+                    
+                except Exception as e:
+                    logger.error(f"📄 Failed to read file {file_path}: {str(e)}")
+                    return {
+                        "agent": "DataProcessingAgent",
+                        "success": False,
+                        "error": f"Failed to read file {file_path}: {str(e)}",
+                        "timestamp": datetime.now().isoformat()
+                    }
+            
             # Check if this appears to be a file attachment (contains file marker)
-            if "[Attached file:" in query:
+            elif "[Attached file:" in query:
                 # Extract file content for summarization
                 lines = query.split('\n')
                 file_content_start = -1

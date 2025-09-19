@@ -10,11 +10,12 @@ from .base_agent import BaseAgent
 from .file_search_agent import FileSearchAgent
 from .web_search_agent import WebSearchAgent
 from .system_info_agent import SystemInfoAgent
-from .code_analysis_agent import CodeAnalysisAgent
+from .cost_analysis_agent import CostAnalysisAgent
 from .data_processing_agent import DataProcessingAgent
 from .presentation_agent import PresentationAgent
 from .image_analysis_agent import ImageAnalysisAgent
 from .stock_analysis_agent import StockAnalysisAgent
+from .visualization_agent import VisualizationAgent
 
 logger = logging.getLogger("MultiAgentSystem")
 
@@ -28,11 +29,12 @@ class OrchestratorAgent(BaseAgent):
             "file_search": FileSearchAgent(model),
             "web_search": WebSearchAgent(model),
             "system_info": SystemInfoAgent(model),
-            "code_analysis": CodeAnalysisAgent(model),
+            "cost_analysis": CostAnalysisAgent(model),
             "data_processing": DataProcessingAgent(model),
             "presentation": PresentationAgent(model),
             "image_analysis": ImageAnalysisAgent(model),
-            "stock_analysis": StockAnalysisAgent(model)
+            "stock_analysis": StockAnalysisAgent(model),
+            "visualization": VisualizationAgent(model)
         }
 
     def _select_agents(self, query: str, available_tools: List[str], attached_file: Dict = None) -> List[str]:
@@ -45,11 +47,12 @@ class OrchestratorAgent(BaseAgent):
                 "file_search": "search for files and directories",
                 "web_search": "search the internet for information",
                 "system_info": "get system information (CPU, memory, disk, network)",
-                "code_analysis": "analyze code for quality, security, performance",
+                "cost_analysis": "analyze cost data, COGS, and spending patterns",
                 "data_processing": "process, analyze, or transform data",
                 "presentation": "generate PowerPoint presentations from text or files",
                 "image_analysis": "analyze image files for content, text, and metadata",
-                "stock_analysis": "analyze stock market data and performance using Yahoo Finance"
+                "stock_analysis": "analyze stock market data and performance using Yahoo Finance",
+                "visualization": "create charts and visualizations from data"
             }
 
             available_desc = [f"- {tool}: {tools_desc[tool]}" for tool in available_tools if tool in tools_desc]
@@ -62,7 +65,7 @@ class OrchestratorAgent(BaseAgent):
                 if file_type.startswith("image/") or any(file_name.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.svg']):
                     file_context = f"\nIMPORTANT: User has uploaded an IMAGE file ({file_name}). For image analysis queries, prioritize 'image_analysis' tool."
                 elif file_type.startswith("text/") or any(file_name.lower().endswith(ext) for ext in ['.txt', '.md', '.csv', '.json', '.xml']):
-                    file_context = f"\nIMPORTANT: User has uploaded a TEXT/DATA file ({file_name}). For data processing queries, prioritize 'data_processing' tool."
+                    file_context = f"\nIMPORTANT: User has uploaded a TEXT/DATA file ({file_name}). For data processing queries, prioritize 'data_processing' tool. For chart/visualization requests, prioritize 'visualization' tool."
 
             prompt = f"""Given this user query: "{query}"{file_context}
 
@@ -244,7 +247,7 @@ Respond as the orchestrator agent in first person."""
                         # First agent uses original query
                         agent_query = query
                         # Add attached file information for relevant agents
-                        if attached_file and agent_name in ["image_analysis", "data_processing", "presentation"]:
+                        if attached_file and agent_name in ["image_analysis", "data_processing", "presentation", "visualization", "cost_analysis"]:
                             file_path = attached_file.get("path", "")
                             if file_path:
                                 agent_query += f" FILE_PATH:{file_path}"
@@ -426,7 +429,7 @@ Provide a clear, helpful response that synthesizes the information from the tool
                         # First agent uses original query
                         agent_query = query
                         # Add attached file information for relevant agents
-                        if attached_file and agent_name in ["image_analysis", "data_processing", "presentation"]:
+                        if attached_file and agent_name in ["image_analysis", "data_processing", "presentation", "visualization", "cost_analysis"]:
                             file_path = attached_file.get("path", "")
                             if file_path:
                                 agent_query += f" FILE_PATH:{file_path}"
