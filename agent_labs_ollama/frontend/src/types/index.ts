@@ -19,7 +19,7 @@ export interface Message {
   toolResults?: ToolResult[];
 }
 
-export interface ChartData {
+export interface StockChartData {
   dates: string[];
   prices: number[];
   symbol: string;
@@ -46,14 +46,33 @@ export interface PresentationData {
   slides: SlideDescription[];
 }
 
+export interface VisualizationData {
+  chart_html: string;
+  chart_image_base64: string;
+  chart_config: {
+    title: string;
+    x_column?: string;
+    y_column?: string;
+    label_column?: string;
+    value_column?: string;
+    size_column?: string;
+  };
+  chart_type: string;
+  data_rows: number;
+  data_columns: number;
+  columns: string[];
+  message: string;
+}
+
 export interface ToolResult {
   tool: string;
   result: any;
   timestamp: string;
   summary?: string;
-  chart_data?: ChartData;
+  stock_chart_data?: StockChartData;
   image_data?: ImageData;
   presentation_data?: PresentationData;
+  visualization_data?: VisualizationData;
 }
 
 export interface WebSocketMessage {
