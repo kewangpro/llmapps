@@ -303,10 +303,15 @@ Respond with just the refined query, no additional text."""
 
                 for result in results:
                     if result.get("result", {}).get("ai_insights", {}).get("analysis"):
-                        # Use the beautifully formatted analysis directly
+                        # Use the beautifully formatted analysis directly (for stock analysis, etc.)
                         insight = result["result"]["ai_insights"]["analysis"]
                         formatted_insights.append(insight)
                         logger.info(f"📊 Using pre-formatted insight from {result.get('agent', 'unknown')} agent")
+                    elif result.get("agent") == "ImageAnalysisAgent" and result.get("result", {}).get("analysis"):
+                        # Use image analysis directly without further synthesis
+                        insight = result["result"]["analysis"]
+                        formatted_insights.append(insight)
+                        logger.info(f"🖼️ Using image analysis directly from {result.get('agent', 'unknown')} agent")
                     else:
                         # Keep raw results for other agents
                         raw_results.append(result)
@@ -480,10 +485,15 @@ Respond with just the refined query, no additional text."""
 
                 for result in results:
                     if result.get("result", {}).get("ai_insights", {}).get("analysis"):
-                        # Use the beautifully formatted analysis directly
+                        # Use the beautifully formatted analysis directly (for stock analysis, etc.)
                         insight = result["result"]["ai_insights"]["analysis"]
                         formatted_insights.append(insight)
                         logger.info(f"📊 Using pre-formatted insight from {result.get('agent', 'unknown')} agent")
+                    elif result.get("agent") == "ImageAnalysisAgent" and result.get("result", {}).get("analysis"):
+                        # Use image analysis directly without further synthesis
+                        insight = result["result"]["analysis"]
+                        formatted_insights.append(insight)
+                        logger.info(f"🖼️ Using image analysis directly from {result.get('agent', 'unknown')} agent")
                     else:
                         # Keep raw results for other agents
                         raw_results.append(result)
