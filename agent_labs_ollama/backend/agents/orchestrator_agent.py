@@ -14,6 +14,7 @@ from .code_analysis_agent import CodeAnalysisAgent
 from .data_processing_agent import DataProcessingAgent
 from .presentation_agent import PresentationAgent
 from .image_analysis_agent import ImageAnalysisAgent
+from .stock_analysis_agent import StockAnalysisAgent
 
 logger = logging.getLogger("MultiAgentSystem")
 
@@ -30,7 +31,8 @@ class OrchestratorAgent(BaseAgent):
             "code_analysis": CodeAnalysisAgent(model),
             "data_processing": DataProcessingAgent(model),
             "presentation": PresentationAgent(model),
-            "image_analysis": ImageAnalysisAgent(model)
+            "image_analysis": ImageAnalysisAgent(model),
+            "stock_analysis": StockAnalysisAgent(model)
         }
 
     def _select_agents(self, query: str, available_tools: List[str], attached_file: Dict = None) -> List[str]:
@@ -46,7 +48,8 @@ class OrchestratorAgent(BaseAgent):
                 "code_analysis": "analyze code for quality, security, performance",
                 "data_processing": "process, analyze, or transform data",
                 "presentation": "generate PowerPoint presentations from text or files",
-                "image_analysis": "analyze image files for content, text, and metadata"
+                "image_analysis": "analyze image files for content, text, and metadata",
+                "stock_analysis": "analyze stock market data and performance using Yahoo Finance"
             }
 
             available_desc = [f"- {tool}: {tools_desc[tool]}" for tool in available_tools if tool in tools_desc]
@@ -294,15 +297,51 @@ Respond with just the refined query, no additional text."""
                 logger.info(f"\n🧠 SYNTHESIZING FINAL ANSWER...")
                 logger.info(f"📝 Combining results from {len(results)} agents...")
 
-                prompt = f"""Based on these tool execution results, provide a comprehensive answer to: "{query}"
+                # Check if any agent has pre-formatted insights (like stock analysis)
+                formatted_insights = []
+                raw_results = []
+
+                for result in results:
+                    if result.get("result", {}).get("ai_insights", {}).get("analysis"):
+                        # Use the beautifully formatted analysis directly
+                        insight = result["result"]["ai_insights"]["analysis"]
+                        formatted_insights.append(insight)
+                        logger.info(f"📊 Using pre-formatted insight from {result.get('agent', 'unknown')} agent")
+                    else:
+                        # Keep raw results for other agents
+                        raw_results.append(result)
+
+                if formatted_insights and not raw_results:
+                    # If we only have formatted insights, use them directly
+                    final_answer = "\n\n".join(formatted_insights)
+                    logger.info(f"✅ Using pre-formatted insights directly ({len(final_answer)} characters)")
+                elif formatted_insights and raw_results:
+                    # Mix formatted insights with synthesis of raw results
+                    prompt = f"""The user asked: "{query}"
+
+I have some pre-formatted analysis and some raw tool results to combine:
+
+PRE-FORMATTED ANALYSIS:
+{chr(10).join(formatted_insights)}
+
+RAW TOOL RESULTS:
+{json.dumps(raw_results, indent=2)}
+
+Please provide a brief introduction and then present the pre-formatted analysis, followed by any additional insights from the raw results. Keep the pre-formatted sections intact."""
+
+                    final_answer = self.llm.call(prompt)
+                    logger.info(f"✅ Combined formatted insights with synthesis ({len(final_answer)} characters)")
+                else:
+                    # Traditional synthesis for agents without formatted insights
+                    prompt = f"""Based on these tool execution results, provide a comprehensive answer to: "{query}"
 
 Results:
 {json.dumps(results, indent=2)}
 
 Provide a clear, helpful response that synthesizes the information from the tools."""
 
-                final_answer = self.llm.call(prompt)
-                logger.info(f"✅ Final answer generated ({len(final_answer)} characters)")
+                    final_answer = self.llm.call(prompt)
+                    logger.info(f"✅ Final answer generated via synthesis ({len(final_answer)} characters)")
 
                 # Send final answer via callback
                 if callback:
@@ -435,15 +474,51 @@ Respond with just the refined query, no additional text."""
                 logger.info(f"\n🧠 SYNTHESIZING FINAL ANSWER...")
                 logger.info(f"📝 Combining results from {len(results)} agents...")
 
-                prompt = f"""Based on these tool execution results, provide a comprehensive answer to: "{query}"
+                # Check if any agent has pre-formatted insights (like stock analysis)
+                formatted_insights = []
+                raw_results = []
+
+                for result in results:
+                    if result.get("result", {}).get("ai_insights", {}).get("analysis"):
+                        # Use the beautifully formatted analysis directly
+                        insight = result["result"]["ai_insights"]["analysis"]
+                        formatted_insights.append(insight)
+                        logger.info(f"📊 Using pre-formatted insight from {result.get('agent', 'unknown')} agent")
+                    else:
+                        # Keep raw results for other agents
+                        raw_results.append(result)
+
+                if formatted_insights and not raw_results:
+                    # If we only have formatted insights, use them directly
+                    final_answer = "\n\n".join(formatted_insights)
+                    logger.info(f"✅ Using pre-formatted insights directly ({len(final_answer)} characters)")
+                elif formatted_insights and raw_results:
+                    # Mix formatted insights with synthesis of raw results
+                    prompt = f"""The user asked: "{query}"
+
+I have some pre-formatted analysis and some raw tool results to combine:
+
+PRE-FORMATTED ANALYSIS:
+{chr(10).join(formatted_insights)}
+
+RAW TOOL RESULTS:
+{json.dumps(raw_results, indent=2)}
+
+Please provide a brief introduction and then present the pre-formatted analysis, followed by any additional insights from the raw results. Keep the pre-formatted sections intact."""
+
+                    final_answer = self.llm.call(prompt)
+                    logger.info(f"✅ Combined formatted insights with synthesis ({len(final_answer)} characters)")
+                else:
+                    # Traditional synthesis for agents without formatted insights
+                    prompt = f"""Based on these tool execution results, provide a comprehensive answer to: "{query}"
 
 Results:
 {json.dumps(results, indent=2)}
 
 Provide a clear, helpful response that synthesizes the information from the tools."""
 
-                final_answer = self.llm.call(prompt)
-                logger.info(f"✅ Final answer generated ({len(final_answer)} characters)")
+                    final_answer = self.llm.call(prompt)
+                    logger.info(f"✅ Final answer generated via synthesis ({len(final_answer)} characters)")
 
             logger.info(f"\n🎉 ORCHESTRATION COMPLETE!")
             logger.info(f"📊 Total agents used: {len(selected_agents)}")

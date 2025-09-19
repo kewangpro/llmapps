@@ -8,6 +8,7 @@ from .code_analysis_agent import CodeAnalysisAgent
 from .data_processing_agent import DataProcessingAgent
 from .presentation_agent import PresentationAgent
 from .image_analysis_agent import ImageAnalysisAgent
+from .stock_analysis_agent import StockAnalysisAgent
 from .orchestrator_agent import OrchestratorAgent
 
 __all__ = [
@@ -20,5 +21,6 @@ __all__ = [
     'DataProcessingAgent',
     'PresentationAgent',
     'ImageAnalysisAgent',
+    'StockAnalysisAgent',
     'OrchestratorAgent'
 ]
