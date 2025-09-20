@@ -2,6 +2,49 @@
 
 This directory contains all project documentation for Agent Labs.
 
+## Screenshots & Demos
+
+### Application Overview
+![Agent Labs Interface](./images/chat-interface-overview.png)
+*Main application interface with chat, tool sidebar, and real-time interactions*
+
+### Interactive Features
+
+#### Cost Analysis
+![Cost Analysis Demo](./images/cost-analysis-demo.png)
+*Real-time cost analysis with interactive line charts showing AWS spending trends over time*
+
+#### Data Visualization
+![Visualization Charts](./images/visualization-charts.png)
+*Create interactive charts from CSV data with full zoom, hover, and export capabilities*
+
+#### Stock Market Analysis
+![Stock Analysis Chart](./images/stock-analysis-chart.png)
+*Live stock data with candlestick charts and technical indicators*
+
+#### Image Analysis
+![Image Analysis Demo](./images/image-analysis-demo.png)
+*Image analysis with zoom, rotation, and comprehensive metadata extraction*
+
+#### PowerPoint Generation
+![Presentation Viewer](./images/presentation-viewer.png)
+*Automated PowerPoint generation with slide preview and download options*
+
+### System Architecture
+![System Architecture](./images/architecture-diagram.png)
+*Multi-agent system architecture with WebSocket communication*
+
+### User Interface Components
+![Tool Sidebar](./images/tool-sidebar.png)
+*Tool selection interface with organized categories*
+
+### Workflow Demonstrations
+![File Upload Demo](./images/file-upload-demo.gif)
+*File upload workflow with drag & drop, automatic tool selection, and processing*
+
+![Real-time Chat](./images/real-time-chat.gif)
+*Real-time chat interaction showing streaming responses and tool execution*
+
 ## Project Documentation
 
 ### Core Documentation
