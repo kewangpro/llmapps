@@ -2,21 +2,7 @@
 
 A modern AI-powered chat interface with intelligent multi-agent orchestration and real-time tool execution. Built with Next.js, FastAPI, and Ollama integration.
 
-![Agent Labs Interface](./docs/images/chat-interface-overview.png)
-
-## Demo Screenshots
-
-### Interactive Cost Analysis
-![Cost Analysis Demo](./docs/images/cost-analysis-demo.png)
-*Real-time cost analysis with interactive line charts showing AWS spending trends over time*
-
-### Data Visualization
-![Visualization Charts](./docs/images/visualization-charts.png)
-*Create interactive charts from CSV data with full zoom, hover, and export capabilities*
-
-### Stock Market Analysis
-![Stock Analysis Chart](./docs/images/stock-analysis-chart.png)
-*Live stock data with candlestick charts and technical indicators*
+> 📸 **[View Screenshots & Visual Demos](./docs/README.md#screenshots--demos)** - See the application in action with interactive examples
 
 ## Features
 
@@ -30,8 +16,6 @@ A modern AI-powered chat interface with intelligent multi-agent orchestration an
 - **Smart Response Handling**: Direct pass-through for formatted responses, synthesis only when needed
 
 ## Architecture
-
-![System Architecture](./docs/images/architecture-diagram.png)
 
 ### System Design
 
@@ -291,8 +275,6 @@ GOOGLE_SEARCH_ENGINE_ID=your_engine_id_here
 
 ## Usage
 
-![Tool Sidebar](./docs/images/tool-sidebar.png)
-
 ### Basic Chat
 1. Open the application at http://localhost:3000
 2. Select tools from the sidebar based on your needs
@@ -300,8 +282,6 @@ GOOGLE_SEARCH_ENGINE_ID=your_engine_id_here
 4. Watch as the AI orchestrator selects and executes appropriate tools
 
 ### File Upload & Analysis
-![File Upload Demo](./docs/images/file-upload-demo.gif)
-
 1. Click the attachment icon in the chat input
 2. Select an image, document, or data file
 3. The system automatically chooses the appropriate analysis tool
@@ -399,8 +379,6 @@ Chart Type: Bar chart with 12 data points, downloadable as HTML or PNG.
 ```
 
 **Image Analysis with Rich Display**:
-![Image Analysis Demo](./docs/images/image-analysis-demo.png)
-
 ```
 User: [Uploads camera lens photo]
 
@@ -416,12 +394,6 @@ clean composition on a dark reflective surface with studio lighting.
 Interactive Features: Zoom, rotate, and download options available
 in the chat interface for detailed examination.
 ```
-
-**PowerPoint Generation**:
-![Presentation Viewer](./docs/images/presentation-viewer.png)
-
-**Real-time Chat Interaction**:
-![Real-time Chat](./docs/images/real-time-chat.gif)
 
 ## API Reference
 
