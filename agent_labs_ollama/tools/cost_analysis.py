@@ -1,18 +1,3 @@
-if __name__ == "__main__":
-    import sys
-    import json
-    if len(sys.argv) < 2:
-        print(json.dumps({"tool": "cost_analysis", "success": False, "error": "No JSON input provided"}))
-        sys.exit(1)
-    try:
-        params = json.loads(sys.argv[1])
-        file_path = params.get("file_path")
-        query = params.get("query", "")
-        result = analyze_cogs_data(file_path, query)
-        print(json.dumps({"tool": "cost_analysis", "success": True, "result": result}))
-    except Exception as e:
-        print(json.dumps({"tool": "cost_analysis", "success": False, "error": str(e)}))
-        sys.exit(1)
 """
 Cost Analysis Tool
 Performs cost analysis operations on COGS data files
