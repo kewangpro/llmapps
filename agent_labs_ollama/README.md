@@ -2,6 +2,22 @@
 
 A modern AI-powered chat interface with intelligent multi-agent orchestration and real-time tool execution. Built with Next.js, FastAPI, and Ollama integration.
 
+![Agent Labs Interface](./docs/images/chat-interface-overview.png)
+
+## Demo Screenshots
+
+### Interactive Cost Analysis
+![Cost Analysis Demo](./docs/images/cost-analysis-demo.png)
+*Real-time cost analysis with interactive line charts showing AWS spending trends over time*
+
+### Data Visualization
+![Visualization Charts](./docs/images/visualization-charts.png)
+*Create interactive charts from CSV data with full zoom, hover, and export capabilities*
+
+### Stock Market Analysis
+![Stock Analysis Chart](./docs/images/stock-analysis-chart.png)
+*Live stock data with candlestick charts and technical indicators*
+
 ## Features
 
 - **Real-time Chat Interface**: WebSocket-based streaming communication with immediate response feedback
@@ -14,6 +30,8 @@ A modern AI-powered chat interface with intelligent multi-agent orchestration an
 - **Smart Response Handling**: Direct pass-through for formatted responses, synthesis only when needed
 
 ## Architecture
+
+![System Architecture](./docs/images/architecture-diagram.png)
 
 ### System Design
 
@@ -34,6 +52,8 @@ A modern AI-powered chat interface with intelligent multi-agent orchestration an
                                     │ - FileSearch   │
                                     │ - WebSearch    │
                                     │ - SystemInfo   │
+                                    │ - CostAnalysis │
+                                    │ - Visualization│
                                     │ - Presentation │
                                     │ - CodeAnalysis │
                                     │ - ImageAnalysis│
@@ -73,6 +93,8 @@ agent_labs_ollama/
 │   │   ├── file_search_agent.py    # File system search operations
 │   │   ├── web_search_agent.py     # Web search with Google API
 │   │   ├── system_info_agent.py    # System metrics and information
+│   │   ├── cost_analysis_agent.py  # Cost and spending analysis
+│   │   ├── visualization_agent.py  # Chart creation and data visualization
 │   │   ├── code_analysis_agent.py  # Code quality and security analysis
 │   │   ├── data_processing_agent.py # Data analysis and transformation
 │   │   ├── presentation_agent.py   # PowerPoint generation
@@ -82,6 +104,8 @@ agent_labs_ollama/
 │   │   ├── file_search.py          # File system search implementation
 │   │   ├── web_search.py           # Google Custom Search integration
 │   │   ├── system_info.py          # System metrics collection
+│   │   ├── cost_analysis.py        # Cost and spending analysis tools
+│   │   ├── visualization.py        # Chart generation and visualization
 │   │   ├── code_analysis.py        # Code analysis utilities
 │   │   ├── data_processing.py      # Data manipulation tools
 │   │   ├── presentation.py         # PowerPoint generation
@@ -99,6 +123,7 @@ agent_labs_ollama/
 │   │   │   ├── ToolSidebar.tsx     # Tool selection interface
 │   │   │   ├── MessageBubble.tsx   # Individual message display
 │   │   │   ├── StockChart.tsx      # Interactive stock chart display
+│   │   │   ├── VisualizationChart.tsx # Interactive charts with full controls
 │   │   │   ├── AnalyzedImage.tsx   # Image analysis with zoom and download
 │   │   │   └── PresentationViewer.tsx # PowerPoint preview and download
 │   │   ├── hooks/
@@ -138,6 +163,18 @@ The tools are organized into two main categories accessible via the sidebar:
   - Downloadable .pptx files with slide preview in chat
 
 ### Analytics & Data Tools
+- **cost_analysis**: Analyze cost data, COGS, and spending patterns
+  - AWS cost breakdown and spending trends analysis
+  - Interactive line charts showing cost trends over time by business unit or AWS product
+  - Monthly cost growth analysis and optimization recommendations
+  - Support for CSV files with time-series cost data
+
+- **visualization**: Create charts from your data
+  - Upload CSV files and generate interactive visualizations
+  - Support for line charts, bar charts, scatter plots, pie charts, and histograms
+  - Fully interactive charts with hover, zoom, and data exploration features
+  - HTML and PNG download options for presentations and reports
+
 - **code_analysis**: Analyze code files for quality and security
   - Security vulnerability detection
   - Code quality metrics and performance analysis
@@ -254,6 +291,8 @@ GOOGLE_SEARCH_ENGINE_ID=your_engine_id_here
 
 ## Usage
 
+![Tool Sidebar](./docs/images/tool-sidebar.png)
+
 ### Basic Chat
 1. Open the application at http://localhost:3000
 2. Select tools from the sidebar based on your needs
@@ -261,6 +300,8 @@ GOOGLE_SEARCH_ENGINE_ID=your_engine_id_here
 4. Watch as the AI orchestrator selects and executes appropriate tools
 
 ### File Upload & Analysis
+![File Upload Demo](./docs/images/file-upload-demo.gif)
+
 1. Click the attachment icon in the chat input
 2. Select an image, document, or data file
 3. The system automatically chooses the appropriate analysis tool
@@ -321,7 +362,45 @@ The interactive chart shows technical indicators and price action.
 Stock is fairly valued at current levels around $189.50.
 ```
 
+**Cost Analysis with Interactive Charts**:
+```
+User: [Uploads cost data CSV] "Show me cost trends per AWS product per month"
+
+Orchestrator: I'll analyze the cost data and create interactive visualizations.
+
+CostAnalysisAgent: Processing cost data and generating trend analysis...
+[Interactive line chart displayed showing monthly cost trends by AWS product]
+
+Analysis: Engineering costs highest at $3,300 total, with EC2 being the
+primary driver. 17.4% cost growth from January to February, followed by
+7.4% decrease in March.
+
+Interactive Chart: Cost trends over time with hover details, zoom controls,
+and download options (HTML/PNG) for presentations.
+
+Recommendations: Focus on optimizing EC2 costs in Engineering.
+Consider cost monitoring for periods with high growth rates.
+```
+
+**Data Visualization**:
+```
+User: [Uploads sales data] "Create a bar chart showing revenue by region"
+
+Orchestrator: I'll create an interactive visualization of your sales data.
+
+VisualizationAgent: Processing CSV data and generating chart...
+[Interactive bar chart displayed with full controls]
+
+Result: Revenue by region visualization with 4 regions and $2.3M total.
+Interactive features include hover tooltips, zoom/pan, legend controls,
+and export options.
+
+Chart Type: Bar chart with 12 data points, downloadable as HTML or PNG.
+```
+
 **Image Analysis with Rich Display**:
+![Image Analysis Demo](./docs/images/image-analysis-demo.png)
+
 ```
 User: [Uploads camera lens photo]
 
@@ -337,6 +416,12 @@ clean composition on a dark reflective surface with studio lighting.
 Interactive Features: Zoom, rotate, and download options available
 in the chat interface for detailed examination.
 ```
+
+**PowerPoint Generation**:
+![Presentation Viewer](./docs/images/presentation-viewer.png)
+
+**Real-time Chat Interaction**:
+![Real-time Chat](./docs/images/real-time-chat.gif)
 
 ## API Reference
 
