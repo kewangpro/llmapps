@@ -309,7 +309,7 @@ export default function ChatInterface({
                             )}
 
                             {/* Display visualization chart if available */}
-                            {result.tool === 'visualization' && result.result && (
+                            {(result.tool === 'visualization' || result.tool === 'cost_analysis') && result.result && result.result.chart_html && (
                               <div className="mb-3">
                                 <VisualizationChart
                                   visualizationData={result.result}
