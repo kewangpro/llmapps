@@ -30,6 +30,22 @@ This directory contains all project documentation for Agent Labs.
 ![Presentation Viewer](./images/presentation-viewer.png)
 *Automated PowerPoint generation with slide preview and download options*
 
+#### System Information
+![System Info Demo](./images/system-info-demo.png)
+*Real-time system monitoring with CPU, memory, disk usage, and performance metrics*
+
+#### File Search
+![File Search Demo](./images/file-search-demo.png)
+*Advanced file search with pattern matching, content filtering, and instant results*
+
+#### Web Search
+![Web Search Demo](./images/web-search-demo.png)
+*Intelligent web search with result analysis and content extraction*
+
+#### Data Processing
+![Data Processing Demo](./images/data-processing-demo.png)
+*Automated data cleaning, transformation, and processing with real-time feedback*
+
 ### System Architecture
 ![System Architecture](./images/architecture-diagram.png)
 *Multi-agent system architecture with WebSocket communication*
