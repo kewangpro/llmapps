@@ -1,21 +1,18 @@
 // API utility to handle different environments
 export const getApiUrl = () => {
-  if (process.env.NEXT_PUBLIC_API_BASE_URL) {
-    return process.env.NEXT_PUBLIC_API_BASE_URL;
+  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    return 'http://localhost:8000';
   }
-  // In development, use backend port
-  return 'http://localhost:8000';
+  return 'https://agent-labs-ollama-backend-851143938786.us-central1.run.app';
 };
 
 export const getWebSocketUrl = () => {
-  if (process.env.NEXT_PUBLIC_API_BASE_URL) {
-    const url = new URL(process.env.NEXT_PUBLIC_API_BASE_URL);
-    const protocol = url.protocol === 'https:' ? 'wss' : 'ws';
-    return `${protocol}://${url.host}/ws`;
+  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    return 'ws://localhost:8000/ws';
   }
-
-  // In development, use backend WebSocket port
-  return 'ws://localhost:8000/ws';
+  const url = new URL('https://agent-labs-ollama-backend-851143938786.us-central1.run.app');
+  const protocol = url.protocol === 'https:' ? 'wss' : 'ws';
+  return `${protocol}://${url.host}/ws`;
 };
 
 export const apiUrl = (path: string) => {
