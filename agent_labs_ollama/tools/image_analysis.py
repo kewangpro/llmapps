@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Image Analysis Tool
-Analyzes image files using Ollama's vision capabilities
+Processes and reads image files, extracting metadata and content
 """
 
 import json
@@ -10,7 +10,7 @@ import os
 from typing import Dict, Any
 from datetime import datetime
 import base64
-import httpx
+import mimetypes
 
 def encode_image_to_base64(image_path: str, max_size: int = 1024) -> str:
     """Convert image file to base64 encoding with size optimization"""
@@ -48,20 +48,12 @@ def encode_image_to_base64(image_path: str, max_size: int = 1024) -> str:
     except Exception as e:
         raise Exception(f"Failed to encode image: {str(e)}")
 
-def analyze_image_with_ollama(image_path: str, analysis_type: str = "comprehensive", model: str = "gemma3:latest") -> Dict[str, Any]:
+def process_image_file(image_path: str) -> Dict[str, Any]:
     """
-    Analyze image using Ollama's vision model
-
-    Args:
-        image_path: Path to image file
-        analysis_type: Type of analysis to perform
-        model: Ollama vision model to use (default: llava)
-
-    Returns:
-        Dictionary with analysis results
+    Process image file and extract metadata, content, and base64 data
     """
     try:
-        # Check if image file exists
+        # Check if file exists
         if not os.path.exists(image_path):
             return {
                 "tool": "image_analysis",
@@ -69,104 +61,70 @@ def analyze_image_with_ollama(image_path: str, analysis_type: str = "comprehensi
                 "error": f"Image file not found: {image_path}"
             }
 
-        # Encode image to base64
-        image_base64 = encode_image_to_base64(image_path)
-
-        # Create analysis prompt based on type
-        prompts = {
-            "comprehensive": """Analyze this image comprehensively. Provide:
-1. Main subject and objects in the image
-2. Scene description and setting
-3. Colors, lighting, and mood
-4. Any text visible in the image
-5. Technical aspects (composition, quality)
-6. Any notable details or interesting elements
-
-Be detailed but concise in your analysis.""",
-
-            "basic": """Describe what you see in this image. Include:
-- Main subject or focus
-- Setting/background
-- Key objects or elements
-- Overall mood or atmosphere
-
-Keep the description clear and concise.""",
-
-            "text": """Focus on extracting and transcribing any text visible in this image. Include:
-- All readable text (signs, labels, documents, etc.)
-- Text location and context
-- Language if not English
-- Quality of text (clear, blurry, partial, etc.)
-
-If no text is visible, clearly state that.""",
-
-            "metadata": """Analyze the technical and contextual aspects of this image:
-- Image quality and resolution apparent
-- Lighting conditions
-- Camera angle/perspective
-- Possible location or setting type
-- Time of day if determinable
-- Any technical artifacts or issues
-
-Focus on observable technical characteristics."""
-        }
-
-        prompt = prompts.get(analysis_type, prompts["comprehensive"])
-
-        # Call Ollama API using chat endpoint (like PyQt app)
-        ollama_url = "http://localhost:11434/api/chat"
-        payload = {
-            "model": model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": prompt,
-                    "images": [image_base64]
-                }
-            ],
-            "stream": False
-        }
-
-        with httpx.Client(timeout=300.0) as client:
-            response = client.post(ollama_url, json=payload)
-
-            if response.status_code != 200:
-                return {
-                    "tool": "image_analysis",
-                    "success": False,
-                    "error": f"Ollama API error: {response.status_code} - {response.text}"
-                }
-
-            result = response.json()
-            analysis_text = result.get("message", {}).get("content", "No analysis provided")
-
-        # Get basic file info
+        # Get file info
         file_stats = os.stat(image_path)
-        file_size_mb = round(file_stats.st_size / (1024 * 1024), 2)
+        file_size_mb = file_stats.st_size / (1024 * 1024)
 
-        # Determine image type for data URL
-        file_extension = os.path.splitext(image_path)[1].lower()
-        mime_types = {
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.png': 'image/png',
-            '.gif': 'image/gif',
-            '.bmp': 'image/bmp',
-            '.webp': 'image/webp'
-        }
-        mime_type = mime_types.get(file_extension, 'image/jpeg')
+        # Detect MIME type
+        mime_type, _ = mimetypes.guess_type(image_path)
+        if not mime_type or not mime_type.startswith('image/'):
+            mime_type = 'image/jpeg'  # Default fallback
+
+        # Encode image to base64
+        try:
+            image_base64 = encode_image_to_base64(image_path)
+        except Exception as e:
+            return {
+                "tool": "image_analysis",
+                "success": False,
+                "error": f"Failed to process image: {str(e)}"
+            }
+
+        # Extract additional metadata if PIL is available
+        additional_metadata = {}
+        try:
+            from PIL import Image
+            from PIL.ExifTags import TAGS
+
+            with Image.open(image_path) as img:
+                additional_metadata = {
+                    "width": img.width,
+                    "height": img.height,
+                    "mode": img.mode,
+                    "format": img.format
+                }
+
+                # Extract EXIF data if available
+                if hasattr(img, '_getexif') and img._getexif() is not None:
+                    exif_data = {}
+                    for tag_id, value in img._getexif().items():
+                        tag = TAGS.get(tag_id, tag_id)
+                        # Convert non-JSON serializable types to strings
+                        try:
+                            import json
+                            json.dumps(value)  # Test if value is JSON serializable
+                            exif_data[tag] = value
+                        except (TypeError, ValueError):
+                            # Convert to string if not serializable
+                            exif_data[tag] = str(value)
+                    additional_metadata["exif"] = exif_data
+
+        except ImportError:
+            # PIL not available, continue without additional metadata
+            pass
+        except Exception:
+            # Error reading image metadata, continue without it
+            pass
 
         return {
             "tool": "image_analysis",
             "success": True,
             "image_path": image_path,
-            "analysis_type": analysis_type,
-            "model_used": model,
-            "analysis": analysis_text,
             "file_info": {
                 "filename": os.path.basename(image_path),
                 "file_size_mb": file_size_mb,
-                "modified_time": datetime.fromtimestamp(file_stats.st_mtime).isoformat()
+                "modified_time": datetime.fromtimestamp(file_stats.st_mtime).isoformat(),
+                **additional_metadata
             },
             "image_data": {
                 "base64": image_base64,
@@ -183,125 +141,6 @@ Focus on observable technical characteristics."""
             "error": f"Image analysis failed: {str(e)}"
         }
 
-def analyze_image_with_openai(image_path: str, analysis_type: str = "comprehensive", model: str = "gpt-4o") -> Dict[str, Any]:
-    """
-    Analyze image using OpenAI Vision API
-    """
-    try:
-        # Load environment variables
-        from dotenv import load_dotenv
-        load_dotenv()
-
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            return {
-                "tool": "image_analysis",
-                "success": False,
-                "error": "OpenAI API key not found. Please set OPENAI_API_KEY environment variable."
-            }
-
-        # Encode image to base64
-        image_base64 = encode_image_to_base64(image_path)
-
-        # Determine analysis prompt based on type
-        analysis_prompts = {
-            "comprehensive": "Provide a detailed description of this image, including objects, people, settings, colors, mood, and any text visible.",
-            "basic": "Briefly describe what you see in this image.",
-            "objects": "List and describe the main objects visible in this image.",
-            "text": "Extract and transcribe any text visible in this image.",
-            "metadata": "Describe the technical aspects of this image such as composition, lighting, and style."
-        }
-
-        prompt = analysis_prompts.get(analysis_type, analysis_prompts["comprehensive"])
-
-        # Call OpenAI Vision API
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-
-        payload = {
-            "model": "gpt-4o" if not model.startswith("gpt-4o") else model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{image_base64}",
-                                "detail": "low"  # Use low detail to reduce token usage
-                            }
-                        }
-                    ]
-                }
-            ],
-            "max_tokens": 1000
-        }
-
-        with httpx.Client(timeout=30.0) as client:
-            response = client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-
-            if response.status_code != 200:
-                return {
-                    "tool": "image_analysis",
-                    "success": False,
-                    "error": f"OpenAI API error: {response.status_code} - {response.text}"
-                }
-
-            result = response.json()
-            analysis_text = result["choices"][0]["message"]["content"]
-
-        # Get file info
-        file_stats = os.stat(image_path)
-        file_size_mb = round(file_stats.st_size / (1024 * 1024), 2)
-
-        # Determine MIME type
-        file_extension = os.path.splitext(image_path)[1].lower()
-        mime_types = {
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.png': 'image/png',
-            '.gif': 'image/gif',
-            '.bmp': 'image/bmp',
-            '.webp': 'image/webp'
-        }
-        mime_type = mime_types.get(file_extension, 'image/jpeg')
-
-        return {
-            "tool": "image_analysis",
-            "success": True,
-            "image_path": image_path,
-            "analysis_type": analysis_type,
-            "model_used": f"openai/{model}",
-            "analysis": analysis_text,
-            "file_info": {
-                "filename": os.path.basename(image_path),
-                "file_size_mb": file_size_mb,
-                "modified_time": datetime.fromtimestamp(file_stats.st_mtime).isoformat()
-            },
-            "image_data": {
-                "base64": image_base64,
-                "data_url": f"data:{mime_type};base64,{image_base64}",
-                "mime_type": mime_type
-            },
-            "timestamp": datetime.now().isoformat()
-        }
-
-    except Exception as e:
-        return {
-            "tool": "image_analysis",
-            "success": False,
-            "error": f"OpenAI image analysis failed: {str(e)}"
-        }
-
-def analyze_image(image_path: str, analysis_type: str = "comprehensive") -> Dict[str, Any]:
-    """
-    Main function for image analysis
-    """
-    return analyze_image_with_ollama(image_path, analysis_type)
-
 def main():
     """CLI interface for the image analysis tool"""
     if len(sys.argv) < 2:
@@ -311,27 +150,12 @@ def main():
     try:
         args = json.loads(sys.argv[1])
         image_path = args.get("image_path", "")
-        analysis_type = args.get("analysis_type", "comprehensive")
-        model = args.get("model", "gemma3:latest")
 
         if not image_path:
             print(json.dumps({"error": "image_path is required"}))
             sys.exit(1)
 
-        # Parse provider from model string (e.g., "openai/gpt-4" -> "openai")
-        if "/" in model:
-            provider, model_name = model.split("/", 1)
-        else:
-            provider = "ollama"
-            model_name = model
-
-        # Call appropriate API based on provider
-        if provider.lower() == "openai":
-            result = analyze_image_with_openai(image_path, analysis_type, model_name)
-        elif provider.lower() == "gemini":
-            result = {"tool": "image_analysis", "success": False, "error": "Gemini vision not yet implemented"}
-        else:
-            result = analyze_image_with_ollama(image_path, analysis_type, model_name)
+        result = process_image_file(image_path)
         print(json.dumps(result, indent=2))
 
     except json.JSONDecodeError as e:

@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 """
 Presentation Tool
-Generates PowerPoint presentations from input text or files using Ollama LLM
+Generates PowerPoint presentations from structured slide data
 """
 
 import json
 import sys
 import os
-import asyncio
-import aiohttp
-import re
 import base64
 from typing import Dict, Any, List
 from datetime import datetime
@@ -23,18 +20,17 @@ try:
 except ImportError:
     PPTX_AVAILABLE = False
 
-async def generate_presentation_with_ollama(input_text: str, title: str = "", output_filename: str = "presentation.pptx", model: str = "gemma3:latest") -> Dict[str, Any]:
+def create_presentation(slides_data: List[Dict[str, Any]], title: str = "", output_filename: str = "presentation.pptx") -> Dict[str, Any]:
     """
-    Generate PowerPoint presentation from input text using Ollama LLM
+    Create PowerPoint presentation from structured slide data
 
     Args:
-        input_text: Text content to convert to presentation
+        slides_data: List of slide dictionaries with 'title' and 'content' keys
         title: Presentation title
         output_filename: Output file name
-        model: Ollama model to use
 
     Returns:
-        Dictionary with generation results
+        Dictionary with creation results
     """
     try:
         if not PPTX_AVAILABLE:
@@ -44,82 +40,11 @@ async def generate_presentation_with_ollama(input_text: str, title: str = "", ou
                 "error": "python-pptx library not available. Install with: pip install python-pptx"
             }
 
-        # Chunk text if it's too long
-        max_chunk_length = 3000
-        text_chunks = chunk_text(input_text, max_chunk_length)
-        all_slides = []
-
-        for chunk_idx, chunk in enumerate(text_chunks):
-            chunk_prompt = f'''
-You are a presentation assistant. Your ONLY task is to create a slide outline based on the following content.
-
-IMPORTANT: DO NOT provide any commentary, review, explanation, or text before or after the slides. If you do, the user's program will break.
-
-INSTRUCTIONS:
-- Output ONLY slides in the following format. Do NOT add any extra text, commentary, or explanation.
-- Always generate at least 3 slides.
-- Each slide must have a title and 3 to 5 bullet points.
-- Use this exact format (do not change it):
-
-Slide 1:
-Title: <title of slide 1>
-- <bullet point 1>
-- <bullet point 2>
-- <bullet point 3>
-Slide 2:
-Title: <title of slide 2>
-- <bullet point 1>
-- <bullet point 2>
-- <bullet point 3>
-Slide 3:
-Title: <title of slide 3>
-- <bullet point 1>
-- <bullet point 2>
-- <bullet point 3>
-
-Continue for as many slides as needed, but do not add any text outside this format. Do NOT include any summary, review, or extra lines.
-
-Content:
-{chunk}
-'''
-
-            # Call Ollama API
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.post('http://localhost:11434/api/generate', json={
-                        'model': model,
-                        'prompt': chunk_prompt,
-                        'stream': False
-                    }) as resp:
-                        result = await resp.json()
-            except Exception as e:
-                return {
-                    "tool": "presentation",
-                    "success": False,
-                    "error": f"LLM API error: {e}"
-                }
-
-            if 'response' not in result:
-                return {
-                    "tool": "presentation",
-                    "success": False,
-                    "error": f"Unexpected API response: {result}"
-                }
-
-            outline = result['response']
-
-            # Parse slides from LLM output
-            slides_raw = re.split(r'Slide\s*\d+:', outline, flags=re.IGNORECASE)[1:]
-            if not slides_raw or all(not s.strip() for s in slides_raw):
-                # Continue with next chunk if this one fails
-                continue
-            all_slides.extend(slides_raw)
-
-        if not all_slides:
+        if not slides_data:
             return {
                 "tool": "presentation",
                 "success": False,
-                "error": "No valid slides were generated from input text"
+                "error": "No slide data provided"
             }
 
         # Create PowerPoint presentation
@@ -127,75 +52,71 @@ Content:
         prs.slide_width = Inches(13.33)
         prs.slide_height = Inches(7.5)
 
-        slides_created = 0
+        # Add title slide
+        title_slide_layout = prs.slide_layouts[0]
+        slide = prs.slides.add_slide(title_slide_layout)
+        slide.shapes.title.text = title or "Generated Presentation"
+        slide.shapes.placeholders[1].text = f"Generated on {datetime.now().strftime('%Y-%m-%d')}"
+
         slide_descriptions = []
 
-        # Add title slide if title provided
-        if title:
-            title_slide = prs.slides.add_slide(prs.slide_layouts[0])
-            title_slide.shapes.title.text = title
-            slides_created += 1
-            slide_descriptions.append({
-                "title": title,
-                "bullets": [],
-                "slide_type": "title"
-            })
+        # Process each slide from structured data
+        for i, slide_data in enumerate(slides_data, 1):
+            slide_title = slide_data.get("title", f"Slide {i}")
+            slide_content = slide_data.get("content", [])
 
-        # Process each slide
-        for idx, slide_text in enumerate(all_slides, 1):
-            lines = [line.strip() for line in slide_text.strip().splitlines() if line.strip()]
-            slide_title = None
-            bullets = []
+            # Ensure content is a list
+            if isinstance(slide_content, str):
+                slide_content = [slide_content]
+            elif not isinstance(slide_content, list):
+                slide_content = [str(slide_content)]
 
-            # Parse title and bullets
-            for i, line in enumerate(lines):
-                if line.lower().startswith('title:'):
-                    slide_title = line[len('title:'):].strip()
-                    bullets = [l[1:].strip() for l in lines[i+1:] if l.startswith('-')]
-                    break
-
-            if not slide_title:
-                if lines:
-                    slide_title = lines[0]
-                    bullets = [l[1:].strip() for l in lines[1:] if l.startswith('-')]
-                else:
-                    slide_title = f"Slide {idx}"
-                    bullets = []
-
-            # Create slide
-            slide = prs.slides.add_slide(prs.slide_layouts[1])
+            # Add slide to presentation
+            bullet_slide_layout = prs.slide_layouts[1]
+            slide = prs.slides.add_slide(bullet_slide_layout)
             slide.shapes.title.text = slide_title
 
-            # Add content
-            if len(slide.placeholders) > 1 and bullets:
-                slide.placeholders[1].text = '\n'.join(bullets)
+            content_placeholder = slide.shapes.placeholders[1]
+            text_frame = content_placeholder.text_frame
+            text_frame.clear()
 
-            # Store slide description
+            for j, bullet in enumerate(slide_content[:6]):  # Limit to 6 bullets per slide
+                if j == 0:
+                    p = text_frame.paragraphs[0]
+                else:
+                    p = text_frame.add_paragraph()
+                p.text = str(bullet)
+                p.level = 0
+
             slide_descriptions.append({
+                "slide_number": len(prs.slides),
                 "title": slide_title,
-                "bullets": bullets,
-                "slide_type": "content"
+                "bullets": slide_content,  # Frontend expects 'bullets' not 'content'
+                "slide_type": "title" if i == 1 else "content"  # First content slide is title slide
             })
 
-            slides_created += 1
-
-        # Save presentation
-        output_path = os.path.join("outputs", output_filename)
-        os.makedirs("outputs", exist_ok=True)
+        # Save presentation to outputs directory
+        outputs_dir = os.path.join(os.path.dirname(__file__), "..", "outputs")
+        os.makedirs(outputs_dir, exist_ok=True)
+        output_path = os.path.join(outputs_dir, output_filename)
         prs.save(output_path)
 
-        # Encode PPT file to base64 for frontend display
-        with open(output_path, "rb") as ppt_file:
-            ppt_base64 = base64.b64encode(ppt_file.read()).decode('utf-8')
+        # Convert to base64 for JSON response
+        with open(output_path, "rb") as f:
+            ppt_data = f.read()
+            ppt_base64 = base64.b64encode(ppt_data).decode('utf-8')
+
+        # Calculate file size in MB
+        file_size_mb = len(ppt_data) / (1024 * 1024)
 
         return {
             "tool": "presentation",
             "success": True,
-            "output_file": output_path,
-            "slides_created": slides_created,
-            "total_slides": len(all_slides) + (1 if title else 0),
-            "file_size_mb": round(os.path.getsize(output_path) / (1024 * 1024), 2),
-            "message": f"Generated presentation with {slides_created} slides: {output_path}",
+            "title": title,
+            "slides_created": len(prs.slides),  # Frontend expects 'slides_created'
+            "total_slides": len(prs.slides),     # Frontend expects 'total_slides'
+            "file_size_mb": round(file_size_mb, 2),  # Frontend expects 'file_size_mb'
+            "output_path": output_path,
             "presentation_data": {
                 "base64": ppt_base64,
                 "filename": output_filename,
@@ -212,42 +133,6 @@ Content:
             "error": str(e)
         }
 
-def chunk_text(text: str, max_length: int = 3000) -> List[str]:
-    """Splits text into chunks of max_length characters, trying to preserve paragraphs."""
-    paragraphs = text.split('\n')
-    chunks = []
-    current = ''
-    for para in paragraphs:
-        if len(current) + len(para) + 1 > max_length:
-            if current:
-                chunks.append(current)
-            current = para
-        else:
-            current += ('\n' if current else '') + para
-    if current:
-        chunks.append(current)
-    return chunks
-
-def generate_presentation(input_text: str, title: str = "", output_filename: str = "presentation.pptx") -> Dict[str, Any]:
-    """
-    Synchronous wrapper for generate_presentation_with_ollama
-    """
-    try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        result = loop.run_until_complete(
-            generate_presentation_with_ollama(input_text, title, output_filename)
-        )
-        loop.close()
-        return result
-    except Exception as e:
-        return {
-            "tool": "presentation",
-            "success": False,
-            "error": str(e)
-        }
-
-
 def main():
     """CLI interface for the presentation tool"""
     if len(sys.argv) < 2:
@@ -256,15 +141,15 @@ def main():
 
     try:
         args = json.loads(sys.argv[1])
-        input_text = args.get("input_text", "")
+        slides_data = args.get("slides_data", [])
         title = args.get("title", "Generated Presentation")
         output_filename = args.get("output_filename", "presentation.pptx")
 
-        if not input_text:
-            print(json.dumps({"error": "input_text is required"}))
+        if not slides_data:
+            print(json.dumps({"error": "slides_data is required"}))
             sys.exit(1)
 
-        result = generate_presentation(input_text, title, output_filename)
+        result = create_presentation(slides_data, title, output_filename)
         print(json.dumps(result, indent=2))
 
     except json.JSONDecodeError as e:
