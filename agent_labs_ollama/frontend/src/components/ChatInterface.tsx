@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Message, ToolResult } from '@/types';
 import { apiUrl } from '@/utils/api';
+import { getDefaultLLMConfig, getAvailableModels } from '@/utils/llm';
 import { Send, Bot, User, Loader2, Wrench, ChevronDown, ChevronRight, Paperclip, X } from 'lucide-react';
 import StockChart from './StockChart';
 import AnalyzedImage from './AnalyzedImage';
@@ -25,7 +26,10 @@ export default function ChatInterface({
   selectedTools
 }: ChatInterfaceProps) {
   const [inputMessage, setInputMessage] = useState('');
-  const [selectedModel, setSelectedModel] = useState('ollama/gemma3:latest');
+  const [selectedModel, setSelectedModel] = useState(() => {
+    const defaultConfig = getDefaultLLMConfig();
+    return `${defaultConfig.provider}/${defaultConfig.model}`;
+  });
   const [availableModels, setAvailableModels] = useState<Array<{name: string, provider: string, model: string}>>([]);
   const [collapsedToolResults, setCollapsedToolResults] = useState<Set<string | number>>(new Set());
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
@@ -57,15 +61,21 @@ export default function ChatInterface({
         }
       } catch (error) {
         console.error('Failed to fetch models:', error);
-        // Fallback to default models
-        setAvailableModels([
-          { name: 'ollama/gemma3:latest', provider: 'ollama', model: 'gemma3:latest' },
-          { name: 'ollama/llama3.1:latest', provider: 'ollama', model: 'llama3.1:latest' },
-          { name: 'ollama/mistral:latest', provider: 'ollama', model: 'mistral:latest' },
-          { name: 'openai/gpt-4', provider: 'openai', model: 'gpt-4' },
-          { name: 'openai/gpt-3.5-turbo', provider: 'openai', model: 'gpt-3.5-turbo' },
-          { name: 'gemini/gemini-pro', provider: 'gemini', model: 'gemini-pro' }
-        ]);
+        // Fallback to default models from utility
+        const availableModelsByProvider = getAvailableModels();
+        const fallbackModels = [];
+
+        for (const [provider, models] of Object.entries(availableModelsByProvider)) {
+          for (const model of models) {
+            fallbackModels.push({
+              name: `${provider}/${model}`,
+              provider,
+              model
+            });
+          }
+        }
+
+        setAvailableModels(fallbackModels);
       }
     };
 
