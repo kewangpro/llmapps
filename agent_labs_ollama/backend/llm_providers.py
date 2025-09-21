@@ -183,30 +183,7 @@ _ALL_MODELS = {
 
 def get_available_providers():
     """Get available providers based on environment"""
-    # Check if running in production by detecting if we can connect to localhost Ollama
-    # This mirrors the frontend's localhost detection approach
-    try:
-        import socket
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(1)
-        result = sock.connect_ex(('localhost', 11434))
-        sock.close()
-
-        # If we can connect to Ollama (development), include all providers
-        if result == 0:
-            return _ALL_MODELS
-        else:
-            # If we can't connect to Ollama (production), only cloud providers
-            return {
-                "openai": _ALL_MODELS["openai"],
-                "gemini": _ALL_MODELS["gemini"]
-            }
-    except:
-        # If any error, assume production and only use cloud providers
-        return {
-            "openai": _ALL_MODELS["openai"],
-            "gemini": _ALL_MODELS["gemini"]
-        }
+    return _ALL_MODELS
 
 # Dynamic DEFAULT_MODELS based on environment
 DEFAULT_MODELS = get_available_providers()
