@@ -164,9 +164,10 @@ def create_llm(provider: str, model: str) -> BaseLLM:
 # All available models
 _ALL_MODELS = {
     "openai": {
+        "gpt-4o": "gpt-4o",
+        "gpt-3.5-turbo": "gpt-3.5-turbo",
         "gpt-4": "gpt-4",
-        "gpt-4-turbo": "gpt-4-turbo-preview",
-        "gpt-3.5-turbo": "gpt-3.5-turbo"
+        "gpt-4-turbo": "gpt-4-turbo-preview"
     },
     "gemini": {
         "gemini-pro": "gemini-pro",
