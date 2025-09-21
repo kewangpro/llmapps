@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Tool } from '@/types';
+import { apiUrl } from '@/utils/api';
 import { Check, Wrench, Globe, Code, Database, Monitor, BarChart3, Settings, Search, FileText, Image, TrendingUp, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface ToolSidebarProps {
@@ -125,7 +126,7 @@ export default function ToolSidebar({ selectedTools, onToolToggle }: ToolSidebar
     // Fetch available tools from the backend
     const fetchTools = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/tools');
+        const response = await fetch(apiUrl('/api/tools'));
         const data = await response.json();
         setTools(data.tools);
       } catch (error) {
