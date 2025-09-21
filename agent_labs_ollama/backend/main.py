@@ -68,8 +68,10 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+import os
+
 # Ollama client configuration
-OLLAMA_BASE_URL = "http://localhost:11434"
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 ollama_client = httpx.AsyncClient(base_url=OLLAMA_BASE_URL, timeout=30.0)
 
 # Multi-Agent System management
