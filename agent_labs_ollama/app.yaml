@@ -1,0 +1,21 @@
+# Alternative: App Engine deployment (simpler but less control)
+runtime: python39
+
+env_variables:
+  PYTHONPATH: /srv
+
+automatic_scaling:
+  min_instances: 0
+  max_instances: 10
+  target_cpu_utilization: 0.6
+
+resources:
+  cpu: 2
+  memory_gb: 4
+
+handlers:
+  - url: /.*
+    script: auto
+    secure: always
+
+entrypoint: python main.py
