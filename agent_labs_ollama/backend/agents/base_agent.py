@@ -10,41 +10,17 @@ from typing import Dict, Any
 from datetime import datetime
 from abc import ABC, abstractmethod
 import httpx
+from llm_config import llm_config
 
 logger = logging.getLogger("MultiAgentSystem")
-
-
-class OllamaLLM:
-    """Simple Ollama LLM client"""
-
-    def __init__(self, model: str = "gemma3:latest", base_url: str = "http://localhost:11434"):
-        self.model = model
-        self.base_url = base_url
-
-    def call(self, prompt: str) -> str:
-        """Call Ollama API and return response"""
-        try:
-            with httpx.Client(base_url=self.base_url, timeout=300.0) as client:
-                response = client.post(
-                    '/api/chat',
-                    json={
-                        "model": self.model,
-                        "messages": [{"role": "user", "content": prompt}],
-                        "stream": False
-                    }
-                )
-                result = response.json()
-                return result.get('message', {}).get('content', '')
-        except Exception as e:
-            return f"Error calling Ollama: {str(e)}"
 
 
 class BaseAgent(ABC):
     """Base class for all agents"""
 
-    def __init__(self, model: str = "gemma3:latest"):
-        self.model = model
-        self.llm = OllamaLLM(model=model)
+    def __init__(self):
+        # Use shared LLM configuration
+        self.llm = llm_config.get_llm()
         # Since we run from project root, tools are in ./tools
         self.tools_dir = "tools"
 
@@ -52,7 +28,9 @@ class BaseAgent(ABC):
         """Execute a tool script with given parameters"""
         try:
             # Change to project root directory for tool execution (so .env can be found)
-            project_root = os.path.join(os.path.dirname(__file__), "..", "..")
+            project_root = os.environ.get("APP_HOME")
+            if not project_root:
+                project_root = os.path.join(os.path.dirname(__file__), "..", "..")
 
             # Tool script path should be absolute
             tool_script = os.path.join(project_root, self.tools_dir, f"{tool_name}.py")
