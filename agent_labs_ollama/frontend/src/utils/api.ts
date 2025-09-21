@@ -1,23 +1,17 @@
 // API utility to handle different environments
 export const getApiUrl = () => {
-  // In production (deployed), use relative URLs
-  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-    return '';
+  if (process.env.NEXT_PUBLIC_API_BASE_URL) {
+    return process.env.NEXT_PUBLIC_API_BASE_URL;
   }
-
   // In development, use backend port
   return 'http://localhost:8000';
 };
 
 export const getWebSocketUrl = () => {
-  if (typeof window === 'undefined') {
-    return '';
-  }
-
-  // In production (deployed), use current host with appropriate protocol
-  if (window.location.hostname !== 'localhost') {
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    return `${protocol}://${window.location.host}/ws`;
+  if (process.env.NEXT_PUBLIC_API_BASE_URL) {
+    const url = new URL(process.env.NEXT_PUBLIC_API_BASE_URL);
+    const protocol = url.protocol === 'https:' ? 'wss' : 'ws';
+    return `${protocol}://${url.host}/ws`;
   }
 
   // In development, use backend WebSocket port
