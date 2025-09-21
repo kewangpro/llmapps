@@ -23,6 +23,11 @@ export const useWebSocket = ({ url, clientId }: UseWebSocketProps) => {
   const mountedRef = useRef(true);
 
   const connect = useCallback(() => {
+    // Don't connect if URL is empty (during SSR)
+    if (!url) {
+      return;
+    }
+
     // Prevent multiple simultaneous connection attempts
     if (isConnectingRef.current) {
       console.log('Connection attempt already in progress, skipping');
@@ -221,7 +226,10 @@ export const useWebSocket = ({ url, clientId }: UseWebSocketProps) => {
 
   useEffect(() => {
     mountedRef.current = true;
-    connect();
+    // Only connect when URL is available
+    if (url) {
+      connect();
+    }
 
     return () => {
       mountedRef.current = false;
@@ -231,7 +239,7 @@ export const useWebSocket = ({ url, clientId }: UseWebSocketProps) => {
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, [connect, disconnect]); // Include connect and disconnect dependencies as required
+  }, [url, connect, disconnect]); // Include url dependency
 
   return {
     isConnected,
