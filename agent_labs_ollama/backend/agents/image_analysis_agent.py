@@ -35,7 +35,9 @@ class ImageAnalysisAgent(BaseAgent):
                 elif "basic" in clean_query.lower():
                     analysis_type = "basic"
 
-                params = {"image_path": file_path, "analysis_type": analysis_type, "model": self.model}
+                from llm_config import llm_config
+                current_model = f"{llm_config.get_provider()}/{llm_config.get_model()}"
+                params = {"image_path": file_path, "analysis_type": analysis_type, "model": current_model}
                 logger.info(f"🖼️ Using attached file parameters: {params}")
             else:
                 # Extract parameters from query using LLM (fallback)
@@ -67,7 +69,9 @@ Analysis types:
                             image_path = word
                             break
 
-                    params = {"image_path": image_path, "analysis_type": "comprehensive", "model": self.model}
+                    from llm_config import llm_config
+                    current_model = f"{llm_config.get_provider()}/{llm_config.get_model()}"
+                    params = {"image_path": image_path, "analysis_type": "comprehensive", "model": current_model}
 
             # Execute image analysis tool
             result = self._execute_tool_script("image_analysis", params)
