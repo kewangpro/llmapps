@@ -40,21 +40,25 @@ if __name__ == "__main__":
         allow_headers=["*"],
     )
 
-    # Serve Next.js static files if they exist
-    frontend_path = Path(__file__).parent / "frontend"
+    # Serve Next.js static export files
+    frontend_path = Path(__file__).parent / "frontend" / "out"
     if frontend_path.exists():
-        next_static_path = frontend_path / ".next" / "static"
-        if next_static_path.exists():
-            app.mount("/_next/static", StaticFiles(directory=str(next_static_path)), name="next_static")
+        # Mount static assets
+        static_assets = frontend_path / "_next"
+        if static_assets.exists():
+            app.mount("/_next", StaticFiles(directory=str(static_assets)), name="next_static")
 
         # Serve the main page
         @app.get("/")
         async def serve_frontend():
-            index_path = frontend_path / ".next" / "server" / "app" / "page.html"
+            index_path = frontend_path / "index.html"
             if index_path.exists():
                 return FileResponse(str(index_path))
             else:
                 return {"message": "Agent Labs API - Frontend not available", "status": "API only"}
+
+        # Serve other static files
+        app.mount("/", StaticFiles(directory=str(frontend_path), html=True), name="frontend")
 
     port = int(os.environ.get("PORT", 8000))
 

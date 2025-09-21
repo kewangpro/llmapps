@@ -28,9 +28,8 @@ COPY tools/ ./tools/
 COPY data/ ./data/
 COPY main.py .
 
-# Copy built frontend files (no node_modules needed in production)
-COPY --from=frontend-build /app/frontend/.next ./frontend/.next
-COPY --from=frontend-build /app/frontend/public ./frontend/public
+# Copy built frontend static files
+COPY --from=frontend-build /app/frontend/out ./frontend/out
 COPY --from=frontend-build /app/frontend/package.json ./frontend/package.json
 
 # Create non-root user
