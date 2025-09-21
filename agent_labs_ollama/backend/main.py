@@ -77,12 +77,24 @@ ollama_client = httpx.AsyncClient(base_url=OLLAMA_BASE_URL, timeout=30.0)
 # Initialize Multi-Agent System
 multi_agent_system = None
 
-def get_multi_agent_system(model: str = "gemma3:latest") -> MultiAgentSystem:
+def get_multi_agent_system(model: str = "gemma3:latest", provider: str = "ollama") -> MultiAgentSystem:
     """Get or create multi-agent system instance"""
     global multi_agent_system
     if multi_agent_system is None:
-        multi_agent_system = MultiAgentSystem(model=model)
+        logger.info(f"🚀 Initializing Multi-Agent System with {provider}/{model}")
+        multi_agent_system = MultiAgentSystem(model=model, provider=provider)
     return multi_agent_system
+
+def update_model_selection(model: str, provider: str):
+    """Update the model selection for the multi-agent system"""
+    global multi_agent_system
+    from llm_config import llm_config
+
+    # Update the global LLM configuration
+    llm_config.configure(provider, model)
+
+    # Reset multi_agent_system to use new configuration
+    multi_agent_system = None
 
 # Ollama integration
 async def stream_ollama_response(messages: List[Dict], model: str = "gemma3:latest"):
@@ -152,9 +164,11 @@ def handle_attached_file(attached_file_data: Dict[str, Any], file_content: str) 
         logger.error(f"Error handling attached file: {e}")
         return None
 
-def get_ollama_summary(tool_name: str, tool_result: Dict[str, Any], model: str = "gemma3:latest") -> str:
-    """Get a summary of tool results from Ollama"""
+def get_tool_summary(tool_name: str, tool_result: Dict[str, Any]) -> str:
+    """Get a summary of tool results using the configured LLM"""
     try:
+        from llm_config import llm_config
+
         prompt = f"""Please provide a concise, user-friendly summary of this tool execution result. Focus on the key information that would be useful to the user.
 
 Tool: {tool_name}
@@ -162,26 +176,12 @@ Result: {json.dumps(tool_result, indent=2)}
 
 Provide a brief, clear summary in 1-2 sentences highlighting the most important findings or data."""
 
-        messages = [
-            {"role": "system", "content": "You are a helpful assistant that summarizes tool execution results in a clear, concise manner."},
-            {"role": "user", "content": prompt}
-        ]
-
-        import httpx
-        with httpx.Client(base_url="http://localhost:11434", timeout=30.0) as client:
-            response = client.post(
-                '/api/chat',
-                json={
-                    "model": model,
-                    "messages": messages,
-                    "stream": False
-                }
-            )
-            result = response.json()
-            return result.get('message', {}).get('content', 'Summary not available')
+        llm = llm_config.get_llm()
+        return llm.call(prompt)
 
     except Exception as e:
-        return f"Could not generate summary: {str(e)}"
+        logger.error(f"Error generating tool summary: {e}")
+        return f"Tool executed successfully but summary could not be generated: {str(e)}"
 
 # Chat message model
 class ChatMessage(BaseModel):
@@ -227,12 +227,81 @@ async def get_tools():
 
 @app.get("/api/models")
 async def get_models():
-    """Get available Ollama models"""
+    """Get available models from all providers"""
+    from llm_config import llm_config
+
+    # Get models from our configuration
+    available_models = llm_config.get_available_models()
+
+    models = []
+
+    # Add OpenAI models
+    for model_name in available_models.get("openai", {}):
+        models.append({
+            "name": f"openai/{model_name}",
+            "provider": "openai",
+            "model": model_name
+        })
+
+    # Add Gemini models
+    for model_name in available_models.get("gemini", {}):
+        models.append({
+            "name": f"gemini/{model_name}",
+            "provider": "gemini",
+            "model": model_name
+        })
+
+    # Try to get Ollama models if available
     try:
         response = await ollama_client.get("/api/tags")
-        return response.json()
+        ollama_data = response.json()
+        for model in ollama_data.get("models", []):
+            models.append({
+                "name": f"ollama/{model['name']}",
+                "provider": "ollama",
+                "model": model['name']
+            })
     except Exception as e:
-        return {"error": str(e), "models": []}
+        # Add default Ollama models if service unavailable
+        for model_name in available_models.get("ollama", {}):
+            models.append({
+                "name": f"ollama/{model_name}",
+                "provider": "ollama",
+                "model": model_name
+            })
+
+    return {"models": models}
+
+
+@app.post("/api/select-model")
+async def select_model(model_data: dict):
+    """Change the active model and provider"""
+    try:
+        full_model = model_data.get("model", "ollama/gemma3:latest")
+
+        # Parse provider and model from format "provider/model"
+        if "/" in full_model:
+            provider, model = full_model.split("/", 1)
+        else:
+            # Default to ollama if no provider specified
+            provider = "ollama"
+            model = full_model
+
+        # Update model selection
+        update_model_selection(model, provider)
+
+        return {
+            "success": True,
+            "provider": provider,
+            "model": model,
+            "message": f"Model changed to {provider}/{model}"
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 
 # WebSocket endpoint for real-time chat
@@ -285,7 +354,14 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
             # Always use the multi-agent system with real-time communication
             try:
                 logger.info(f"🤖 Processing message with Main Agent")
-                mas = get_multi_agent_system(model)
+                # Parse provider and model from format "provider/model"
+                if "/" in model:
+                    provider, model_name = model.split("/", 1)
+                else:
+                    provider = "ollama"
+                    model_name = model
+
+                mas = get_multi_agent_system(model_name, provider)
 
                 # Create a callback function for real-time messaging
                 async def send_response_callback(response_type: str, content: str = "", **kwargs):
@@ -371,7 +447,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                             }, client_id)
 
                             # Generate summary of tool result
-                            base_summary = get_ollama_summary(tool_name, agent_result.get("result", {}), model)
+                            base_summary = get_tool_summary(tool_name, agent_result.get("result", {}))
 
                             await manager.send_personal_message({
                                 "type": "tool_summary",
