@@ -2,9 +2,10 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  output: 'export',
-  trailingSlash: true,
-  distDir: 'dist',
+  // Remove static export for Cloud Run deployment
+  // output: 'export',
+  // trailingSlash: true,
+  // distDir: 'dist',
   images: {
     unoptimized: true
   }
