@@ -1,8 +1,14 @@
-# Alternative: App Engine deployment (simpler but less control)
+# Full-stack App Engine deployment
 runtime: python39
 
 env_variables:
   PYTHONPATH: /srv
+  # Note: Set real API keys via: gcloud app deploy --set-env-vars KEY=value
+  # Or update these values before deploying
+  OPENAI_API_KEY: "your_openai_api_key_here"
+  GEMINI_API_KEY: "your_gemini_api_key_here"
+  GOOGLE_SEARCH_API_KEY: "your_google_search_api_key_here"
+  GOOGLE_SEARCH_ENGINE_ID: "your_search_engine_id_here"
 
 automatic_scaling:
   min_instances: 0
@@ -14,8 +20,29 @@ resources:
   memory_gb: 4
 
 handlers:
-  - url: /.*
+  # Static files from frontend build
+  - url: /_next/static
+    static_dir: frontend/.next/static
+    secure: always
+
+  - url: /(.*\.(js|css|png|jpg|jpeg|gif|ico|svg))$
+    static_files: frontend/dist/\1
+    upload: frontend/dist/.*\.(js|css|png|jpg|jpeg|gif|ico|svg)$
+    secure: always
+
+  # API routes
+  - url: /(api|ws)/.*
     script: auto
     secure: always
+
+  # All other routes to frontend
+  - url: /.*
+    static_files: frontend/dist/index.html
+    upload: frontend/dist/index.html
+    secure: always
+
+# Build step to compile frontend
+build_env_variables:
+  NODE_ENV: production
 
 entrypoint: python main.py
