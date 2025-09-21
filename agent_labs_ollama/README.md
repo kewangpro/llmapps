@@ -48,9 +48,28 @@ docker-compose up --build
 **Access**: http://localhost:3000
 
 ### Manual Setup
-1. **Backend**: Python 3.9+, install requirements, run `python main.py`
-2. **Frontend**: Node.js 18+, `npm install`, `npm run dev`
-3. **Ollama**: Install locally, pull models (`gemma3:latest`, `llama3.1:latest`), run `ollama serve`
+1. **Clone and Install**:
+   ```bash
+   git clone <repository-url>
+   cd agent_labs_ollama
+   pip install -r requirements.txt
+   npm install
+   ```
+
+2. **Setup Ollama**:
+   ```bash
+   # Install Ollama locally
+   ollama serve
+   ollama pull gemma3:latest
+   ollama pull llama3.1:latest
+   ```
+
+3. **Run Application**:
+   ```bash
+   # Single command starts both frontend and backend
+   python main.py
+   ```
+   **Access**: http://localhost:3000
 
 **Environment Variables**: Create `.env` file with:
 ```bash
