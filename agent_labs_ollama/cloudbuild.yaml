@@ -1,54 +1,28 @@
 steps:
-# Build the backend container image
+# Build the unified container image (frontend + backend)
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-f', 'backend/Dockerfile', '-t', 'gcr.io/$PROJECT_ID/agent-labs-ollama-backend', '.']
+  args: ['build', '-t', 'gcr.io/$PROJECT_ID/agent-labs', '.']
 
-# Push the backend container image to Container Registry
+# Push the unified container image to Container Registry
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['push', 'gcr.io/$PROJECT_ID/agent-labs-ollama-backend']
+  args: ['push', 'gcr.io/$PROJECT_ID/agent-labs']
 
-# Deploy backend container image to Cloud Run
+# Deploy unified container image to Cloud Run
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
   entrypoint: gcloud
   args:
   - 'run'
   - 'deploy'
-  - 'agent-labs-ollama-backend'
+  - 'agent-labs'
   - '--image'
-  - 'gcr.io/$PROJECT_ID/agent-labs-ollama-backend'
+  - 'gcr.io/$PROJECT_ID/agent-labs'
   - '--region'
   - 'us-central1'
   - '--platform'
   - 'managed'
   - '--allow-unauthenticated'
-  - '--set-env-vars'
-  - 'OLLAMA_BASE_URL=http://<your-ollama-service-url>'
-
-# Build the frontend container image
-- name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'gcr.io/$PROJECT_ID/agent-labs-ollama-frontend', './frontend']
-
-# Push the frontend container image to Container Registry
-- name: 'gcr.io/cloud-builders/docker'
-  args: ['push', 'gcr.io/$PROJECT_ID/agent-labs-ollama-frontend']
-
-# Deploy frontend container image to Cloud Run
-- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-  entrypoint: gcloud
-  args:
-  - 'run'
-  - 'deploy'
-  - 'agent-labs-ollama-frontend'
-  - '--image'
-  - 'gcr.io/$PROJECT_ID/agent-labs-ollama-frontend'
-  - '--region'
-  - 'us-central1'
-  - '--platform'
-  - 'managed'
-  - '--allow-unauthenticated'
-  - '--set-env-vars'
-  - 'NEXT_PUBLIC_API_BASE_URL=https://agent-labs-ollama-backend-851143938786.us-central1.run.app'
+  - '--port'
+  - '8080'
 
 images:
-- 'gcr.io/$PROJECT_ID/agent-labs-ollama-backend'
-- 'gcr.io/$PROJECT_ID/agent-labs-ollama-frontend'
+- 'gcr.io/$PROJECT_ID/agent-labs'
