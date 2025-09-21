@@ -1,7 +1,7 @@
 steps:
 # Build the backend container image
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'gcr.io/$PROJECT_ID/agent-labs-ollama-backend', './backend']
+  args: ['build', '-f', 'backend/Dockerfile', '-t', 'gcr.io/$PROJECT_ID/agent-labs-ollama-backend', '.']
 
 # Push the backend container image to Container Registry
 - name: 'gcr.io/cloud-builders/docker'
