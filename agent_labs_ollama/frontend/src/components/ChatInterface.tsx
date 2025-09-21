@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Message, ToolResult } from '@/types';
+import { apiUrl } from '@/utils/api';
 import { Send, Bot, User, Loader2, Wrench, ChevronDown, ChevronRight, Paperclip, X } from 'lucide-react';
 import StockChart from './StockChart';
 import AnalyzedImage from './AnalyzedImage';
@@ -24,7 +25,8 @@ export default function ChatInterface({
   selectedTools
 }: ChatInterfaceProps) {
   const [inputMessage, setInputMessage] = useState('');
-  const [selectedModel, setSelectedModel] = useState('gemma3:latest');
+  const [selectedModel, setSelectedModel] = useState('ollama/gemma3:latest');
+  const [availableModels, setAvailableModels] = useState<Array<{name: string, provider: string, model: string}>>([]);
   const [collapsedToolResults, setCollapsedToolResults] = useState<Set<string | number>>(new Set());
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [fileContent, setFileContent] = useState<string>('');
@@ -43,6 +45,50 @@ export default function ChatInterface({
   useEffect(() => {
     scrollToBottom();
   }, [messages, currentResponse]);
+
+  // Fetch available models on component mount
+  useEffect(() => {
+    const fetchModels = async () => {
+      try {
+        const response = await fetch(apiUrl('/api/models'));
+        const data = await response.json();
+        if (data.models) {
+          setAvailableModels(data.models);
+        }
+      } catch (error) {
+        console.error('Failed to fetch models:', error);
+        // Fallback to default models
+        setAvailableModels([
+          { name: 'ollama/gemma3:latest', provider: 'ollama', model: 'gemma3:latest' },
+          { name: 'ollama/llama3.1:latest', provider: 'ollama', model: 'llama3.1:latest' },
+          { name: 'ollama/mistral:latest', provider: 'ollama', model: 'mistral:latest' },
+          { name: 'openai/gpt-4', provider: 'openai', model: 'gpt-4' },
+          { name: 'openai/gpt-3.5-turbo', provider: 'openai', model: 'gpt-3.5-turbo' },
+          { name: 'gemini/gemini-pro', provider: 'gemini', model: 'gemini-pro' }
+        ]);
+      }
+    };
+
+    fetchModels();
+  }, []);
+
+  // Handle model selection change
+  const handleModelChange = async (newModel: string) => {
+    setSelectedModel(newModel);
+
+    // Send model selection to backend
+    try {
+      await fetch(apiUrl('/api/select-model'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ model: newModel }),
+      });
+    } catch (error) {
+      console.error('Failed to update model selection:', error);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,13 +207,20 @@ export default function ChatInterface({
 
             <select
               value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
+              onChange={(e) => handleModelChange(e.target.value)}
               className="px-3 py-1 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="gemma3:latest">Gemma 3 (Default)</option>
-              <option value="llama3.1:latest">Llama 3.1</option>
-              <option value="mistral:latest">Mistral</option>
-              <option value="llama3.2-vision:latest">Llama 3.2 Vision</option>
+              {availableModels.length > 0 ? (
+                availableModels.map((model) => (
+                  <option key={model.name} value={model.name}>
+                    {model.provider === 'openai' && `🤖 OpenAI ${model.model}`}
+                    {model.provider === 'gemini' && `💎 Gemini ${model.model}`}
+                    {model.provider === 'ollama' && `🦙 ${model.model}`}
+                  </option>
+                ))
+              ) : (
+                <option value="ollama/gemma3:latest">🦙 Gemma 3 (Loading...)</option>
+              )}
             </select>
           </div>
         </div>
