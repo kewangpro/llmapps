@@ -180,12 +180,12 @@ class OpenAILLM(BaseLLM):
 class GeminiLLM(BaseLLM):
     """Google Gemini client"""
 
-    def __init__(self, model: str = "gemini-pro"):
+    def __init__(self, model: str = "gemini-2.5-flash"):
         super().__init__(model)
         self.api_key = os.getenv("GEMINI_API_KEY")
         self.base_url = "https://generativelanguage.googleapis.com/v1beta"
-        # Gemini Pro Vision supports images
-        self._supports_vision = "vision" in model.lower() or "gemini-pro" in model.lower()
+        # All Gemini 2.5 models support vision
+        self._supports_vision = True
 
         if not self.api_key:
             logger.warning("GEMINI_API_KEY not found in environment variables")
@@ -306,8 +306,9 @@ _ALL_MODELS = {
         "gpt-4-turbo": "gpt-4-turbo-preview"
     },
     "gemini": {
-        "gemini-pro": "gemini-pro",
-        "gemini-pro-vision": "gemini-pro-vision"
+        "gemini-2.5-pro": "gemini-2.5-pro",
+        "gemini-2.5-flash": "gemini-2.5-flash",
+        "gemini-2.5-flash-lite": "gemini-2.5-flash-lite"
     },
     "ollama": {
         "gemma3:latest": "gemma3:latest",
