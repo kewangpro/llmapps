@@ -82,6 +82,13 @@ export default function ChatInterface({
     fetchModels();
   }, []);
 
+  // Send default model selection to backend on mount
+  useEffect(() => {
+    const defaultConfig = getDefaultLLMConfig();
+    const defaultModel = `${defaultConfig.provider}/${defaultConfig.model}`;
+    handleModelChange(defaultModel);
+  }, []); // Only run once on mount
+
   // Handle model selection change
   const handleModelChange = async (newModel: string) => {
     setSelectedModel(newModel);
