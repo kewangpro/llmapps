@@ -1,18 +1,25 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useWebSocket } from '@/hooks/useWebSocket';
+import { getWebSocketUrl } from '@/utils/api';
 import ChatInterface from '@/components/ChatInterface';
 import ToolSidebar from '@/components/ToolSidebar';
 
 export default function Home() {
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
+  const [wsUrl, setWsUrl] = useState<string>('');
 
   // Use stable client ID to prevent reconnection loops
   const clientId = useMemo(() =>
     'client-' + Math.random().toString(36).substr(2, 9),
     []
   );
+
+  // Set WebSocket URL on client side only
+  useEffect(() => {
+    setWsUrl(getWebSocketUrl());
+  }, []);
 
   const {
     isConnected,
@@ -22,7 +29,7 @@ export default function Home() {
     sendMessage,
     reconnect
   } = useWebSocket({
-    url: 'ws://localhost:8000/ws',
+    url: wsUrl || '',
     clientId
   });
 
