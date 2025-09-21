@@ -45,8 +45,9 @@ export const getAvailableModels = () => {
       'gpt-3.5-turbo'
     ],
     gemini: [
-      'gemini-pro',
-      'gemini-pro-vision'
+      'gemini-2.5-pro',
+      'gemini-2.5-flash',
+      'gemini-2.5-flash-lite'
     ]
   };
 };
@@ -56,7 +57,7 @@ export const getVisionModels = () => {
   return {
     ollama: ['gemma3:latest', 'llama3.2-vision:latest'],
     openai: ['gpt-4o', 'gpt-4'],
-    gemini: ['gemini-pro', 'gemini-pro-vision']
+    gemini: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite']
   };
 };
 
