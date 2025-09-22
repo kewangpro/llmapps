@@ -23,18 +23,18 @@ logger = logging.getLogger("MultiAgentSystem")
 class OrchestratorAgent(BaseAgent):
     """Main orchestrator agent that coordinates sub-agents"""
 
-    def __init__(self, model: str = "gemma3:latest"):
-        super().__init__(model)
+    def __init__(self):
+        super().__init__()
         self.sub_agents = {
-            "file_search": FileSearchAgent(model),
-            "web_search": WebSearchAgent(model),
-            "system_info": SystemInfoAgent(model),
-            "cost_analysis": CostAnalysisAgent(model),
-            "data_processing": DataProcessingAgent(model),
-            "presentation": PresentationAgent(model),
-            "image_analysis": ImageAnalysisAgent(model),
-            "stock_analysis": StockAnalysisAgent(model),
-            "visualization": VisualizationAgent(model)
+            "file_search": FileSearchAgent(),
+            "web_search": WebSearchAgent(),
+            "system_info": SystemInfoAgent(),
+            "cost_analysis": CostAnalysisAgent(),
+            "data_processing": DataProcessingAgent(),
+            "presentation": PresentationAgent(),
+            "image_analysis": ImageAnalysisAgent(),
+            "stock_analysis": StockAnalysisAgent(),
+            "visualization": VisualizationAgent()
         }
 
     def _select_agents(self, query: str, available_tools: List[str], attached_file: Dict = None) -> List[str]:
@@ -78,6 +78,11 @@ Which tools should be used? Consider:
 3. Are multiple tools needed?
 4. If an image file is attached, prioritize image_analysis for visual analysis
 5. If a data file is attached, prioritize data_processing for data analysis
+
+IMPORTANT RULES FOR STOCK ANALYSIS:
+- For stock-related queries (company names, stock symbols, market analysis, stock performance), ALWAYS use BOTH "stock_analysis" AND "visualization" tools together
+- Stock analysis provides data and insights, visualization creates charts
+- Examples: "show AAPL performance", "analyze Tesla stock", "Microsoft stock chart" → use both tools
 
 Important: If this is a conversational query (greetings, thanks, general chat) that doesn't require any tools, respond with "NONE".
 
@@ -257,13 +262,63 @@ Respond as the orchestrator agent in first person."""
                         # Subsequent agents get context from previous results
                         logger.info(f"🔗 Building context-aware query for {agent_name} based on previous results...")
 
-                        context = "Previous agent results:\n"
-                        for j, prev_result in enumerate(results, 1):
-                            if prev_result.get("success"):
-                                context += f"{j}. {prev_result.get('agent', 'Unknown')}: {json.dumps(prev_result.get('result', {}), indent=2)}\n\n"
+                        # Handle visualization tool specially when following data-producing agents
+                        if agent_name == "visualization":
+                            # Find any previous agent that produced data suitable for visualization
+                            data_agent = None
+                            for prev_result in results:
+                                if prev_result.get("success") and prev_result.get("agent") in ["StockAnalysisAgent", "CostAnalysisAgent", "DataProcessingAgent"]:
+                                    data_agent = prev_result
+                                    break
 
-                        # Let the LLM create a contextual query for this agent
-                        context_prompt = f"""Original user query: "{query}"
+                            if data_agent:
+                                agent_type = data_agent.get("agent", "")
+                                if agent_type == "StockAnalysisAgent":
+                                    # Extract tabular historical data and create a temporary file
+                                    tool_data = data_agent.get("result", {}).get("tool_data", {})
+                                    symbol = tool_data.get("symbol", "Unknown")
+                                    company_name = tool_data.get("company_name", symbol)
+
+                                    # Extract historical data as a table
+                                    historical_data = tool_data.get("historical_data", {})
+                                    if historical_data:
+                                        # Convert to CSV table format
+                                        dates = historical_data.get("dates", [])
+                                        prices = historical_data.get("prices", [])
+                                        volumes = historical_data.get("volumes", [])
+                                        highs = historical_data.get("highs", [])
+                                        lows = historical_data.get("lows", [])
+
+                                        csv_data = "date,price,volume,high,low\n"
+                                        for i in range(len(dates)):
+                                            csv_data += f"{dates[i]},{prices[i]},{volumes[i] if i < len(volumes) else ''},{highs[i] if i < len(highs) else ''},{lows[i] if i < len(lows) else ''}\n"
+
+                                        # Create temporary CSV file
+                                        import tempfile
+                                        import os
+                                        temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
+                                        temp_file.write(csv_data)
+                                        temp_file.close()
+
+                                        agent_query = f"Create a line chart for {company_name} ({symbol}) stock price over time. Use 'date' column for x-axis and 'price' column for y-axis FILE_PATH:{temp_file.name}"
+                                        logger.info(f"🎯 Generated stock visualization with CSV file ({len(dates)} rows) at {temp_file.name}")
+                                    else:
+                                        agent_query = f"No historical data available for {company_name} ({symbol})"
+                                else:
+                                    # Generic data visualization for other agents
+                                    data = data_agent.get("result", {})
+                                    agent_query = f"Create a visualization using this data: {json.dumps(data)}"
+                                    logger.info(f"🎯 Generated generic visualization query for {agent_type}")
+                            else:
+                                agent_query = f"Create a visualization for: {query}"
+                        else:
+                            context = "Previous agent results:\n"
+                            for j, prev_result in enumerate(results, 1):
+                                if prev_result.get("success"):
+                                    context += f"{j}. {prev_result.get('agent', 'Unknown')}: {json.dumps(prev_result.get('result', {}), indent=2)}\n\n"
+
+                            # Let the LLM create a contextual query for this agent
+                            context_prompt = f"""Original user query: "{query}"
 
 {context}
 
@@ -281,8 +336,8 @@ Do NOT use placeholders like [OS version] - use the actual values.
 
 Respond with just the refined query, no additional text."""
 
-                        agent_query = self.llm.call(context_prompt).strip()
-                        logger.info(f"🎯 Context-aware query for {agent_name}: '{agent_query}'")
+                            agent_query = self.llm.call(context_prompt).strip()
+                            logger.info(f"🎯 Context-aware query for {agent_name}: '{agent_query}'")
 
                     agent_result = self.sub_agents[agent_name].execute(agent_query)
 
@@ -300,51 +355,57 @@ Respond with just the refined query, no additional text."""
                 logger.info(f"\n🧠 SYNTHESIZING FINAL ANSWER...")
                 logger.info(f"📝 Combining results from {len(results)} agents...")
 
-                # Check if any agent has pre-formatted insights (like stock analysis)
-                formatted_insights = []
-                raw_results = []
+                # Separate analysis results from visualization results
+                analysis_content = []
+                non_analysis_results = []
 
                 for result in results:
-                    if result.get("result", {}).get("ai_insights", {}).get("analysis"):
-                        # Use the beautifully formatted analysis directly (for stock analysis, etc.)
-                        insight = result["result"]["ai_insights"]["analysis"]
-                        formatted_insights.append(insight)
-                        logger.info(f"📊 Using pre-formatted insight from {result.get('agent', 'unknown')} agent")
+                    if result.get("agent") == "VisualizationAgent":
+                        # Visualization results are displayed separately, not included in final answer
+                        logger.info(f"📊 Visualization result will be displayed separately")
+                        continue
+                    elif result.get("agent") == "StockAnalysisAgent" and result.get("result", {}).get("llm_analysis"):
+                        # Use stock analysis LLM insights directly
+                        analysis_content.append(result["result"]["llm_analysis"])
+                        logger.info(f"📈 Using stock analysis LLM insights")
                     elif result.get("agent") == "ImageAnalysisAgent" and result.get("result", {}).get("analysis"):
-                        # Use image analysis directly without further synthesis
-                        insight = result["result"]["analysis"]
-                        formatted_insights.append(insight)
-                        logger.info(f"🖼️ Using image analysis directly from {result.get('agent', 'unknown')} agent")
+                        # Use image analysis directly
+                        analysis_content.append(result["result"]["analysis"])
+                        logger.info(f"🖼️ Using image analysis directly")
+                    elif result.get("result", {}).get("ai_insights", {}).get("analysis"):
+                        # Use other pre-formatted insights
+                        analysis_content.append(result["result"]["ai_insights"]["analysis"])
+                        logger.info(f"📊 Using pre-formatted insight from {result.get('agent', 'unknown')} agent")
                     else:
-                        # Keep raw results for other agents
-                        raw_results.append(result)
+                        # Keep other results for potential synthesis
+                        non_analysis_results.append(result)
 
-                if formatted_insights and not raw_results:
-                    # If we only have formatted insights, use them directly
-                    final_answer = "\n\n".join(formatted_insights)
-                    logger.info(f"✅ Using pre-formatted insights directly ({len(final_answer)} characters)")
-                elif formatted_insights and raw_results:
-                    # Mix formatted insights with synthesis of raw results
+                if analysis_content and not non_analysis_results:
+                    # If we only have analysis content, use it directly
+                    final_answer = "\n\n".join(analysis_content)
+                    logger.info(f"✅ Using analysis content directly ({len(final_answer)} characters)")
+                elif analysis_content and non_analysis_results:
+                    # Mix analysis content with synthesis of other results
                     prompt = f"""The user asked: "{query}"
 
-I have some pre-formatted analysis and some raw tool results to combine:
+I have some pre-formatted analysis and some additional tool results to combine:
 
-PRE-FORMATTED ANALYSIS:
-{chr(10).join(formatted_insights)}
+ANALYSIS:
+{chr(10).join(analysis_content)}
 
-RAW TOOL RESULTS:
-{json.dumps(raw_results, indent=2)}
+ADDITIONAL RESULTS:
+{json.dumps(non_analysis_results, indent=2)}
 
-Please provide a brief introduction and then present the pre-formatted analysis, followed by any additional insights from the raw results. Keep the pre-formatted sections intact."""
+Please provide a brief introduction and then present the analysis, followed by any additional insights from the other results. Keep the analysis sections intact."""
 
                     final_answer = self.llm.call(prompt)
-                    logger.info(f"✅ Combined formatted insights with synthesis ({len(final_answer)} characters)")
+                    logger.info(f"✅ Combined analysis with synthesis ({len(final_answer)} characters)")
                 else:
-                    # Traditional synthesis for agents without formatted insights
+                    # Traditional synthesis for cases without specialized analysis
                     prompt = f"""Based on these tool execution results, provide a comprehensive answer to: "{query}"
 
 Results:
-{json.dumps(results, indent=2)}
+{json.dumps([r for r in results if r.get('agent') != 'VisualizationAgent'], indent=2)}
 
 Provide a clear, helpful response that synthesizes the information from the tools."""
 
@@ -439,13 +500,63 @@ Provide a clear, helpful response that synthesizes the information from the tool
                         # Subsequent agents get context from previous results
                         logger.info(f"🔗 Building context-aware query for {agent_name} based on previous results...")
 
-                        context = "Previous agent results:\n"
-                        for j, prev_result in enumerate(results, 1):
-                            if prev_result.get("success"):
-                                context += f"{j}. {prev_result.get('agent', 'Unknown')}: {json.dumps(prev_result.get('result', {}), indent=2)}\n\n"
+                        # Handle visualization tool specially when following data-producing agents
+                        if agent_name == "visualization":
+                            # Find any previous agent that produced data suitable for visualization
+                            data_agent = None
+                            for prev_result in results:
+                                if prev_result.get("success") and prev_result.get("agent") in ["StockAnalysisAgent", "CostAnalysisAgent", "DataProcessingAgent"]:
+                                    data_agent = prev_result
+                                    break
 
-                        # Let the LLM create a contextual query for this agent
-                        context_prompt = f"""Original user query: "{query}"
+                            if data_agent:
+                                agent_type = data_agent.get("agent", "")
+                                if agent_type == "StockAnalysisAgent":
+                                    # Extract tabular historical data and create a temporary file
+                                    tool_data = data_agent.get("result", {}).get("tool_data", {})
+                                    symbol = tool_data.get("symbol", "Unknown")
+                                    company_name = tool_data.get("company_name", symbol)
+
+                                    # Extract historical data as a table
+                                    historical_data = tool_data.get("historical_data", {})
+                                    if historical_data:
+                                        # Convert to CSV table format
+                                        dates = historical_data.get("dates", [])
+                                        prices = historical_data.get("prices", [])
+                                        volumes = historical_data.get("volumes", [])
+                                        highs = historical_data.get("highs", [])
+                                        lows = historical_data.get("lows", [])
+
+                                        csv_data = "date,price,volume,high,low\n"
+                                        for i in range(len(dates)):
+                                            csv_data += f"{dates[i]},{prices[i]},{volumes[i] if i < len(volumes) else ''},{highs[i] if i < len(highs) else ''},{lows[i] if i < len(lows) else ''}\n"
+
+                                        # Create temporary CSV file
+                                        import tempfile
+                                        import os
+                                        temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
+                                        temp_file.write(csv_data)
+                                        temp_file.close()
+
+                                        agent_query = f"Create a line chart for {company_name} ({symbol}) stock price over time. Use 'date' column for x-axis and 'price' column for y-axis FILE_PATH:{temp_file.name}"
+                                        logger.info(f"🎯 Generated stock visualization with CSV file ({len(dates)} rows) at {temp_file.name}")
+                                    else:
+                                        agent_query = f"No historical data available for {company_name} ({symbol})"
+                                else:
+                                    # Generic data visualization for other agents
+                                    data = data_agent.get("result", {})
+                                    agent_query = f"Create a visualization using this data: {json.dumps(data)}"
+                                    logger.info(f"🎯 Generated generic visualization query for {agent_type}")
+                            else:
+                                agent_query = f"Create a visualization for: {query}"
+                        else:
+                            context = "Previous agent results:\n"
+                            for j, prev_result in enumerate(results, 1):
+                                if prev_result.get("success"):
+                                    context += f"{j}. {prev_result.get('agent', 'Unknown')}: {json.dumps(prev_result.get('result', {}), indent=2)}\n\n"
+
+                            # Let the LLM create a contextual query for this agent
+                            context_prompt = f"""Original user query: "{query}"
 
 {context}
 
@@ -463,8 +574,8 @@ Do NOT use placeholders like [OS version] - use the actual values.
 
 Respond with just the refined query, no additional text."""
 
-                        agent_query = self.llm.call(context_prompt).strip()
-                        logger.info(f"🎯 Context-aware query for {agent_name}: '{agent_query}'")
+                            agent_query = self.llm.call(context_prompt).strip()
+                            logger.info(f"🎯 Context-aware query for {agent_name}: '{agent_query}'")
 
                     agent_result = self.sub_agents[agent_name].execute(agent_query)
 
@@ -482,51 +593,57 @@ Respond with just the refined query, no additional text."""
                 logger.info(f"\n🧠 SYNTHESIZING FINAL ANSWER...")
                 logger.info(f"📝 Combining results from {len(results)} agents...")
 
-                # Check if any agent has pre-formatted insights (like stock analysis)
-                formatted_insights = []
-                raw_results = []
+                # Separate analysis results from visualization results
+                analysis_content = []
+                non_analysis_results = []
 
                 for result in results:
-                    if result.get("result", {}).get("ai_insights", {}).get("analysis"):
-                        # Use the beautifully formatted analysis directly (for stock analysis, etc.)
-                        insight = result["result"]["ai_insights"]["analysis"]
-                        formatted_insights.append(insight)
-                        logger.info(f"📊 Using pre-formatted insight from {result.get('agent', 'unknown')} agent")
+                    if result.get("agent") == "VisualizationAgent":
+                        # Visualization results are displayed separately, not included in final answer
+                        logger.info(f"📊 Visualization result will be displayed separately")
+                        continue
+                    elif result.get("agent") == "StockAnalysisAgent" and result.get("result", {}).get("llm_analysis"):
+                        # Use stock analysis LLM insights directly
+                        analysis_content.append(result["result"]["llm_analysis"])
+                        logger.info(f"📈 Using stock analysis LLM insights")
                     elif result.get("agent") == "ImageAnalysisAgent" and result.get("result", {}).get("analysis"):
-                        # Use image analysis directly without further synthesis
-                        insight = result["result"]["analysis"]
-                        formatted_insights.append(insight)
-                        logger.info(f"🖼️ Using image analysis directly from {result.get('agent', 'unknown')} agent")
+                        # Use image analysis directly
+                        analysis_content.append(result["result"]["analysis"])
+                        logger.info(f"🖼️ Using image analysis directly")
+                    elif result.get("result", {}).get("ai_insights", {}).get("analysis"):
+                        # Use other pre-formatted insights
+                        analysis_content.append(result["result"]["ai_insights"]["analysis"])
+                        logger.info(f"📊 Using pre-formatted insight from {result.get('agent', 'unknown')} agent")
                     else:
-                        # Keep raw results for other agents
-                        raw_results.append(result)
+                        # Keep other results for potential synthesis
+                        non_analysis_results.append(result)
 
-                if formatted_insights and not raw_results:
-                    # If we only have formatted insights, use them directly
-                    final_answer = "\n\n".join(formatted_insights)
-                    logger.info(f"✅ Using pre-formatted insights directly ({len(final_answer)} characters)")
-                elif formatted_insights and raw_results:
-                    # Mix formatted insights with synthesis of raw results
+                if analysis_content and not non_analysis_results:
+                    # If we only have analysis content, use it directly
+                    final_answer = "\n\n".join(analysis_content)
+                    logger.info(f"✅ Using analysis content directly ({len(final_answer)} characters)")
+                elif analysis_content and non_analysis_results:
+                    # Mix analysis content with synthesis of other results
                     prompt = f"""The user asked: "{query}"
 
-I have some pre-formatted analysis and some raw tool results to combine:
+I have some pre-formatted analysis and some additional tool results to combine:
 
-PRE-FORMATTED ANALYSIS:
-{chr(10).join(formatted_insights)}
+ANALYSIS:
+{chr(10).join(analysis_content)}
 
-RAW TOOL RESULTS:
-{json.dumps(raw_results, indent=2)}
+ADDITIONAL RESULTS:
+{json.dumps(non_analysis_results, indent=2)}
 
-Please provide a brief introduction and then present the pre-formatted analysis, followed by any additional insights from the raw results. Keep the pre-formatted sections intact."""
+Please provide a brief introduction and then present the analysis, followed by any additional insights from the other results. Keep the analysis sections intact."""
 
                     final_answer = self.llm.call(prompt)
-                    logger.info(f"✅ Combined formatted insights with synthesis ({len(final_answer)} characters)")
+                    logger.info(f"✅ Combined analysis with synthesis ({len(final_answer)} characters)")
                 else:
-                    # Traditional synthesis for agents without formatted insights
+                    # Traditional synthesis for cases without specialized analysis
                     prompt = f"""Based on these tool execution results, provide a comprehensive answer to: "{query}"
 
 Results:
-{json.dumps(results, indent=2)}
+{json.dumps([r for r in results if r.get('agent') != 'VisualizationAgent'], indent=2)}
 
 Provide a clear, helpful response that synthesizes the information from the tools."""
 

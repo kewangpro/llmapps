@@ -231,6 +231,42 @@ Use only column names that exist in the data above. Use null if a column type do
     def _extract_chart_parameters(self, query: str) -> Dict[str, Any]:
         """Extract chart parameters from query containing data"""
         try:
+            # Check for DATA_START/DATA_END markers first
+            if "DATA_START" in query and "DATA_END" in query:
+                start_marker = query.find("DATA_START") + len("DATA_START")
+                end_marker = query.find("DATA_END")
+                data = query[start_marker:end_marker].strip()
+
+                # Extract chart type from the instruction part
+                instruction = query[:query.find("DATA_START")].lower()
+                chart_type = "line"  # default
+                if "line chart" in instruction or "line" in instruction:
+                    chart_type = "line"
+                elif "bar chart" in instruction or "bar" in instruction:
+                    chart_type = "bar"
+                elif "scatter" in instruction:
+                    chart_type = "scatter"
+
+                # Extract column information
+                x_column = None
+                y_column = None
+                if "x-axis" in instruction and "date" in instruction:
+                    x_column = "date"
+                if "y-axis" in instruction and "price" in instruction:
+                    y_column = "price"
+
+                logger.info(f"📊 Extracted chart type: {chart_type}, data: {len(data)} chars")
+                return {
+                    "data": data,
+                    "chart_type": chart_type,
+                    "options": {
+                        "title": "Stock Price Chart",
+                        "x_column": x_column,
+                        "y_column": y_column
+                    }
+                }
+
+            # Fallback to LLM extraction for other formats
             prompt = f"""Extract chart parameters from this query that contains both data and visualization request.
 
 Query: "{query}"
@@ -242,7 +278,7 @@ The query contains:
 Extract and respond with JSON only:
 {{
     "data": "extracted_data_string",
-    "chart_type": "chart_type_name", 
+    "chart_type": "chart_type_name",
     "options": {{
         "title": "Chart Title",
         "x_column": "column_name_or_null",
@@ -256,13 +292,13 @@ If data format is ambiguous, assume CSV format."""
 
             response = self.llm.call(prompt)
             logger.info(f"📊 Parameter extraction: {response.strip()}")
-            
+
             try:
                 return json.loads(response.strip())
             except json.JSONDecodeError:
                 # Fallback - try to extract data manually
                 logger.warning("📊 Failed to parse parameters, attempting manual extraction")
-                
+
                 # Simple extraction - look for JSON-like patterns
                 if '[{' in query or '{"' in query:
                     # Find JSON data
@@ -279,21 +315,21 @@ If data format is ambiguous, assume CSV format."""
                                 if bracket_count == 0:
                                     end = i + 1
                                     break
-                        
+
                         data = query[start:end]
                         return {
                             "data": data,
                             "chart_type": "bar",
                             "options": {"title": "Data Visualization"}
                         }
-                
+
                 # Fallback for other formats
                 return {
                     "data": query,
-                    "chart_type": "bar", 
+                    "chart_type": "bar",
                     "options": {"title": "Data Visualization"}
                 }
-                
+
         except Exception as e:
             logger.error(f"📊 Error extracting chart parameters: {str(e)}")
             return {
