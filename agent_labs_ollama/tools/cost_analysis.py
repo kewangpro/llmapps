@@ -1,25 +1,18 @@
 """
 Cost Analysis Tool
-Performs cost analysis operations on COGS data files
+Reads and organizes COGS data files for analysis
 """
 
 import pandas as pd
 import chardet
-import plotly.express as px
-import plotly.graph_objects as go
-import matplotlib
-matplotlib.use('Agg')  # Use non-interactive backend
-import matplotlib.pyplot as plt
-import base64
-import io
 import logging
 from typing import Dict, Any
 
 logger = logging.getLogger("MultiAgentSystem")
 
 
-def analyze_cogs_data(file_path: str, query: str, analysis_intent: Dict[str, Any] = None) -> Dict[str, Any]:
-    """Analyze COGS data and generate insights"""
+def analyze_cogs_data(file_path: str) -> Dict[str, Any]:
+    """Read and organize COGS data without visualization"""
     # Detect encoding
     with open(file_path, 'rb') as f:
         raw_data = f.read()
@@ -39,11 +32,10 @@ def analyze_cogs_data(file_path: str, query: str, analysis_intent: Dict[str, Any
     else:
         df = pd.read_csv(file_path, encoding=encoding)
 
-    # Generate cost analysis insights and charts
-    insights = generate_cost_insights(df, query)
-    chart_data = generate_cost_charts(df, insights, query, analysis_intent)
+    # Generate cost analysis insights
+    insights = generate_cost_insights(df)
 
-    # Return structure consistent with visualization tool
+    # Return organized data similar to stock analysis tool
     result = {
         "data_summary": {
             "total_rows": len(df),
@@ -52,21 +44,15 @@ def analyze_cogs_data(file_path: str, query: str, analysis_intent: Dict[str, Any
             "date_range": get_date_range(df)
         },
         "cost_insights": insights,
-        "recommendations": generate_recommendations(df, insights)
+        "recommendations": generate_recommendations(df, insights),
+        # Add raw data for visualization tool (similar to stock historical_data)
+        "monthly_data": extract_monthly_data(df)
     }
-
-    # Add chart data at top level (same as visualization tool)
-    result.update({
-        "chart_html": chart_data.get("chart_html", ""),
-        "chart_image_base64": chart_data.get("chart_image_base64", ""),
-        "chart_config": chart_data.get("chart_config", {}),
-        "message": chart_data.get("message", "Cost analysis completed")
-    })
 
     return result
 
 
-def generate_cost_insights(df: pd.DataFrame, query: str) -> Dict[str, Any]:
+def generate_cost_insights(df: pd.DataFrame) -> Dict[str, Any]:
     insights = {}
     month_columns = [col for col in df.columns if col.startswith('2025-')]
     for col in month_columns:
@@ -132,6 +118,54 @@ def calculate_growth_rates(monthly_costs: pd.Series) -> Dict[str, float]:
     return growth_rates
 
 
+def extract_monthly_data(df: pd.DataFrame) -> Dict[str, Any]:
+    """Extract monthly data in format suitable for visualization tool"""
+    month_columns = [col for col in df.columns if col.startswith('2025-')]
+
+    # Prepare data for different visualization dimensions
+    result = {
+        "months": sorted(month_columns),
+        "total_costs": {},
+        "business_unit_costs": {},
+        "aws_product_costs": {},
+        "service_group_costs": {}
+    }
+
+    # Monthly totals
+    for month in month_columns:
+        df[month] = pd.to_numeric(df[month].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
+        result["total_costs"][month] = float(df[month].sum())
+
+    # Business unit breakdown
+    if 'Business Unit' in df.columns:
+        business_unit_costs = df.groupby('Business Unit')[month_columns].sum()
+        for unit in business_unit_costs.index:
+            if pd.notna(unit):
+                result["business_unit_costs"][unit] = {}
+                for month in month_columns:
+                    result["business_unit_costs"][unit][month] = float(business_unit_costs.loc[unit, month])
+
+    # AWS product breakdown
+    if 'AWS Product' in df.columns:
+        aws_product_costs = df.groupby('AWS Product')[month_columns].sum()
+        for product in aws_product_costs.index:
+            if pd.notna(product):
+                result["aws_product_costs"][product] = {}
+                for month in month_columns:
+                    result["aws_product_costs"][product][month] = float(aws_product_costs.loc[product, month])
+
+    # Service group breakdown
+    if 'Service Group New' in df.columns:
+        service_group_costs = df.groupby('Service Group New')[month_columns].sum()
+        for group in service_group_costs.index:
+            if pd.notna(group):
+                result["service_group_costs"][group] = {}
+                for month in month_columns:
+                    result["service_group_costs"][group][month] = float(service_group_costs.loc[group, month])
+
+    return result
+
+
 def generate_recommendations(df: pd.DataFrame, insights: Dict[str, Any]) -> list:
     recommendations = []
     if 'cost_per_business_unit' in insights:
@@ -152,331 +186,6 @@ def generate_recommendations(df: pd.DataFrame, insights: Dict[str, Any]) -> list
     return recommendations
 
 
-def create_monthly_totals_chart(insights: Dict[str, Any], chart_type: str = 'line') -> Dict[str, Any]:
-    """Create chart showing monthly cost totals (sum of all costs per month)"""
-    try:
-        if 'overall_trends' not in insights or not insights['overall_trends']['total_cost_by_month']:
-            return {"message": "No monthly cost data available"}
-
-        monthly_data = insights['overall_trends']['total_cost_by_month']
-        months = list(monthly_data.keys())
-        costs = list(monthly_data.values())
-
-        # Create Plotly chart
-        if chart_type == 'bar':
-            fig = px.bar(x=months, y=costs,
-                        title="Total Costs Per Month",
-                        labels={'x': 'Month', 'y': 'Total Cost ($)'})
-        else:  # default to line
-            fig = px.line(x=months, y=costs,
-                        title="Total Costs Per Month",
-                        labels={'x': 'Month', 'y': 'Total Cost ($)'})
-            fig.update_traces(mode='lines+markers')
-
-        chart_html = fig.to_html(include_plotlyjs='cdn')
-
-        # Create matplotlib version for base64
-        plt.figure(figsize=(12, 6))
-        if chart_type == 'bar':
-            plt.bar(months, costs)
-        else:
-            plt.plot(months, costs, marker='o', linewidth=2, markersize=6)
-
-        plt.title("Total Costs Per Month")
-        plt.xlabel("Month")
-        plt.ylabel("Total Cost ($)")
-        plt.xticks(rotation=45)
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
-
-        # Convert to base64
-        buffer = io.BytesIO()
-        plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
-        buffer.seek(0)
-        img_base64 = base64.b64encode(buffer.getvalue()).decode()
-        plt.close()
-
-        return {
-            "chart_html": chart_html,
-            "chart_image_base64": img_base64,
-            "chart_config": {"x_column": "Month", "y_column": "Total_Cost", "chart_type": chart_type, "title": "Total Costs Per Month"},
-            "message": f"Created {chart_type} chart showing total costs for {len(months)} months"
-        }
-
-    except Exception as e:
-        return {"message": f"Failed to create monthly totals chart: {str(e)}"}
-
-
-def generate_cost_charts(df: pd.DataFrame, insights: Dict[str, Any], query: str, analysis_intent: Dict[str, Any] = None) -> Dict[str, Any]:
-    """Generate cost analysis charts based on the query, insights, and LLM intent analysis"""
-    try:
-        # Find month columns
-        month_columns = [col for col in df.columns if col.startswith('2025-')]
-        if not month_columns:
-            return {"message": "No month data found for charting"}
-
-        # Use LLM intent analysis if available, otherwise fall back to string matching
-        if analysis_intent:
-            dimension = analysis_intent.get('dimension', 'business_unit')
-            chart_type = analysis_intent.get('chart_type', 'line')
-            logger.info(f"📊 Using LLM intent: dimension={dimension}, chart_type={chart_type}")
-        else:
-            # Fallback to original string matching logic
-            if "business unit" in query.lower():
-                dimension = 'business_unit'
-            elif "aws product" in query.lower():
-                dimension = 'aws_product'
-            elif "service group" in query.lower():
-                dimension = 'service_group'
-            elif "per month" in query.lower() or "monthly" in query.lower():
-                dimension = 'monthly_totals'
-            else:
-                dimension = 'business_unit'  # default
-            chart_type = 'line'  # default
-
-        # Create chart based on determined dimension
-        if dimension == 'monthly_totals' and 'overall_trends' in insights:
-            # Monthly totals chart - sum of all costs per month
-            return create_monthly_totals_chart(insights, chart_type)
-        elif dimension == 'business_unit' and 'cost_per_business_unit' in insights:
-            # Create business unit monthly trends line chart
-            monthly_trends = insights['cost_per_business_unit']['monthly_trends']
-            if monthly_trends:
-                # Get business unit total costs for ordering
-                business_unit_totals = insights['cost_per_business_unit']['top_business_units']
-
-                # Convert monthly trends to DataFrame format like visualization expects
-                data_rows = []
-                for month, units_costs in monthly_trends.items():
-                    for unit, cost in units_costs.items():
-                        data_rows.append({
-                            'Month': month,
-                            'Business_Unit': unit,
-                            'Cost': cost
-                        })
-
-                trends_df = pd.DataFrame(data_rows)
-
-                # Order business units by total cost (highest to lowest) for legend ordering
-                unit_order = [unit for unit, _ in sorted(business_unit_totals.items(), key=lambda x: x[1], reverse=True)
-                             if unit in trends_df['Business_Unit'].unique()]
-
-                # Create categorical ordering to control legend order
-                trends_df['Business_Unit'] = pd.Categorical(trends_df['Business_Unit'], categories=unit_order, ordered=True)
-
-                # Create Plotly line chart using px.line like visualization does
-                fig = px.line(trends_df, x='Month', y='Cost', color='Business_Unit',
-                            title="Cost Trends by Business Unit Over Time",
-                            labels={'Month': 'Month', 'Cost': 'Cost ($)', 'Business_Unit': 'Business Unit'},
-                            category_orders={'Business_Unit': unit_order})
-
-                chart_html = fig.to_html(include_plotlyjs='cdn')
-
-                # Create matplotlib version for base64 - same style as visualization
-                plt.figure(figsize=(12, 8))
-                # Use the same cost-ordered unit list for consistent legend ordering
-                for unit in unit_order:
-                    if pd.notna(unit) and unit in trends_df['Business_Unit'].values:  # Skip NaN values
-                        unit_data = trends_df[trends_df['Business_Unit'] == unit].sort_values('Month')
-                        plt.plot(unit_data['Month'], unit_data['Cost'],
-                               marker='o', linewidth=2, markersize=4, label=unit)
-
-                plt.title("Cost Trends by Business Unit Over Time")
-                plt.xlabel("Month")
-                plt.ylabel("Cost ($)")
-                plt.legend()
-                plt.xticks(rotation=45)
-                plt.grid(True, alpha=0.3)
-                plt.tight_layout()
-
-                # Convert to base64
-                buffer = io.BytesIO()
-                plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
-                buffer.seek(0)
-                img_base64 = base64.b64encode(buffer.getvalue()).decode()
-                plt.close()
-
-                return {
-                    "chart_html": chart_html,
-                    "chart_image_base64": img_base64,
-                    "chart_config": {"x_column": "Month", "y_column": "Cost", "color_column": "Business_Unit", "title": "Cost Trends by Business Unit Over Time"},
-                    "message": f"Created line chart with {len(trends_df)} data points across {trends_df['Business_Unit'].nunique()} business units"
-                }
-
-        elif dimension == 'aws_product' and 'cost_per_aws_product' in insights:
-            # Create AWS product monthly trends line chart using same approach as visualization
-            monthly_trends = insights['cost_per_aws_product']['monthly_trends']
-            if monthly_trends:
-                # Get AWS product total costs for ordering
-                aws_product_totals = insights['cost_per_aws_product']['top_aws_products']
-
-                # Convert monthly trends to DataFrame format like visualization expects
-                data_rows = []
-                for month, products_costs in monthly_trends.items():
-                    for product, cost in products_costs.items():
-                        data_rows.append({
-                            'Month': month,
-                            'AWS_Product': product,
-                            'Cost': cost
-                        })
-
-                trends_df = pd.DataFrame(data_rows)
-
-                # Order AWS products by total cost (highest to lowest) for legend ordering
-                product_order = [product for product, _ in sorted(aws_product_totals.items(), key=lambda x: x[1], reverse=True)
-                               if product in trends_df['AWS_Product'].unique()]
-
-                # Create categorical ordering to control legend order
-                trends_df['AWS_Product'] = pd.Categorical(trends_df['AWS_Product'], categories=product_order, ordered=True)
-
-                # Create Plotly line chart using px.line like visualization does
-                fig = px.line(trends_df, x='Month', y='Cost', color='AWS_Product',
-                            title="Cost Trends by AWS Product Over Time",
-                            labels={'Month': 'Month', 'Cost': 'Cost ($)', 'AWS_Product': 'AWS Product'},
-                            category_orders={'AWS_Product': product_order})
-
-                chart_html = fig.to_html(include_plotlyjs='cdn')
-
-                # Create matplotlib version for base64 - same style as visualization
-                plt.figure(figsize=(12, 8))
-                # Use the same cost-ordered product list for consistent legend ordering
-                for product in product_order:
-                    if pd.notna(product) and product in trends_df['AWS_Product'].values:  # Skip NaN values
-                        product_data = trends_df[trends_df['AWS_Product'] == product].sort_values('Month')
-                        plt.plot(product_data['Month'], product_data['Cost'],
-                               marker='o', linewidth=2, markersize=4, label=product)
-
-                plt.title("Cost Trends by AWS Product Over Time")
-                plt.xlabel("Month")
-                plt.ylabel("Cost ($)")
-                plt.legend()
-                plt.xticks(rotation=45)
-                plt.grid(True, alpha=0.3)
-                plt.tight_layout()
-
-                # Convert to base64
-                buffer = io.BytesIO()
-                plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
-                buffer.seek(0)
-                img_base64 = base64.b64encode(buffer.getvalue()).decode()
-                plt.close()
-
-                return {
-                    "chart_html": chart_html,
-                    "chart_image_base64": img_base64,
-                    "chart_config": {"x_column": "Month", "y_column": "Cost", "color_column": "AWS_Product", "title": "Cost Trends by AWS Product Over Time"},
-                    "message": f"Created line chart with {len(trends_df)} data points across {trends_df['AWS_Product'].nunique()} series"
-                }
-
-        elif dimension == 'service_group' and 'cost_per_service_group' in insights:
-            # Create service group monthly trends line chart using same approach as visualization
-            monthly_trends = insights['cost_per_service_group']['monthly_trends']
-            if monthly_trends:
-                # Get service group total costs for ordering
-                service_group_totals = insights['cost_per_service_group']['top_service_groups']
-
-                # Convert monthly trends to DataFrame format like visualization expects
-                data_rows = []
-                for month, groups_costs in monthly_trends.items():
-                    for group, cost in groups_costs.items():
-                        data_rows.append({
-                            'Month': month,
-                            'Service_Group': group,
-                            'Cost': cost
-                        })
-
-                trends_df = pd.DataFrame(data_rows)
-
-                # Order service groups by total cost (highest to lowest) for legend ordering
-                group_order = [group for group, _ in sorted(service_group_totals.items(), key=lambda x: x[1], reverse=True)
-                              if group in trends_df['Service_Group'].unique()]
-
-                # Create categorical ordering to control legend order
-                trends_df['Service_Group'] = pd.Categorical(trends_df['Service_Group'], categories=group_order, ordered=True)
-
-                # Create Plotly line chart using px.line like visualization does
-                fig = px.line(trends_df, x='Month', y='Cost', color='Service_Group',
-                            title="Cost Trends by Service Group Over Time",
-                            labels={'Month': 'Month', 'Cost': 'Cost ($)', 'Service_Group': 'Service Group'},
-                            category_orders={'Service_Group': group_order})
-
-                chart_html = fig.to_html(include_plotlyjs='cdn')
-
-                # Create matplotlib version for base64 - same style as visualization
-                plt.figure(figsize=(12, 8))
-                # Use the same cost-ordered group list for consistent legend ordering
-                for group in group_order:
-                    if pd.notna(group) and group in trends_df['Service_Group'].values:  # Skip NaN values
-                        group_data = trends_df[trends_df['Service_Group'] == group].sort_values('Month')
-                        plt.plot(group_data['Month'], group_data['Cost'],
-                               marker='o', linewidth=2, markersize=4, label=group)
-
-                plt.title("Cost Trends by Service Group Over Time")
-                plt.xlabel("Month")
-                plt.ylabel("Cost ($)")
-                plt.legend()
-                plt.xticks(rotation=45)
-                plt.grid(True, alpha=0.3)
-                plt.tight_layout()
-
-                # Convert to base64
-                buffer = io.BytesIO()
-                plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
-                buffer.seek(0)
-                img_base64 = base64.b64encode(buffer.getvalue()).decode()
-                plt.close()
-
-                return {
-                    "chart_html": chart_html,
-                    "chart_image_base64": img_base64,
-                    "chart_config": {"x_column": "Month", "y_column": "Cost", "color_column": "Service_Group", "title": "Cost Trends by Service Group Over Time"},
-                    "message": f"Created line chart with {len(trends_df)} data points across {trends_df['Service_Group'].nunique()} service groups"
-                }
-
-        # Default: monthly cost trends
-        if 'overall_trends' in insights and insights['overall_trends']['total_cost_by_month']:
-            monthly_data = insights['overall_trends']['total_cost_by_month']
-            months = list(monthly_data.keys())
-            costs = list(monthly_data.values())
-
-            # Create Plotly line chart
-            fig = px.line(x=months, y=costs,
-                        title="Monthly Cost Trends",
-                        labels={'x': 'Month', 'y': 'Total Cost ($)'})
-            fig.update_traces(mode='lines+markers')
-
-            chart_html = fig.to_html(include_plotlyjs='cdn')
-
-            # Create matplotlib version for base64
-            plt.figure(figsize=(12, 6))
-            plt.plot(months, costs, marker='o', linewidth=2, markersize=6)
-            plt.title("Monthly Cost Trends")
-            plt.xlabel("Month")
-            plt.ylabel("Total Cost ($)")
-            plt.xticks(rotation=45)
-            plt.grid(True, alpha=0.3)
-            plt.tight_layout()
-
-            # Convert to base64
-            buffer = io.BytesIO()
-            plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
-            buffer.seek(0)
-            img_base64 = base64.b64encode(buffer.getvalue()).decode()
-            plt.close()
-
-            return {
-                "chart_html": chart_html,
-                "chart_image_base64": img_base64,
-                "chart_config": {"chart_type": "line", "months": len(months)},
-                "message": f"Created monthly cost trend chart with {len(months)} months"
-            }
-
-        return {"message": "No suitable data found for charting"}
-
-    except Exception as e:
-        return {"message": f"Chart generation failed: {str(e)}"}
-
-
 def main():
     """Main function for command line execution"""
     import sys
@@ -491,8 +200,6 @@ def main():
         # Parse JSON arguments
         args = json.loads(sys.argv[1])
         file_path = args.get("file_path", "")
-        query = args.get("query", "")
-        analysis_intent = args.get("analysis_intent", None)
 
         if not file_path:
             raise ValueError("file_path is required")
@@ -501,17 +208,16 @@ def main():
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
 
-        # Analyze the cost data
-        result = analyze_cogs_data(file_path, query, analysis_intent)
+        # Analyze the cost data (no query or analysis_intent needed)
+        result = analyze_cogs_data(file_path)
 
-        # Format successful response (same structure as visualization tool)
+        # Format successful response (similar to stock analysis tool)
         response = {
             "tool": "cost_analysis",
             "success": True,
             "file_path": file_path,
-            "query": query,
             "timestamp": datetime.now().isoformat(),
-            **result  # Spread chart fields to top level like visualization tool
+            **result
         }
 
         print(json.dumps(response, indent=2))
