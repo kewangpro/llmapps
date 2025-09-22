@@ -135,19 +135,24 @@ def create_line_chart(df: pd.DataFrame, options: Dict[str, Any]) -> Dict[str, An
     # Create Plotly chart
     if color_col and color_col in df.columns:
         # Multiple time series (one line per category)
+        # Sort categories by total cost/value (descending) for business unit analysis
+        category_totals = df.groupby(color_col)[y_col].sum().sort_values(ascending=False)
+        category_order = category_totals.index.tolist()
+
         fig = px.line(df, x=x_col, y=y_col, color=color_col, title=title,
-                     labels={x_col: x_col.replace('_', ' ').title(), 
+                     category_orders={color_col: category_order},
+                     labels={x_col: x_col.replace('_', ' ').title(),
                             y_col: y_col.replace('_', ' ').title()})
-        
+
         # Sort by x-axis to ensure proper line connections
         df_sorted = df.sort_values(x_col)
-        
-        # Create matplotlib version with multiple lines
+
+        # Create matplotlib version with multiple lines ordered by total cost
         plt.figure(figsize=(12, 8))
-        for category in df_sorted[color_col].unique():
+        for category in category_order:  # Use ordered categories
             if pd.notna(category):  # Skip NaN values
                 category_data = df_sorted[df_sorted[color_col] == category]
-                plt.plot(category_data[x_col], category_data[y_col], 
+                plt.plot(category_data[x_col], category_data[y_col],
                         marker='o', label=category, linewidth=2, markersize=4)
         
         plt.title(title)
