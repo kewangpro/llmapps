@@ -79,12 +79,12 @@ ollama_client = httpx.AsyncClient(base_url=OLLAMA_BASE_URL, timeout=30.0)
 # Initialize Multi-Agent System
 multi_agent_system = None
 
-def get_multi_agent_system(model: str = "gemma3:latest", provider: str = "ollama") -> MultiAgentSystem:
+def get_multi_agent_system() -> MultiAgentSystem:
     """Get or create multi-agent system instance"""
     global multi_agent_system
     if multi_agent_system is None:
-        logger.info(f"🚀 Initializing Multi-Agent System with {provider}/{model}")
-        multi_agent_system = MultiAgentSystem(model=model, provider=provider)
+        logger.info("🚀 Initializing Multi-Agent System")
+        multi_agent_system = MultiAgentSystem()
     return multi_agent_system
 
 def update_model_selection(model: str, provider: str):
@@ -98,29 +98,7 @@ def update_model_selection(model: str, provider: str):
     # Reset multi_agent_system to use new configuration
     multi_agent_system = None
 
-# Ollama integration
-async def stream_ollama_response(messages: List[Dict], model: str = "gemma3:latest"):
-    """Stream response from Ollama"""
-    try:
-        async with ollama_client.stream(
-            'POST',
-            '/api/chat',
-            json={
-                "model": model,
-                "messages": messages,
-                "stream": True
-            }
-        ) as response:
-            async for line in response.aiter_lines():
-                if line:
-                    try:
-                        chunk = json.loads(line)
-                        if not chunk.get('done', False):
-                            yield chunk.get('message', {}).get('content', '')
-                    except json.JSONDecodeError:
-                        continue
-    except Exception as e:
-        yield f"Error: {str(e)}"
+# File handling utilities
 
 def handle_attached_file(attached_file_data: Dict[str, Any], file_content: str) -> Optional[Dict[str, str]]:
     """Handle attached file by saving it to a temporary location"""
@@ -279,7 +257,9 @@ async def get_models():
 async def select_model(model_data: dict):
     """Change the active model and provider"""
     try:
-        full_model = model_data.get("model", "ollama/gemma3:latest")
+        full_model = model_data.get("model")
+        if not full_model:
+            return {"error": "Model parameter is required"}
 
         # Parse provider and model from format "provider/model"
         if "/" in full_model:
@@ -318,7 +298,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
 
             user_message = message_data.get("message", "")
             selected_tools = message_data.get("tools", [])
-            model = message_data.get("model", "gemma3:latest")
+            model = message_data.get("model")
             attached_file_data = message_data.get("attachedFile", None)
 
             # Debug: Log ALL received data
@@ -360,10 +340,13 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                 if "/" in model:
                     provider, model_name = model.split("/", 1)
                 else:
-                    provider = "ollama"
-                    model_name = model
+                    raise ValueError(f"Invalid model format: '{model}'. Expected 'provider/model' format.")
 
-                mas = get_multi_agent_system(model_name, provider)
+                # Ensure LLM is configured with the selected model
+                from llm_config import llm_config
+                llm_config.configure(provider, model_name)
+
+                mas = get_multi_agent_system()
 
                 # Create a callback function for real-time messaging
                 async def send_response_callback(response_type: str, content: str = "", **kwargs):

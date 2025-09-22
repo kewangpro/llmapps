@@ -22,9 +22,8 @@ logger = logging.getLogger("MultiAgentSystem")
 class MultiAgentSystem:
     """Main multi-agent system interface"""
 
-    def __init__(self, model: str = "gemma3:latest", provider: str = "ollama"):
-        # Configure shared LLM
-        llm_config.configure(provider, model)
+    def __init__(self):
+        # LLM configuration will be set by frontend model selection
         self.orchestrator = OrchestratorAgent()
 
     def execute_query(self, query: str, selected_tools: List[str] = None, attached_file: Dict = None) -> Dict[str, Any]:

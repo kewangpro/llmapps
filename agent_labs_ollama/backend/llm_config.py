@@ -31,7 +31,7 @@ class LLMConfig:
             if self._provider in DEFAULT_MODELS:
                 model = list(DEFAULT_MODELS[self._provider].keys())[0]
             else:
-                model = "gemma3:latest"  # fallback
+                raise ValueError(f"No default model available for provider: {self._provider}")
 
         self._model = model
         self._llm = create_llm(self._provider, self._model)
@@ -42,18 +42,17 @@ class LLMConfig:
     def get_llm(self):
         """Get the configured LLM instance"""
         if self._llm is None:
-            # Default configuration
-            logger.info("🔧 No LLM configured, using default (ollama/gemma3:latest)")
-            self.configure()
+            # Wait for frontend to send model selection - no auto-default
+            raise RuntimeError("No LLM configured. Waiting for frontend model selection.")
         return self._llm
 
     def get_provider(self) -> str:
         """Get current provider"""
-        return self._provider or "ollama"
+        return self._provider
 
     def get_model(self) -> str:
         """Get current model"""
-        return self._model or "gemma3:latest"
+        return self._model
 
     def get_available_models(self):
         """Get all available models grouped by provider"""
