@@ -80,8 +80,12 @@ If no clear stock symbol is found, use "SPY" (S&P 500 ETF) as default."""
             if tool_result.get("success"):
                 # Use LLM to analyze the stock data returned by the tool
                 llm_analysis = self._analyze_stock_data_with_llm(tool_result, query)
+
+                # Format tool_data as CSV for downstream agents
+                formatted_tool_data = self._format_tool_data_as_csv(tool_result)
+
                 result = {
-                    "tool_data": tool_result,  # Raw data from tool
+                    "tool_data": formatted_tool_data,  # CSV formatted data for chaining
                     "llm_analysis": llm_analysis  # LLM insights
                 }
             else:
@@ -254,4 +258,37 @@ Format your response in a clear, professional manner that would be helpful for a
         except Exception as e:
             logger.error(f"📈 Failed to generate LLM analysis: {str(e)}")
             return f"Unable to generate analysis at this time: {str(e)}"
+
+    def _format_tool_data_as_csv(self, tool_result: Dict[str, Any]) -> str:
+        """Format tool result as CSV string for downstream agents"""
+        try:
+            historical_data = tool_result.get("historical_data", {})
+            if not historical_data:
+                return "No historical data available"
+
+            dates = historical_data.get("dates", [])
+            prices = historical_data.get("prices", [])
+            volumes = historical_data.get("volumes", [])
+            highs = historical_data.get("highs", [])
+            lows = historical_data.get("lows", [])
+
+            if not dates or not prices:
+                return "Insufficient data for CSV export"
+
+            # Build CSV string
+            csv_data = "date,price,volume,high,low\n"
+            for i in range(len(dates)):
+                date = dates[i] if i < len(dates) else ""
+                price = prices[i] if i < len(prices) else ""
+                volume = volumes[i] if i < len(volumes) else ""
+                high = highs[i] if i < len(highs) else ""
+                low = lows[i] if i < len(lows) else ""
+                csv_data += f"{date},{price},{volume},{high},{low}\n"
+
+            logger.info(f"📊 Formatted {len(dates)} rows of stock data as CSV")
+            return csv_data
+
+        except Exception as e:
+            logger.error(f"📈 Failed to format tool data as CSV: {str(e)}")
+            return f"Error formatting data: {str(e)}"
 

@@ -54,14 +54,60 @@ class ImageAnalysisAgent(BaseAgent):
             # Step 2: Use LLM to analyze the image content from the tool's data
             logger.info(f"🖼️ Tool successful, now using LLM to analyze image content")
 
-            # Determine analysis type from clean query
-            analysis_type = "comprehensive"  # Default
-            if "text" in clean_query.lower() or "ocr" in clean_query.lower():
-                analysis_type = "text"
-            elif "metadata" in clean_query.lower() or "exif" in clean_query.lower():
-                analysis_type = "metadata"
-            elif "basic" in clean_query.lower():
-                analysis_type = "basic"
+            # Use LLM to determine user intent and what they want
+            intent_prompt = f"""Analyze this user request: "{clean_query}"
+
+Determine what the user wants from the image analysis. Choose ONE of these response types:
+
+1. "raw_exif" - User wants just the raw EXIF data without interpretation (e.g., "show EXIF data", "display EXIF", "get EXIF info")
+2. "text" - User wants text extraction/OCR (e.g., "read text", "extract text", "what does it say")
+3. "metadata" - User wants technical analysis including EXIF interpretation (e.g., "analyze metadata", "technical details")
+4. "basic" - User wants simple description (e.g., "what is this", "describe briefly")
+5. "comprehensive" - User wants detailed analysis (e.g., "analyze this image", "tell me about this")
+
+Respond with just the type name (e.g., "raw_exif")."""
+
+            try:
+                analysis_type = self.llm.call(intent_prompt).strip().lower()
+                # Validate response
+                valid_types = ["raw_exif", "text", "metadata", "basic", "comprehensive"]
+                if analysis_type not in valid_types:
+                    analysis_type = "comprehensive"  # Default fallback
+            except Exception:
+                analysis_type = "comprehensive"  # Default fallback
+
+            # Get image metadata from tool result (needed for all analysis types)
+            file_info = tool_result.get("file_info", {})
+            filename = file_info.get("filename", "image")
+            file_size = file_info.get("file_size_mb", "unknown")
+            dimensions = f"{file_info.get('width', 'unknown')}x{file_info.get('height', 'unknown')}"
+            exif_data = file_info.get("exif", {})
+
+            # Handle raw EXIF request - return data directly without LLM analysis
+            if analysis_type == "raw_exif":
+                if exif_data:
+                    exif_output = "EXIF Data:\n"
+                    for key, value in exif_data.items():
+                        exif_output += f"{key}: {value}\n"
+                else:
+                    exif_output = "No EXIF data available in this image."
+
+                result = {
+                    "tool_data": exif_output,
+                    "llm_analysis": exif_output,
+                    "image_data": tool_result.get("image_data", {}),
+                    "file_info": tool_result.get("file_info", {}),
+                    "metadata": tool_result
+                }
+
+                return {
+                    "agent": "ImageAnalysisAgent",
+                    "tool": "image_analysis",
+                    "parameters": {"image_path": file_path, "analysis_type": analysis_type},
+                    "result": result,
+                    "success": True,
+                    "timestamp": datetime.now().isoformat()
+                }
 
             # Prepare analysis prompt based on type
             analysis_prompts = {
@@ -102,11 +148,6 @@ Focus on observable technical characteristics."""
 
             analysis_prompt = analysis_prompts.get(analysis_type, analysis_prompts["comprehensive"])
 
-            # Get image metadata from tool result
-            file_info = tool_result.get("file_info", {})
-            filename = file_info.get("filename", "image")
-            file_size = file_info.get("file_size_mb", "unknown")
-            dimensions = f"{file_info.get('width', 'unknown')}x{file_info.get('height', 'unknown')}"
 
             # Get the base64 image data for actual visual analysis
             image_data = tool_result.get("image_data", {})
@@ -116,14 +157,21 @@ Focus on observable technical characteristics."""
             if not base64_data:
                 logger.warning("🖼️ No base64 image data available, falling back to metadata analysis")
                 # Create comprehensive prompt with image context
+                exif_info = ""
+                if exif_data:
+                    exif_info = f"\nEXIF Data:\n"
+                    for key, value in exif_data.items():
+                        exif_info += f"- {key}: {value}\n"
+                else:
+                    exif_info = "\nEXIF Data: No EXIF data available in this image\n"
+
                 full_prompt = f"""{analysis_prompt}
 
 Image Context:
 - Filename: {filename}
 - File size: {file_size} MB
 - Dimensions: {dimensions}
-- Format: {file_info.get('format', 'unknown')}
-
+- Format: {file_info.get('format', 'unknown')}{exif_info}
 Note: This analysis is based on the image file metadata and context only. The image contains visual content that would be analyzed if the image data was available."""
 
                 # Use LLM to generate analysis
@@ -132,14 +180,21 @@ Note: This analysis is based on the image file metadata and context only. The im
                 logger.info("🖼️ Using base64 image data for visual content analysis")
 
                 # Create prompt for actual image analysis with visual content
+                exif_info = ""
+                if exif_data:
+                    exif_info = f"\nEXIF Data:\n"
+                    for key, value in exif_data.items():
+                        exif_info += f"- {key}: {value}\n"
+                else:
+                    exif_info = "\nEXIF Data: No EXIF data available in this image\n"
+
                 visual_prompt = f"""{analysis_prompt}
 
 Image Technical Details:
 - Filename: {filename}
 - File size: {file_size} MB
 - Dimensions: {dimensions}
-- Format: {file_info.get('format', 'unknown')}
-
+- Format: {file_info.get('format', 'unknown')}{exif_info}
 Please analyze the actual visual content of this image and provide detailed insights."""
 
                 # Use LLM with image data for visual analysis
@@ -154,10 +209,14 @@ Please analyze the actual visual content of this image and provide detailed insi
 [Image data is available ({file_size} MB, {dimensions}) but this LLM cannot process visual content. Analysis limited to technical metadata.]"""
                     ai_analysis = self.llm.call(fallback_prompt)
 
-            # Combine tool result with AI analysis
-            result = tool_result.copy()
-            result["ai_analysis"] = ai_analysis
-            result["analysis_type"] = analysis_type
+            # Standardize result to match contract schema
+            result = {
+                "tool_data": ai_analysis,          # MUST: text analysis as tool_data for chaining
+                "llm_analysis": ai_analysis,       # MUST: text analysis output
+                "image_data": tool_result.get("image_data", {}),  # Image data for frontend display
+                "file_info": tool_result.get("file_info", {}),   # File info for frontend display
+                "metadata": tool_result            # Additional tool metadata
+            }
 
             return {
                 "agent": "ImageAnalysisAgent",

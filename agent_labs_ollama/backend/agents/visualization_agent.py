@@ -125,63 +125,48 @@ class VisualizationAgent(BaseAgent):
     def _determine_chart_parameters(self, query: str, data: str) -> Dict[str, Any]:
         """Determine chart type and options from query and data analysis"""
         try:
-            # Check for explicit chart type requests first
-            chart_type_keywords = {
-                "line": ["line chart", "line plot", "trends over time", "time series", "temporal trend"],
-                "bar": ["bar chart", "bar plot", "categorical comparison", "compare categories"],
-                "scatter": ["scatter plot", "scatter chart", "correlation", "relationship"],
-                "pie": ["pie chart", "pie plot", "parts of whole", "distribution"],
-                "histogram": ["histogram", "distribution of", "frequency"],
-                "box": ["box plot", "box chart", "statistical distribution"],
-                "heatmap": ["heatmap", "heat map", "correlation matrix"],
-                "area": ["area chart", "area plot", "cumulative"],
-                "bubble": ["bubble chart", "bubble plot", "three variables"],
-                "treemap": ["treemap", "tree map", "hierarchical"]
-            }
-            
-            query_lower = query.lower()
-            detected_chart_type = "bar"  # default fallback
-            
-            # Check for explicit chart type mentions
-            for chart_type, keywords in chart_type_keywords.items():
-                if any(keyword in query_lower for keyword in keywords):
-                    detected_chart_type = chart_type
-                    logger.info(f"📊 Detected explicit chart type request: {chart_type}")
-                    break
+            # Let LLM decide chart type based on query and data context - no keyword detection
             
             # Analyze the data to understand its structure
             data_preview = data[:500] if len(data) > 500 else data
             
-            prompt = f"""You are analyzing a data visualization request. Look at the user's query and the data structure to determine the best chart configuration.
+            prompt = f"""You are a data visualization expert. Analyze the user's query and data to determine the BEST chart type and configuration.
 
 USER QUERY: "{query}"
-REQUESTED CHART TYPE: "{detected_chart_type}"
 
 DATA STRUCTURE (first 500 characters):
 {data_preview}
 
-Your task:
-1. Look at the column names in the data
-2. Understand what the user wants to visualize from their query
-3. Map the query to appropriate columns
+CHART TYPE SELECTION RULES:
+- Cost/spending trends over time = LINE CHART (multiple lines for different categories)
+- Stock price trends over time = LINE CHART
+- Comparing categories/values = BAR CHART
+- Distribution/parts of whole = PIE CHART
+- Correlation between variables = SCATTER PLOT
+- Statistical distribution = HISTOGRAM or BOX PLOT
 
-For the query "{query}":
-- "cost trends" means find a column with cost/price/amount data for y-axis
-- "over time" means find a time/date/month column for x-axis  
-- "per business unit" means find a category column for grouping multiple lines
+COST ANALYSIS SPECIAL HANDLING:
+- If query mentions "cost", "spending", "COGS" AND "trends", "over time", "monthly" → USE LINE CHART
+- For cost analysis: x-axis = time/month column, y-axis = cost column, color = category/service
+- Title should be like "Cost Trends by [Category] Over Time"
+
+Your task:
+1. Determine the BEST chart type for this specific query and data
+2. Find the right columns in the data
+3. Create an appropriate title
 
 RESPOND WITH VALID JSON ONLY - NO OTHER TEXT:
 {{
-    "chart_type": "{detected_chart_type}",
+    "chart_type": "line|bar|pie|scatter|histogram|box|heatmap|area",
     "options": {{
-        "title": "descriptive title based on query",
+        "title": "descriptive title based on query and data",
         "x_column": "exact_column_name_from_data",
         "y_column": "exact_column_name_from_data",
         "color_column": "exact_column_name_from_data_or_null"
     }}
 }}
 
-Use only column names that exist in the data above. Use null if a column type doesn't exist."""
+Use only column names that exist in the data. Use null if a column doesn't exist."""
 
             response = self.llm.call(prompt)
             logger.info(f"📊 Raw LLM response: '{response}'")
@@ -199,10 +184,7 @@ Use only column names that exist in the data above. Use null if a column type do
                 
                 try:
                     result = json.loads(json_part)
-                    # Ensure the detected chart type is preserved
-                    if result.get("chart_type") != detected_chart_type:
-                        logger.info(f"📊 Enforcing detected chart type: {detected_chart_type}")
-                        result["chart_type"] = detected_chart_type
+                    # Trust the LLM's chart type decision
                     logger.info(f"📊 Successfully parsed chart parameters: {result}")
                     return result
                 except json.JSONDecodeError as e:

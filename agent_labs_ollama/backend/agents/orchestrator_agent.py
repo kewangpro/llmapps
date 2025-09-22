@@ -43,17 +43,10 @@ class OrchestratorAgent(BaseAgent):
             logger.info(f"\n🧠 ORCHESTRATOR ANALYZING QUERY: '{query}'")
             logger.info(f"📋 Available tools: {available_tools}")
 
-            tools_desc = {
-                "file_search": "search for files and directories",
-                "web_search": "search the internet for information",
-                "system_info": "get system information (CPU, memory, disk, network)",
-                "cost_analysis": "analyze cost data, COGS, and spending patterns",
-                "data_processing": "process, analyze, or transform data",
-                "presentation": "generate PowerPoint presentations from text or files",
-                "image_analysis": "analyze image files for content, text, and metadata",
-                "stock_analysis": "analyze stock market data and performance using Yahoo Finance",
-                "visualization": "create charts and visualizations from data"
-            }
+            # Get tool descriptions from MultiAgentSystem
+            from multi_agent_system import MultiAgentSystem
+            all_tools = MultiAgentSystem.get_available_tools()
+            tools_desc = {tool["name"]: tool["short_description"] for tool in all_tools}
 
             available_desc = [f"- {tool}: {tools_desc[tool]}" for tool in available_tools if tool in tools_desc]
 
@@ -83,6 +76,11 @@ IMPORTANT RULES FOR STOCK ANALYSIS:
 - For stock-related queries (company names, stock symbols, market analysis, stock performance), ALWAYS use BOTH "stock_analysis" AND "visualization" tools together
 - Stock analysis provides data and insights, visualization creates charts
 - Examples: "show AAPL performance", "analyze Tesla stock", "Microsoft stock chart" → use both tools
+
+IMPORTANT RULES FOR COST ANALYSIS:
+- For cost-related queries (COGS analysis, cost trends, spending patterns, cost per business unit), ALWAYS use BOTH "cost_analysis" AND "visualization" tools together
+- Cost analysis provides data and insights, visualization creates charts
+- Examples: "show cost trends", "analyze spending per business unit", "cost analysis chart" → use both tools
 
 Important: If this is a conversational query (greetings, thanks, general chat) that doesn't require any tools, respond with "NONE".
 
@@ -254,61 +252,34 @@ Respond as the orchestrator agent in first person."""
                         # Add attached file information for relevant agents
                         if attached_file and agent_name in ["image_analysis", "data_processing", "presentation", "visualization", "cost_analysis"]:
                             file_path = attached_file.get("path", "")
+                            logger.info(f"🔍 Debug attached_file: {attached_file}")
+                            logger.info(f"🔍 Debug file_path: '{file_path}'")
                             if file_path:
                                 agent_query += f" FILE_PATH:{file_path}"
                                 logger.info(f"📎 Added file attachment: {file_path}")
+                            else:
+                                logger.warning(f"⚠️ No file path found in attached_file for {agent_name}")
                         logger.info(f"🎯 Delegating original query to {agent_name} specialist...")
                     else:
                         # Subsequent agents get context from previous results
                         logger.info(f"🔗 Building context-aware query for {agent_name} based on previous results...")
 
-                        # Handle visualization tool specially when following data-producing agents
+                        # Handle visualization tool when following any data-producing agent
                         if agent_name == "visualization":
-                            # Find any previous agent that produced data suitable for visualization
-                            data_agent = None
-                            for prev_result in results:
-                                if prev_result.get("success") and prev_result.get("agent") in ["StockAnalysisAgent", "CostAnalysisAgent", "DataProcessingAgent"]:
-                                    data_agent = prev_result
-                                    break
+                            # Find any previous agent that produced tool_data (generic detection)
+                            data_agent = self._find_previous_data_agent(results)
 
                             if data_agent:
-                                agent_type = data_agent.get("agent", "")
-                                if agent_type == "StockAnalysisAgent":
-                                    # Extract tabular historical data and create a temporary file
-                                    tool_data = data_agent.get("result", {}).get("tool_data", {})
-                                    symbol = tool_data.get("symbol", "Unknown")
-                                    company_name = tool_data.get("company_name", symbol)
+                                # Export tool_data to file (pure file I/O, no data processing)
+                                file_path = self._export_tool_data_to_file(data_agent["result"]["tool_data"])
 
-                                    # Extract historical data as a table
-                                    historical_data = tool_data.get("historical_data", {})
-                                    if historical_data:
-                                        # Convert to CSV table format
-                                        dates = historical_data.get("dates", [])
-                                        prices = historical_data.get("prices", [])
-                                        volumes = historical_data.get("volumes", [])
-                                        highs = historical_data.get("highs", [])
-                                        lows = historical_data.get("lows", [])
-
-                                        csv_data = "date,price,volume,high,low\n"
-                                        for i in range(len(dates)):
-                                            csv_data += f"{dates[i]},{prices[i]},{volumes[i] if i < len(volumes) else ''},{highs[i] if i < len(highs) else ''},{lows[i] if i < len(lows) else ''}\n"
-
-                                        # Create temporary CSV file
-                                        import tempfile
-                                        import os
-                                        temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
-                                        temp_file.write(csv_data)
-                                        temp_file.close()
-
-                                        agent_query = f"Create a line chart for {company_name} ({symbol}) stock price over time. Use 'date' column for x-axis and 'price' column for y-axis FILE_PATH:{temp_file.name}"
-                                        logger.info(f"🎯 Generated stock visualization with CSV file ({len(dates)} rows) at {temp_file.name}")
-                                    else:
-                                        agent_query = f"No historical data available for {company_name} ({symbol})"
+                                if file_path:
+                                    # Generate generic visualization query based on user's ask
+                                    viz_query = self._generate_generic_visualization_query(query)
+                                    agent_query = f"{viz_query} FILE_PATH:{file_path}"
+                                    logger.info(f"🎯 Exported data to file {file_path} for visualization")
                                 else:
-                                    # Generic data visualization for other agents
-                                    data = data_agent.get("result", {})
-                                    agent_query = f"Create a visualization using this data: {json.dumps(data)}"
-                                    logger.info(f"🎯 Generated generic visualization query for {agent_type}")
+                                    agent_query = f"No data available for visualization from previous agent"
                             else:
                                 agent_query = f"Create a visualization for: {query}"
                         else:
@@ -364,18 +335,11 @@ Respond with just the refined query, no additional text."""
                         # Visualization results are displayed separately, not included in final answer
                         logger.info(f"📊 Visualization result will be displayed separately")
                         continue
-                    elif result.get("agent") == "StockAnalysisAgent" and result.get("result", {}).get("llm_analysis"):
-                        # Use stock analysis LLM insights directly
+                    elif result.get("result", {}).get("llm_analysis"):
+                        # Use any agent's LLM analysis directly (generic handling)
                         analysis_content.append(result["result"]["llm_analysis"])
-                        logger.info(f"📈 Using stock analysis LLM insights")
-                    elif result.get("agent") == "ImageAnalysisAgent" and result.get("result", {}).get("analysis"):
-                        # Use image analysis directly
-                        analysis_content.append(result["result"]["analysis"])
-                        logger.info(f"🖼️ Using image analysis directly")
-                    elif result.get("result", {}).get("ai_insights", {}).get("analysis"):
-                        # Use other pre-formatted insights
-                        analysis_content.append(result["result"]["ai_insights"]["analysis"])
-                        logger.info(f"📊 Using pre-formatted insight from {result.get('agent', 'unknown')} agent")
+                        agent_name = result.get("agent", "Unknown")
+                        logger.info(f"🤖 Using LLM insights from {agent_name}")
                     else:
                         # Keep other results for potential synthesis
                         non_analysis_results.append(result)
@@ -441,6 +405,50 @@ Provide a clear, helpful response that synthesizes the information from the tool
                 "timestamp": datetime.now().isoformat()
             }
 
+    def _find_previous_data_agent(self, results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Find any previous agent that produced tool_data (generic detection)"""
+        for prev_result in results:
+            if (prev_result.get("success") and
+                prev_result.get("result", {}).get("tool_data") and
+                isinstance(prev_result["result"]["tool_data"], str) and
+                len(prev_result["result"]["tool_data"].strip()) > 0):
+                return prev_result
+        return None
+
+    def _export_tool_data_to_file(self, tool_data: str) -> str:
+        """Export tool_data to file (pure file I/O, no data processing)"""
+        try:
+            import tempfile
+            temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
+            temp_file.write(tool_data)
+            temp_file.close()
+            return temp_file.name
+        except Exception as e:
+            logger.error(f"🎯 Error exporting tool data to file: {str(e)}")
+            return None
+
+    def _generate_generic_visualization_query(self, user_query: str) -> str:
+        """Generate generic visualization query based only on user's ask"""
+        try:
+            # Generic query generation based on user language only
+            query_lower = user_query.lower()
+
+            if any(keyword in query_lower for keyword in ["line chart", "trends", "over time", "time series"]):
+                return "Create a line chart showing trends over time. Auto-detect appropriate columns for x-axis and y-axis"
+            elif any(keyword in query_lower for keyword in ["bar chart", "comparison", "compare"]):
+                return "Create a bar chart for comparison. Auto-detect appropriate columns for categories and values"
+            elif any(keyword in query_lower for keyword in ["pie chart", "distribution", "breakdown"]):
+                return "Create a pie chart showing distribution. Auto-detect appropriate columns for categories and values"
+            elif any(keyword in query_lower for keyword in ["scatter", "correlation", "relationship"]):
+                return "Create a scatter plot to show relationships. Auto-detect appropriate columns for x and y axes"
+            else:
+                # Default to smart auto-detection based on data
+                return "Create an appropriate visualization based on the data structure. Auto-detect the best chart type and columns"
+
+        except Exception as e:
+            logger.error(f"🎯 Error generating generic visualization query: {str(e)}")
+            return f"Create a visualization for: {user_query}"
+
     def execute(self, query: str, available_tools: List[str] = None, attached_file: Dict = None) -> Dict[str, Any]:
         """Orchestrate sub-agents to handle the user query"""
         try:
@@ -492,61 +500,34 @@ Provide a clear, helpful response that synthesizes the information from the tool
                         # Add attached file information for relevant agents
                         if attached_file and agent_name in ["image_analysis", "data_processing", "presentation", "visualization", "cost_analysis"]:
                             file_path = attached_file.get("path", "")
+                            logger.info(f"🔍 Debug attached_file: {attached_file}")
+                            logger.info(f"🔍 Debug file_path: '{file_path}'")
                             if file_path:
                                 agent_query += f" FILE_PATH:{file_path}"
                                 logger.info(f"📎 Added file attachment: {file_path}")
+                            else:
+                                logger.warning(f"⚠️ No file path found in attached_file for {agent_name}")
                         logger.info(f"🎯 Delegating original query to {agent_name} specialist...")
                     else:
                         # Subsequent agents get context from previous results
                         logger.info(f"🔗 Building context-aware query for {agent_name} based on previous results...")
 
-                        # Handle visualization tool specially when following data-producing agents
+                        # Handle visualization tool when following any data-producing agent
                         if agent_name == "visualization":
-                            # Find any previous agent that produced data suitable for visualization
-                            data_agent = None
-                            for prev_result in results:
-                                if prev_result.get("success") and prev_result.get("agent") in ["StockAnalysisAgent", "CostAnalysisAgent", "DataProcessingAgent"]:
-                                    data_agent = prev_result
-                                    break
+                            # Find any previous agent that produced tool_data (generic detection)
+                            data_agent = self._find_previous_data_agent(results)
 
                             if data_agent:
-                                agent_type = data_agent.get("agent", "")
-                                if agent_type == "StockAnalysisAgent":
-                                    # Extract tabular historical data and create a temporary file
-                                    tool_data = data_agent.get("result", {}).get("tool_data", {})
-                                    symbol = tool_data.get("symbol", "Unknown")
-                                    company_name = tool_data.get("company_name", symbol)
+                                # Export tool_data to file (pure file I/O, no data processing)
+                                file_path = self._export_tool_data_to_file(data_agent["result"]["tool_data"])
 
-                                    # Extract historical data as a table
-                                    historical_data = tool_data.get("historical_data", {})
-                                    if historical_data:
-                                        # Convert to CSV table format
-                                        dates = historical_data.get("dates", [])
-                                        prices = historical_data.get("prices", [])
-                                        volumes = historical_data.get("volumes", [])
-                                        highs = historical_data.get("highs", [])
-                                        lows = historical_data.get("lows", [])
-
-                                        csv_data = "date,price,volume,high,low\n"
-                                        for i in range(len(dates)):
-                                            csv_data += f"{dates[i]},{prices[i]},{volumes[i] if i < len(volumes) else ''},{highs[i] if i < len(highs) else ''},{lows[i] if i < len(lows) else ''}\n"
-
-                                        # Create temporary CSV file
-                                        import tempfile
-                                        import os
-                                        temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
-                                        temp_file.write(csv_data)
-                                        temp_file.close()
-
-                                        agent_query = f"Create a line chart for {company_name} ({symbol}) stock price over time. Use 'date' column for x-axis and 'price' column for y-axis FILE_PATH:{temp_file.name}"
-                                        logger.info(f"🎯 Generated stock visualization with CSV file ({len(dates)} rows) at {temp_file.name}")
-                                    else:
-                                        agent_query = f"No historical data available for {company_name} ({symbol})"
+                                if file_path:
+                                    # Generate generic visualization query based on user's ask
+                                    viz_query = self._generate_generic_visualization_query(query)
+                                    agent_query = f"{viz_query} FILE_PATH:{file_path}"
+                                    logger.info(f"🎯 Exported data to file {file_path} for visualization")
                                 else:
-                                    # Generic data visualization for other agents
-                                    data = data_agent.get("result", {})
-                                    agent_query = f"Create a visualization using this data: {json.dumps(data)}"
-                                    logger.info(f"🎯 Generated generic visualization query for {agent_type}")
+                                    agent_query = f"No data available for visualization from previous agent"
                             else:
                                 agent_query = f"Create a visualization for: {query}"
                         else:
@@ -602,18 +583,11 @@ Respond with just the refined query, no additional text."""
                         # Visualization results are displayed separately, not included in final answer
                         logger.info(f"📊 Visualization result will be displayed separately")
                         continue
-                    elif result.get("agent") == "StockAnalysisAgent" and result.get("result", {}).get("llm_analysis"):
-                        # Use stock analysis LLM insights directly
+                    elif result.get("result", {}).get("llm_analysis"):
+                        # Use any agent's LLM analysis directly (generic handling)
                         analysis_content.append(result["result"]["llm_analysis"])
-                        logger.info(f"📈 Using stock analysis LLM insights")
-                    elif result.get("agent") == "ImageAnalysisAgent" and result.get("result", {}).get("analysis"):
-                        # Use image analysis directly
-                        analysis_content.append(result["result"]["analysis"])
-                        logger.info(f"🖼️ Using image analysis directly")
-                    elif result.get("result", {}).get("ai_insights", {}).get("analysis"):
-                        # Use other pre-formatted insights
-                        analysis_content.append(result["result"]["ai_insights"]["analysis"])
-                        logger.info(f"📊 Using pre-formatted insight from {result.get('agent', 'unknown')} agent")
+                        agent_name = result.get("agent", "Unknown")
+                        logger.info(f"🤖 Using LLM insights from {agent_name}")
                     else:
                         # Keep other results for potential synthesis
                         non_analysis_results.append(result)
@@ -673,3 +647,47 @@ Provide a clear, helpful response that synthesizes the information from the tool
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()
             }
+
+    def _find_previous_data_agent(self, results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Find any previous agent that produced tool_data (generic detection)"""
+        for prev_result in results:
+            if (prev_result.get("success") and
+                prev_result.get("result", {}).get("tool_data") and
+                isinstance(prev_result["result"]["tool_data"], str) and
+                len(prev_result["result"]["tool_data"].strip()) > 0):
+                return prev_result
+        return None
+
+    def _export_tool_data_to_file(self, tool_data: str) -> str:
+        """Export tool_data to file (pure file I/O, no data processing)"""
+        try:
+            import tempfile
+            temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
+            temp_file.write(tool_data)
+            temp_file.close()
+            return temp_file.name
+        except Exception as e:
+            logger.error(f"🎯 Error exporting tool data to file: {str(e)}")
+            return None
+
+    def _generate_generic_visualization_query(self, user_query: str) -> str:
+        """Generate generic visualization query based only on user's ask"""
+        try:
+            # Generic query generation based on user language only
+            query_lower = user_query.lower()
+
+            if any(keyword in query_lower for keyword in ["line chart", "trends", "over time", "time series"]):
+                return "Create a line chart showing trends over time. Auto-detect appropriate columns for x-axis and y-axis"
+            elif any(keyword in query_lower for keyword in ["bar chart", "comparison", "compare"]):
+                return "Create a bar chart for comparison. Auto-detect appropriate columns for categories and values"
+            elif any(keyword in query_lower for keyword in ["pie chart", "distribution", "breakdown"]):
+                return "Create a pie chart showing distribution. Auto-detect appropriate columns for categories and values"
+            elif any(keyword in query_lower for keyword in ["scatter", "correlation", "relationship"]):
+                return "Create a scatter plot to show relationships. Auto-detect appropriate columns for x and y axes"
+            else:
+                # Default to smart auto-detection based on data
+                return "Create an appropriate visualization based on the data structure. Auto-detect the best chart type and columns"
+
+        except Exception as e:
+            logger.error(f"🎯 Error generating generic visualization query: {str(e)}")
+            return f"Create a visualization for: {user_query}"

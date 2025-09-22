@@ -85,23 +85,34 @@ Respond with only the JSON structure."""
             slide_response = self.llm.call(slide_prompt)
             logger.info(f"🎨 Slide generation: Generated slide structure")
 
-            try:
-                # Clean up the response to extract JSON
-                cleaned_response = slide_response.strip()
-                if "```json" in cleaned_response:
-                    cleaned_response = cleaned_response.split("```json")[1].split("```")[0].strip()
-                elif "```" in cleaned_response:
-                    cleaned_response = cleaned_response.split("```")[1].split("```")[0].strip()
+            # Clean up the response to extract JSON
+            cleaned_response = slide_response.strip()
+            logger.info(f"🎨 Raw LLM response: {cleaned_response[:200]}...")
 
+            # More robust JSON extraction
+            import re
+            if "```json" in cleaned_response:
+                cleaned_response = cleaned_response.split("```json")[1].split("```")[0].strip()
+            elif "```" in cleaned_response:
+                cleaned_response = cleaned_response.split("```")[1].split("```")[0].strip()
+
+            # Look for JSON structure in the response
+            json_match = re.search(r'\{.*"slides_data".*\}', cleaned_response, re.DOTALL)
+            if json_match:
+                cleaned_response = json_match.group()
+
+            logger.info(f"🎨 Cleaned JSON: {cleaned_response[:200]}...")
+
+            try:
                 slide_structure = json.loads(cleaned_response)
                 slides_data = slide_structure.get("slides_data", [])
-            except json.JSONDecodeError:
-                logger.warning("🎨 Failed to parse slide structure, using fallback")
-                # Fallback slide structure
-                slides_data = [
-                    {"title": "Introduction", "content": ["Generated from provided content", "Automated presentation creation", "Content analysis completed"]},
-                    {"title": "Main Content", "content": ["Key points extracted", "Important information highlighted", "Comprehensive coverage provided"]}
-                ]
+                if not slides_data:
+                    raise ValueError("No slides_data found in response")
+                logger.info(f"🎨 Successfully parsed {len(slides_data)} slides")
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.error(f"🎨 Failed to parse slide structure: {e}")
+                logger.error(f"🎨 LLM response was: {slide_response}")
+                raise Exception(f"Unable to generate presentation structure from content. LLM parsing error: {e}")
 
             # Prepare parameters for the refactored tool
             params = {
