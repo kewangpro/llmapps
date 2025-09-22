@@ -111,11 +111,39 @@ def handle_attached_file(attached_file_data: Dict[str, Any], file_content: str) 
 
         # Check if it's an image file sent as base64
         if file_type.startswith("image/") and file_content.startswith("data:"):
-            # Extract base64 data from data URL
-            header, base64_data = file_content.split(",", 1)
+            logger.info(f"🔍 Processing image file: {file_name} ({file_type})")
+            logger.info(f"🔍 Data URL preview: {file_content[:50]}...")
 
-            # Decode base64 to binary
-            file_binary = base64.b64decode(base64_data)
+            # Extract base64 data from data URL
+            if "," not in file_content:
+                raise ValueError(f"Invalid data URL format: no comma separator found")
+
+            header, base64_data = file_content.split(",", 1)
+            logger.info(f"🔍 Base64 data length: {len(base64_data)}")
+
+            # Clean and fix base64 data
+            import re
+            base64_data = base64_data.strip()
+            # Remove any non-base64 characters (keep only A-Z, a-z, 0-9, +, /, =)
+            base64_data = re.sub(r'[^A-Za-z0-9+/=]', '', base64_data)
+
+            missing_padding = len(base64_data) % 4
+            if missing_padding:
+                base64_data += '=' * (4 - missing_padding)
+                logger.info(f"🔧 Cleaned and fixed base64 data, new length: {len(base64_data)}")
+
+            # Decode base64 to binary with better error handling
+            try:
+                file_binary = base64.b64decode(base64_data, validate=True)
+                logger.info(f"✅ Successfully decoded base64 data to {len(file_binary)} bytes")
+            except Exception as decode_error:
+                logger.error(f"❌ Base64 decode failed: {decode_error}")
+                # Try alternative decoding without validation
+                try:
+                    file_binary = base64.b64decode(base64_data)
+                    logger.info(f"✅ Alternative decode successful: {len(file_binary)} bytes")
+                except Exception as alt_error:
+                    raise ValueError(f"Failed to decode base64 data: {alt_error}")
 
             # Create temporary file
             suffix = os.path.splitext(file_name)[1] or ".jpg"
@@ -173,24 +201,8 @@ class ChatMessage(BaseModel):
 @app.get("/api/tools")
 async def get_tools():
     """Get available tools"""
-    mas = get_multi_agent_system()
-    tools = mas.get_available_tools()
-
-    # Define tool categories
-    tool_categories = {
-        # General Tools
-        "file_search": "general",
-        "web_search": "general",
-        "system_info": "general",
-        "presentation": "general",
-        "visualization": "general",
-
-        # Analytics Tools
-        "cost_analysis": "analytics",
-        "image_analysis": "analytics",
-        "data_processing": "analytics",
-        "stock_analysis": "analytics"
-    }
+    from multi_agent_system import MultiAgentSystem
+    tools = MultiAgentSystem.get_available_tools()
 
     # Convert to the format expected by frontend
     tools_dict = {}
@@ -200,7 +212,7 @@ async def get_tools():
             "name": tool_name,
             "description": tool["description"],
             "parameters": {},
-            "category": tool_categories.get(tool_name, "general")
+            "category": tool.get("category", "general")
         }
 
     return {"tools": tools_dict}

@@ -34,16 +34,17 @@ class MultiAgentSystem:
         """Execute a query with real-time callback for messaging"""
         return await self.orchestrator.execute_with_callback(query, selected_tools, attached_file, callback)
 
-    def get_available_tools(self) -> List[Dict[str, str]]:
+    @staticmethod
+    def get_available_tools() -> List[Dict[str, str]]:
         """Get list of available tools"""
         return [
-            {"name": "file_search", "description": "Search for files and directories in the filesystem"},
-            {"name": "web_search", "description": "Search the web for current information and news"},
-            {"name": "system_info", "description": "Get system information including CPU, memory, disk usage"},
-            {"name": "cost_analysis", "description": "Analyze cost data, COGS, and spending patterns"},
-            {"name": "data_processing", "description": "Process, analyze, and transform data"},
-            {"name": "presentation", "description": "Generate PowerPoint presentations from text or files"},
-            {"name": "image_analysis", "description": "Analyze image files for content, objects, text, and metadata"},
-            {"name": "stock_analysis", "description": "Analyze stock market data and performance using Yahoo Finance"},
-            {"name": "visualization", "description": "Create charts and visualizations from data"}
+            {"name": "file_search", "description": "Search for files and directories in the filesystem", "short_description": "search for files and directories", "category": "general"},
+            {"name": "web_search", "description": "Search the web for current information and news", "short_description": "search the internet for information", "category": "general"},
+            {"name": "system_info", "description": "Get system information including CPU, memory, disk usage", "short_description": "get system information (CPU, memory, disk, network)", "category": "general"},
+            {"name": "presentation", "description": "Generate PowerPoint presentations from text or files", "short_description": "generate PowerPoint presentations from text or files", "category": "general"},
+            {"name": "cost_analysis", "description": "Analyze cost data, COGS, and spending patterns", "short_description": "analyze cost data, COGS, and spending patterns", "category": "analytics"},
+            {"name": "data_processing", "description": "Process, analyze, and transform data", "short_description": "process, analyze, or transform data", "category": "analytics"},
+            {"name": "image_analysis", "description": "Analyze image files for content, objects, text, and metadata", "short_description": "analyze image files for content, text, and metadata", "category": "analytics"},
+            {"name": "stock_analysis", "description": "Analyze stock market data and performance using Yahoo Finance", "short_description": "analyze stock market data and performance using Yahoo Finance", "category": "analytics"},
+            {"name": "visualization", "description": "Create charts and visualizations from data", "short_description": "create charts and visualizations from data", "category": "analytics"}
         ]
