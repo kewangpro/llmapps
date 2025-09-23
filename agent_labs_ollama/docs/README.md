@@ -46,21 +46,6 @@ This directory contains all project documentation for Agent Labs.
 ![Data Processing Demo](./images/data-processing-demo.png)
 *Automated data cleaning, transformation, and processing with real-time feedback*
 
-### System Architecture
-![System Architecture](./images/architecture-diagram.png)
-*Multi-agent system architecture with WebSocket communication*
-
-### User Interface Components
-![Tool Sidebar](./images/tool-sidebar.png)
-*Tool selection interface with organized categories*
-
-### Workflow Demonstrations
-![File Upload Demo](./images/file-upload-demo.gif)
-*File upload workflow with drag & drop, automatic tool selection, and processing*
-
-![Real-time Chat](./images/real-time-chat.gif)
-*Real-time chat interaction showing streaming responses and tool execution*
-
 ## Project Documentation
 
 ### Core Documentation
