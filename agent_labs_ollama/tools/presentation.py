@@ -95,10 +95,16 @@ def create_presentation(slides_data: List[Dict[str, Any]], title: str = "", outp
                 "slide_type": "title" if i == 1 else "content"  # First content slide is title slide
             })
 
+        # Add timestamp to filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_name = output_filename.rsplit('.', 1)[0] if '.' in output_filename else output_filename
+        extension = output_filename.rsplit('.', 1)[1] if '.' in output_filename else 'pptx'
+        timestamped_filename = f"{base_name}_{timestamp}.{extension}"
+
         # Save presentation to outputs directory
         outputs_dir = os.path.join(os.path.dirname(__file__), "..", "outputs")
         os.makedirs(outputs_dir, exist_ok=True)
-        output_path = os.path.join(outputs_dir, output_filename)
+        output_path = os.path.join(outputs_dir, timestamped_filename)
         prs.save(output_path)
 
         # Convert to base64 for JSON response
@@ -119,7 +125,7 @@ def create_presentation(slides_data: List[Dict[str, Any]], title: str = "", outp
             "output_path": output_path,
             "presentation_data": {
                 "base64": ppt_base64,
-                "filename": output_filename,
+                "filename": timestamped_filename,
                 "mime_type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
                 "slides": slide_descriptions
             },

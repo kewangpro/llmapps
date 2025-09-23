@@ -10,8 +10,18 @@ import csv
 import io
 import re
 import base64
+import os
 from typing import Dict, Any, List, Union
 from datetime import datetime
+
+def save_to_outputs_folder(content: str, filename: str) -> str:
+    """Save content to outputs folder and return the full path"""
+    outputs_dir = os.path.join(os.path.dirname(__file__), "..", "outputs")
+    os.makedirs(outputs_dir, exist_ok=True)
+    output_path = os.path.join(outputs_dir, filename)
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(content)
+    return output_path
 
 def process_data(input_data: str, operation: str) -> Dict[str, Any]:
     """
@@ -87,8 +97,12 @@ def csv_to_json(data: str) -> Dict[str, Any]:
         rows = list(reader)
         json_output = json.dumps(rows, indent=2, ensure_ascii=False)
 
+        # Save file to outputs folder
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"converted_data_{timestamp}.json"
+        output_path = save_to_outputs_folder(json_output, filename)
+
         # Create downloadable file data
-        filename = "converted_data.json"
         file_base64 = base64.b64encode(json_output.encode('utf-8')).decode('utf-8')
         file_size_mb = len(json_output.encode('utf-8')) / (1024 * 1024)
 
@@ -98,6 +112,7 @@ def csv_to_json(data: str) -> Dict[str, Any]:
             "row_count": len(rows),
             "columns": list(rows[0].keys()) if rows else [],
             "file_size_mb": round(file_size_mb, 4),
+            "output_path": output_path,
             "processing_data": {
                 "base64": file_base64,
                 "filename": filename,
@@ -124,8 +139,12 @@ def json_to_csv(data: str) -> Dict[str, Any]:
             writer.writerows(parsed)
             csv_output = output.getvalue()
 
+        # Save file to outputs folder
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"converted_data_{timestamp}.csv"
+        output_path = save_to_outputs_folder(csv_output, filename)
+
         # Create downloadable file data
-        filename = "converted_data.csv"
         file_base64 = base64.b64encode(csv_output.encode('utf-8')).decode('utf-8')
         file_size_mb = len(csv_output.encode('utf-8')) / (1024 * 1024)
 
@@ -135,6 +154,7 @@ def json_to_csv(data: str) -> Dict[str, Any]:
             "row_count": len(parsed),
             "columns": list(parsed[0].keys()) if parsed else [],
             "file_size_mb": round(file_size_mb, 4),
+            "output_path": output_path,
             "processing_data": {
                 "base64": file_base64,
                 "filename": filename,
@@ -224,8 +244,12 @@ def extract_emails(data: str) -> Dict[str, Any]:
     # Create output content
     output_content = "\n".join(unique_emails)
 
+    # Save file to outputs folder
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"extracted_emails_{timestamp}.txt"
+    output_path = save_to_outputs_folder(output_content, filename)
+
     # Create downloadable file data
-    filename = "extracted_emails.txt"
     file_base64 = base64.b64encode(output_content.encode('utf-8')).decode('utf-8')
     file_size_mb = len(output_content.encode('utf-8')) / (1024 * 1024)
 
@@ -235,6 +259,7 @@ def extract_emails(data: str) -> Dict[str, Any]:
         "total_matches": len(emails),
         "unique_matches": len(unique_emails),
         "file_size_mb": round(file_size_mb, 4),
+        "output_path": output_path,
         "processing_data": {
             "base64": file_base64,
             "filename": filename,
@@ -298,8 +323,12 @@ def remove_duplicates(data: str) -> Dict[str, Any]:
 
     result_text = '\n'.join(unique_lines)
 
+    # Save file to outputs folder
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"deduplicated_data_{timestamp}.txt"
+    output_path = save_to_outputs_folder(result_text, filename)
+
     # Create downloadable file data
-    filename = "deduplicated_data.txt"
     file_base64 = base64.b64encode(result_text.encode('utf-8')).decode('utf-8')
     file_size_mb = len(result_text.encode('utf-8')) / (1024 * 1024)
 
@@ -310,6 +339,7 @@ def remove_duplicates(data: str) -> Dict[str, Any]:
         "unique_lines": len(unique_lines),
         "duplicates_removed": len(lines) - len(unique_lines),
         "file_size_mb": round(file_size_mb, 4),
+        "output_path": output_path,
         "processing_data": {
             "base64": file_base64,
             "filename": filename,
