@@ -8,7 +8,7 @@ from typing import Dict, Any
 from datetime import datetime
 from .base_agent import BaseAgent
 
-logger = logging.getLogger("MultiAgentSystem")
+logger = logging.getLogger("FileSearchAgent")
 
 
 class FileSearchAgent(BaseAgent):
@@ -57,8 +57,27 @@ For counting queries, use pattern "*" or "**/*" for recursive."""
 
             logger.info(f"📁 Executing file_search tool with: {params}")
             # Execute file search tool
-            result = self._execute_tool_script("file_search", params)
-            logger.info(f"📁 Tool execution completed: {len(str(result))} characters")
+            tool_result = self._execute_tool_script("file_search", params)
+            logger.info(f"📁 Tool execution completed: {len(str(tool_result))} characters")
+
+            if not tool_result.get("success", False):
+                return {
+                    "agent": "FileSearchAgent",
+                    "success": False,
+                    "error": f"File search tool failed: {tool_result.get('error', 'Unknown error')}",
+                    "timestamp": datetime.now().isoformat()
+                }
+
+            # Use LLM to analyze the search results
+            llm_analysis = self._analyze_search_results_with_llm(tool_result, query)
+
+            # Format for downstream agents
+            formatted_tool_data = self._format_tool_data(tool_result)
+
+            result = {
+                "tool_data": formatted_tool_data,  # Formatted data for chaining
+                "llm_analysis": llm_analysis       # LLM insights
+            }
 
             return {
                 "agent": "FileSearchAgent",
@@ -76,3 +95,113 @@ For counting queries, use pattern "*" or "**/*" for recursive."""
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()
             }
+
+    def _analyze_search_results_with_llm(self, tool_result: Dict[str, Any], original_query: str) -> str:
+        """Use LLM to analyze file search results and provide insights"""
+        try:
+            # Extract relevant information from tool result
+            files = tool_result.get("files", [])
+            total_count = tool_result.get("total_count", len(files))
+            search_path = tool_result.get("search_path", "")
+            pattern = tool_result.get("pattern", "")
+
+            analysis_prompt = f"""Analyze these file search results and provide insights for the user query: "{original_query}"
+
+Search Pattern: {pattern}
+Search Path: {search_path}
+Total Files Found: {total_count}
+
+File Results:
+{self._format_files_for_analysis(files)}
+
+Please provide:
+1. Summary of what was found
+2. File organization and structure insights
+3. Key findings about the files (types, sizes, locations)
+4. Any recommendations or next steps if applicable
+
+Format your response with:
+- Clear section headers
+- Important details highlighted
+- Organized layout that's easy to read
+
+Focus on the information most relevant to the user's question."""
+
+            llm_response = self.llm.call(analysis_prompt)
+            logger.info(f"📁 Generated LLM analysis for file search results")
+            return llm_response.strip()
+
+        except Exception as e:
+            logger.error(f"📁 Error in LLM analysis: {str(e)}")
+            return f"File search completed but LLM analysis failed: {str(e)}"
+
+    def _format_files_for_analysis(self, files: list) -> str:
+        """Format file list for LLM analysis"""
+        try:
+            if not files:
+                return "No files found"
+
+            formatted = ""
+            for i, file_info in enumerate(files[:10], 1):  # Limit to top 10 files
+                if isinstance(file_info, dict):
+                    name = file_info.get("name", "Unknown")
+                    path = file_info.get("path", "")
+                    size = file_info.get("size", "")
+                    modified = file_info.get("modified", "")
+
+                    formatted += f"{i}. {name}\n"
+                    if path:
+                        formatted += f"   Path: {path}\n"
+                    if size:
+                        formatted += f"   Size: {size}\n"
+                    if modified:
+                        formatted += f"   Modified: {modified}\n"
+                    formatted += "\n"
+                else:
+                    # Simple file path string
+                    formatted += f"{i}. {file_info}\n"
+
+            if len(files) > 10:
+                formatted += f"... and {len(files) - 10} more files\n"
+
+            return formatted
+        except Exception as e:
+            logger.error(f"📁 Error formatting files: {str(e)}")
+            return "Error formatting file results"
+
+    def _format_tool_data(self, tool_result: Dict[str, Any]) -> str:
+        """Format tool result as text for downstream agents"""
+        try:
+            files = tool_result.get("files", [])
+            total_count = tool_result.get("total_count", len(files))
+            search_path = tool_result.get("search_path", "")
+            pattern = tool_result.get("pattern", "")
+
+            if not files:
+                return f"File search in '{search_path}' with pattern '{pattern}' found no files"
+
+            formatted_text = f"File Search Results:\n"
+            formatted_text += f"Search Path: {search_path}\n"
+            formatted_text += f"Pattern: {pattern}\n"
+            formatted_text += f"Total Files Found: {total_count}\n\n"
+
+            # Show first few files
+            formatted_text += "Files:\n"
+            for i, file_info in enumerate(files[:5], 1):
+                if isinstance(file_info, dict):
+                    name = file_info.get("name", "Unknown")
+                    path = file_info.get("path", "")
+                    formatted_text += f"{i}. {name}"
+                    if path:
+                        formatted_text += f" ({path})"
+                    formatted_text += "\n"
+                else:
+                    formatted_text += f"{i}. {file_info}\n"
+
+            if len(files) > 5:
+                formatted_text += f"... and {len(files) - 5} more files\n"
+
+            return formatted_text
+        except Exception as e:
+            logger.error(f"📁 Error formatting tool data: {str(e)}")
+            return f"Error formatting file search results: {str(e)}"

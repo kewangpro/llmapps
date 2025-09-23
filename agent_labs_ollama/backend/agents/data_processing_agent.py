@@ -7,7 +7,7 @@ from typing import Dict, List, Any
 from datetime import datetime
 from .base_agent import BaseAgent
 
-logger = logging.getLogger("MultiAgentSystem")
+logger = logging.getLogger("DataProcessingAgent")
 
 
 class DataProcessingAgent(BaseAgent):
@@ -241,46 +241,46 @@ Available operations:
 
 Respond with just the operation name that best matches the request."""
                     
-                    operation = self.llm.call(prompt).strip().lower()
-                    
-                    # Validate operation
-                    valid_ops = ["json_format", "csv_to_json", "json_to_csv", "text_analysis",
-                                "base64_encode", "base64_decode", "word_count", "extract_emails",
-                                "extract_urls", "clean_text", "sort_lines", "remove_duplicates", "calculate_stats"]
-                    
-                    if operation not in valid_ops:
-                        operation = "text_analysis"  # Default to text analysis
-                    
-                    logger.info(f"📊 Selected operation: {operation}")
-                    
-                    # Handle large files by chunking for certain operations
-                    if len(file_content) > 10000 and operation in ["text_analysis", "word_count", "clean_text", "extract_emails", "extract_urls"]:
-                        logger.info(f"📄 Large file detected for {operation}, using chunked processing")
-                        result = self._process_large_input(file_content, operation)
-                        params = {"input_data": f"[{len(file_content)} chars, chunked]", "operation": operation}
+                    # Use keyword-based detection instead of LLM for faster processing
+                    operation = self._detect_operation_from_query(clean_query)
+                    logger.info(f"📊 Detected operation: {operation}")
+
+                    # Execute data processing tool directly (no chunking for better performance)
+                    params = {"input_data": file_content, "operation": operation}
+                    result = self._execute_tool_script("data_processing", params)
+
+                    if not result.get("success", False):
+                        return {
+                            "agent": "DataProcessingAgent",
+                            "success": False,
+                            "error": f"Data processing tool failed: {result.get('error', 'Unknown error')}",
+                            "timestamp": datetime.now().isoformat()
+                        }
+
+                    # Skip LLM analysis for simple transformation operations
+                    if operation in ["csv_to_json", "json_to_csv", "remove_duplicates", "clean_text", "sort_lines", "extract_emails", "extract_urls"]:
+                        llm_analysis = f"Successfully completed {operation} operation. File ready for download."
                     else:
-                        params = {"input_data": file_content, "operation": operation}
-                        # Execute data processing tool
-                        result = self._execute_tool_script("data_processing", params)
-                    
-                    # Include file summary if it's a large file
-                    file_summary = None
-                    if len(file_content) > 8000:
-                        file_summary = self._generate_file_summary(file_content)
-                    
+                        # Use LLM analysis only for complex operations like text_analysis
+                        llm_analysis = self._analyze_processing_results_with_llm(result, query, operation)
+
+                    # Format for downstream agents
+                    formatted_tool_data = self._format_tool_data(result, operation)
+
+                    result_data = {
+                        "tool_data": formatted_tool_data,  # Formatted data for chaining
+                        "llm_analysis": llm_analysis       # LLM insights
+                    }
+
                     response = {
                         "agent": "DataProcessingAgent",
                         "tool": "data_processing",
                         "parameters": params,
-                        "result": result,
+                        "result": result_data,
                         "success": True,
                         "timestamp": datetime.now().isoformat()
                     }
-                    
-                    # Add file summary if generated
-                    if file_summary:
-                        response["file_summary"] = file_summary
-                    
+
                     return response
                     
                 except Exception as e:
@@ -370,38 +370,49 @@ Available operations:
 
 Respond with just the operation name that best matches the request."""
 
-            operation = self.llm.call(prompt).strip().lower()
+            # Use keyword-based detection for non-file queries too
+            operation = self._detect_operation_from_query(query)
+            logger.info(f"📊 Detected operation: {operation}")
 
-            # Validate operation
-            valid_ops = ["json_format", "csv_to_json", "json_to_csv", "text_analysis",
-                        "base64_encode", "base64_decode", "word_count", "extract_emails",
-                        "extract_urls", "clean_text", "sort_lines", "remove_duplicates", "calculate_stats"]
+            # Execute data processing tool directly (no chunking)
+            params = {"input_data": query, "operation": operation}
+            result = self._execute_tool_script("data_processing", params)
 
-            if operation not in valid_ops:
-                operation = "text_analysis"  # Default to text analysis
+            if not result.get("success", False):
+                return {
+                    "agent": "DataProcessingAgent",
+                    "success": False,
+                    "error": f"Data processing tool failed: {result.get('error', 'Unknown error')}",
+                    "timestamp": datetime.now().isoformat()
+                }
 
-            # Handle large input data by chunking for certain operations
-            if len(query) > 10000 and operation in ["text_analysis", "word_count", "clean_text", "extract_emails", "extract_urls"]:
-                logger.info(f"📄 Large input detected for {operation}, using chunked processing")
-                result = self._process_large_input(query, operation)
+            # Skip LLM analysis for simple transformation operations
+            if operation in ["csv_to_json", "json_to_csv", "remove_duplicates", "clean_text", "sort_lines", "extract_emails", "extract_urls"]:
+                llm_analysis = f"Successfully completed {operation} operation. File ready for download."
             else:
-                params = {"input_data": query, "operation": operation}
-                # Execute data processing tool
-                result = self._execute_tool_script("data_processing", params)
+                # Use LLM analysis only for complex operations like text_analysis
+                llm_analysis = self._analyze_processing_results_with_llm(result, query, operation)
 
-            # Include file summary in response if available
-            response = {
-                "agent": "DataProcessingAgent",
-                "tool": "data_processing",
-                "parameters": params,
-                "result": result,
-                "success": True,
-                "timestamp": datetime.now().isoformat()
+            # Format for downstream agents
+            formatted_tool_data = self._format_tool_data(result, operation)
+
+            result_data = {
+                "tool_data": formatted_tool_data,  # Formatted data for chaining
+                "llm_analysis": llm_analysis       # LLM insights
             }
 
             # Add file summary if we generated one
             if "[Attached file:" in query and 'file_summary' in locals():
-                response["file_summary"] = file_summary
+                result_data["file_summary"] = file_summary
+
+            response = {
+                "agent": "DataProcessingAgent",
+                "tool": "data_processing",
+                "parameters": params,
+                "result": result_data,
+                "success": True,
+                "timestamp": datetime.now().isoformat()
+            }
 
             return response
 
@@ -412,3 +423,136 @@ Respond with just the operation name that best matches the request."""
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()
             }
+
+    def _analyze_processing_results_with_llm(self, tool_result: Dict[str, Any], original_query: str, operation: str) -> str:
+        """Use LLM to analyze data processing results and provide insights"""
+        try:
+            analysis_prompt = f"""Analyze these data processing results and provide insights for the user query: "{original_query}"
+
+Operation Performed: {operation}
+Processing Results:
+{self._format_results_for_analysis(tool_result)}
+
+Please provide:
+1. Summary of what was processed
+2. Key findings and metrics
+3. Insights about the data
+4. Any recommendations or next steps if applicable
+
+Format your response with:
+- Clear section headers
+- Important details highlighted
+- Organized layout that's easy to read
+
+Focus on the information most relevant to the user's question."""
+
+            llm_response = self.llm.call(analysis_prompt)
+            logger.info(f"📄 Generated LLM analysis for data processing results")
+            return llm_response.strip()
+
+        except Exception as e:
+            logger.error(f"📄 Error in LLM analysis: {str(e)}")
+            return f"Data processing completed but LLM analysis failed: {str(e)}"
+
+    def _format_results_for_analysis(self, result: Dict[str, Any]) -> str:
+        """Format processing results for LLM analysis"""
+        try:
+            if not result.get("success", False):
+                return f"Processing failed: {result.get('error', 'Unknown error')}"
+
+            operation = result.get("operation", "unknown")
+            output = result.get("output", {})
+            message = result.get("message", "")
+
+            formatted = f"Operation: {operation}\n"
+            if message:
+                formatted += f"Summary: {message}\n"
+
+            if isinstance(output, dict):
+                formatted += "Results:\n"
+                for key, value in output.items():
+                    formatted += f"  {key}: {value}\n"
+            else:
+                formatted += f"Output: {str(output)}\n"
+
+            return formatted
+        except Exception as e:
+            logger.error(f"📄 Error formatting results: {str(e)}")
+            return "Error formatting processing results"
+
+    def _format_tool_data(self, tool_result: Dict[str, Any], operation: str) -> str:
+        """Format tool result as text for downstream agents"""
+        try:
+            if not tool_result.get("success", False):
+                return f"Processing failed for operation '{operation}': {tool_result.get('error', 'Unknown error')}"
+
+            output = tool_result.get("output", {})
+            message = tool_result.get("message", "")
+
+            formatted_text = f"Data Processing Operation: {operation}\n"
+
+            if message:
+                formatted_text += f"Summary: {message}\n"
+
+            if isinstance(output, dict):
+                formatted_text += "Results:\n"
+                for key, value in output.items():
+                    formatted_text += f"- {key}: {value}\n"
+            elif isinstance(output, list):
+                formatted_text += f"Results: {len(output)} items\n"
+                # Show first few items if it's a list
+                for i, item in enumerate(output[:5]):
+                    formatted_text += f"- {item}\n"
+                if len(output) > 5:
+                    formatted_text += f"... and {len(output) - 5} more items\n"
+            else:
+                formatted_text += f"Result: {str(output)}\n"
+
+            return formatted_text
+        except Exception as e:
+            logger.error(f"📄 Error formatting tool data: {str(e)}")
+            return f"Error formatting data processing results: {str(e)}"
+
+    def _detect_operation_from_query(self, query: str) -> str:
+        """Detect operation from query using keywords (no LLM needed)"""
+        query_lower = query.lower()
+
+        # Conversion operations
+        if "csv to json" in query_lower or "convert csv" in query_lower:
+            return "csv_to_json"
+        elif "json to csv" in query_lower or "convert json" in query_lower:
+            return "json_to_csv"
+
+        # Extraction operations
+        elif "email" in query_lower and ("extract" in query_lower or "get" in query_lower or "find" in query_lower):
+            return "extract_emails"
+        elif "url" in query_lower and ("extract" in query_lower or "get" in query_lower or "find" in query_lower):
+            return "extract_urls"
+
+        # Cleaning operations
+        elif "remove duplicates" in query_lower or "deduplicate" in query_lower:
+            return "remove_duplicates"
+        elif "clean" in query_lower:
+            return "clean_text"
+        elif "sort" in query_lower:
+            return "sort_lines"
+
+        # Analysis operations
+        elif "analyze" in query_lower or "analysis" in query_lower:
+            return "text_analysis"
+        elif "word count" in query_lower or "count words" in query_lower:
+            return "word_count"
+        elif "statistics" in query_lower or "stats" in query_lower:
+            return "calculate_stats"
+
+        # Encoding operations
+        elif "base64" in query_lower and "encode" in query_lower:
+            return "base64_encode"
+        elif "base64" in query_lower and "decode" in query_lower:
+            return "base64_decode"
+        elif "format json" in query_lower:
+            return "json_format"
+
+        # Default fallback
+        else:
+            return "text_analysis"

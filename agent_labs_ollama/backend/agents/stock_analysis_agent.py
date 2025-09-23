@@ -9,7 +9,7 @@ from typing import Dict, Any
 from datetime import datetime
 from .base_agent import BaseAgent
 
-logger = logging.getLogger("MultiAgentSystem")
+logger = logging.getLogger("StockAnalysisAgent")
 
 
 class StockAnalysisAgent(BaseAgent):
@@ -260,7 +260,7 @@ Format your response in a clear, professional manner that would be helpful for a
             return f"Unable to generate analysis at this time: {str(e)}"
 
     def _format_tool_data_as_csv(self, tool_result: Dict[str, Any]) -> str:
-        """Format tool result as CSV string for downstream agents"""
+        """Format tool result as CSV string for downstream agents in long format like cost analysis"""
         try:
             historical_data = tool_result.get("historical_data", {})
             if not historical_data:
@@ -268,24 +268,32 @@ Format your response in a clear, professional manner that would be helpful for a
 
             dates = historical_data.get("dates", [])
             prices = historical_data.get("prices", [])
-            volumes = historical_data.get("volumes", [])
-            highs = historical_data.get("highs", [])
-            lows = historical_data.get("lows", [])
+            ma_20 = historical_data.get("ma_20", [])
+            ma_50 = historical_data.get("ma_50", [])
 
             if not dates or not prices:
                 return "Insufficient data for CSV export"
 
-            # Build CSV string
-            csv_data = "date,price,volume,high,low\n"
+            # Format in long format like cost analysis: date,series,value
+            # This allows visualization tool to use 'series' as color_column for multiple lines
+            csv_data = "date,series,value\n"
+
             for i in range(len(dates)):
                 date = dates[i] if i < len(dates) else ""
-                price = prices[i] if i < len(prices) else ""
-                volume = volumes[i] if i < len(volumes) else ""
-                high = highs[i] if i < len(highs) else ""
-                low = lows[i] if i < len(lows) else ""
-                csv_data += f"{date},{price},{volume},{high},{low}\n"
 
-            logger.info(f"📊 Formatted {len(dates)} rows of stock data as CSV")
+                # Add price data
+                if i < len(prices) and prices[i] != "":
+                    csv_data += f"{date},Price,{prices[i]}\n"
+
+                # Add MA-20 data (only if not None/empty)
+                if i < len(ma_20) and ma_20[i] is not None and ma_20[i] != "":
+                    csv_data += f"{date},20-day MA,{ma_20[i]}\n"
+
+                # Add MA-50 data (only if not None/empty)
+                if i < len(ma_50) and ma_50[i] is not None and ma_50[i] != "":
+                    csv_data += f"{date},50-day MA,{ma_50[i]}\n"
+
+            logger.info(f"📊 Formatted stock data in long format with {len(dates)} dates and multiple series")
             return csv_data
 
         except Exception as e:

@@ -8,7 +8,7 @@ from typing import Dict, List, Any
 from datetime import datetime
 from .base_agent import BaseAgent
 
-logger = logging.getLogger("MultiAgentSystem")
+logger = logging.getLogger("VisualizationAgent")
 
 
 class VisualizationAgent(BaseAgent):
@@ -139,16 +139,17 @@ DATA STRUCTURE (first 500 characters):
 
 CHART TYPE SELECTION RULES:
 - Cost/spending trends over time = LINE CHART (multiple lines for different categories)
-- Stock price trends over time = LINE CHART
+- Stock price trends over time = LINE CHART (multiple lines for price and moving averages)
 - Comparing categories/values = BAR CHART
 - Distribution/parts of whole = PIE CHART
 - Correlation between variables = SCATTER PLOT
 - Statistical distribution = HISTOGRAM or BOX PLOT
 
-COST ANALYSIS SPECIAL HANDLING:
-- If query mentions "cost", "spending", "COGS" AND "trends", "over time", "monthly" → USE LINE CHART
-- For cost analysis: x-axis = time/month column, y-axis = cost column, color = category/service
-- Title should be like "Cost Trends by [Category] Over Time"
+MULTI-LINE CHART DETECTION:
+- Time series data with categories (date,category,value format) → USE LINE CHART
+- x-axis = time/date column, y-axis = value column, color = category column
+- Examples: cost by business unit, stock price with moving averages, sales by region
+- This automatically creates multiple lines (one per category)
 
 Your task:
 1. Determine the BEST chart type for this specific query and data
@@ -159,7 +160,7 @@ RESPOND WITH VALID JSON ONLY - NO OTHER TEXT:
 {{
     "chart_type": "line|bar|pie|scatter|histogram|box|heatmap|area",
     "options": {{
-        "title": "descriptive title based on query and data",
+        "title": "generic descriptive title (do not include specific entity names - use generic terms like 'by Business Unit', 'by Product', etc.)",
         "x_column": "exact_column_name_from_data",
         "y_column": "exact_column_name_from_data",
         "color_column": "exact_column_name_from_data_or_null"
@@ -190,10 +191,10 @@ Use only column names that exist in the data. Use null if a column doesn't exist
                 except json.JSONDecodeError as e:
                     logger.warning(f"📊 JSON decode error: {e}")
             
-            # Fallback to detected chart type
-            logger.warning(f"📊 Failed to parse chart parameters, using detected type: {detected_chart_type}")
+            # Fallback to bar chart if LLM response invalid
+            logger.warning(f"📊 Failed to parse chart parameters, using default bar chart")
             return {
-                "chart_type": detected_chart_type,
+                "chart_type": "bar",
                 "options": {"title": "Data Visualization"}
             }
                 

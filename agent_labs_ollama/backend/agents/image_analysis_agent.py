@@ -8,7 +8,7 @@ from typing import Dict, Any
 from datetime import datetime
 from .base_agent import BaseAgent
 
-logger = logging.getLogger("MultiAgentSystem")
+logger = logging.getLogger("ImageAnalysisAgent")
 
 
 class ImageAnalysisAgent(BaseAgent):

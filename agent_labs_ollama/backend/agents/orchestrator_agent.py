@@ -17,7 +17,7 @@ from .image_analysis_agent import ImageAnalysisAgent
 from .stock_analysis_agent import StockAnalysisAgent
 from .visualization_agent import VisualizationAgent
 
-logger = logging.getLogger("MultiAgentSystem")
+logger = logging.getLogger("OrchestratorAgent")
 
 
 class OrchestratorAgent(BaseAgent):
@@ -72,15 +72,17 @@ Which tools should be used? Consider:
 4. If an image file is attached, prioritize image_analysis for visual analysis
 5. If a data file is attached, prioritize data_processing for data analysis
 
-IMPORTANT RULES FOR STOCK ANALYSIS:
-- For stock-related queries (company names, stock symbols, market analysis, stock performance), ALWAYS use BOTH "stock_analysis" AND "visualization" tools together
-- Stock analysis provides data and insights, visualization creates charts
-- Examples: "show AAPL performance", "analyze Tesla stock", "Microsoft stock chart" → use both tools
+TOOL SELECTION PRIORITY RULES:
+1. STOCK QUERIES (company names like MSFT/AAPL, stock symbols, market analysis, stock performance):
+   - Use "stock_analysis" AND "visualization" tools together
+   - Examples: "show AAPL performance", "analyze Tesla stock", "get financial metrics for MSFT"
 
-IMPORTANT RULES FOR COST ANALYSIS:
-- For cost-related queries (COGS analysis, cost trends, spending patterns, cost per business unit), ALWAYS use BOTH "cost_analysis" AND "visualization" tools together
-- Cost analysis provides data and insights, visualization creates charts
-- Examples: "show cost trends", "analyze spending per business unit", "cost analysis chart" → use both tools
+2. COST/SPENDING QUERIES (COGS analysis, business unit costs, spending patterns):
+   - Use "cost_analysis" AND "visualization" tools together
+   - Examples: "show cost trends", "analyze spending per business unit", "cost per department"
+
+3. PRIORITIZATION: If query contains stock symbols (MSFT, AAPL, etc.) or company names, treat as STOCK QUERY first
+4. AVOID DUPLICATES: Select each tool only once, even if multiple categories match
 
 Important: If this is a conversational query (greetings, thanks, general chat) that doesn't require any tools, respond with "NONE".
 
@@ -92,11 +94,11 @@ Respond with:
             response = self.llm.call(prompt)
             logger.info(f"💭 Orchestrator reasoning: {response.strip()}")
 
-            # Parse response and validate against available tools
+            # Parse response and validate against available tools (avoid duplicates)
             selected = []
             for line in response.strip().split('\n'):
                 tool = line.strip().lower().replace('-', '').replace('*', '').strip()
-                if tool in available_tools:
+                if tool in available_tools and tool not in selected:
                     selected.append(tool)
 
             # Check if any valid tools were selected

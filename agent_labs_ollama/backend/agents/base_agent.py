@@ -5,14 +5,11 @@ Base Agent class for all specialized agents
 import json
 import os
 import subprocess
-import logging
 from typing import Dict, Any
 from datetime import datetime
 from abc import ABC, abstractmethod
 import httpx
 from llm_config import llm_config
-
-logger = logging.getLogger("MultiAgentSystem")
 
 
 class BaseAgent(ABC):
