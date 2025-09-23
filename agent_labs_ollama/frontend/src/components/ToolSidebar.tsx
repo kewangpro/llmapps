@@ -178,7 +178,7 @@ export default function ToolSidebar({ selectedTools, onToolToggle }: ToolSidebar
               <div className="flex items-center gap-2 mb-3">
                 <IconComponent className="w-4 h-4 text-gray-600" />
                 <h3 className="text-sm font-medium text-gray-700 capitalize">
-                  {category === 'analytics' ? 'Analytics & Data' : category}
+                  {category} ({categoryTools.length})
                 </h3>
               </div>
 

@@ -274,7 +274,7 @@ export default function ChatInterface({
             <div className={`flex-1 max-w-3xl ${message.role === 'user' ? 'text-right' : ''}`}>
               <div className={`block rounded-lg ${
                 message.role === 'user'
-                  ? 'bg-blue-600 text-white max-w-md ml-auto p-3'
+                  ? 'bg-blue-600 text-white max-w-md ml-auto px-3 py-2'
                   : 'max-w-4xl'
               }`}>
                 {message.role === 'assistant' ? (
@@ -282,7 +282,7 @@ export default function ChatInterface({
                     <p className="whitespace-pre-wrap">{message.content}</p>
                   </div>
                 ) : (
-                  <p className="whitespace-pre-wrap break-words overflow-hidden text-sm leading-relaxed p-3">{message.content}</p>
+                  <p className="whitespace-pre-wrap break-words overflow-hidden text-sm leading-relaxed">{message.content}</p>
                 )}
               </div>
 
