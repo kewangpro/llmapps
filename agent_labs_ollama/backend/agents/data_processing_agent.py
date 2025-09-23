@@ -269,7 +269,9 @@ Respond with just the operation name that best matches the request."""
 
                     result_data = {
                         "tool_data": formatted_tool_data,  # Formatted data for chaining
-                        "llm_analysis": llm_analysis       # LLM insights
+                        "llm_analysis": llm_analysis,      # LLM insights
+                        # Preserve all original tool result fields for frontend
+                        **{k: v for k, v in result.items() if k not in ["tool", "success", "timestamp"]}
                     }
 
                     response = {
@@ -398,7 +400,9 @@ Respond with just the operation name that best matches the request."""
 
             result_data = {
                 "tool_data": formatted_tool_data,  # Formatted data for chaining
-                "llm_analysis": llm_analysis       # LLM insights
+                "llm_analysis": llm_analysis,      # LLM insights
+                # Preserve all original tool result fields for frontend
+                **{k: v for k, v in result.items() if k not in ["tool", "success", "timestamp"]}
             }
 
             # Add file summary if we generated one
