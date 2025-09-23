@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Data Processing Tool
-Processes and transforms data in various formats
+Processes and transforms data in various formats with downloadable outputs
 """
 
 import json
@@ -9,8 +9,8 @@ import sys
 import csv
 import io
 import re
-from typing import Dict, Any, List, Union
 import base64
+from typing import Dict, Any, List, Union
 from datetime import datetime
 
 def process_data(input_data: str, operation: str) -> Dict[str, Any]:
@@ -81,41 +81,66 @@ def format_json(data: str) -> Dict[str, Any]:
         return {"error": f"Invalid JSON: {str(e)}"}
 
 def csv_to_json(data: str) -> Dict[str, Any]:
-    """Convert CSV to JSON"""
+    """Convert CSV to JSON with downloadable output"""
     try:
         reader = csv.DictReader(io.StringIO(data))
         rows = list(reader)
         json_output = json.dumps(rows, indent=2, ensure_ascii=False)
+
+        # Create downloadable file data
+        filename = "converted_data.json"
+        file_base64 = base64.b64encode(json_output.encode('utf-8')).decode('utf-8')
+        file_size_mb = len(json_output.encode('utf-8')) / (1024 * 1024)
+
         return {
             "output": json_output,
             "message": f"Converted CSV to JSON with {len(rows)} rows",
             "row_count": len(rows),
-            "columns": list(rows[0].keys()) if rows else []
+            "columns": list(rows[0].keys()) if rows else [],
+            "file_size_mb": round(file_size_mb, 4),
+            "processing_data": {
+                "base64": file_base64,
+                "filename": filename,
+                "mime_type": "application/json",
+                "content_preview": json_output[:300] + "..." if len(json_output) > 300 else json_output
+            }
         }
     except Exception as e:
         return {"error": f"CSV conversion failed: {str(e)}"}
 
 def json_to_csv(data: str) -> Dict[str, Any]:
-    """Convert JSON to CSV"""
+    """Convert JSON to CSV with downloadable output"""
     try:
         parsed = json.loads(data)
         if not isinstance(parsed, list):
             return {"error": "JSON must be a list of objects for CSV conversion"}
 
         if not parsed:
-            return {"output": "", "message": "Empty JSON array"}
+            csv_output = ""
+        else:
+            output = io.StringIO()
+            writer = csv.DictWriter(output, fieldnames=parsed[0].keys())
+            writer.writeheader()
+            writer.writerows(parsed)
+            csv_output = output.getvalue()
 
-        output = io.StringIO()
-        writer = csv.DictWriter(output, fieldnames=parsed[0].keys())
-        writer.writeheader()
-        writer.writerows(parsed)
-        csv_output = output.getvalue()
+        # Create downloadable file data
+        filename = "converted_data.csv"
+        file_base64 = base64.b64encode(csv_output.encode('utf-8')).decode('utf-8')
+        file_size_mb = len(csv_output.encode('utf-8')) / (1024 * 1024)
 
         return {
             "output": csv_output,
             "message": f"Converted JSON to CSV with {len(parsed)} rows",
             "row_count": len(parsed),
-            "columns": list(parsed[0].keys())
+            "columns": list(parsed[0].keys()) if parsed else [],
+            "file_size_mb": round(file_size_mb, 4),
+            "processing_data": {
+                "base64": file_base64,
+                "filename": filename,
+                "mime_type": "text/csv",
+                "content_preview": csv_output[:300] + "..." if len(csv_output) > 300 else csv_output
+            }
         }
     except Exception as e:
         return {"error": f"JSON to CSV conversion failed: {str(e)}"}
@@ -191,16 +216,31 @@ def count_words(data: str) -> Dict[str, Any]:
     }
 
 def extract_emails(data: str) -> Dict[str, Any]:
-    """Extract email addresses from text"""
+    """Extract email addresses from text with downloadable output"""
     email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
     emails = re.findall(email_pattern, data)
     unique_emails = list(set(emails))
+
+    # Create output content
+    output_content = "\n".join(unique_emails)
+
+    # Create downloadable file data
+    filename = "extracted_emails.txt"
+    file_base64 = base64.b64encode(output_content.encode('utf-8')).decode('utf-8')
+    file_size_mb = len(output_content.encode('utf-8')) / (1024 * 1024)
 
     return {
         "output": unique_emails,
         "message": f"Found {len(unique_emails)} unique email addresses",
         "total_matches": len(emails),
-        "unique_matches": len(unique_emails)
+        "unique_matches": len(unique_emails),
+        "file_size_mb": round(file_size_mb, 4),
+        "processing_data": {
+            "base64": file_base64,
+            "filename": filename,
+            "mime_type": "text/plain",
+            "content_preview": output_content[:300] + "..." if len(output_content) > 300 else output_content
+        }
     }
 
 def extract_urls(data: str) -> Dict[str, Any]:
@@ -246,7 +286,7 @@ def sort_lines(data: str) -> Dict[str, Any]:
     }
 
 def remove_duplicates(data: str) -> Dict[str, Any]:
-    """Remove duplicate lines from text"""
+    """Remove duplicate lines from text with downloadable output"""
     lines = data.split('\n')
     unique_lines = []
     seen = set()
@@ -258,12 +298,24 @@ def remove_duplicates(data: str) -> Dict[str, Any]:
 
     result_text = '\n'.join(unique_lines)
 
+    # Create downloadable file data
+    filename = "deduplicated_data.txt"
+    file_base64 = base64.b64encode(result_text.encode('utf-8')).decode('utf-8')
+    file_size_mb = len(result_text.encode('utf-8')) / (1024 * 1024)
+
     return {
         "output": result_text,
         "message": f"Removed duplicates: {len(lines)} → {len(unique_lines)} lines",
         "original_lines": len(lines),
         "unique_lines": len(unique_lines),
-        "duplicates_removed": len(lines) - len(unique_lines)
+        "duplicates_removed": len(lines) - len(unique_lines),
+        "file_size_mb": round(file_size_mb, 4),
+        "processing_data": {
+            "base64": file_base64,
+            "filename": filename,
+            "mime_type": "text/plain",
+            "content_preview": result_text[:300] + "..." if len(result_text) > 300 else result_text
+        }
     }
 
 def calculate_stats(data: str) -> Dict[str, Any]:

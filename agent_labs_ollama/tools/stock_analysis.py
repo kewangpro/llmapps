@@ -151,14 +151,40 @@ def analyze_stock(symbol: str, period: str = "1y", analysis_type: str = "compreh
             "timestamp": datetime.now().isoformat()
         }
 
-        # Add raw historical data for visualization tool
+        # Calculate moving averages for visualization
+        close_prices = hist['Close']
+        ma_20_series = close_prices.rolling(window=20).mean()
+        ma_50_series = close_prices.rolling(window=50).mean()
+
+        # Convert moving averages to lists, handling MultiIndex
+        ma_20_list = []
+        ma_50_list = []
+
+        for i in range(len(hist)):
+            # MA-20
+            if i >= 19:  # Need at least 20 data points
+                ma_val = ma_20_series.iloc[i]
+                ma_20_list.append(ma_val.iloc[0] if isinstance(ma_val, pd.Series) else ma_val)
+            else:
+                ma_20_list.append(None)
+
+            # MA-50
+            if i >= 49:  # Need at least 50 data points
+                ma_val = ma_50_series.iloc[i]
+                ma_50_list.append(ma_val.iloc[0] if isinstance(ma_val, pd.Series) else ma_val)
+            else:
+                ma_50_list.append(None)
+
+        # Add raw historical data for visualization tool including moving averages
         result["historical_data"] = {
             "dates": [d.strftime('%Y-%m-%d') for d in hist.index.tolist()],
             "prices": hist['Close'].iloc[:, 0].tolist() if isinstance(hist.columns, pd.MultiIndex) else hist['Close'].tolist(),
             "volumes": hist['Volume'].iloc[:, 0].tolist() if isinstance(hist.columns, pd.MultiIndex) else hist['Volume'].tolist(),
             "highs": hist['High'].iloc[:, 0].tolist() if isinstance(hist.columns, pd.MultiIndex) else hist['High'].tolist(),
             "lows": hist['Low'].iloc[:, 0].tolist() if isinstance(hist.columns, pd.MultiIndex) else hist['Low'].tolist(),
-            "opens": hist['Open'].iloc[:, 0].tolist() if isinstance(hist.columns, pd.MultiIndex) else hist['Open'].tolist()
+            "opens": hist['Open'].iloc[:, 0].tolist() if isinstance(hist.columns, pd.MultiIndex) else hist['Open'].tolist(),
+            "ma_20": ma_20_list,
+            "ma_50": ma_50_list
         }
 
         if analysis_type == "basic":

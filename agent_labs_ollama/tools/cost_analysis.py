@@ -8,16 +8,19 @@ import chardet
 import logging
 from typing import Dict, Any
 
-logger = logging.getLogger("MultiAgentSystem")
+logger = logging.getLogger("CostAnalysisTool")
 
 
 def analyze_cogs_data(file_path: str) -> Dict[str, Any]:
     """Read and organize COGS data without visualization"""
+    logger.info(f"Starting cost analysis for file: {file_path}")
+
     # Detect encoding
     with open(file_path, 'rb') as f:
         raw_data = f.read()
         encoding_info = chardet.detect(raw_data)
         encoding = encoding_info.get('encoding', 'utf-8')
+        logger.debug(f"Detected file encoding: {encoding}")
 
     # Read CSV with detected encoding
     if 'utf-16' in encoding.lower():
@@ -34,6 +37,7 @@ def analyze_cogs_data(file_path: str) -> Dict[str, Any]:
 
     # Generate cost analysis insights
     insights = generate_cost_insights(df)
+    logger.info(f"Analysis complete: {len(df)} rows, {len(df.columns)} columns")
 
     # Return organized data similar to stock analysis tool
     result = {
@@ -44,7 +48,7 @@ def analyze_cogs_data(file_path: str) -> Dict[str, Any]:
             "date_range": get_date_range(df)
         },
         "cost_insights": insights,
-        "recommendations": generate_recommendations(df, insights),
+        "recommendations": generate_recommendations(insights),
         # Add raw data for visualization tool (similar to stock historical_data)
         "monthly_data": extract_monthly_data(df)
     }
@@ -80,11 +84,29 @@ def generate_cost_insights(df: pd.DataFrame) -> Dict[str, Any]:
         service_group_costs = df.groupby('Service Group New')[month_columns].sum()
         service_group_costs = service_group_costs[service_group_costs.sum(axis=1) > 0]
         if not service_group_costs.empty:
+            # Limit to top 50 service groups to reduce LLM payload
+            top_50_service_groups = service_group_costs.sum(axis=1).sort_values(ascending=False).head(50).index
+            top_service_group_costs = service_group_costs.loc[top_50_service_groups]
             insights['cost_per_service_group'] = {
-                'summary': f"Analysis across {len(service_group_costs)} service groups",
-                'top_service_groups': service_group_costs.sum(axis=1).sort_values(ascending=False).to_dict(),
-                'monthly_trends': service_group_costs.to_dict()
+                'summary': f"Analysis of top 50 service groups (out of {len(service_group_costs)} total)",
+                'top_service_groups': service_group_costs.sum(axis=1).sort_values(ascending=False).head(50).to_dict(),
+                'monthly_trends': top_service_group_costs.to_dict()
             }
+
+    # Add analysis for top 50 services
+    if 'Service Name' in df.columns:
+        service_costs = df.groupby('Service Name')[month_columns].sum()
+        service_costs = service_costs[service_costs.sum(axis=1) > 0]
+        if not service_costs.empty:
+            # Limit to top 50 services to reduce LLM payload
+            top_50_services = service_costs.sum(axis=1).sort_values(ascending=False).head(50).index
+            top_service_costs = service_costs.loc[top_50_services]
+            insights['cost_per_service'] = {
+                'summary': f"Analysis of top 50 services (out of {len(service_costs)} total)",
+                'top_services': service_costs.sum(axis=1).sort_values(ascending=False).head(50).to_dict(),
+                'monthly_trends': top_service_costs.to_dict()
+            }
+
     total_monthly_costs = df[month_columns].sum()
     insights['overall_trends'] = {
         'total_cost_by_month': total_monthly_costs.to_dict(),
@@ -166,7 +188,7 @@ def extract_monthly_data(df: pd.DataFrame) -> Dict[str, Any]:
     return result
 
 
-def generate_recommendations(df: pd.DataFrame, insights: Dict[str, Any]) -> list:
+def generate_recommendations(insights: Dict[str, Any]) -> list:
     recommendations = []
     if 'cost_per_business_unit' in insights:
         top_units = insights['cost_per_business_unit']['top_business_units']
