@@ -21,7 +21,8 @@ class FileSearchAgent(BaseAgent):
             prompt = f"""Extract file search parameters from this query: "{query}"
 Examples:
 - "find images under the videos folder" → {{"pattern": "**/*.{{jpg,jpeg,png,gif,bmp,tiff,webp,svg}}", "path": "videos"}}
-- "find Python files in src" → {{"pattern": "**/*.py", "path": "src"}}
+- "find Python files in the project" → {{"pattern": "**/*.py", "path": "."}}
+- "find Python files in backend" → {{"pattern": "**/*.py", "path": "backend"}}
 - "how many files under ~/videos folder?" → {{"pattern": "*", "path": "~/videos"}}
 - "count files in documents" → {{"pattern": "*", "path": "documents"}}
 - "search for config files" → {{"pattern": "*config*", "path": "."}}
