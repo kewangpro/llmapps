@@ -8,6 +8,7 @@ import { Send, Bot, User, Loader2, Wrench, ChevronDown, ChevronRight, Paperclip,
 import StockChart from './StockChart';
 import AnalyzedImage from './AnalyzedImage';
 import PresentationViewer from './PresentationViewer';
+import ProcessedFileViewer from './ProcessedFileViewer';
 import VisualizationChart from './VisualizationChart';
 
 interface ChatInterfaceProps {
@@ -271,12 +272,18 @@ export default function ChatInterface({
             </div>
 
             <div className={`flex-1 max-w-3xl ${message.role === 'user' ? 'text-right' : ''}`}>
-              <div className={`block p-3 rounded-lg ${
+              <div className={`block rounded-lg ${
                 message.role === 'user'
-                  ? 'bg-blue-600 text-white max-w-md ml-auto'
-                  : 'bg-gray-100 text-gray-900 max-w-4xl'
+                  ? 'bg-blue-600 text-white max-w-md ml-auto p-3'
+                  : 'max-w-4xl'
               }`}>
-                <pre className="whitespace-pre-wrap break-words overflow-hidden font-sans text-sm leading-relaxed">{message.content}</pre>
+                {message.role === 'assistant' ? (
+                  <div className="text-sm text-gray-800 bg-gray-100 p-3 rounded-lg mb-3 border-t border-gray-200">
+                    <p className="whitespace-pre-wrap">{message.content}</p>
+                  </div>
+                ) : (
+                  <p className="whitespace-pre-wrap break-words overflow-hidden text-sm leading-relaxed p-3">{message.content}</p>
+                )}
               </div>
 
               <div className={`text-xs text-gray-500 mt-1 ${message.role === 'user' ? 'text-right' : ''}`}>
@@ -342,12 +349,6 @@ export default function ChatInterface({
 
                         {!isCollapsed && (
                           <div className="px-3 pb-3">
-                            {result.summary && (
-                              <div className="text-sm text-green-800 bg-green-100 p-3 rounded-lg mb-3 border-t border-green-200">
-                                <div className="font-medium mb-1">Summary:</div>
-                                <p className="whitespace-pre-wrap">{result.summary}</p>
-                              </div>
-                            )}
 
                             {/* Display stock chart if available */}
                             {result.tool === 'stock_analysis' && result.result?.stock_chart_data && (
@@ -374,6 +375,22 @@ export default function ChatInterface({
                                   slidesCreated={result.result.slides_created}
                                   totalSlides={result.result.total_slides}
                                   fileSizeMb={result.result.file_size_mb}
+                                />
+                              </div>
+                            )}
+
+                            {/* Display processed file if available */}
+                            {result.tool === 'data_processing' && result.result?.processing_data && (
+                              <div className="mb-3">
+                                <ProcessedFileViewer
+                                  processingData={result.result.processing_data}
+                                  operation={result.result.operation || 'unknown'}
+                                  fileSizeMb={result.result.file_size_mb}
+                                  rowsConverted={result.result.rows_converted || result.result.row_count}
+                                  originalLines={result.result.original_lines}
+                                  uniqueLines={result.result.unique_lines}
+                                  emailsFound={result.result.emails_found || result.result.unique_matches}
+                                  urlsFound={result.result.urls_found || result.result.unique_matches}
                                 />
                               </div>
                             )}
