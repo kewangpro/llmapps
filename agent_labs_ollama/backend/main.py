@@ -172,24 +172,7 @@ def handle_attached_file(attached_file_data: Dict[str, Any], file_content: str) 
         logger.error(f"Error handling attached file: {e}")
         return None
 
-def get_tool_summary(tool_name: str, tool_result: Dict[str, Any]) -> str:
-    """Get a summary of tool results using the configured LLM"""
-    try:
-        from llm_config import llm_config
-
-        prompt = f"""Please provide a concise, user-friendly summary of this tool execution result. Focus on the key information that would be useful to the user.
-
-Tool: {tool_name}
-Result: {json.dumps(tool_result, indent=2)}
-
-Provide a brief, clear summary in 1-2 sentences highlighting the most important findings or data."""
-
-        llm = llm_config.get_llm()
-        return llm.call(prompt)
-
-    except Exception as e:
-        logger.error(f"Error generating tool summary: {e}")
-        return f"Tool executed successfully but summary could not be generated: {str(e)}"
+# Note: get_tool_summary() function removed - OrchestratorAgent's final response serves as the summary
 
 # Chat message model
 class ChatMessage(BaseModel):
@@ -370,22 +353,13 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                             "timestamp": datetime.now().isoformat()
                         }, client_id)
 
-                        words = content.split()
-                        current_chunk = ""
-                        for word in words:
-                            current_chunk += word + " "
-                            if len(current_chunk) > 50:
-                                await manager.send_personal_message({
-                                    "type": "assistant_response_chunk",
-                                    "content": current_chunk,
-                                    "timestamp": datetime.now().isoformat()
-                                }, client_id)
-                                current_chunk = ""
-
-                        if current_chunk:
+                        # Stream content preserving formatting (character-based)
+                        chunk_size = 50
+                        for i in range(0, len(content), chunk_size):
+                            chunk = content[i:i + chunk_size]
                             await manager.send_personal_message({
                                 "type": "assistant_response_chunk",
-                                "content": current_chunk,
+                                "content": chunk,
                                 "timestamp": datetime.now().isoformat()
                             }, client_id)
 
@@ -401,22 +375,13 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                             "timestamp": datetime.now().isoformat()
                         }, client_id)
 
-                        words = content.split()
-                        current_chunk = ""
-                        for word in words:
-                            current_chunk += word + " "
-                            if len(current_chunk) > 50:
-                                await manager.send_personal_message({
-                                    "type": "assistant_response_chunk",
-                                    "content": current_chunk,
-                                    "timestamp": datetime.now().isoformat()
-                                }, client_id)
-                                current_chunk = ""
-
-                        if current_chunk:
+                        # Stream content preserving formatting (character-based)
+                        chunk_size = 50
+                        for i in range(0, len(content), chunk_size):
+                            chunk = content[i:i + chunk_size]
                             await manager.send_personal_message({
                                 "type": "assistant_response_chunk",
-                                "content": current_chunk,
+                                "content": chunk,
                                 "timestamp": datetime.now().isoformat()
                             }, client_id)
 
@@ -443,15 +408,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                                 "timestamp": datetime.now().isoformat()
                             }, client_id)
 
-                            # Generate summary of tool result
-                            base_summary = get_tool_summary(tool_name, agent_result.get("result", {}))
-
-                            await manager.send_personal_message({
-                                "type": "tool_summary",
-                                "tool": tool_name,
-                                "summary": base_summary,
-                                "timestamp": datetime.now().isoformat()
-                            }, client_id)
+                            # Note: Tool summaries removed - OrchestratorAgent's final response serves as the summary
 
                 else:
                     # Send error message

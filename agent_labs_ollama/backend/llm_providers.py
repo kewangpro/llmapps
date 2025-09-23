@@ -4,10 +4,8 @@ LLM Provider abstraction for different AI services
 
 import os
 import httpx
-import json
 import logging
 from abc import ABC, abstractmethod
-from typing import Dict, Any
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -30,6 +28,7 @@ class BaseLLM(ABC):
     def call_with_image(self, prompt: str, image_data: str) -> str:
         """Call the LLM API with image data and return response"""
         # Default implementation returns error - providers should override if they support images
+        # Using _ prefix to indicate intentionally unused parameters
         return f"Error: {self.__class__.__name__} does not support image analysis. Please use a vision-capable model."
 
     def supports_vision(self) -> bool:
@@ -48,6 +47,11 @@ class OllamaLLM(BaseLLM):
 
     def call(self, prompt: str) -> str:
         """Call Ollama API and return response"""
+        import time
+        start_time = time.time()
+        prompt_preview = prompt[:100] + "..." if len(prompt) > 100 else prompt
+        logger.info(f"🤖 Calling {self.model}: {prompt_preview}")
+
         try:
             with httpx.Client(base_url=self.base_url, timeout=300.0) as client:
                 response = client.post(
@@ -59,12 +63,25 @@ class OllamaLLM(BaseLLM):
                     }
                 )
                 result = response.json()
-                return result.get('message', {}).get('content', '')
+                content = result.get('message', {}).get('content', '')
+
+                duration = time.time() - start_time
+                content_preview = content[:100] + "..." if len(content) > 100 else content
+                logger.info(f"✅ {self.model} responded in {duration:.2f}s: {content_preview}")
+
+                return content
         except Exception as e:
+            duration = time.time() - start_time
+            logger.error(f"❌ {self.model} failed after {duration:.2f}s: {str(e)}")
             return f"Error calling Ollama: {str(e)}"
 
     def call_with_image(self, prompt: str, image_data: str) -> str:
         """Call Ollama API with image data and return response"""
+        import time
+        start_time = time.time()
+        prompt_preview = prompt[:100] + "..." if len(prompt) > 100 else prompt
+        logger.info(f"🤖🖼️ Calling {self.model} with image: {prompt_preview}")
+
         try:
             # Extract base64 data from data URL if needed
             if image_data.startswith('data:'):
@@ -86,8 +103,16 @@ class OllamaLLM(BaseLLM):
                     }
                 )
                 result = response.json()
-                return result.get('message', {}).get('content', '')
+                content = result.get('message', {}).get('content', '')
+
+                duration = time.time() - start_time
+                content_preview = content[:100] + "..." if len(content) > 100 else content
+                logger.info(f"✅🖼️ {self.model} responded with image in {duration:.2f}s: {content_preview}")
+
+                return content
         except Exception as e:
+            duration = time.time() - start_time
+            logger.error(f"❌🖼️ {self.model} failed with image after {duration:.2f}s: {str(e)}")
             return f"Error calling Ollama with image: {str(e)}"
 
 
@@ -106,7 +131,13 @@ class OpenAILLM(BaseLLM):
 
     def call(self, prompt: str) -> str:
         """Call OpenAI API and return response"""
+        import time
+        start_time = time.time()
+        prompt_preview = prompt[:100] + "..." if len(prompt) > 100 else prompt
+        logger.info(f"🤖 Calling {self.model}: {prompt_preview}")
+
         if not self.api_key:
+            logger.error(f"❌ {self.model} failed: API key not configured")
             return "Error: OpenAI API key not configured. Please set OPENAI_API_KEY environment variable."
 
         try:
@@ -128,20 +159,37 @@ class OpenAILLM(BaseLLM):
                 )
 
                 if response.status_code != 200:
+                    duration = time.time() - start_time
+                    logger.error(f"❌ {self.model} failed after {duration:.2f}s: HTTP {response.status_code}")
                     return f"Error calling OpenAI: HTTP {response.status_code} - {response.text}"
 
                 result = response.json()
-                return result.get('choices', [{}])[0].get('message', {}).get('content', '')
+                content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+
+                duration = time.time() - start_time
+                content_preview = content[:100] + "..." if len(content) > 100 else content
+                logger.info(f"✅ {self.model} responded in {duration:.2f}s: {content_preview}")
+
+                return content
 
         except Exception as e:
+            duration = time.time() - start_time
+            logger.error(f"❌ {self.model} failed after {duration:.2f}s: {str(e)}")
             return f"Error calling OpenAI: {str(e)}"
 
     def call_with_image(self, prompt: str, image_data: str) -> str:
         """Call OpenAI API with image data and return response"""
+        import time
+        start_time = time.time()
+        prompt_preview = prompt[:100] + "..." if len(prompt) > 100 else prompt
+        logger.info(f"🤖🖼️ Calling {self.model} with image: {prompt_preview}")
+
         if not self.api_key:
+            logger.error(f"❌🖼️ {self.model} failed: API key not configured")
             return "Error: OpenAI API key not configured. Please set OPENAI_API_KEY environment variable."
 
         if not self._supports_vision:
+            logger.error(f"❌🖼️ {self.model} failed: No vision support")
             return f"Error: Model {self.model} does not support image analysis. Please use gpt-4o or gpt-4-vision-preview."
 
         try:
@@ -168,12 +216,22 @@ class OpenAILLM(BaseLLM):
                 )
 
                 if response.status_code != 200:
+                    duration = time.time() - start_time
+                    logger.error(f"❌🖼️ {self.model} failed after {duration:.2f}s: HTTP {response.status_code}")
                     return f"Error calling OpenAI: HTTP {response.status_code} - {response.text}"
 
                 result = response.json()
-                return result.get('choices', [{}])[0].get('message', {}).get('content', '')
+                content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+
+                duration = time.time() - start_time
+                content_preview = content[:100] + "..." if len(content) > 100 else content
+                logger.info(f"✅🖼️ {self.model} responded with image in {duration:.2f}s: {content_preview}")
+
+                return content
 
         except Exception as e:
+            duration = time.time() - start_time
+            logger.error(f"❌🖼️ {self.model} failed with image after {duration:.2f}s: {str(e)}")
             return f"Error calling OpenAI with image: {str(e)}"
 
 
@@ -192,7 +250,13 @@ class GeminiLLM(BaseLLM):
 
     def call(self, prompt: str) -> str:
         """Call Gemini API and return response"""
+        import time
+        start_time = time.time()
+        prompt_preview = prompt[:100] + "..." if len(prompt) > 100 else prompt
+        logger.info(f"🤖 Calling {self.model}: {prompt_preview}")
+
         if not self.api_key:
+            logger.error(f"❌ {self.model} failed: API key not configured")
             return "Error: Gemini API key not configured. Please set GEMINI_API_KEY environment variable."
 
         try:
@@ -215,6 +279,8 @@ class GeminiLLM(BaseLLM):
                 )
 
                 if response.status_code != 200:
+                    duration = time.time() - start_time
+                    logger.error(f"❌ {self.model} failed after {duration:.2f}s: HTTP {response.status_code}")
                     return f"Error calling Gemini: HTTP {response.status_code} - {response.text}"
 
                 result = response.json()
@@ -223,19 +289,34 @@ class GeminiLLM(BaseLLM):
                     content = candidates[0].get('content', {})
                     parts = content.get('parts', [])
                     if parts:
-                        return parts[0].get('text', '')
+                        response_text = parts[0].get('text', '')
+                        duration = time.time() - start_time
+                        content_preview = response_text[:100] + "..." if len(response_text) > 100 else response_text
+                        logger.info(f"✅ {self.model} responded in {duration:.2f}s: {content_preview}")
+                        return response_text
 
+                duration = time.time() - start_time
+                logger.error(f"❌ {self.model} failed after {duration:.2f}s: No response from Gemini API")
                 return "No response from Gemini API"
 
         except Exception as e:
+            duration = time.time() - start_time
+            logger.error(f"❌ {self.model} failed after {duration:.2f}s: {str(e)}")
             return f"Error calling Gemini: {str(e)}"
 
     def call_with_image(self, prompt: str, image_data: str) -> str:
         """Call Gemini API with image data and return response"""
+        import time
+        start_time = time.time()
+        prompt_preview = prompt[:100] + "..." if len(prompt) > 100 else prompt
+        logger.info(f"🤖🖼️ Calling {self.model} with image: {prompt_preview}")
+
         if not self.api_key:
+            logger.error(f"❌🖼️ {self.model} failed: API key not configured")
             return "Error: Gemini API key not configured. Please set GEMINI_API_KEY environment variable."
 
         if not self._supports_vision:
+            logger.error(f"❌🖼️ {self.model} failed: No vision support")
             return f"Error: Model {self.model} does not support image analysis. Please use gemini-pro-vision."
 
         try:
@@ -269,6 +350,8 @@ class GeminiLLM(BaseLLM):
                 )
 
                 if response.status_code != 200:
+                    duration = time.time() - start_time
+                    logger.error(f"❌🖼️ {self.model} failed after {duration:.2f}s: HTTP {response.status_code}")
                     return f"Error calling Gemini: HTTP {response.status_code} - {response.text}"
 
                 result = response.json()
@@ -277,11 +360,19 @@ class GeminiLLM(BaseLLM):
                     content = candidates[0].get('content', {})
                     parts = content.get('parts', [])
                     if parts:
-                        return parts[0].get('text', '')
+                        response_text = parts[0].get('text', '')
+                        duration = time.time() - start_time
+                        content_preview = response_text[:100] + "..." if len(response_text) > 100 else response_text
+                        logger.info(f"✅🖼️ {self.model} responded with image in {duration:.2f}s: {content_preview}")
+                        return response_text
 
+                duration = time.time() - start_time
+                logger.error(f"❌🖼️ {self.model} failed after {duration:.2f}s: No response from Gemini API")
                 return "No response from Gemini API"
 
         except Exception as e:
+            duration = time.time() - start_time
+            logger.error(f"❌🖼️ {self.model} failed with image after {duration:.2f}s: {str(e)}")
             return f"Error calling Gemini with image: {str(e)}"
 
 
