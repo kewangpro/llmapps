@@ -39,18 +39,6 @@ AI-powered chat interface with intelligent multi-agent orchestration and real-ti
 
 *Each tool has specialized agents with automatic parameter extraction and interactive result display.*
 
-### Specialized Agents (10)
-
-- **OrchestratorAgent** - Intelligent task routing and workflow coordination
-- **FileSearchAgent** - Intelligent file discovery and pattern matching
-- **WebSearchAgent** - Real-time web search and information retrieval
-- **SystemInfoAgent** - System monitoring and diagnostics
-- **PresentationAgent** - PowerPoint generation with timestamped outputs
-- **DataProcessingAgent** - Data transformation and format conversion
-- **CostAnalysisAgent** - Financial data analysis and visualization
-- **VisualizationAgent** - Interactive chart and graph generation
-- **ImageAnalysisAgent** - Visual content analysis with AI understanding
-- **StockAnalysisAgent** - Financial market data and technical analysis
 
 ## Quick Start
 
