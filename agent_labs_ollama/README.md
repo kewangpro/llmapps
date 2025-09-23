@@ -7,35 +7,50 @@ AI-powered chat interface with intelligent multi-agent orchestration and real-ti
 ## Key Features
 
 - **Multi-Agent Orchestration** - Intelligent task routing to specialized agents
-- **Real-Time Tool Execution** - File analysis, web search, data visualization, cost analysis
+- **Real-Time Tool Execution** - 9 powerful tools for file analysis, web search, data processing, visualization
 - **Visual Content Analysis** - AI-powered image analysis with actual visual understanding
 - **Interactive Results** - Charts, images, presentations displayed directly in chat
 - **File Upload Support** - Automatic content analysis and tool selection
 - **Multiple LLM Support** - Ollama, OpenAI, Google Gemini with vision capabilities
+- **Downloadable Outputs** - Generated files saved with timestamps for easy access
 
 ## Architecture
 
-**Frontend**: Next.js with WebSocket communication
-**Backend**: FastAPI with multi-agent orchestration
-**LLM**: Ollama integration with model flexibility
+**Frontend**: Next.js with WebSocket communication and real-time streaming
+**Backend**: FastAPI with multi-agent orchestration system
+**LLM**: Flexible provider support (Ollama, OpenAI, Gemini)
 
 **Flow**: User input → Orchestrator → Specialized agents → Tool execution → Real-time results
 
-## Available Tools
+## Available Tools (9)
 
-**General**: File search, web search, system info, presentations
-**Analytics**: Cost analysis, data visualization, code analysis, image analysis, stock analysis
-**AI-Powered**: Visual content analysis with real image understanding, intelligent parameter extraction
+### General (4)
+- **File Search** - Intelligent file discovery and pattern matching
+- **Web Search** - Real-time web search and information retrieval
+- **System Info** - Comprehensive system monitoring and diagnostics
+- **Presentation** - PowerPoint generation with downloadable outputs
+
+### Analytics (5)
+- **Data Processing** - CSV/JSON conversion, text analysis, data transformation
+- **Cost Analysis** - Financial data analysis and spending pattern visualization
+- **Visualization** - Interactive chart generation from data files
+- **Image Analysis** - Visual content analysis with metadata extraction
+- **Stock Analysis** - Financial market data and technical analysis
 
 *Each tool has specialized agents with automatic parameter extraction and interactive result display.*
 
-### Specialized Agents
+### Specialized Agents (10)
 
-- **ImageAnalysisAgent** - Visual content analysis with AI-powered image understanding
-- **PresentationAgent** - PowerPoint generation from content and files
-- **FileSearchAgent** - Intelligent file discovery and content analysis
+- **OrchestratorAgent** - Intelligent task routing and workflow coordination
+- **FileSearchAgent** - Intelligent file discovery and pattern matching
 - **WebSearchAgent** - Real-time web search and information retrieval
+- **SystemInfoAgent** - System monitoring and diagnostics
+- **PresentationAgent** - PowerPoint generation with timestamped outputs
+- **DataProcessingAgent** - Data transformation and format conversion
 - **CostAnalysisAgent** - Financial data analysis and visualization
+- **VisualizationAgent** - Interactive chart and graph generation
+- **ImageAnalysisAgent** - Visual content analysis with AI understanding
+- **StockAnalysisAgent** - Financial market data and technical analysis
 
 ## Quick Start
 
@@ -152,14 +167,20 @@ npm run dev
 - `WS /ws/{client_id}` - Real-time chat with multi-agent orchestration
 - `POST /api/llm/configure` - Configure LLM provider and model
 
-### Recent Updates
+### Current Features
 
-**v2.0** (Latest)
-- ✅ **Enhanced Image Analysis** - Real visual content analysis with AI understanding
-- ✅ **Multi-LLM Support** - OpenAI GPT-4, Google Gemini, Ollama with vision capabilities
-- ✅ **Improved Agent Architecture** - Better separation of concerns between tools and agents
-- ✅ **Fixed JSON Serialization** - Proper handling of EXIF metadata and complex data types
-- ✅ **Cloud Deployment** - Google Cloud Build and Cloud Run support
+**Architecture**
+- ✅ **Multi-Agent System** - 10 specialized agents with intelligent orchestration
+- ✅ **Real-Time Streaming** - WebSocket-based communication with character-level streaming
+- ✅ **Tool Integration** - 9 powerful tools with automatic parameter extraction
+- ✅ **File Management** - Timestamped outputs saved to dedicated outputs folder
+
+**Capabilities**
+- ✅ **Data Processing** - CSV/JSON conversion, text analysis, duplicate removal
+- ✅ **Visual Analysis** - AI-powered image understanding and metadata extraction
+- ✅ **Financial Analytics** - Cost analysis and stock market data visualization
+- ✅ **Content Generation** - PowerPoint presentations and interactive charts
+- ✅ **System Integration** - File search, web search, system monitoring
 
 ### Contributing
 1. Fork repository
