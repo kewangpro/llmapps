@@ -66,10 +66,10 @@ class OrchestratorAgent(BaseAgent):
                     file_context = f"\nIMPORTANT: User has uploaded a TEXT/DATA file ({file_name}). For data processing queries, prioritize 'data_processing' tool. For chart/visualization requests, prioritize 'visualization' tool."
 
             # Check if user has specifically selected tools
-            user_selected_tools = len(available_tools) > 0
+            user_has_selected_tools = len(available_tools) > 0
             tool_selection_context = ""
 
-            if user_selected_tools:
+            if user_has_selected_tools:
                 tool_selection_context = f"\nIMPORTANT: The user has specifically selected these tools: {available_tools}. Unless the query is completely unrelated, you should use the user's selected tools."
 
             prompt = f"""Given this user query: "{query}"{file_context}{tool_selection_context}
@@ -261,10 +261,18 @@ Respond as the orchestrator agent in first person."""
 
             # Execute selected sub-agents sequentially with context
             for i, agent_name in enumerate(selected_agents, 1):
-                # Handle MCP tools
-                if agent_name.startswith("mcp_"):
-                    mcp_tool_name = agent_name[4:]  # Remove "mcp_" prefix
-                    logger.info(f"\n🔌 MCP TOOL {i}/{len(selected_agents)}: {mcp_tool_name}")
+                tool_id = agent_name  # Keep original tool ID for reference
+
+                # Map tool ID to agent name
+                if ":" in tool_id and not tool_id.startswith(("http:", "https:")):
+                    # MCP tools map to MCP agent
+                    agent_name = "mcp"
+                # For built-in tools, tool_id and agent_name are the same (no reassignment needed)
+
+                # Handle MCP agent
+                if agent_name == "mcp":
+                    server_name, tool_name = tool_id.split(":", 1)
+                    logger.info(f"\n🔌 MCP TOOL {i}/{len(selected_agents)}: {tool_id}")
 
                     # Extract parameters from query (simple approach)
                     # For more complex parameter extraction, could use LLM to parse
@@ -280,19 +288,18 @@ Respond as the orchestrator agent in first person."""
                         parameters = {"message": query}
 
                     # Execute MCP tool
-                    agent_result = await self.mcp_agent.execute_mcp_tool(mcp_tool_name, parameters)
+                    agent_result = await self.mcp_agent.execute_mcp_tool(tool_name, parameters)
                     agent_result["agent"] = "MCPAgent"
 
                     if agent_result.get("success"):
-                        logger.info(f"✅ MCP tool {mcp_tool_name} completed successfully")
-                        logger.info(f"🔧 MCP server: {agent_result.get('server', 'unknown')}")
+                        logger.info(f"✅ {tool_id} completed successfully")
                     else:
-                        logger.error(f"❌ MCP tool {mcp_tool_name} failed: {agent_result.get('error', 'Unknown error')}")
+                        logger.error(f"❌ {tool_id} failed: {agent_result.get('error', 'Unknown error')}")
 
                     results.append(agent_result)
 
                 elif agent_name in self.sub_agents:
-                    logger.info(f"\n🤖 SUB-AGENT {i}/{len(selected_agents)}: {agent_name.upper()}Agent")
+                    logger.info(f"\n🤖 SUB-AGENT {i}/{len(selected_agents)}: {agent_name}")
 
                     # Build context-aware query for agents after the first one
                     if i == 1:
@@ -557,10 +564,18 @@ Provide a clear, helpful response that synthesizes the information from the tool
 
             # Execute selected sub-agents sequentially with context
             for i, agent_name in enumerate(selected_agents, 1):
-                # Handle MCP tools
-                if agent_name.startswith("mcp_"):
-                    mcp_tool_name = agent_name[4:]  # Remove "mcp_" prefix
-                    logger.info(f"\n🔌 MCP TOOL {i}/{len(selected_agents)}: {mcp_tool_name}")
+                tool_id = agent_name  # Keep original tool ID for reference
+
+                # Map tool ID to agent name
+                if ":" in tool_id and not tool_id.startswith(("http:", "https:")):
+                    # MCP tools map to MCP agent
+                    agent_name = "mcp"
+                # For built-in tools, tool_id and agent_name are the same (no reassignment needed)
+
+                # Handle MCP agent
+                if agent_name == "mcp":
+                    server_name, tool_name = tool_id.split(":", 1)
+                    logger.info(f"\n🔌 MCP TOOL {i}/{len(selected_agents)}: {tool_id}")
 
                     # Extract parameters from query (simple approach)
                     parameters = {}
@@ -572,19 +587,18 @@ Provide a clear, helpful response that synthesizes the information from the tool
                         parameters = {"message": query}
 
                     # Execute MCP tool synchronously (wrapper handles async)
-                    agent_result = self.mcp_agent.execute(query, mcp_tool_name, parameters)
+                    agent_result = self.mcp_agent.execute(query, tool_name, parameters)
                     agent_result["agent"] = "MCPAgent"
 
                     if agent_result.get("success"):
-                        logger.info(f"✅ MCP tool {mcp_tool_name} completed successfully")
-                        logger.info(f"🔧 MCP server: {agent_result.get('server', 'unknown')}")
+                        logger.info(f"✅ {tool_id} completed successfully")
                     else:
-                        logger.error(f"❌ MCP tool {mcp_tool_name} failed: {agent_result.get('error', 'Unknown error')}")
+                        logger.error(f"❌ {tool_id} failed: {agent_result.get('error', 'Unknown error')}")
 
                     results.append(agent_result)
 
                 elif agent_name in self.sub_agents:
-                    logger.info(f"\n🤖 SUB-AGENT {i}/{len(selected_agents)}: {agent_name.upper()}Agent")
+                    logger.info(f"\n🤖 SUB-AGENT {i}/{len(selected_agents)}: {agent_name}")
 
                     # Build context-aware query for agents after the first one
                     if i == 1:
