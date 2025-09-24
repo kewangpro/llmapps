@@ -13,7 +13,7 @@ sys.path.insert(0, str(backend_path))
 
 # Set environment variables for cloud deployment
 os.environ["HOST"] = "0.0.0.0"
-os.environ["PORT"] = os.environ.get("PORT", "8000")
+os.environ["PORT"] = os.environ.get("PORT", "3000")
 
 # Configure logging for cloud
 logging.basicConfig(
@@ -60,7 +60,7 @@ if __name__ == "__main__":
         # Serve other static files
         app.mount("/", StaticFiles(directory=str(frontend_path), html=True), name="frontend")
 
-    port = int(os.environ.get("PORT", 8000))
+    port = int(os.environ.get("PORT", 3000))
 
     print(f"🚀 Starting Agent Labs on port {port}")
     print(f"🌐 Environment: {'PRODUCTION' if os.environ.get('GAE_ENV') else 'DEVELOPMENT'}")

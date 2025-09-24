@@ -7,7 +7,8 @@ AI-powered chat interface with intelligent multi-agent orchestration and real-ti
 ## Key Features
 
 - **Multi-Agent Orchestration** - Intelligent task routing to specialized agents
-- **Real-Time Tool Execution** - 10 powerful tools for file analysis, web search, data processing, visualization
+- **Real-Time Tool Execution** - 10+ powerful tools for file analysis, web search, data processing, visualization
+- **MCP Integration** - Connect to external Model Context Protocol servers for extended capabilities
 - **Visual Content Analysis** - AI-powered image analysis with actual visual understanding
 - **Interactive Results** - Charts, images, presentations displayed directly in chat
 - **File Upload Support** - Automatic content analysis and tool selection
@@ -19,24 +20,31 @@ AI-powered chat interface with intelligent multi-agent orchestration and real-ti
 **Frontend**: Next.js with WebSocket communication and real-time streaming
 **Backend**: FastAPI with multi-agent orchestration system
 **LLM**: Flexible provider support (Ollama, OpenAI, Gemini)
+**MCP**: Model Context Protocol integration for external tool servers
 
 **Flow**: User input → Orchestrator → Specialized agents → Tool execution → Real-time results
 
-## Available Tools (10)
+## Available Tools
 
-### General (5)
+### Built-in Tools
+#### General (5)
 - **File Search** - Intelligent file discovery and pattern matching
 - **Web Search** - Real-time web search and information retrieval
 - **System Info** - Comprehensive system monitoring and diagnostics
 - **Presentation** - PowerPoint generation with downloadable outputs
 - **Visualization** - Interactive chart generation from data files
 
-### Analytics (5)
+#### Analytics (5)
 - **Data Processing** - CSV/JSON conversion, text analysis, data transformation
 - **Cost Analysis** - Financial data analysis and spending pattern visualization
 - **Image Analysis** - Visual content analysis with metadata extraction
 - **Stock Analysis** - Financial market data and technical analysis
 - **Forecast** - LSTM neural network time series prediction and forecasting
+
+### MCP Tools
+- **External Integration** - Connect to MCP servers for additional specialized tools
+- **Dynamic Discovery** - Automatically discover and integrate available MCP tools
+- **Flexible Configuration** - Configure multiple MCP servers via environment variables
 
 *Each tool has specialized agents with automatic parameter extraction and interactive result display.*
 
@@ -86,6 +94,12 @@ OPENAI_API_KEY=your_openai_key
 GEMINI_API_KEY=your_gemini_key
 GOOGLE_SEARCH_API_KEY=your_google_search_key
 GOOGLE_SEARCH_ENGINE_ID=your_search_engine_id
+
+# MCP Server Configuration (optional)
+MCP_SERVERS=example_server
+MCP_EXAMPLE_SERVER_URL=http://localhost:8000
+MCP_EXAMPLE_SERVER_TOOLS=echo,get_time,search_web
+MCP_EXAMPLE_SERVER_DESCRIPTION=Basic MCP server for testing
 ```
 
 ## Usage
@@ -159,9 +173,10 @@ npm run dev
 ### Current Features
 
 **Architecture**
-- ✅ **Multi-Agent System** - 11 specialized agents with intelligent orchestration
+- ✅ **Multi-Agent System** - 11+ specialized agents with intelligent orchestration
 - ✅ **Real-Time Streaming** - WebSocket-based communication with character-level streaming
-- ✅ **Tool Integration** - 10 powerful tools with automatic parameter extraction
+- ✅ **Tool Integration** - 10+ powerful tools with automatic parameter extraction
+- ✅ **MCP Protocol Support** - Connect to external MCP servers for extended functionality
 - ✅ **File Management** - Timestamped outputs saved to dedicated outputs folder
 
 **Capabilities**
@@ -170,6 +185,7 @@ npm run dev
 - ✅ **Financial Analytics** - Cost analysis, stock market data visualization, and time series forecasting
 - ✅ **Content Generation** - PowerPoint presentations and interactive charts
 - ✅ **System Integration** - File search, web search, system monitoring
+- ✅ **External Tool Integration** - Dynamic discovery and execution of MCP server tools
 
 ### Contributing
 1. Fork repository
