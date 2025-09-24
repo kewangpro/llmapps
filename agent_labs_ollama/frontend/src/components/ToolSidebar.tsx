@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Tool } from '@/types';
 import { apiUrl } from '@/utils/api';
-import { Check, Wrench, Globe, Code, Database, Monitor, BarChart3, Settings, Search, FileText, Image, TrendingUp, ChevronDown, ChevronUp } from 'lucide-react';
+import { Check, Wrench, Globe, Code, Database, Monitor, BarChart3, Settings, Search, FileText, Image, TrendingUp, ChevronDown, ChevronUp, Zap } from 'lucide-react';
 
 interface ToolSidebarProps {
   selectedTools: string[];
@@ -17,7 +17,8 @@ const toolIcons: Record<string, any> = {
   web: Globe,
   development: Code,
   data: Database,
-  system: Monitor
+  system: Monitor,
+  mcp: Zap
 };
 
 const getToolTips = (toolName: string) => {
