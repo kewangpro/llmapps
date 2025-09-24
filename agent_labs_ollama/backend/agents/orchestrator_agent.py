@@ -16,6 +16,7 @@ from .presentation_agent import PresentationAgent
 from .image_analysis_agent import ImageAnalysisAgent
 from .stock_analysis_agent import StockAnalysisAgent
 from .visualization_agent import VisualizationAgent
+from .forecast_agent import ForecastAgent
 
 logger = logging.getLogger("OrchestratorAgent")
 
@@ -34,7 +35,8 @@ class OrchestratorAgent(BaseAgent):
             "presentation": PresentationAgent(),
             "image_analysis": ImageAnalysisAgent(),
             "stock_analysis": StockAnalysisAgent(),
-            "visualization": VisualizationAgent()
+            "visualization": VisualizationAgent(),
+            "forecast": ForecastAgent()
         }
 
     def _select_agents(self, query: str, available_tools: List[str], attached_file: Dict = None) -> List[str]:
@@ -84,10 +86,15 @@ TOOL SELECTION PRIORITY RULES:
 3. PRIORITIZATION: If query contains stock symbols (MSFT, AAPL, etc.) or company names, treat as STOCK QUERY first
 4. AVOID DUPLICATES: Select each tool only once, even if multiple categories match
 
+EXECUTION ORDER RULES:
+1. For forecast + visualization: Run forecast BEFORE visualization so charts show both historical and predicted data
+2. For stock analysis + forecast + visualization: Run stock_analysis → forecast → visualization
+3. Data-producing tools (stock_analysis, forecast, cost_analysis) should run before visualization
+
 Important: If this is a conversational query (greetings, thanks, general chat) that doesn't require any tools, respond with "NONE".
 
 Respond with:
-- Tool names (one per line) if tools are needed
+- Tool names (one per line) IN EXECUTION ORDER if tools are needed
 - "NONE" if no tools are required for this conversational query"""
 
             logger.info("🤔 Orchestrator thinking...")
@@ -266,8 +273,24 @@ Respond as the orchestrator agent in first person."""
                         # Subsequent agents get context from previous results
                         logger.info(f"🔗 Building context-aware query for {agent_name} based on previous results...")
 
+                        # Handle forecast tool when following any data-producing agent
+                        if agent_name == "forecast":
+                            # Find any previous agent that produced tool_data (generic detection)
+                            data_agent = self._find_previous_data_agent(results)
+
+                            if data_agent:
+                                # Export tool_data to file (pure file I/O, no data processing)
+                                file_path = self._export_tool_data_to_file(data_agent["result"]["tool_data"])
+
+                                if file_path:
+                                    agent_query = f"predict future trends using LSTM neural network FILE_PATH:{file_path}"
+                                    logger.info(f"🎯 Exported data to file {file_path} for forecast")
+                                else:
+                                    agent_query = f"No data available for forecasting from previous agent"
+                            else:
+                                agent_query = f"predict future trends based on: {query}"
                         # Handle visualization tool when following any data-producing agent
-                        if agent_name == "visualization":
+                        elif agent_name == "visualization":
                             # Find any previous agent that produced tool_data (generic detection)
                             data_agent = self._find_previous_data_agent(results)
 
@@ -408,12 +431,14 @@ Provide a clear, helpful response that synthesizes the information from the tool
             }
 
     def _find_previous_data_agent(self, results: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Find any previous agent that produced tool_data (generic detection)"""
-        for prev_result in results:
+        """Find the most recent previous agent that produced tool_data (generic detection)"""
+        # Search in reverse order to get the most recent data agent
+        for prev_result in reversed(results):
             if (prev_result.get("success") and
                 prev_result.get("result", {}).get("tool_data") and
                 isinstance(prev_result["result"]["tool_data"], str) and
                 len(prev_result["result"]["tool_data"].strip()) > 0):
+                logger.info(f"🔍 Found data agent: {prev_result.get('agent', 'Unknown')} with tool_data")
                 return prev_result
         return None
 
@@ -514,8 +539,24 @@ Provide a clear, helpful response that synthesizes the information from the tool
                         # Subsequent agents get context from previous results
                         logger.info(f"🔗 Building context-aware query for {agent_name} based on previous results...")
 
+                        # Handle forecast tool when following any data-producing agent
+                        if agent_name == "forecast":
+                            # Find any previous agent that produced tool_data (generic detection)
+                            data_agent = self._find_previous_data_agent(results)
+
+                            if data_agent:
+                                # Export tool_data to file (pure file I/O, no data processing)
+                                file_path = self._export_tool_data_to_file(data_agent["result"]["tool_data"])
+
+                                if file_path:
+                                    agent_query = f"predict future trends using LSTM neural network FILE_PATH:{file_path}"
+                                    logger.info(f"🎯 Exported data to file {file_path} for forecast")
+                                else:
+                                    agent_query = f"No data available for forecasting from previous agent"
+                            else:
+                                agent_query = f"predict future trends based on: {query}"
                         # Handle visualization tool when following any data-producing agent
-                        if agent_name == "visualization":
+                        elif agent_name == "visualization":
                             # Find any previous agent that produced tool_data (generic detection)
                             data_agent = self._find_previous_data_agent(results)
 
@@ -651,12 +692,14 @@ Provide a clear, helpful response that synthesizes the information from the tool
             }
 
     def _find_previous_data_agent(self, results: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Find any previous agent that produced tool_data (generic detection)"""
-        for prev_result in results:
+        """Find the most recent previous agent that produced tool_data (generic detection)"""
+        # Search in reverse order to get the most recent data agent
+        for prev_result in reversed(results):
             if (prev_result.get("success") and
                 prev_result.get("result", {}).get("tool_data") and
                 isinstance(prev_result["result"]["tool_data"], str) and
                 len(prev_result["result"]["tool_data"].strip()) > 0):
+                logger.info(f"🔍 Found data agent: {prev_result.get('agent', 'Unknown')} with tool_data")
                 return prev_result
         return None
 

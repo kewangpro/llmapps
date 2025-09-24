@@ -1,6 +1,6 @@
 # Agents package
 
-from .base_agent import BaseAgent, OllamaLLM
+from .base_agent import BaseAgent
 from .file_search_agent import FileSearchAgent
 from .web_search_agent import WebSearchAgent
 from .system_info_agent import SystemInfoAgent
@@ -10,11 +10,11 @@ from .presentation_agent import PresentationAgent
 from .image_analysis_agent import ImageAnalysisAgent
 from .stock_analysis_agent import StockAnalysisAgent
 from .visualization_agent import VisualizationAgent
+from .forecast_agent import ForecastAgent
 from .orchestrator_agent import OrchestratorAgent
 
 __all__ = [
     'BaseAgent',
-    'OllamaLLM',
     'FileSearchAgent',
     'WebSearchAgent',
     'SystemInfoAgent',
@@ -24,5 +24,6 @@ __all__ = [
     'ImageAnalysisAgent',
     'StockAnalysisAgent',
     'VisualizationAgent',
+    'ForecastAgent',
     'OrchestratorAgent'
 ]
