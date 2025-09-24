@@ -17,6 +17,7 @@ from .image_analysis_agent import ImageAnalysisAgent
 from .stock_analysis_agent import StockAnalysisAgent
 from .visualization_agent import VisualizationAgent
 from .forecast_agent import ForecastAgent
+from .mcp_agent import MCPAgent
 
 logger = logging.getLogger("OrchestratorAgent")
 
@@ -38,6 +39,8 @@ class OrchestratorAgent(BaseAgent):
             "visualization": VisualizationAgent(),
             "forecast": ForecastAgent()
         }
+        # Initialize MCP agent
+        self.mcp_agent = MCPAgent()
 
     def _select_agents(self, query: str, available_tools: List[str], attached_file: Dict = None) -> List[str]:
         """Select which sub-agents to use based on query and available tools"""
@@ -62,40 +65,47 @@ class OrchestratorAgent(BaseAgent):
                 elif file_type.startswith("text/") or any(file_name.lower().endswith(ext) for ext in ['.txt', '.md', '.csv', '.json', '.xml']):
                     file_context = f"\nIMPORTANT: User has uploaded a TEXT/DATA file ({file_name}). For data processing queries, prioritize 'data_processing' tool. For chart/visualization requests, prioritize 'visualization' tool."
 
-            prompt = f"""Given this user query: "{query}"{file_context}
+            # Check if user has specifically selected tools
+            user_selected_tools = len(available_tools) > 0
+            tool_selection_context = ""
+
+            if user_selected_tools:
+                tool_selection_context = f"\nIMPORTANT: The user has specifically selected these tools: {available_tools}. Unless the query is completely unrelated, you should use the user's selected tools."
+
+            prompt = f"""Given this user query: "{query}"{file_context}{tool_selection_context}
 
 Available tools:
 {chr(10).join(available_desc)}
 
 Which tools should be used? Consider:
-1. What information is the user asking for?
-2. What actions need to be performed?
-3. Are multiple tools needed?
-4. If an image file is attached, prioritize image_analysis for visual analysis
-5. If a data file is attached, prioritize data_processing for data analysis
+1. PRIORITY: If user has selected specific tools, prioritize using those tools unless the query is completely unrelated
+2. What information is the user asking for?
+3. What actions need to be performed?
+4. Are multiple tools needed?
+5. If an image file is attached, prioritize image_analysis for visual analysis
+6. If a data file is attached, prioritize data_processing for data analysis
 
 TOOL SELECTION PRIORITY RULES:
-1. STOCK QUERIES (company names like MSFT/AAPL, stock symbols, market analysis, stock performance):
+1. USER SELECTION: If user selected specific tools, use them unless completely inappropriate
+2. STOCK QUERIES (company names like MSFT/AAPL, stock symbols, market analysis, stock performance):
    - Use "stock_analysis" AND "visualization" tools together
    - Examples: "show AAPL performance", "analyze Tesla stock", "get financial metrics for MSFT"
-
-2. COST/SPENDING QUERIES (COGS analysis, business unit costs, spending patterns):
+3. COST/SPENDING QUERIES (COGS analysis, business unit costs, spending patterns):
    - Use "cost_analysis" AND "visualization" tools together
    - Examples: "show cost trends", "analyze spending per business unit", "cost per department"
-
-3. PRIORITIZATION: If query contains stock symbols (MSFT, AAPL, etc.) or company names, treat as STOCK QUERY first
-4. AVOID DUPLICATES: Select each tool only once, even if multiple categories match
+4. MCP TOOLS: If user selected MCP tools (mcp_*), respect their choice for testing/demonstration
+5. AVOID DUPLICATES: Select each tool only once, even if multiple categories match
 
 EXECUTION ORDER RULES:
 1. For forecast + visualization: Run forecast BEFORE visualization so charts show both historical and predicted data
 2. For stock analysis + forecast + visualization: Run stock_analysis → forecast → visualization
 3. Data-producing tools (stock_analysis, forecast, cost_analysis) should run before visualization
 
-Important: If this is a conversational query (greetings, thanks, general chat) that doesn't require any tools, respond with "NONE".
+Important: Only respond with "NONE" if this is a conversational query AND the user has NOT selected any specific tools.
 
 Respond with:
-- Tool names (one per line) IN EXECUTION ORDER if tools are needed
-- "NONE" if no tools are required for this conversational query"""
+- Tool names (one per line) IN EXECUTION ORDER if tools should be used
+- "NONE" only if no tools are needed AND user hasn't selected any specific tools"""
 
             logger.info("🤔 Orchestrator thinking...")
             response = self.llm.call(prompt)
@@ -251,7 +261,37 @@ Respond as the orchestrator agent in first person."""
 
             # Execute selected sub-agents sequentially with context
             for i, agent_name in enumerate(selected_agents, 1):
-                if agent_name in self.sub_agents:
+                # Handle MCP tools
+                if agent_name.startswith("mcp_"):
+                    mcp_tool_name = agent_name[4:]  # Remove "mcp_" prefix
+                    logger.info(f"\n🔌 MCP TOOL {i}/{len(selected_agents)}: {mcp_tool_name}")
+
+                    # Extract parameters from query (simple approach)
+                    # For more complex parameter extraction, could use LLM to parse
+                    parameters = {}
+                    if any(keyword in query.lower() for keyword in ["search", "find", "query"]):
+                        # For search-like tools, use the entire query
+                        parameters = {"query": query}
+                    elif any(keyword in query.lower() for keyword in ["time", "current"]):
+                        # For time tools, no parameters needed
+                        parameters = {}
+                    else:
+                        # Default: pass the query as message parameter
+                        parameters = {"message": query}
+
+                    # Execute MCP tool
+                    agent_result = await self.mcp_agent.execute_mcp_tool(mcp_tool_name, parameters)
+                    agent_result["agent"] = "MCPAgent"
+
+                    if agent_result.get("success"):
+                        logger.info(f"✅ MCP tool {mcp_tool_name} completed successfully")
+                        logger.info(f"🔧 MCP server: {agent_result.get('server', 'unknown')}")
+                    else:
+                        logger.error(f"❌ MCP tool {mcp_tool_name} failed: {agent_result.get('error', 'Unknown error')}")
+
+                    results.append(agent_result)
+
+                elif agent_name in self.sub_agents:
                     logger.info(f"\n🤖 SUB-AGENT {i}/{len(selected_agents)}: {agent_name.upper()}Agent")
 
                     # Build context-aware query for agents after the first one
@@ -517,7 +557,33 @@ Provide a clear, helpful response that synthesizes the information from the tool
 
             # Execute selected sub-agents sequentially with context
             for i, agent_name in enumerate(selected_agents, 1):
-                if agent_name in self.sub_agents:
+                # Handle MCP tools
+                if agent_name.startswith("mcp_"):
+                    mcp_tool_name = agent_name[4:]  # Remove "mcp_" prefix
+                    logger.info(f"\n🔌 MCP TOOL {i}/{len(selected_agents)}: {mcp_tool_name}")
+
+                    # Extract parameters from query (simple approach)
+                    parameters = {}
+                    if any(keyword in query.lower() for keyword in ["search", "find", "query"]):
+                        parameters = {"query": query}
+                    elif any(keyword in query.lower() for keyword in ["time", "current"]):
+                        parameters = {}
+                    else:
+                        parameters = {"message": query}
+
+                    # Execute MCP tool synchronously (wrapper handles async)
+                    agent_result = self.mcp_agent.execute(query, mcp_tool_name, parameters)
+                    agent_result["agent"] = "MCPAgent"
+
+                    if agent_result.get("success"):
+                        logger.info(f"✅ MCP tool {mcp_tool_name} completed successfully")
+                        logger.info(f"🔧 MCP server: {agent_result.get('server', 'unknown')}")
+                    else:
+                        logger.error(f"❌ MCP tool {mcp_tool_name} failed: {agent_result.get('error', 'Unknown error')}")
+
+                    results.append(agent_result)
+
+                elif agent_name in self.sub_agents:
                     logger.info(f"\n🤖 SUB-AGENT {i}/{len(selected_agents)}: {agent_name.upper()}Agent")
 
                     # Build context-aware query for agents after the first one
