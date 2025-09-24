@@ -7,7 +7,7 @@ import { Check, Wrench, Globe, Code, Database, Monitor, BarChart3, Settings, Sea
 
 interface ToolSidebarProps {
   selectedTools: string[];
-  onToolToggle: (toolName: string) => void;
+  onToolToggle: (toolId: string) => void;
 }
 
 const toolIcons: Record<string, any> = {
@@ -124,7 +124,25 @@ const getToolTips = (toolName: string) => {
       extra: "Uses: LSTM neural networks, automatic data preprocessing, model performance metrics, downloadable predictions"
     }
   };
-  
+
+  // Handle MCP tools (format: server:tool)
+  if (toolName.includes(':')) {
+    const [serverName, toolName_] = toolName.split(':', 2);
+    const displayServerName = serverName.replace(/_/g, '-').replace(/\b\w/g, l => l.toUpperCase());
+    const displayToolName = toolName_.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+    return {
+      icon: Zap,
+      title: `🔌 MCP ${displayToolName}:`,
+      examples: [
+        `Try: "use the ${toolName_} tool"`,
+        `Ask: "${toolName_.replace(/_/g, ' ')} please"`,
+        `Simple: "${toolName_.replace(/_/g, ' ')}"`
+      ],
+      extra: `External MCP tool from ${displayServerName} - select this tool and describe what you want to do`
+    };
+  }
+
   return tips[toolName];
 };
 
@@ -188,29 +206,29 @@ export default function ToolSidebar({ selectedTools, onToolToggle }: ToolSidebar
             <div key={category} className="space-y-2">
               <div className="flex items-center gap-2 mb-3">
                 <IconComponent className="w-4 h-4 text-gray-600" />
-                <h3 className="text-sm font-medium text-gray-700 capitalize">
-                  {category} ({categoryTools.length})
+                <h3 className="text-sm font-medium text-gray-700">
+                  {category === 'mcp' ? 'MCP' : category.charAt(0).toUpperCase() + category.slice(1)} ({categoryTools.length})
                 </h3>
               </div>
 
               <div className="space-y-2">
                 {categoryTools.map((tool) => (
                   <div
-                    key={tool.name}
+                    key={tool.id}
                     className={`p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm ${
-                      selectedTools.includes(tool.name)
+                      selectedTools.includes(tool.id)
                         ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200'
                         : 'bg-white border-gray-200 hover:border-gray-300'
                     }`}
-                    onClick={() => onToolToggle(tool.name)}
+                    onClick={() => onToolToggle(tool.id)}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <h4 className="text-sm font-medium text-gray-900 truncate">
-                            {tool.name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                            {tool.name}
                           </h4>
-                          {selectedTools.includes(tool.name) && (
+                          {selectedTools.includes(tool.id) && (
                             <Check className="w-4 h-4 text-blue-600 flex-shrink-0" />
                           )}
                         </div>
@@ -253,23 +271,27 @@ export default function ToolSidebar({ selectedTools, onToolToggle }: ToolSidebar
             Selected Tools ({selectedTools.length})
           </h4>
           <div className="flex flex-wrap gap-1">
-            {selectedTools.map((toolName) => (
+            {selectedTools.map((toolId) => {
+              const tool = Object.values(tools).find(t => t.id === toolId);
+              const displayName = tool?.name || toolId.replace(/_/g, ' ');
+              return (
               <span
-                key={toolName}
+                key={toolId}
                 className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded"
               >
-                {toolName.replace(/_/g, ' ')}
+                {displayName}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    onToolToggle(toolName);
+                    onToolToggle(toolId);
                   }}
                   className="ml-1 text-blue-600 hover:text-blue-800"
                 >
                   ×
                 </button>
               </span>
-            ))}
+              );
+            })}
           </div>
 
           {/* Quick Tips for Selected Tools */}
