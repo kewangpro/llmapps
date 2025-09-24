@@ -7,7 +7,7 @@ AI-powered chat interface with intelligent multi-agent orchestration and real-ti
 ## Key Features
 
 - **Multi-Agent Orchestration** - Intelligent task routing to specialized agents
-- **Real-Time Tool Execution** - 9 powerful tools for file analysis, web search, data processing, visualization
+- **Real-Time Tool Execution** - 10 powerful tools for file analysis, web search, data processing, visualization
 - **Visual Content Analysis** - AI-powered image analysis with actual visual understanding
 - **Interactive Results** - Charts, images, presentations displayed directly in chat
 - **File Upload Support** - Automatic content analysis and tool selection
@@ -22,20 +22,21 @@ AI-powered chat interface with intelligent multi-agent orchestration and real-ti
 
 **Flow**: User input → Orchestrator → Specialized agents → Tool execution → Real-time results
 
-## Available Tools (9)
+## Available Tools (10)
 
-### General (4)
+### General (5)
 - **File Search** - Intelligent file discovery and pattern matching
 - **Web Search** - Real-time web search and information retrieval
 - **System Info** - Comprehensive system monitoring and diagnostics
 - **Presentation** - PowerPoint generation with downloadable outputs
+- **Visualization** - Interactive chart generation from data files
 
 ### Analytics (5)
 - **Data Processing** - CSV/JSON conversion, text analysis, data transformation
 - **Cost Analysis** - Financial data analysis and spending pattern visualization
-- **Visualization** - Interactive chart generation from data files
 - **Image Analysis** - Visual content analysis with metadata extraction
 - **Stock Analysis** - Financial market data and technical analysis
+- **Forecast** - LSTM neural network time series prediction and forecasting
 
 *Each tool has specialized agents with automatic parameter extraction and interactive result display.*
 
@@ -158,15 +159,15 @@ npm run dev
 ### Current Features
 
 **Architecture**
-- ✅ **Multi-Agent System** - 10 specialized agents with intelligent orchestration
+- ✅ **Multi-Agent System** - 11 specialized agents with intelligent orchestration
 - ✅ **Real-Time Streaming** - WebSocket-based communication with character-level streaming
-- ✅ **Tool Integration** - 9 powerful tools with automatic parameter extraction
+- ✅ **Tool Integration** - 10 powerful tools with automatic parameter extraction
 - ✅ **File Management** - Timestamped outputs saved to dedicated outputs folder
 
 **Capabilities**
 - ✅ **Data Processing** - CSV/JSON conversion, text analysis, duplicate removal
 - ✅ **Visual Analysis** - AI-powered image understanding and metadata extraction
-- ✅ **Financial Analytics** - Cost analysis and stock market data visualization
+- ✅ **Financial Analytics** - Cost analysis, stock market data visualization, and time series forecasting
 - ✅ **Content Generation** - PowerPoint presentations and interactive charts
 - ✅ **System Integration** - File search, web search, system monitoring
 
