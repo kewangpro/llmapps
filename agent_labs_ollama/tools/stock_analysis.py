@@ -13,6 +13,15 @@ from typing import Dict, Any, List
 from datetime import datetime, timedelta
 import statistics
 
+def save_to_outputs_folder(content: str, filename: str) -> str:
+    """Save content to outputs folder and return the full path"""
+    outputs_dir = os.path.join(os.path.dirname(__file__), "..", "outputs")
+    os.makedirs(outputs_dir, exist_ok=True)
+    output_path = os.path.join(outputs_dir, filename)
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(content)
+    return output_path
+
 # Suppress warnings and yfinance verbose output
 warnings.filterwarnings('ignore')
 os.environ['PYTHONWARNINGS'] = 'ignore'
@@ -193,6 +202,7 @@ def analyze_stock(symbol: str, period: str = "1y", analysis_type: str = "compreh
             result.update(perform_technical_analysis(hist, info))
         else:  # comprehensive
             result.update(perform_comprehensive_analysis(hist, info))
+
 
         return result
 
