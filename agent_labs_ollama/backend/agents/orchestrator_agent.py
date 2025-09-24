@@ -101,11 +101,27 @@ EXECUTION ORDER RULES:
 2. For stock analysis + forecast + visualization: Run stock_analysis → forecast → visualization
 3. Data-producing tools (stock_analysis, forecast, cost_analysis) should run before visualization
 
-Important: Only respond with "NONE" if this is a conversational query AND the user has NOT selected any specific tools.
+CRITICAL RULE: If the user has selected tools, choose ONLY the DIRECTLY RELEVANT ones from their selection for this query.
+Be EXTREMELY SELECTIVE. Only use tools that directly answer the specific question asked.
+NEVER respond with "NONE" when tools are selected.
+
+SELECTION LOGIC:
+1. Identify the PRIMARY tool that directly answers the user's question by reading tool descriptions
+2. Consider if a SECONDARY tool would enhance the output (e.g., visualization for data analysis)
+3. IGNORE all other tools, even if loosely related
+
+COMMON PATTERNS:
+- Data analysis queries: Use the analysis tool + visualization tool (if available)
+- Time queries: Use only time-related tools
+- System queries: Use only system information tools
+- Simple requests: Use only the most directly relevant tool
+
+Be RUTHLESSLY selective. Most queries need 1-2 tools maximum.
+Read the tool descriptions carefully and pick only tools whose purpose directly matches what the user asked for.
 
 Respond with:
 - Tool names (one per line) IN EXECUTION ORDER if tools should be used
-- "NONE" only if no tools are needed AND user hasn't selected any specific tools"""
+- "NONE" ONLY if the user has selected NO tools AND the query is purely conversational"""
 
             logger.info("🤔 Orchestrator thinking...")
             response = self.llm.call(prompt)
@@ -113,10 +129,16 @@ Respond with:
 
             # Parse response and validate against available tools (avoid duplicates)
             selected = []
-            for line in response.strip().split('\n'):
-                tool = line.strip().lower().replace('-', '').replace('*', '').strip()
-                if tool in available_tools and tool not in selected:
-                    selected.append(tool)
+
+            # Handle both comma-separated and newline-separated formats
+            lines = response.strip().split('\n')
+            for line in lines:
+                # Split by commas in case tools are comma-separated on one line
+                tools_in_line = [t.strip() for t in line.split(',')]
+                for tool_raw in tools_in_line:
+                    tool = tool_raw.strip().lower().replace('-', '').replace('*', '').strip()
+                    if tool in available_tools and tool not in selected:
+                        selected.append(tool)
 
             # Check if any valid tools were selected
             if selected:
