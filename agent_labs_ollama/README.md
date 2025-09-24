@@ -102,6 +102,42 @@ MCP_EXAMPLE_SERVER_TOOLS=echo,get_time,search_web
 MCP_EXAMPLE_SERVER_DESCRIPTION=Basic MCP server for testing
 ```
 
+## MCP Integration
+
+### Overview
+Agent Labs supports the Model Context Protocol (MCP) for connecting to external tool servers. MCP tools appear in their own category and are dynamically discovered.
+
+### Configuration
+Configure MCP servers in your `.env` file:
+```bash
+# Define server names (comma-separated)
+MCP_SERVERS=example_server,custom_server
+
+# Configure each server
+MCP_EXAMPLE_SERVER_URL=http://localhost:8000
+MCP_EXAMPLE_SERVER_TOOLS=echo,get_time
+MCP_EXAMPLE_SERVER_DESCRIPTION=Example MCP server
+
+MCP_CUSTOM_SERVER_URL=http://localhost:8001
+MCP_CUSTOM_SERVER_TOOLS=search,analyze
+MCP_CUSTOM_SERVER_DESCRIPTION=Custom analytics server
+```
+
+### Tool Selection
+- MCP tools appear in the "MCP" category in the sidebar
+- Tool names follow the pattern: `Server-Name:Tool-Name`
+- Quick Tips are automatically generated for all MCP tools
+- Select MCP tools alongside built-in tools for hybrid workflows
+
+### Usage Examples
+```bash
+# With echo tool selected
+"Hello world"  # Will use example_server:echo tool
+
+# With multiple tools
+"Analyze this data and echo the results"  # Uses both MCP and built-in tools
+```
+
 ## Usage
 
 1. **Select tools** from sidebar based on your task
@@ -166,9 +202,9 @@ npm run dev
 ### API Endpoints
 - `GET /api/tools` - Available tools and agent information
 - `GET /api/models` - Available LLM models (Ollama, OpenAI, Gemini)
+- `POST /api/select-model` - Change active LLM model and provider
 - `GET /health` - Health check and system status
 - `WS /ws/{client_id}` - Real-time chat with multi-agent orchestration
-- `POST /api/llm/configure` - Configure LLM provider and model
 
 ### Current Features
 
