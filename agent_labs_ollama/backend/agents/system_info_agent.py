@@ -3,6 +3,7 @@ System Info Agent - Specialized agent for system information operations
 """
 
 import logging
+import json
 from typing import Dict, Any
 from datetime import datetime
 from .base_agent import BaseAgent
@@ -88,8 +89,13 @@ Respond with just the metric name."""
     def _analyze_system_info_with_llm(self, tool_result: Dict[str, Any], original_query: str) -> str:
         """Use LLM to analyze the system information"""
         try:
-            # Extract system info from tool result
-            system_data = tool_result.get("system_info", {})
+            # Extract system info from tool result (different keys based on metric)
+            system_data = {}
+
+            # Combine all relevant data keys
+            for key in ['system', 'cpu', 'memory', 'disk', 'network']:
+                if key in tool_result:
+                    system_data[key] = tool_result[key]
 
             analysis_prompt = f"""Analyze this system information and provide insights for the user query: "{original_query}"
 
@@ -120,15 +126,20 @@ Focus on the information most relevant to the user's question."""
     def _format_tool_data(self, tool_result: Dict[str, Any]) -> str:
         """Format tool result as text for downstream agents"""
         try:
-            system_data = tool_result.get("system_info", {})
-            if isinstance(system_data, dict):
-                # Convert dict to readable text format
-                formatted_text = ""
-                for key, value in system_data.items():
-                    formatted_text += f"{key}: {value}\n"
-                return formatted_text
-            else:
-                return str(system_data)
+            # Extract all relevant data keys from the tool result
+            formatted_text = ""
+
+            for key in ['system', 'cpu', 'memory', 'disk', 'network']:
+                if key in tool_result:
+                    formatted_text += f"\n{key.upper()}:\n"
+                    data = tool_result[key]
+                    if isinstance(data, dict):
+                        formatted_text += json.dumps(data, indent=2)
+                    else:
+                        formatted_text += str(data)
+                    formatted_text += "\n"
+
+            return formatted_text.strip() if formatted_text else "No system data available"
         except Exception as e:
             logger.error(f"💻 Error formatting tool data: {str(e)}")
             return f"Error formatting system data: {str(e)}"
