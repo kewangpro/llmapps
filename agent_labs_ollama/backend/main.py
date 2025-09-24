@@ -190,9 +190,10 @@ async def get_tools():
     # Convert to the format expected by frontend
     tools_dict = {}
     for tool in tools:
-        tool_name = tool["name"]
-        tools_dict[tool_name] = {
-            "name": tool_name,
+        tool_id = tool["id"]
+        tools_dict[tool_id] = {
+            "id": tool_id,
+            "name": tool["name"],
             "description": tool["description"],
             "parameters": {},
             "category": tool.get("category", "general")
