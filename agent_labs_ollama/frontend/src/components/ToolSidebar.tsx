@@ -111,6 +111,16 @@ const getToolTips = (toolName: string) => {
         "Upload data and request: \"visualize trends over time\""
       ],
       extra: "Supported chart types: line, bar, scatter, pie, histogram, box, heatmap, area, bubble, treemap"
+    },
+    forecast: {
+      icon: TrendingUp,
+      title: "🔮 Predict future trends using LSTM:",
+      examples: [
+        "Upload time series CSV and ask: \"forecast the next 30 days\"",
+        "Attach sales data and say: \"predict future sales trends\"",
+        "Upload stock prices and request: \"forecast price movements\""
+      ],
+      extra: "Uses: LSTM neural networks, automatic data preprocessing, model performance metrics, downloadable predictions"
     }
   };
   

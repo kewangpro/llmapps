@@ -9,6 +9,7 @@ import StockChart from './StockChart';
 import AnalyzedImage from './AnalyzedImage';
 import PresentationViewer from './PresentationViewer';
 import ProcessedFileViewer from './ProcessedFileViewer';
+import ForecastViewer from './ForecastViewer';
 import VisualizationChart from './VisualizationChart';
 
 interface ChatInterfaceProps {
@@ -391,6 +392,19 @@ export default function ChatInterface({
                                   uniqueLines={result.result.unique_lines}
                                   emailsFound={result.result.emails_found || result.result.unique_matches}
                                   urlsFound={result.result.urls_found || result.result.unique_matches}
+                                />
+                              </div>
+                            )}
+
+                            {/* Display forecast file if available */}
+                            {result.tool === 'forecast' && result.result?.forecast_file_data && (
+                              <div className="mb-3">
+                                <ForecastViewer
+                                  forecastFileData={result.result.forecast_file_data}
+                                  forecastPeriods={result.result.data_info?.forecast_periods}
+                                  historicalPoints={result.result.data_info?.historical_points}
+                                  fileSizeMb={result.result.file_size_mb}
+                                  modelMetrics={result.result.model_metrics}
                                 />
                               </div>
                             )}
