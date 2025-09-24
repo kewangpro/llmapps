@@ -351,12 +351,6 @@ export default function ChatInterface({
                         {!isCollapsed && (
                           <div className="px-3 pb-3">
 
-                            {/* Display stock chart if available */}
-                            {result.tool === 'stock_analysis' && result.result?.stock_chart_data && (
-                              <div className="mb-3">
-                                <StockChart chartData={result.result.stock_chart_data} />
-                              </div>
-                            )}
 
                             {/* Display analyzed image if available */}
                             {result.tool === 'image_analysis' && result.result?.image_data && (
@@ -419,7 +413,7 @@ export default function ChatInterface({
                             )}
 
                             {/* Default/fallback renderer for tools without specific handlers */}
-                            {!['stock_analysis', 'image_analysis', 'presentation', 'data_processing', 'forecast', 'visualization'].includes(result.tool) && result.result && (
+                            {!['image_analysis', 'presentation', 'data_processing', 'forecast', 'visualization'].includes(result.tool) && result.result && (
                               <div className="mb-3">
                                 <div className="bg-green-50 p-4 rounded-lg border border-green-200">
                                   <pre className="text-xs text-green-800 whitespace-pre-wrap font-sans">
