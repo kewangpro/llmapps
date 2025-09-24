@@ -46,6 +46,10 @@ This directory contains all project documentation for Agent Labs.
 ![Data Processing Demo](./images/data-processing-demo.png)
 *Automated data cleaning, transformation, and processing with real-time feedback*
 
+#### LSTM Forecasting
+![Forecast Analysis Demo](./images/forecast-analysis-demo.png)
+*Advanced time series forecasting using LSTM neural networks with historical data analysis and future predictions*
+
 ## Project Documentation
 
 ### Core Documentation
