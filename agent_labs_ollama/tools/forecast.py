@@ -9,6 +9,7 @@ import sys
 import os
 import base64
 import io
+import signal
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -24,9 +25,27 @@ from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.optimizers import Adam
 import warnings
 
-# Suppress warnings
+# Suppress warnings and optimize for production
 warnings.filterwarnings('ignore')
 tf.get_logger().setLevel('ERROR')
+
+# Configure TensorFlow for production
+tf.config.threading.set_intra_op_parallelism_threads(2)
+tf.config.threading.set_inter_op_parallelism_threads(2)
+
+# Enable memory growth to prevent OOM
+physical_devices = tf.config.list_physical_devices('GPU')
+if physical_devices:
+    try:
+        tf.config.experimental.set_memory_growth(physical_devices[0], True)
+    except:
+        pass
+
+class TimeoutException(Exception):
+    pass
+
+def timeout_handler(signum, frame):
+    raise TimeoutException("Forecast operation timed out")
 
 def save_to_outputs_folder(content: str, filename: str) -> str:
     """Save content to outputs folder and return the full path"""
@@ -38,19 +57,17 @@ def save_to_outputs_folder(content: str, filename: str) -> str:
     return output_path
 
 def create_lstm_model(input_shape: Tuple[int, int]) -> Sequential:
-    """Create LSTM model architecture"""
+    """Create LSTM model architecture - optimized for production"""
     model = Sequential([
-        LSTM(50, return_sequences=True, input_shape=input_shape),
-        Dropout(0.2),
-        LSTM(50, return_sequences=True),
-        Dropout(0.2),
-        LSTM(50),
-        Dropout(0.2),
+        LSTM(32, return_sequences=True, input_shape=input_shape),
+        Dropout(0.1),
+        LSTM(32),
+        Dropout(0.1),
         Dense(1)
     ])
 
     model.compile(
-        optimizer=Adam(learning_rate=0.001),
+        optimizer=Adam(learning_rate=0.01),
         loss='mean_squared_error',
         metrics=['mae']
     )
@@ -116,6 +133,10 @@ def forecast_timeseries(data: str, forecast_periods: int = 30, time_steps: int =
     Returns:
         Dictionary with forecast results and visualization
     """
+    # Set timeout for production deployment (5 minutes)
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(300)  # 5 minutes timeout
+
     try:
         # Parse CSV data
         df = pd.read_csv(io.StringIO(data))
@@ -167,16 +188,18 @@ def forecast_timeseries(data: str, forecast_periods: int = 30, time_steps: int =
         scaler = MinMaxScaler(feature_range=(0, 1))
         scaled_data = scaler.fit_transform(values)
 
-        # Check if we have enough data
+        # Check if we have enough data - reduce requirements for production
+        if len(scaled_data) < 30:
+            return {
+                "success": False,
+                "error": f"Insufficient data for forecasting. Need at least 30 data points, got {len(scaled_data)}",
+                "forecast_data": [],
+                "visualization": None
+            }
+
+        # Adjust time_steps based on available data
         if len(scaled_data) < time_steps + 20:
-            time_steps = max(10, len(scaled_data) // 3)
-            if len(scaled_data) < time_steps + 10:
-                return {
-                    "success": False,
-                    "error": f"Insufficient data for forecasting. Need at least {time_steps + 10} data points, got {len(scaled_data)}",
-                    "forecast_data": [],
-                    "visualization": None
-                }
+            time_steps = max(10, min(30, len(scaled_data) // 3))
 
         # Prepare training data
         X, y = prepare_lstm_data(scaled_data, time_steps)
@@ -192,11 +215,11 @@ def forecast_timeseries(data: str, forecast_periods: int = 30, time_steps: int =
         # Create and train model
         model = create_lstm_model((time_steps, 1))
 
-        # Train with early stopping
+        # Train with reduced epochs for production
         history = model.fit(
             X_train, y_train,
-            epochs=50,
-            batch_size=32,
+            epochs=20,
+            batch_size=16,
             validation_data=(X_val, y_val),
             verbose=0,
             shuffle=False
@@ -284,6 +307,13 @@ def forecast_timeseries(data: str, forecast_periods: int = 30, time_steps: int =
             }
         }
 
+    except TimeoutException as e:
+        return {
+            "success": False,
+            "error": "Forecast operation timed out. Please try with smaller dataset or fewer forecast periods.",
+            "forecast_data": [],
+            "visualization": None
+        }
     except Exception as e:
         return {
             "success": False,
@@ -291,6 +321,9 @@ def forecast_timeseries(data: str, forecast_periods: int = 30, time_steps: int =
             "forecast_data": [],
             "visualization": None
         }
+    finally:
+        # Clear the alarm
+        signal.alarm(0)
 
 def main():
     if len(sys.argv) < 2:
