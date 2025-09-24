@@ -1,4 +1,5 @@
 export interface Tool {
+  id: string;
   name: string;
   description: string;
   parameters: Record<string, any>;
