@@ -33,11 +33,11 @@ export default function Home() {
     clientId
   });
 
-  const handleToolToggle = (toolName: string) => {
+  const handleToolToggle = (toolId: string) => {
     setSelectedTools(prev =>
-      prev.includes(toolName)
-        ? prev.filter(t => t !== toolName)
-        : [...prev, toolName]
+      prev.includes(toolId)
+        ? prev.filter(t => t !== toolId)
+        : [...prev, toolId]
     );
   };
 
