@@ -410,11 +410,47 @@ export default function ChatInterface({
                             )}
 
                             {/* Display visualization chart if available */}
-                            {(result.tool === 'visualization' || result.tool === 'cost_analysis') && result.result && result.result.chart_html && (
+                            {result.tool === 'visualization' && result.result?.chart_html && (
                               <div className="mb-3">
                                 <VisualizationChart
                                   visualizationData={result.result}
                                 />
+                              </div>
+                            )}
+
+                            {/* Default/fallback renderer for tools without specific handlers */}
+                            {!['stock_analysis', 'image_analysis', 'presentation', 'data_processing', 'forecast', 'visualization'].includes(result.tool) && result.result && (
+                              <div className="mb-3">
+                                <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                                  <pre className="text-xs text-green-800 whitespace-pre-wrap font-sans">
+                                    {(() => {
+                                      // Handle deeply nested JSON strings (recursive parsing)
+                                      let data = result.result.tool_data || result.result;
+
+                                      const parseRecursively = (obj: any): any => {
+                                        if (typeof obj === 'string') {
+                                          try {
+                                            const parsed = JSON.parse(obj);
+                                            return parseRecursively(parsed); // Recursively parse
+                                          } catch (e) {
+                                            return obj; // If not JSON, return as string
+                                          }
+                                        } else if (typeof obj === 'object' && obj !== null) {
+                                          // Parse each property recursively
+                                          const result: any = {};
+                                          for (const [key, value] of Object.entries(obj)) {
+                                            result[key] = parseRecursively(value);
+                                          }
+                                          return result;
+                                        }
+                                        return obj;
+                                      };
+
+                                      data = parseRecursively(data);
+                                      return typeof data === 'object' ? JSON.stringify(data, null, 2) : data;
+                                    })()}
+                                  </pre>
+                                </div>
                               </div>
                             )}
 
