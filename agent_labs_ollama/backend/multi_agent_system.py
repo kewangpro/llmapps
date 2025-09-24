@@ -46,5 +46,6 @@ class MultiAgentSystem:
             {"name": "data_processing", "description": "Process, analyze, and transform data", "short_description": "process, analyze, or transform data", "category": "analytics"},
             {"name": "image_analysis", "description": "Analyze image files for content, objects, text, and metadata", "short_description": "analyze image files for content, text, and metadata", "category": "analytics"},
             {"name": "stock_analysis", "description": "Analyze stock market data and performance using Yahoo Finance", "short_description": "analyze stock market data and performance using Yahoo Finance", "category": "analytics"},
-            {"name": "visualization", "description": "Create charts and visualizations from data", "short_description": "create charts and visualizations from data", "category": "analytics"}
+            {"name": "visualization", "description": "Create charts and visualizations from data", "short_description": "create charts and visualizations from data", "category": "general"},
+            {"name": "forecast", "description": "Predict future values using LSTM neural networks for time series data", "short_description": "forecast future trends using LSTM neural networks", "category": "analytics"}
         ]
