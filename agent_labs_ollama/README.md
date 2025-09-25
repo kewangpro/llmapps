@@ -36,7 +36,7 @@ AI-powered chat interface with intelligent multi-agent orchestration and real-ti
 
 #### Analytics (5)
 - **Data Processing** - CSV/JSON conversion, text analysis, data transformation
-- **Cost Analysis** - Financial data analysis and spending pattern visualization
+- **Cost Analysis** - Financial data analysis with downloadable CSV reports and spending insights
 - **Image Analysis** - Visual content analysis with metadata extraction
 - **Stock Analysis** - Financial market data and technical analysis
 - **Forecast** - LSTM neural network time series prediction and forecasting
