@@ -6,9 +6,22 @@ Reads and organizes COGS data files for analysis
 import pandas as pd
 import chardet
 import logging
+import base64
+import os
 from typing import Dict, Any
+from datetime import datetime
 
 logger = logging.getLogger("CostAnalysisTool")
+
+
+def save_to_outputs_folder(content: str, filename: str) -> str:
+    """Save content to outputs folder and return the full path"""
+    outputs_dir = os.path.join(os.path.dirname(__file__), "..", "outputs")
+    os.makedirs(outputs_dir, exist_ok=True)
+    output_path = os.path.join(outputs_dir, filename)
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(content)
+    return output_path
 
 
 def analyze_cogs_data(file_path: str) -> Dict[str, Any]:
@@ -39,7 +52,21 @@ def analyze_cogs_data(file_path: str) -> Dict[str, Any]:
     insights = generate_cost_insights(df)
     logger.info(f"Analysis complete: {len(df)} rows, {len(df.columns)} columns")
 
-    # Return organized data similar to stock analysis tool
+    # Extract monthly data for CSV generation
+    monthly_data = extract_monthly_data(df)
+
+    # Generate CSV data file for download using existing monthly data
+    cost_summary_csv = format_monthly_data_as_csv(monthly_data)
+
+    # Save CSV file to outputs directory
+    cost_filename = f"cost_analysis_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    output_path = save_to_outputs_folder(cost_summary_csv, cost_filename)
+
+    # Create downloadable file data
+    file_base64 = base64.b64encode(cost_summary_csv.encode('utf-8')).decode('utf-8')
+    file_size_mb = len(cost_summary_csv.encode('utf-8')) / (1024 * 1024)
+
+    # Return organized data similar to forecast tool
     result = {
         "data_summary": {
             "total_rows": len(df),
@@ -50,7 +77,16 @@ def analyze_cogs_data(file_path: str) -> Dict[str, Any]:
         "cost_insights": insights,
         "recommendations": generate_recommendations(insights),
         # Add raw data for visualization tool (similar to stock historical_data)
-        "monthly_data": extract_monthly_data(df)
+        "monthly_data": monthly_data,
+        # Add downloadable CSV file data (similar to forecast tool)
+        "output_path": output_path,
+        "file_size_mb": round(file_size_mb, 4),
+        "cost_analysis_file_data": {
+            "base64": file_base64,
+            "filename": cost_filename,
+            "mime_type": "text/csv",
+            "content_preview": cost_summary_csv[:300] + "..." if len(cost_summary_csv) > 300 else cost_summary_csv
+        }
     }
 
     return result
@@ -186,6 +222,38 @@ def extract_monthly_data(df: pd.DataFrame) -> Dict[str, Any]:
                     result["service_group_costs"][group][month] = float(service_group_costs.loc[group, month])
 
     return result
+
+
+def format_monthly_data_as_csv(monthly_data: Dict[str, Any]) -> str:
+    """Format monthly data as CSV string for download"""
+    try:
+        months = monthly_data.get("months", [])
+
+        # Default to business unit breakdown (matches current tool output)
+        business_unit_costs = monthly_data.get("business_unit_costs", {})
+        if business_unit_costs and months:
+            csv_data = "month,business_unit,cost\n"
+            for unit, unit_costs in business_unit_costs.items():
+                for month in months:
+                    cost = unit_costs.get(month, 0)
+                    csv_data += f"{month},{unit},{cost}\n"
+            return csv_data
+
+        # Fallback to monthly totals
+        total_costs = monthly_data.get("total_costs", {})
+        if total_costs and months:
+            csv_data = "month,total_cost\n"
+            for month in months:
+                cost = total_costs.get(month, 0)
+                csv_data += f"{month},{cost}\n"
+            return csv_data
+
+        # Final fallback
+        return "month,cost\nNo data available"
+
+    except Exception as e:
+        logger.error(f"Error formatting monthly data as CSV: {str(e)}")
+        return f"month,error\n2025-01,Error formatting data: {str(e)}\n"
 
 
 def generate_recommendations(insights: Dict[str, Any]) -> list:
