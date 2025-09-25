@@ -5,11 +5,11 @@ import { Message, ToolResult } from '@/types';
 import { apiUrl } from '@/utils/api';
 import { getDefaultLLMConfig, getAvailableModels } from '@/utils/llm';
 import { Send, Bot, User, Loader2, Wrench, ChevronDown, ChevronRight, Paperclip, X } from 'lucide-react';
-import StockChart from './StockChart';
 import AnalyzedImage from './AnalyzedImage';
 import PresentationViewer from './PresentationViewer';
 import ProcessedFileViewer from './ProcessedFileViewer';
 import ForecastViewer from './ForecastViewer';
+import CostAnalysisViewer from './CostAnalysisViewer';
 import VisualizationChart from './VisualizationChart';
 
 interface ChatInterfaceProps {
@@ -33,7 +33,7 @@ export default function ChatInterface({
     return `${defaultConfig.provider}/${defaultConfig.model}`;
   });
   const [availableModels, setAvailableModels] = useState<Array<{name: string, provider: string, model: string}>>([]);
-  const [collapsedToolResults, setCollapsedToolResults] = useState<Set<string | number>>(new Set());
+  const [expandedToolResults, setExpandedToolResults] = useState<Set<string | number>>(new Set());
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [fileContent, setFileContent] = useState<string>('');
   const [fileWarning, setFileWarning] = useState<string>('');
@@ -192,8 +192,8 @@ export default function ChatInterface({
     });
   };
 
-  const toggleToolResultCollapse = (key: string | number) => {
-    setCollapsedToolResults(prev => {
+  const toggleToolResultExpand = (key: string | number) => {
+    setExpandedToolResults(prev => {
       const newSet = new Set(prev);
       if (newSet.has(key)) {
         newSet.delete(key);
@@ -321,12 +321,13 @@ export default function ChatInterface({
               {message.role === 'assistant' && message.toolResults && message.toolResults.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {message.toolResults.map((result, index) => {
-                    const isCollapsed = collapsedToolResults.has(`${message.id}-${index}`);
+                    const hasSpecialViewer = ['image_analysis', 'presentation', 'data_processing', 'forecast', 'cost_analysis', 'visualization'].includes(result.tool);
+                    const isExpanded = hasSpecialViewer || expandedToolResults.has(`${message.id}-${index}`);
                     return (
                       <div key={`${message.id}-${index}`} className="rounded-lg bg-green-50 border border-green-200">
                         <div
                           className="p-3 cursor-pointer hover:bg-green-100 transition-colors"
-                          onClick={() => toggleToolResultCollapse(`${message.id}-${index}`)}
+                          onClick={() => toggleToolResultExpand(`${message.id}-${index}`)}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
@@ -339,16 +340,16 @@ export default function ChatInterface({
                               <div className="text-xs text-green-600">
                                 {formatTimestamp(result.timestamp)}
                               </div>
-                              {isCollapsed ? (
-                                <ChevronRight className="w-4 h-4 text-green-600" />
-                              ) : (
+                              {isExpanded ? (
                                 <ChevronDown className="w-4 h-4 text-green-600" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4 text-green-600" />
                               )}
                             </div>
                           </div>
                         </div>
 
-                        {!isCollapsed && (
+                        {isExpanded && (
                           <div className="px-3 pb-3">
 
 
@@ -403,6 +404,16 @@ export default function ChatInterface({
                               </div>
                             )}
 
+                            {/* Display cost analysis file if available */}
+                            {result.tool === 'cost_analysis' && result.result?.cost_analysis_file_data && (
+                              <div className="mb-3">
+                                <CostAnalysisViewer
+                                  costAnalysisFileData={result.result.cost_analysis_file_data}
+                                  fileSizeMb={result.result.file_size_mb}
+                                />
+                              </div>
+                            )}
+
                             {/* Display visualization chart if available */}
                             {result.tool === 'visualization' && result.result?.chart_html && (
                               <div className="mb-3">
@@ -413,7 +424,7 @@ export default function ChatInterface({
                             )}
 
                             {/* Default/fallback renderer for tools without specific handlers */}
-                            {!['image_analysis', 'presentation', 'data_processing', 'forecast', 'visualization'].includes(result.tool) && result.result && (
+                            {!['image_analysis', 'presentation', 'data_processing', 'forecast', 'cost_analysis', 'visualization'].includes(result.tool) && result.result && (
                               <div className="mb-3">
                                 <div className="bg-green-50 p-4 rounded-lg border border-green-200">
                                   <pre className="text-xs text-green-800 whitespace-pre-wrap font-sans">
