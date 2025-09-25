@@ -48,6 +48,11 @@ class OrchestratorAgent(BaseAgent):
             logger.info(f"\n🧠 ORCHESTRATOR ANALYZING QUERY: '{query}'")
             logger.info(f"📋 Available tools: {available_tools}")
 
+            # If no tools are available (user didn't select any), treat as conversational query
+            if not available_tools:
+                logger.info("✅ No tools selected - treating as conversational query")
+                return []
+
             # Get tool descriptions from MultiAgentSystem
             from multi_agent_system import MultiAgentSystem
             all_tools = MultiAgentSystem.get_available_tools()
@@ -241,8 +246,7 @@ Respond as the orchestrator agent in first person."""
             logger.info(f"\n🎯 ORCHESTRATOR STARTING EXECUTION WITH CALLBACK")
             logger.info(f"Query: '{query}'")
 
-            if not available_tools:
-                available_tools = list(self.sub_agents.keys())
+            # Don't auto-populate available_tools - respect user's tool selection (or lack thereof)
 
             # Select appropriate sub-agents
             selected_agents = self._select_agents(query, available_tools, attached_file)
@@ -555,8 +559,7 @@ Provide a clear, helpful response that synthesizes the information from the tool
             logger.info(f"\n🎯 ORCHESTRATOR STARTING EXECUTION")
             logger.info(f"Query: '{query}'")
 
-            if not available_tools:
-                available_tools = list(self.sub_agents.keys())
+            # Don't auto-populate available_tools - respect user's tool selection (or lack thereof)
 
             # Select appropriate sub-agents
             selected_agents = self._select_agents(query, available_tools, attached_file)
