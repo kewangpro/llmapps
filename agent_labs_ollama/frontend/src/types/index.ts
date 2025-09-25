@@ -20,13 +20,6 @@ export interface Message {
   toolResults?: ToolResult[];
 }
 
-export interface StockChartData {
-  dates: string[];
-  prices: number[];
-  symbol: string;
-  company_name: string;
-  chart_html?: string;
-}
 
 export interface ImageData {
   base64: string;
@@ -70,7 +63,6 @@ export interface ToolResult {
   result: any;
   timestamp: string;
   summary?: string;
-  stock_chart_data?: StockChartData;
   image_data?: ImageData;
   presentation_data?: PresentationData;
   visualization_data?: VisualizationData;
