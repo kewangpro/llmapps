@@ -82,47 +82,7 @@ class OrchestratorAgent(BaseAgent):
 Available tools:
 {chr(10).join(available_desc)}
 
-Which tools should be used? Consider:
-1. PRIORITY: If user has selected specific tools, prioritize using those tools unless the query is completely unrelated
-2. What information is the user asking for?
-3. What actions need to be performed?
-4. Are multiple tools needed?
-5. If an image file is attached, prioritize image_analysis for visual analysis
-6. If a data file is attached, prioritize data_processing for data analysis
-
-TOOL SELECTION PRIORITY RULES:
-1. USER SELECTION: If user selected specific tools, use them unless completely inappropriate
-2. STOCK QUERIES (company names like MSFT/AAPL, stock symbols, market analysis, stock performance):
-   - Use "stock_analysis" AND "visualization" tools together
-   - Examples: "show AAPL performance", "analyze Tesla stock", "get financial metrics for MSFT"
-3. COST/SPENDING QUERIES (COGS analysis, business unit costs, spending patterns):
-   - Use "cost_analysis" AND "visualization" tools together
-   - Examples: "show cost trends", "analyze spending per business unit", "cost per department"
-4. MCP TOOLS: If user selected MCP tools (mcp_*), respect their choice for testing/demonstration
-5. AVOID DUPLICATES: Select each tool only once, even if multiple categories match
-
-EXECUTION ORDER RULES:
-1. For forecast + visualization: Run forecast BEFORE visualization so charts show both historical and predicted data
-2. For stock analysis + forecast + visualization: Run stock_analysis → forecast → visualization
-3. Data-producing tools (stock_analysis, forecast, cost_analysis) should run before visualization
-
-CRITICAL RULE: If the user has selected tools, choose ONLY the DIRECTLY RELEVANT ones from their selection for this query.
-Be EXTREMELY SELECTIVE. Only use tools that directly answer the specific question asked.
-NEVER respond with "NONE" when tools are selected.
-
-SELECTION LOGIC:
-1. Identify the PRIMARY tool that directly answers the user's question by reading tool descriptions
-2. Consider if a SECONDARY tool would enhance the output (e.g., visualization for data analysis)
-3. IGNORE all other tools, even if loosely related
-
-COMMON PATTERNS:
-- Data analysis queries: Use the analysis tool + visualization tool (if available)
-- Time queries: Use only time-related tools
-- System queries: Use only system information tools
-- Simple requests: Use only the most directly relevant tool
-
-Be RUTHLESSLY selective. Most queries need 1-2 tools maximum.
-Read the tool descriptions carefully and pick only tools whose purpose directly matches what the user asked for.
+Look at what the user is asking for and match it to the tool descriptions. Select only the tools that directly fulfill their request. Do not add tools they did not ask for.
 
 Respond with:
 - Tool names (one per line) IN EXECUTION ORDER if tools should be used
@@ -151,6 +111,14 @@ Respond with:
                 if 'visualization' in selected and len(selected) > 1:
                     selected = [tool for tool in selected if tool != 'visualization'] + ['visualization']
                     logger.info(f"🔄 Reordered tools to put visualization last: {selected}")
+
+                # Ensure presentation runs last when combined with data tools
+                if 'presentation' in selected and len(selected) > 1:
+                    data_tools = [tool for tool in selected if tool in ['cost_analysis', 'stock_analysis', 'data_processing', 'forecast']]
+                    other_tools = [tool for tool in selected if tool not in ['cost_analysis', 'stock_analysis', 'data_processing', 'forecast', 'presentation']]
+                    selected = data_tools + other_tools + ['presentation']
+                    logger.info(f"🔄 Reordered tools to put presentation last after data tools: {selected}")
+
                 logger.info(f"✅ Selected agents: {selected}")
             elif "NONE" in response.strip().upper():
                 selected = []
