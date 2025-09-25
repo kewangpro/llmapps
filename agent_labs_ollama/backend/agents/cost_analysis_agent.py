@@ -53,7 +53,9 @@ class CostAnalysisAgent(BaseAgent):
                 # Format tool_data as CSV for downstream agents
                 formatted_tool_data = self._format_tool_data_as_csv(tool_result, clean_query)
 
+                # Merge tool result with agent analysis for frontend
                 result = {
+                    **tool_result,  # Include all tool result data (cost_analysis_file_data, etc.)
                     "tool_data": formatted_tool_data,  # CSV formatted data for chaining
                     "llm_analysis": llm_analysis       # LLM insights
                 }

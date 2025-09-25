@@ -142,6 +142,10 @@ Respond with:
 
             # Check if any valid tools were selected
             if selected:
+                # Ensure visualization runs last when combined with other tools
+                if 'visualization' in selected and len(selected) > 1:
+                    selected = [tool for tool in selected if tool != 'visualization'] + ['visualization']
+                    logger.info(f"🔄 Reordered tools to put visualization last: {selected}")
                 logger.info(f"✅ Selected agents: {selected}")
             elif "NONE" in response.strip().upper():
                 selected = []
