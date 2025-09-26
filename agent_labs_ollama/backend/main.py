@@ -396,20 +396,25 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                 logger.info(f"🎯 Main Agent result: success={mas_result.get('success')}")
 
                 # Send tool results if any (for transparency)
-                # But responses are already sent via callback
+                # Send results for both successful and failed tools
                 if mas_result.get("success"):
                     for agent_result in mas_result.get("agent_results", []):
-                        if agent_result.get("success"):
-                            tool_name = agent_result.get("tool", "unknown")
+                        tool_name = agent_result.get("tool", "unknown")
 
-                            await manager.send_personal_message({
-                                "type": "tool_result",
-                                "tool": tool_name,
-                                "result": agent_result.get("result", {}),
-                                "timestamp": datetime.now().isoformat()
-                            }, client_id)
+                        # Include error information for failed tools
+                        result_data = agent_result.get("result", {})
+                        if not agent_result.get("success", False) and agent_result.get("error"):
+                            result_data = {"error": agent_result.get("error")}
 
-                            # Note: Tool summaries removed - OrchestratorAgent's final response serves as the summary
+                        await manager.send_personal_message({
+                            "type": "tool_result",
+                            "tool": tool_name,
+                            "result": result_data,
+                            "success": agent_result.get("success", False),
+                            "timestamp": datetime.now().isoformat()
+                        }, client_id)
+
+                        # Note: Tool summaries removed - OrchestratorAgent's final response serves as the summary
 
                 else:
                     # Send error message
