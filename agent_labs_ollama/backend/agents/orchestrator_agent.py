@@ -287,7 +287,7 @@ Respond as the orchestrator agent in first person."""
 
                     # Execute MCP tool
                     agent_result = await self.mcp_agent.execute_mcp_tool(tool_name, parameters)
-                    agent_result["agent"] = "MCPAgent"
+                    # Tool name is already set by MCP agent
 
                     if agent_result.get("success"):
                         logger.info(f"✅ {tool_id} completed successfully")
@@ -401,15 +401,15 @@ Respond with just the refined query, no additional text."""
                 non_analysis_results = []
 
                 for result in results:
-                    if result.get("agent") == "VisualizationAgent":
+                    if result.get("tool") == "visualization":
                         # Visualization results are displayed separately, not included in final answer
                         logger.info(f"📊 Visualization result will be displayed separately")
                         continue
                     elif result.get("result", {}).get("llm_analysis"):
                         # Use any agent's LLM analysis directly (generic handling)
                         analysis_content.append(result["result"]["llm_analysis"])
-                        agent_name = result.get("agent", "Unknown")
-                        logger.info(f"🤖 Using LLM insights from {agent_name}")
+                        tool_name = result.get("tool", "Unknown")
+                        logger.info(f"🤖 Using LLM insights from {tool_name}")
                     else:
                         # Keep other results for potential synthesis
                         non_analysis_results.append(result)
@@ -585,7 +585,7 @@ Provide a clear, helpful response that synthesizes the information from the tool
 
                     # Execute MCP tool synchronously (wrapper handles async)
                     agent_result = self.mcp_agent.execute(query, tool_name, parameters)
-                    agent_result["agent"] = "MCPAgent"
+                    # Tool name is already set by MCP agent
 
                     if agent_result.get("success"):
                         logger.info(f"✅ {tool_id} completed successfully")
@@ -699,15 +699,15 @@ Respond with just the refined query, no additional text."""
                 non_analysis_results = []
 
                 for result in results:
-                    if result.get("agent") == "VisualizationAgent":
+                    if result.get("tool") == "visualization":
                         # Visualization results are displayed separately, not included in final answer
                         logger.info(f"📊 Visualization result will be displayed separately")
                         continue
                     elif result.get("result", {}).get("llm_analysis"):
                         # Use any agent's LLM analysis directly (generic handling)
                         analysis_content.append(result["result"]["llm_analysis"])
-                        agent_name = result.get("agent", "Unknown")
-                        logger.info(f"🤖 Using LLM insights from {agent_name}")
+                        tool_name = result.get("tool", "Unknown")
+                        logger.info(f"🤖 Using LLM insights from {tool_name}")
                     else:
                         # Keep other results for potential synthesis
                         non_analysis_results.append(result)

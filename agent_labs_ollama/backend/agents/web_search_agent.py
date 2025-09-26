@@ -44,7 +44,6 @@ Respond with just the optimized query, no additional text."""
 
             if not tool_result.get("success", False):
                 return {
-                    "agent": "WebSearchAgent",
                     "success": False,
                     "error": f"Web search tool failed: {tool_result.get('error', 'Unknown error')}",
                     "timestamp": datetime.now().isoformat()
@@ -62,7 +61,6 @@ Respond with just the optimized query, no additional text."""
             }
 
             return {
-                "agent": "WebSearchAgent",
                 "tool": "web_search",
                 "parameters": params,
                 "result": result,
@@ -72,7 +70,7 @@ Respond with just the optimized query, no additional text."""
         except Exception as e:
             logger.error(f"🌐 WebSearchAgent error: {str(e)}")
             return {
-                "agent": "WebSearchAgent",
+                "tool": "web_search",
                 "success": False,
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()

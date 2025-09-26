@@ -43,7 +43,6 @@ class ImageAnalysisAgent(BaseAgent):
 
             if not tool_result.get("success", False):
                 return {
-                    "agent": "ImageAnalysisAgent",
                     "tool": "image_analysis",
                     "parameters": tool_params,
                     "result": tool_result,
@@ -101,7 +100,6 @@ Respond with just the type name (e.g., "raw_exif")."""
                 }
 
                 return {
-                    "agent": "ImageAnalysisAgent",
                     "tool": "image_analysis",
                     "parameters": {"image_path": file_path, "analysis_type": analysis_type},
                     "result": result,
@@ -219,7 +217,6 @@ Please analyze the actual visual content of this image and provide detailed insi
             }
 
             return {
-                "agent": "ImageAnalysisAgent",
                 "tool": "image_analysis",
                 "parameters": {"image_path": file_path, "analysis_type": analysis_type},
                 "result": result,
@@ -230,7 +227,7 @@ Please analyze the actual visual content of this image and provide detailed insi
         except Exception as e:
             logger.error(f"🖼️ ImageAnalysisAgent error: {str(e)}")
             return {
-                "agent": "ImageAnalysisAgent",
+                "tool": "image_analysis",
                 "success": False,
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()

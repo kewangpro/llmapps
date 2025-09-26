@@ -92,7 +92,6 @@ If no clear stock symbol is found, use "SPY" (S&P 500 ETF) as default."""
                 result = tool_result
 
             return {
-                "agent": "StockAnalysisAgent",
                 "tool": "stock_analysis",
                 "parameters": params,
                 "result": result,
@@ -103,7 +102,7 @@ If no clear stock symbol is found, use "SPY" (S&P 500 ETF) as default."""
         except Exception as e:
             logger.error(f"📈 StockAnalysisAgent error: {str(e)}")
             return {
-                "agent": "StockAnalysisAgent",
+                "tool": "stock_analysis",
                 "success": False,
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()

@@ -44,7 +44,6 @@ class VisualizationAgent(BaseAgent):
                     result = self._execute_tool_script("visualization", params)
                     
                     response = {
-                        "agent": "VisualizationAgent",
                         "tool": "visualization",
                         "parameters": params,
                         "result": result,
@@ -57,7 +56,7 @@ class VisualizationAgent(BaseAgent):
                 except Exception as e:
                     logger.error(f"📄 Failed to read file {file_path}: {str(e)}")
                     return {
-                        "agent": "VisualizationAgent",
+                        "tool": "visualization",
                         "success": False,
                         "error": f"Failed to read file {file_path}: {str(e)}",
                         "timestamp": datetime.now().isoformat()
@@ -80,7 +79,6 @@ class VisualizationAgent(BaseAgent):
                 result = self._execute_tool_script("visualization", params)
                 
                 response = {
-                    "agent": "VisualizationAgent",
                     "tool": "visualization", 
                     "parameters": params,
                     "result": result,
@@ -93,11 +91,11 @@ class VisualizationAgent(BaseAgent):
             else:
                 # Query doesn't contain data or file - provide guidance
                 return {
-                    "agent": "VisualizationAgent",
+                    "tool": "visualization",
                     "success": False,
                     "error": "No data provided. Please attach a data file or include data in your query.",
                     "available_chart_types": [
-                        "line", "bar", "scatter", "pie", "histogram", 
+                        "line", "bar", "scatter", "pie", "histogram",
                         "box", "heatmap", "area", "bubble", "treemap"
                     ],
                     "timestamp": datetime.now().isoformat()
@@ -106,7 +104,7 @@ class VisualizationAgent(BaseAgent):
         except Exception as e:
             logger.error(f"📊 VisualizationAgent error: {str(e)}")
             return {
-                "agent": "VisualizationAgent",
+                "tool": "visualization",
                 "success": False,
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()

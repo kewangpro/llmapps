@@ -29,7 +29,6 @@ class ForecastAgent(BaseAgent):
         except Exception as e:
             logger.error(f"📈 ForecastAgent error: {str(e)}")
             return {
-                "agent": "ForecastAgent",
                 "success": False,
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()
@@ -139,8 +138,7 @@ IMPORTANT: Use the EXACT column names from the CSV headers, not conceptual names
 
             if not tool_result.get("success", False):
                 return {
-                    "agent": "ForecastAgent",
-                    "success": False,
+                        "success": False,
                     "error": f"Forecast tool failed: {tool_result.get('error', 'Unknown error')}",
                     "timestamp": datetime.now().isoformat()
                 }
@@ -165,7 +163,6 @@ IMPORTANT: Use the EXACT column names from the CSV headers, not conceptual names
                 logger.warning("📈 forecast_file_data NOT found in result!")
 
             return {
-                "agent": "ForecastAgent",
                 "tool": "forecast",
                 "parameters": tool_params,
                 "result": result,
@@ -176,7 +173,7 @@ IMPORTANT: Use the EXACT column names from the CSV headers, not conceptual names
         except Exception as e:
             logger.error(f"📈 File forecast processing error: {str(e)}")
             return {
-                "agent": "ForecastAgent",
+                "tool": "forecast",
                 "success": False,
                 "error": f"Failed to process file forecast: {str(e)}",
                 "timestamp": datetime.now().isoformat()
@@ -225,8 +222,7 @@ Format response as JSON:
 
             if not params.get("has_data", False):
                 return {
-                    "agent": "ForecastAgent",
-                    "success": False,
+                        "success": False,
                     "error": "No time series data provided. Forecasting requires actual historical data (CSV format with date and value columns). Please attach a CSV file with time series data to make predictions.",
                     "timestamp": datetime.now().isoformat()
                 }
@@ -244,8 +240,7 @@ Format response as JSON:
 
             if not tool_result.get("success", False):
                 return {
-                    "agent": "ForecastAgent",
-                    "success": False,
+                        "success": False,
                     "error": f"Forecast tool failed: {tool_result.get('error', 'Unknown error')}",
                     "timestamp": datetime.now().isoformat()
                 }
@@ -261,7 +256,6 @@ Format response as JSON:
             }
 
             return {
-                "agent": "ForecastAgent",
                 "tool": "forecast",
                 "parameters": tool_params,
                 "result": result,
@@ -272,7 +266,7 @@ Format response as JSON:
         except Exception as e:
             logger.error(f"📈 Text forecast processing error: {str(e)}")
             return {
-                "agent": "ForecastAgent",
+                "tool": "forecast",
                 "success": False,
                 "error": f"Failed to process forecast request: {str(e)}",
                 "timestamp": datetime.now().isoformat()
@@ -310,8 +304,7 @@ Format response as JSON:
 
             if not csv_data_lines or len(csv_data_lines) < 2:
                 return {
-                    "agent": "ForecastAgent",
-                    "success": False,
+                        "success": False,
                     "error": "No valid stock price data found for forecasting. Need historical price data with dates and values.",
                     "timestamp": datetime.now().isoformat()
                 }
@@ -336,8 +329,7 @@ Format response as JSON:
 
             if not tool_result.get("success", False):
                 return {
-                    "agent": "ForecastAgent",
-                    "success": False,
+                        "success": False,
                     "error": f"Forecast tool failed: {tool_result.get('error', 'Unknown error')}",
                     "timestamp": datetime.now().isoformat()
                 }
@@ -352,7 +344,6 @@ Format response as JSON:
             }
 
             return {
-                "agent": "ForecastAgent",
                 "tool": "forecast",
                 "parameters": tool_params,
                 "result": result,
@@ -363,7 +354,7 @@ Format response as JSON:
         except Exception as e:
             logger.error(f"📈 Stock price forecasting error: {str(e)}")
             return {
-                "agent": "ForecastAgent",
+                "tool": "forecast",
                 "success": False,
                 "error": f"Failed to process stock price forecast: {str(e)}",
                 "timestamp": datetime.now().isoformat()

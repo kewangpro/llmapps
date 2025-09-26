@@ -125,7 +125,6 @@ Respond with only the JSON structure."""
             result = self._execute_tool_script("presentation", params)
 
             return {
-                "agent": "PresentationAgent",
                 "tool": "presentation",
                 "parameters": params,
                 "result": result,
@@ -136,7 +135,7 @@ Respond with only the JSON structure."""
         except Exception as e:
             logger.error(f"🎨 PresentationAgent error: {str(e)}")
             return {
-                "agent": "PresentationAgent",
+                "tool": "presentation",
                 "success": False,
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()

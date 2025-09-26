@@ -63,7 +63,7 @@ For counting queries, use pattern "*" or "**/*" for recursive."""
 
             if not tool_result.get("success", False):
                 return {
-                    "agent": "FileSearchAgent",
+                    "tool": "file_search",
                     "success": False,
                     "error": f"File search tool failed: {tool_result.get('error', 'Unknown error')}",
                     "timestamp": datetime.now().isoformat()
@@ -81,7 +81,6 @@ For counting queries, use pattern "*" or "**/*" for recursive."""
             }
 
             return {
-                "agent": "FileSearchAgent",
                 "tool": "file_search",
                 "parameters": params,
                 "result": result,
@@ -91,7 +90,7 @@ For counting queries, use pattern "*" or "**/*" for recursive."""
         except Exception as e:
             logger.error(f"📁 FileSearchAgent error: {str(e)}")
             return {
-                "agent": "FileSearchAgent",
+                "tool": "file_search",
                 "success": False,
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()

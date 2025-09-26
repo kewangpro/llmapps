@@ -251,7 +251,7 @@ Respond with just the operation name that best matches the request."""
 
                     if not result.get("success", False):
                         return {
-                            "agent": "DataProcessingAgent",
+                            "tool": "data_processing",
                             "success": False,
                             "error": f"Data processing tool failed: {result.get('error', 'Unknown error')}",
                             "timestamp": datetime.now().isoformat()
@@ -275,8 +275,7 @@ Respond with just the operation name that best matches the request."""
                     }
 
                     response = {
-                        "agent": "DataProcessingAgent",
-                        "tool": "data_processing",
+                            "tool": "data_processing",
                         "parameters": params,
                         "result": result_data,
                         "success": True,
@@ -288,8 +287,7 @@ Respond with just the operation name that best matches the request."""
                 except Exception as e:
                     logger.error(f"📄 Failed to read file {file_path}: {str(e)}")
                     return {
-                        "agent": "DataProcessingAgent",
-                        "success": False,
+                            "success": False,
                         "error": f"Failed to read file {file_path}: {str(e)}",
                         "timestamp": datetime.now().isoformat()
                     }
@@ -382,7 +380,6 @@ Respond with just the operation name that best matches the request."""
 
             if not result.get("success", False):
                 return {
-                    "agent": "DataProcessingAgent",
                     "success": False,
                     "error": f"Data processing tool failed: {result.get('error', 'Unknown error')}",
                     "timestamp": datetime.now().isoformat()
@@ -410,7 +407,6 @@ Respond with just the operation name that best matches the request."""
                 result_data["file_summary"] = file_summary
 
             response = {
-                "agent": "DataProcessingAgent",
                 "tool": "data_processing",
                 "parameters": params,
                 "result": result_data,
@@ -422,7 +418,7 @@ Respond with just the operation name that best matches the request."""
 
         except Exception as e:
             return {
-                "agent": "DataProcessingAgent",
+                "tool": "data_processing",
                 "success": False,
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()

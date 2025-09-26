@@ -52,7 +52,6 @@ Respond with just the metric name."""
 
             if not tool_result.get("success", False):
                 return {
-                    "agent": "SystemInfoAgent",
                     "success": False,
                     "error": f"System info tool failed: {tool_result.get('error', 'Unknown error')}",
                     "timestamp": datetime.now().isoformat()
@@ -70,7 +69,6 @@ Respond with just the metric name."""
             }
 
             return {
-                "agent": "SystemInfoAgent",
                 "tool": "system_info",
                 "parameters": params,
                 "result": result,
@@ -80,7 +78,7 @@ Respond with just the metric name."""
         except Exception as e:
             logger.error(f"💻 SystemInfoAgent error: {str(e)}")
             return {
-                "agent": "SystemInfoAgent",
+                "tool": "system_info",
                 "success": False,
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()

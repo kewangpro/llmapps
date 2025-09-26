@@ -39,7 +39,7 @@ class CostAnalysisAgent(BaseAgent):
 
                 if not tool_result.get("success", False):
                     return {
-                        "agent": "CostAnalysisAgent",
+                        "tool": "cost_analysis",
                         "success": False,
                         "error": f"Cost analysis tool failed: {tool_result.get('error', 'Unknown error')}",
                         "timestamp": datetime.now().isoformat()
@@ -61,7 +61,6 @@ class CostAnalysisAgent(BaseAgent):
                 }
 
                 return {
-                    "agent": "CostAnalysisAgent",
                     "tool": "cost_analysis",
                     "parameters": {"file_path": file_path},
                     "result": result,
@@ -72,7 +71,7 @@ class CostAnalysisAgent(BaseAgent):
             except Exception as e:
                 logger.error(f"📊 Failed to analyze COGS data: {str(e)}")
                 return {
-                    "agent": "CostAnalysisAgent",
+                    "tool": "cost_analysis",
                     "success": False,
                     "error": f"Failed to analyze COGS data: {str(e)}",
                     "timestamp": datetime.now().isoformat()
@@ -80,7 +79,7 @@ class CostAnalysisAgent(BaseAgent):
         except Exception as e:
             logger.error(f"📊 CostAnalysisAgent error: {str(e)}")
             return {
-                "agent": "CostAnalysisAgent",
+                "tool": "cost_analysis",
                 "success": False,
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()
