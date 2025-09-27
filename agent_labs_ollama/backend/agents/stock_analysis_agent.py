@@ -23,15 +23,17 @@ class StockAnalysisAgent(BaseAgent):
             # Extract parameters from query using LLM
             prompt = f"""Extract stock analysis parameters from: "{query}"
 
+IMPORTANT: Look carefully at the query for ANY stock symbol or company name mentioned.
+
 Analyze the query and determine:
-1. Stock symbol(s) mentioned (e.g., AAPL, GOOGL, TSLA, MSFT, etc.)
+1. Stock symbol(s) mentioned - extract the EXACT symbol from the query
 2. Time period for analysis (if mentioned: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max)
 3. Type of analysis requested (basic, technical, comprehensive)
 
 Guidelines:
+- Extract the ACTUAL stock symbol mentioned in the query (e.g., if query says "TEAM", use "TEAM", not "AAPL")
 - If no period is specified, use "1y" as default
 - If no analysis type is specified, use "comprehensive" as default
-- Extract the first/main stock symbol mentioned
 - Look for company names and convert to symbols if possible (e.g., "Apple" -> "AAPL", "Tesla" -> "TSLA")
 
 Common stock symbols:
@@ -46,10 +48,10 @@ Common stock symbols:
 - AMD: AMD
 - Intel: INTC
 
-Respond with JSON only:
-{{"symbol": "AAPL", "period": "1y", "analysis_type": "comprehensive"}}
+Respond with JSON only using the format:
+{{"symbol": "EXTRACTED_SYMBOL", "period": "1y", "analysis_type": "comprehensive"}}
 
-If no clear stock symbol is found, use "SPY" (S&P 500 ETF) as default."""
+Replace EXTRACTED_SYMBOL with the actual symbol from the query. If no clear stock symbol is found, use "SPY"."""
 
             response = self.llm.call(prompt)
             logger.info(f"📈 Parameter extraction: {response.strip()}")
@@ -142,21 +144,24 @@ If no clear stock symbol is found, use "SPY" (S&P 500 ETF) as default."""
 
         query_lower = query.lower()
 
-        # First check for company names
-        for company, symbol in company_mappings.items():
-            if company in query_lower:
-                return symbol
-
-        # Then check for symbol patterns
+        # FIRST check for symbol patterns (prioritize explicit symbols like "TEAM")
         for pattern in symbol_patterns:
             matches = re.findall(pattern, query.upper())
             if matches:
                 # Filter out common words that aren't stock symbols
-                excluded = {'AND', 'THE', 'FOR', 'WITH', 'STOCK', 'PRICE', 'DATA'}
+                excluded = {'AND', 'THE', 'FOR', 'WITH', 'STOCK', 'PRICE', 'DATA', 'PREDICT', 'FUTURE', 'TRENDS', 'ANALYSIS'}
                 valid_symbols = [m for m in matches if m not in excluded and len(m) <= 5]
                 if valid_symbols:
+                    logger.info(f"📈 Fallback extracted symbol: {valid_symbols[0]} from query: {query}")
                     return valid_symbols[0]
 
+        # THEN check for company names
+        for company, symbol in company_mappings.items():
+            if company in query_lower:
+                logger.info(f"📈 Fallback mapped company '{company}' to symbol: {symbol}")
+                return symbol
+
+        logger.info(f"📈 Fallback: No symbol found, using SPY default")
         return "SPY"  # Default to S&P 500 ETF
 
     def _extract_period_fallback(self, query: str) -> str:
