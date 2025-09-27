@@ -85,8 +85,14 @@ Available tools:
 
 Look at what the user is asking for and match it to the tool descriptions. Select only the tools that directly fulfill their request. Do not add tools they did not ask for.
 
+CRITICAL: Think about EXECUTION ORDER - tools that produce data must run BEFORE tools that consume that data.
+Examples:
+- For "analyze stock and forecast": stock_analysis → forecast
+- For "get data and visualize": data_tool → visualization
+- For "forecast stock and visualize": stock_analysis → forecast → visualization
+
 Respond with:
-- Tool names (one per line) IN EXECUTION ORDER if tools should be used
+- Tool names (one per line) IN LOGICAL EXECUTION ORDER if tools should be used
 - "NONE" ONLY if the user has selected NO tools AND the query is purely conversational"""
 
             logger.info("🤔 Orchestrator thinking...")
@@ -96,11 +102,23 @@ Respond with:
             # Parse response and validate against available tools (avoid duplicates)
             selected = []
 
-            # Handle both comma-separated and newline-separated formats
+            # Handle multiple formats: newlines, commas, and arrows
             lines = response.strip().split('\n')
             for line in lines:
-                # Split by commas in case tools are comma-separated on one line
-                tools_in_line = [t.strip() for t in line.split(',')]
+                # Skip NONE lines
+                if line.strip().upper() == "NONE":
+                    continue
+
+                # Handle arrow format: "tool1 → tool2 → tool3"
+                if '→' in line:
+                    tools_in_line = [t.strip() for t in line.split('→')]
+                # Handle comma format: "tool1, tool2, tool3"
+                elif ',' in line:
+                    tools_in_line = [t.strip() for t in line.split(',')]
+                # Handle single tool per line
+                else:
+                    tools_in_line = [line.strip()]
+
                 for tool_raw in tools_in_line:
                     tool = tool_raw.strip().lower().replace('-', '').replace('*', '').strip()
                     if tool in available_tools and tool not in selected:
@@ -108,19 +126,7 @@ Respond with:
 
             # Check if any valid tools were selected
             if selected:
-                # Ensure visualization runs last when combined with other tools
-                if 'visualization' in selected and len(selected) > 1:
-                    selected = [tool for tool in selected if tool != 'visualization'] + ['visualization']
-                    logger.info(f"🔄 Reordered tools to put visualization last: {selected}")
-
-                # Ensure presentation runs last when combined with data tools
-                if 'presentation' in selected and len(selected) > 1:
-                    data_tools = [tool for tool in selected if tool in ['cost_analysis', 'stock_analysis', 'data_processing', 'forecast']]
-                    other_tools = [tool for tool in selected if tool not in ['cost_analysis', 'stock_analysis', 'data_processing', 'forecast', 'presentation']]
-                    selected = data_tools + other_tools + ['presentation']
-                    logger.info(f"🔄 Reordered tools to put presentation last after data tools: {selected}")
-
-                logger.info(f"✅ Selected agents: {selected}")
+                logger.info(f"✅ Selected agents in LLM order: {selected}")
             elif "NONE" in response.strip().upper():
                 selected = []
                 logger.info("✅ No tools needed for conversational query")

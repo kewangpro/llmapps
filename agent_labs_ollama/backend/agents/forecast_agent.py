@@ -29,6 +29,7 @@ class ForecastAgent(BaseAgent):
         except Exception as e:
             logger.error(f"📈 ForecastAgent error: {str(e)}")
             return {
+                "tool": "forecast",
                 "success": False,
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()
@@ -138,7 +139,8 @@ IMPORTANT: Use the EXACT column names from the CSV headers, not conceptual names
 
             if not tool_result.get("success", False):
                 return {
-                        "success": False,
+                    "tool": "forecast",
+                    "success": False,
                     "error": f"Forecast tool failed: {tool_result.get('error', 'Unknown error')}",
                     "timestamp": datetime.now().isoformat()
                 }
@@ -222,7 +224,8 @@ Format response as JSON:
 
             if not params.get("has_data", False):
                 return {
-                        "success": False,
+                    "tool": "forecast",
+                    "success": False,
                     "error": "No time series data provided. Forecasting requires actual historical data (CSV format with date and value columns). Please attach a CSV file with time series data to make predictions.",
                     "timestamp": datetime.now().isoformat()
                 }
@@ -240,7 +243,8 @@ Format response as JSON:
 
             if not tool_result.get("success", False):
                 return {
-                        "success": False,
+                    "tool": "forecast",
+                    "success": False,
                     "error": f"Forecast tool failed: {tool_result.get('error', 'Unknown error')}",
                     "timestamp": datetime.now().isoformat()
                 }
@@ -304,7 +308,8 @@ Format response as JSON:
 
             if not csv_data_lines or len(csv_data_lines) < 2:
                 return {
-                        "success": False,
+                    "tool": "forecast",
+                    "success": False,
                     "error": "No valid stock price data found for forecasting. Need historical price data with dates and values.",
                     "timestamp": datetime.now().isoformat()
                 }
@@ -329,7 +334,8 @@ Format response as JSON:
 
             if not tool_result.get("success", False):
                 return {
-                        "success": False,
+                    "tool": "forecast",
+                    "success": False,
                     "error": f"Forecast tool failed: {tool_result.get('error', 'Unknown error')}",
                     "timestamp": datetime.now().isoformat()
                 }

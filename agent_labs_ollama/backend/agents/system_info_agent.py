@@ -52,6 +52,7 @@ Respond with just the metric name."""
 
             if not tool_result.get("success", False):
                 return {
+                    "tool": "system_info",
                     "success": False,
                     "error": f"System info tool failed: {tool_result.get('error', 'Unknown error')}",
                     "timestamp": datetime.now().isoformat()
