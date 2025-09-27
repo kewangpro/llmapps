@@ -26,13 +26,36 @@ class ImageAnalysisAgent(BaseAgent):
                 clean_query = query.split("FILE_PATH:")[0].strip()
                 logger.info(f"📎 Found attached file: {file_path}")
             else:
-                # Extract image path from query
-                image_path = "image.jpg"  # Default
-                for word in query.split():
-                    if any(word.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff']):
-                        image_path = word
-                        break
-                file_path = image_path
+                # Extract image path from query using pattern matching
+                import re
+
+                # Look for file paths that end with image extensions
+                image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.svg']
+
+                # Pattern to match file paths (both absolute and relative)
+                # This will match paths like /path/to/file.jpg or ./docs/image.png or filename.jpg
+                # Updated to better capture full paths including absolute paths starting with /
+                pattern = r'(/[^\s]*\.(?:' + '|'.join(ext[1:] for ext in image_extensions) + r')|[./][^\s]*\.(?:' + '|'.join(ext[1:] for ext in image_extensions) + r')|[^\s]*\.(?:' + '|'.join(ext[1:] for ext in image_extensions) + r'))'
+                matches = re.findall(pattern, query, re.IGNORECASE)
+
+                if matches:
+                    # Prioritize absolute paths (starting with /) over relative paths and filenames
+                    absolute_paths = [m for m in matches if m.startswith('/')]
+                    if absolute_paths:
+                        file_path = absolute_paths[0]  # Use first absolute path
+                    else:
+                        file_path = matches[0]  # Use the first match as fallback
+                    logger.info(f"🖼️ Extracted image path from query: {file_path}")
+                    logger.info(f"🖼️ All matches found: {matches}")
+                else:
+                    # Fallback: try simple word splitting
+                    file_path = "image.jpg"  # Default
+                    for word in query.split():
+                        if any(word.lower().endswith(ext) for ext in image_extensions):
+                            file_path = word.rstrip('.,')  # Remove trailing punctuation
+                            break
+                    logger.info(f"🖼️ Using fallback extraction: {file_path}")
+
                 clean_query = query
 
             # Step 1: Call the image analysis tool to process the file (no LLM, just file I/O)
@@ -42,11 +65,14 @@ class ImageAnalysisAgent(BaseAgent):
             tool_result = self._execute_tool_script("image_analysis", tool_params)
 
             if not tool_result.get("success", False):
+                error_msg = tool_result.get("error", "Image analysis tool failed")
+                logger.error(f"🖼️ Tool failed: {error_msg}")
                 return {
                     "tool": "image_analysis",
                     "parameters": tool_params,
                     "result": tool_result,
                     "success": False,
+                    "error": error_msg,
                     "timestamp": datetime.now().isoformat()
                 }
 

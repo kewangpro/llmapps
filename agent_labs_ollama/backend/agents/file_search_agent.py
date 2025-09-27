@@ -19,26 +19,45 @@ class FileSearchAgent(BaseAgent):
         try:
             logger.info(f"📁 FileSearchAgent analyzing: '{query}'")
             prompt = f"""Extract file search parameters from this query: "{query}"
+
+IMPORTANT: First identify if the user is asking for specific FILE TYPES, then apply the correct pattern.
+
+File type mappings (USE THESE PATTERNS):
+- "image files", "images", "pictures", "photos" → **/*.{{jpg,jpeg,png,gif,bmp,tiff,webp,svg}}
+- "video files", "videos", "movies" → **/*.{{mp4,avi,mov,mkv,wmv,flv,webm}}
+- "document files", "documents", "docs" → **/*.{{pdf,doc,docx,txt,rtf,odt}}
+- "code files", "source code", "scripts" → **/*.{{py,js,html,css,java,cpp,c,h,rb,php,go,rs}}
+- "data files", "data" → **/*.{{csv,json,xml,yaml,yml}}
+- "Python files" → **/*.py
+- "text files" → **/*.txt
+- "config files" → *config*
+
 Examples:
+- "find image files" → {{"pattern": "**/*.{{jpg,jpeg,png,gif,bmp,tiff,webp,svg}}", "path": "."}}
 - "find images under the videos folder" → {{"pattern": "**/*.{{jpg,jpeg,png,gif,bmp,tiff,webp,svg}}", "path": "videos"}}
 - "find Python files in the project" → {{"pattern": "**/*.py", "path": "."}}
 - "find Python files in backend" → {{"pattern": "**/*.py", "path": "backend"}}
+- "search for video files" → {{"pattern": "**/*.{{mp4,avi,mov,mkv,wmv,flv,webm}}", "path": "."}}
+- "find document files in ~/Documents" → {{"pattern": "**/*.{{pdf,doc,docx,txt,rtf,odt}}", "path": "~/Documents"}}
 - "how many files under ~/videos folder?" → {{"pattern": "*", "path": "~/videos"}}
 - "count files in documents" → {{"pattern": "*", "path": "documents"}}
 - "search for config files" → {{"pattern": "*config*", "path": "."}}
-- "find all text files" → {{"pattern": "**/*.txt", "path": "."}}
-File type mappings:
-- images: *.{{jpg,jpeg,png,gif,bmp,tiff,webp,svg}}
-- videos: *.{{mp4,avi,mov,mkv,wmv,flv,webm}}
-- documents: *.{{pdf,doc,docx,txt,rtf,odt}}
-- code: *.{{py,js,html,css,java,cpp,c,h,rb,php,go,rs}}
-- data: *.{{csv,json,xml,yaml,yml}}
-Determine:
-1. Search pattern - use "*" for counting all files, "**/*" for recursive, specific patterns for file types
-2. Path - extract directory paths like "~/videos", "documents", "src", etc. Use "." for current directory
+- "find any file" → {{"pattern": "*", "path": "."}}
+- "find an any file" → {{"pattern": "*", "path": "."}}
+- "search for some file" → {{"pattern": "*", "path": "."}}
+- "look for a file" → {{"pattern": "*", "path": "."}}
+- "find files" → {{"pattern": "*", "path": "."}}
+
+IMPORTANT: When users use generic terms like "any file", "some file", "a file", they mean search the current directory. Do NOT treat these as literal directory names.
+
+Rules:
+1. ALWAYS check for file type keywords FIRST and use the specific patterns above
+2. Search pattern - use specific file type patterns when mentioned, "*" only for generic searches
+3. Path - extract ACTUAL directory paths only. Generic terms like "any", "some", "a" should use "." (current directory)
+4. If no specific directory is mentioned, always use "." for current directory
+
 Respond with JSON only:
-{{"pattern": "search_pattern", "path": "directory_path"}}
-For counting queries, use pattern "*" or "**/*" for recursive."""
+{{"pattern": "search_pattern", "path": "directory_path"}}"""
             response = self.llm.call(prompt)
             logger.info(f"📁 Parameter extraction: {response.strip()}")
             try:
@@ -101,9 +120,10 @@ For counting queries, use pattern "*" or "**/*" for recursive."""
         try:
             # Extract relevant information from tool result
             files = tool_result.get("files", [])
-            total_count = tool_result.get("total_count", len(files))
-            search_path = tool_result.get("search_path", "")
-            pattern = tool_result.get("pattern", "")
+            total_count = tool_result.get("results_count", len(files))
+            query_info = tool_result.get("query", {})
+            search_path = query_info.get("path", "")
+            pattern = query_info.get("pattern", "")
 
             analysis_prompt = f"""Analyze these file search results and provide insights for the user query: "{original_query}"
 
@@ -173,9 +193,10 @@ Focus on the information most relevant to the user's question."""
         """Format tool result as text for downstream agents"""
         try:
             files = tool_result.get("files", [])
-            total_count = tool_result.get("total_count", len(files))
-            search_path = tool_result.get("search_path", "")
-            pattern = tool_result.get("pattern", "")
+            total_count = tool_result.get("results_count", len(files))
+            query_info = tool_result.get("query", {})
+            search_path = query_info.get("path", "")
+            pattern = query_info.get("pattern", "")
 
             if not files:
                 return f"File search in '{search_path}' with pattern '{pattern}' found no files"

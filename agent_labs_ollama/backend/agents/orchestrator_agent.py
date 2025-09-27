@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Dict, List, Any
 from datetime import datetime
-from .base_agent import BaseAgent
+from llm_config import llm_config
 from .file_search_agent import FileSearchAgent
 from .web_search_agent import WebSearchAgent
 from .system_info_agent import SystemInfoAgent
@@ -22,11 +22,12 @@ from .mcp_agent import MCPAgent
 logger = logging.getLogger("OrchestratorAgent")
 
 
-class OrchestratorAgent(BaseAgent):
+class OrchestratorAgent:
     """Main orchestrator agent that coordinates sub-agents"""
 
     def __init__(self):
-        super().__init__()
+        # Initialize LLM for orchestration decisions
+        self.llm = llm_config.get_llm()
         self.sub_agents = {
             "file_search": FileSearchAgent(),
             "web_search": WebSearchAgent(),
@@ -370,10 +371,12 @@ IMPORTANT: Extract specific values from the previous results and use them direct
 Examples:
 - If system_info shows "macOS Darwin 25.0.0", search for "latest macOS Darwin 25.0.0 updates"
 - If system_info shows "Ubuntu 22.04", search for "Ubuntu 22.04 latest version updates"
-- If file_search found "auth.py, login.py", analyze those specific files
+- If file_search found files, use the FULL PATH (like "./docs/images/photo.png" not just "photo.png")
+- If analyzing images, use complete file paths from the search results
 
 For {agent_name} agent, create a query that uses the specific data values from the previous results above.
 Do NOT use placeholders like [OS version] - use the actual values.
+ALWAYS use full file paths when referencing files found in previous results.
 
 Respond with just the refined query, no additional text."""
 
@@ -450,299 +453,6 @@ Provide a clear, helpful response that synthesizes the information from the tool
                 if callback:
                     logger.info("📤 Sending final answer via callback")
                     await callback("final_answer", final_answer)
-
-            logger.info(f"\n🎉 ORCHESTRATION COMPLETE!")
-            logger.info(f"📊 Total agents used: {len(selected_agents)}")
-            logger.info(f"🎯 Successful executions: {sum(1 for r in results if r.get('success'))}")
-
-            return {
-                "orchestrator": "OrchestratorAgent",
-                "query": query,
-                "selected_agents": selected_agents,
-                "agent_results": results,
-                "initial_response": initial_response,
-                "final_answer": final_answer,
-                "success": True,
-                "timestamp": datetime.now().isoformat()
-            }
-
-        except Exception as e:
-            logger.error(f"❌ ORCHESTRATION FAILED: {str(e)}")
-            return {
-                "orchestrator": "OrchestratorAgent",
-                "success": False,
-                "error": str(e),
-                "timestamp": datetime.now().isoformat()
-            }
-
-    def _find_previous_data_agent(self, results: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Find the most recent previous agent that produced tool_data (generic detection)"""
-        # Search in reverse order to get the most recent data agent
-        for prev_result in reversed(results):
-            if (prev_result.get("success") and
-                prev_result.get("result", {}).get("tool_data") and
-                isinstance(prev_result["result"]["tool_data"], str) and
-                len(prev_result["result"]["tool_data"].strip()) > 0):
-                logger.info(f"🔍 Found data agent: {prev_result.get('agent', 'Unknown')} with tool_data")
-                return prev_result
-        return None
-
-    def _export_tool_data_to_file(self, tool_data: str) -> str:
-        """Export tool_data to file (pure file I/O, no data processing)"""
-        try:
-            import tempfile
-            temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
-            temp_file.write(tool_data)
-            temp_file.close()
-            return temp_file.name
-        except Exception as e:
-            logger.error(f"🎯 Error exporting tool data to file: {str(e)}")
-            return None
-
-    def _generate_generic_visualization_query(self, user_query: str) -> str:
-        """Generate generic visualization query based only on user's ask"""
-        try:
-            # Generic query generation based on user language only
-            query_lower = user_query.lower()
-
-            if any(keyword in query_lower for keyword in ["line chart", "trends", "over time", "time series"]):
-                return "Create a line chart showing trends over time. Auto-detect appropriate columns for x-axis and y-axis"
-            elif any(keyword in query_lower for keyword in ["bar chart", "comparison", "compare"]):
-                return "Create a bar chart for comparison. Auto-detect appropriate columns for categories and values"
-            elif any(keyword in query_lower for keyword in ["pie chart", "distribution", "breakdown"]):
-                return "Create a pie chart showing distribution. Auto-detect appropriate columns for categories and values"
-            elif any(keyword in query_lower for keyword in ["scatter", "correlation", "relationship"]):
-                return "Create a scatter plot to show relationships. Auto-detect appropriate columns for x and y axes"
-            else:
-                # Default to smart auto-detection based on data
-                return "Create an appropriate visualization based on the data structure. Auto-detect the best chart type and columns"
-
-        except Exception as e:
-            logger.error(f"🎯 Error generating generic visualization query: {str(e)}")
-            return f"Create a visualization for: {user_query}"
-
-    def execute(self, query: str, available_tools: List[str] = None, attached_file: Dict = None) -> Dict[str, Any]:
-        """Orchestrate sub-agents to handle the user query"""
-        try:
-            logger.info(f"\n🎯 ORCHESTRATOR STARTING EXECUTION")
-            logger.info(f"Query: '{query}'")
-
-            # Don't auto-populate available_tools - respect user's tool selection (or lack thereof)
-
-            # Select appropriate sub-agents
-            selected_agents = self._select_agents(query, available_tools, attached_file)
-
-            results = []
-            final_answer = ""
-            initial_response = ""
-
-            # Handle conversational queries that don't need tools
-            if not selected_agents:
-                logger.info("💬 Conversational query - no tools needed")
-                final_answer = self._generate_conversational_response(query)
-                logger.info(f"💬 Returning conversational result with final_answer: '{final_answer}'")
-                return {
-                    "orchestrator": "OrchestratorAgent",
-                    "query": query,
-                    "selected_agents": [],
-                    "agent_results": [],
-                    "initial_response": final_answer,  # Same for conversational
-                    "final_answer": final_answer,
-                    "success": True,
-                    "timestamp": datetime.now().isoformat()
-                }
-
-            # Generate initial response from orchestrator
-            logger.info("🎤 Generating initial orchestrator response...")
-            initial_response = self._generate_initial_response(query, selected_agents, attached_file)
-            logger.info(f"📢 Initial response: {initial_response}")
-
-            logger.info(f"\n🚀 EXECUTING {len(selected_agents)} SUB-AGENTS...")
-
-            # Execute selected sub-agents sequentially with context
-            for i, agent_name in enumerate(selected_agents, 1):
-                tool_id = agent_name  # Keep original tool ID for reference
-
-                # Map tool ID to agent name
-                if ":" in tool_id and not tool_id.startswith(("http:", "https:")):
-                    # MCP tools map to MCP agent
-                    agent_name = "mcp"
-                # For built-in tools, tool_id and agent_name are the same (no reassignment needed)
-
-                # Handle MCP agent
-                if agent_name == "mcp":
-                    server_name, tool_name = tool_id.split(":", 1)
-                    logger.info(f"\n🔌 MCP TOOL {i}/{len(selected_agents)}: {tool_id}")
-
-                    # Extract parameters from query (simple approach)
-                    parameters = {}
-                    if any(keyword in query.lower() for keyword in ["search", "find", "query"]):
-                        parameters = {"query": query}
-                    elif any(keyword in query.lower() for keyword in ["time", "current"]):
-                        parameters = {}
-                    else:
-                        parameters = {"message": query}
-
-                    # Execute MCP tool synchronously (wrapper handles async)
-                    agent_result = self.mcp_agent.execute(query, tool_name, parameters)
-                    # Tool name is already set by MCP agent
-
-                    if agent_result.get("success"):
-                        logger.info(f"✅ {tool_id} completed successfully")
-                    else:
-                        logger.error(f"❌ {tool_id} failed: {agent_result.get('error', 'Unknown error')}")
-
-                    results.append(agent_result)
-
-                elif agent_name in self.sub_agents:
-                    logger.info(f"\n🤖 SUB-AGENT {i}/{len(selected_agents)}: {agent_name}")
-
-                    # Build context-aware query for agents after the first one
-                    if i == 1:
-                        # First agent uses original query
-                        agent_query = query
-                        # Add attached file information for relevant agents
-                        if attached_file and agent_name in ["image_analysis", "data_processing", "presentation", "visualization", "cost_analysis"]:
-                            file_path = attached_file.get("path", "")
-                            logger.info(f"🔍 Debug attached_file: {attached_file}")
-                            logger.info(f"🔍 Debug file_path: '{file_path}'")
-                            if file_path:
-                                agent_query += f" FILE_PATH:{file_path}"
-                                logger.info(f"📎 Added file attachment: {file_path}")
-                            else:
-                                logger.warning(f"⚠️ No file path found in attached_file for {agent_name}")
-                        logger.info(f"🎯 Delegating original query to {agent_name} specialist...")
-                    else:
-                        # Subsequent agents get context from previous results
-                        logger.info(f"🔗 Building context-aware query for {agent_name} based on previous results...")
-
-                        # Handle forecast tool when following any data-producing agent
-                        if agent_name == "forecast":
-                            # Find any previous agent that produced tool_data (generic detection)
-                            data_agent = self._find_previous_data_agent(results)
-
-                            if data_agent:
-                                # Export tool_data to file (pure file I/O, no data processing)
-                                file_path = self._export_tool_data_to_file(data_agent["result"]["tool_data"])
-
-                                if file_path:
-                                    agent_query = f"predict future trends using LSTM neural network FILE_PATH:{file_path}"
-                                    logger.info(f"🎯 Exported data to file {file_path} for forecast")
-                                else:
-                                    agent_query = f"No data available for forecasting from previous agent"
-                            else:
-                                agent_query = f"predict future trends based on: {query}"
-                        # Handle visualization tool when following any data-producing agent
-                        elif agent_name == "visualization":
-                            # Find any previous agent that produced tool_data (generic detection)
-                            data_agent = self._find_previous_data_agent(results)
-
-                            if data_agent:
-                                # Export tool_data to file (pure file I/O, no data processing)
-                                file_path = self._export_tool_data_to_file(data_agent["result"]["tool_data"])
-
-                                if file_path:
-                                    # Generate generic visualization query based on user's ask
-                                    viz_query = self._generate_generic_visualization_query(query)
-                                    agent_query = f"{viz_query} FILE_PATH:{file_path}"
-                                    logger.info(f"🎯 Exported data to file {file_path} for visualization")
-                                else:
-                                    agent_query = f"No data available for visualization from previous agent"
-                            else:
-                                agent_query = f"Create a visualization for: {query}"
-                        else:
-                            context = "Previous agent results:\n"
-                            for j, prev_result in enumerate(results, 1):
-                                if prev_result.get("success"):
-                                    context += f"{j}. {prev_result.get('agent', 'Unknown')}: {json.dumps(prev_result.get('result', {}), indent=2)}\n\n"
-
-                            # Let the LLM create a contextual query for this agent
-                            context_prompt = f"""Original user query: "{query}"
-
-{context}
-
-Create a specific query for the {agent_name} agent that uses the ACTUAL data from previous results.
-
-IMPORTANT: Extract specific values from the previous results and use them directly in your query.
-
-Examples:
-- If system_info shows "macOS Darwin 25.0.0", search for "latest macOS Darwin 25.0.0 updates"
-- If system_info shows "Ubuntu 22.04", search for "Ubuntu 22.04 latest version updates"
-- If file_search found "auth.py, login.py", analyze those specific files
-
-For {agent_name} agent, create a query that uses the specific data values from the previous results above.
-Do NOT use placeholders like [OS version] - use the actual values.
-
-Respond with just the refined query, no additional text."""
-
-                            agent_query = self.llm.call(context_prompt).strip()
-                            logger.info(f"🎯 Context-aware query for {agent_name}: '{agent_query}'")
-
-                    agent_result = self.sub_agents[agent_name].execute(agent_query)
-
-                    if agent_result.get("success"):
-                        logger.info(f"✅ {agent_name.upper()}Agent completed successfully")
-                        logger.info(f"🔧 Tool used: {agent_result.get('tool', 'unknown')}")
-                        logger.info(f"📊 Result preview: {str(agent_result.get('result', {}))[:100]}...")
-                    else:
-                        logger.error(f"❌ {agent_name.upper()}Agent failed: {agent_result.get('error', 'Unknown error')}")
-
-                    results.append(agent_result)
-
-            # Generate final answer based on all results
-            if results:
-                logger.info(f"\n🧠 SYNTHESIZING FINAL ANSWER...")
-                logger.info(f"📝 Combining results from {len(results)} agents...")
-
-                # Separate analysis results from visualization results
-                analysis_content = []
-                non_analysis_results = []
-
-                for result in results:
-                    if result.get("tool") == "visualization":
-                        # Visualization results are displayed separately, not included in final answer
-                        logger.info(f"📊 Visualization result will be displayed separately")
-                        continue
-                    elif result.get("result", {}).get("llm_analysis"):
-                        # Use any agent's LLM analysis directly (generic handling)
-                        analysis_content.append(result["result"]["llm_analysis"])
-                        tool_name = result.get("tool", "Unknown")
-                        logger.info(f"🤖 Using LLM insights from {tool_name}")
-                    else:
-                        # Keep other results for potential synthesis
-                        non_analysis_results.append(result)
-
-                if analysis_content and not non_analysis_results:
-                    # If we only have analysis content, use it directly
-                    final_answer = "\n\n".join(analysis_content)
-                    logger.info(f"✅ Using analysis content directly ({len(final_answer)} characters)")
-                elif analysis_content and non_analysis_results:
-                    # Mix analysis content with synthesis of other results
-                    prompt = f"""The user asked: "{query}"
-
-I have some pre-formatted analysis and some additional tool results to combine:
-
-ANALYSIS:
-{chr(10).join(analysis_content)}
-
-ADDITIONAL RESULTS:
-{json.dumps(non_analysis_results, indent=2)}
-
-Please provide a brief introduction and then present the analysis, followed by any additional insights from the other results. Keep the analysis sections intact."""
-
-                    final_answer = self.llm.call(prompt)
-                    logger.info(f"✅ Combined analysis with synthesis ({len(final_answer)} characters)")
-                else:
-                    # Traditional synthesis for cases without specialized analysis
-                    prompt = f"""Based on these tool execution results, provide a comprehensive answer to: "{query}"
-
-Results:
-{json.dumps([r for r in results if r.get('agent') != 'VisualizationAgent'], indent=2)}
-
-Provide a clear, helpful response that synthesizes the information from the tools."""
-
-                    final_answer = self.llm.call(prompt)
-                    logger.info(f"✅ Final answer generated via synthesis ({len(final_answer)} characters)")
 
             logger.info(f"\n🎉 ORCHESTRATION COMPLETE!")
             logger.info(f"📊 Total agents used: {len(selected_agents)}")
