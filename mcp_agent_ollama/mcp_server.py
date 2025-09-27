@@ -37,7 +37,7 @@ class MCPServer:
         """Setup default tools for the MCP server"""
         self.tools.append(Tool(
             name="echo",
-            description="Echo back the input text",
+            description="Echo back user input text (for testing or confirmation purposes, not for displaying tool results)",
             parameters={
                 "type": "object",
                 "properties": {
@@ -52,7 +52,7 @@ class MCPServer:
         
         self.tools.append(Tool(
             name="get_time",
-            description="Get current system time",
+            description="Get current system time and date information (returns formatted time data)",
             parameters={
                 "type": "object",
                 "properties": {},
@@ -62,7 +62,7 @@ class MCPServer:
 
         self.tools.append(Tool(
             name="search_web",
-            description="Search the web for information",
+            description="Search the web for information and return formatted results with titles, content, and sources",
             parameters={
                 "type": "object",
                 "properties": {
