@@ -28,10 +28,6 @@ class MultiAgentSystem:
         # LLM configuration will be set by frontend model selection
         self.orchestrator = OrchestratorAgent()
 
-    def execute_query(self, query: str, selected_tools: List[str] = None, attached_file: Dict = None) -> Dict[str, Any]:
-        """Execute a query using the multi-agent system"""
-        return self.orchestrator.execute(query, selected_tools, attached_file)
-
     async def execute_query_with_callback(self, query: str, selected_tools: List[str] = None, attached_file: Dict = None, callback=None) -> Dict[str, Any]:
         """Execute a query with real-time callback for messaging"""
         return await self.orchestrator.execute_with_callback(query, selected_tools, attached_file, callback)
