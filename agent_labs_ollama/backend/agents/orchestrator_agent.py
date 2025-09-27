@@ -360,9 +360,15 @@ Respond as the orchestrator agent in first person."""
                                 agent_query = f"{query} FILE_PATH:{file_path}"
                                 logger.info(f"🎯 Created data processing query with file path: {agent_query}")
                             else:
-                                # Fallback to regular query without file
-                                agent_query = query
-                                logger.warning(f"⚠️ No file path found for data processing, using original query")
+                                # When no file is found, data processing should return an error
+                                logger.error(f"❌ No file found for data processing - returning error")
+                                results.append({
+                                    "tool": "data_processing",
+                                    "success": False,
+                                    "error": "No file found to process. Data processing requires a file to be found first.",
+                                    "timestamp": datetime.now().isoformat()
+                                })
+                                continue  # Skip executing this agent
                         else:
                             context = "Previous agent results:\n"
                             for j, prev_result in enumerate(results, 1):
@@ -393,6 +399,7 @@ Respond with just the refined query, no additional text."""
                             agent_query = self.llm.call(context_prompt).strip()
                             logger.info(f"🎯 Context-aware query for {agent_name}: '{agent_query}'")
 
+                    # Execute the agent (unless we continued above to skip it)
                     agent_result = self.sub_agents[agent_name].execute(agent_query)
 
                     if agent_result.get("success"):
