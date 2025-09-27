@@ -353,6 +353,16 @@ Respond as the orchestrator agent in first person."""
                                     agent_query = f"No data available for visualization from previous agent"
                             else:
                                 agent_query = f"Create a visualization for: {query}"
+                        elif agent_name == "data_processing":
+                            # Special handling for data processing - extract file path and format with FILE_PATH marker
+                            file_path = self._extract_file_path_from_results(results)
+                            if file_path:
+                                agent_query = f"{query} FILE_PATH:{file_path}"
+                                logger.info(f"🎯 Created data processing query with file path: {agent_query}")
+                            else:
+                                # Fallback to regular query without file
+                                agent_query = query
+                                logger.warning(f"⚠️ No file path found for data processing, using original query")
                         else:
                             context = "Previous agent results:\n"
                             for j, prev_result in enumerate(results, 1):
@@ -523,3 +533,49 @@ Provide a clear, helpful response that synthesizes the information from the tool
         except Exception as e:
             logger.error(f"🎯 Error generating generic visualization query: {str(e)}")
             return f"Create a visualization for: {user_query}"
+
+    def _extract_file_path_from_results(self, results: List[Dict[str, Any]]) -> str:
+        """Extract file path from file search agent results"""
+        try:
+            for result in results:
+                if (result.get("success") and
+                    result.get("tool") == "file_search" and
+                    result.get("result")):
+
+                    # Check if the result has files data directly
+                    if "files" in result["result"] and result["result"]["files"]:
+                        first_file = result["result"]["files"][0]
+                        file_path = first_file.get("path")
+                        if file_path:
+                            logger.info(f"🔍 Extracted file path from results: {file_path}")
+                            return file_path
+
+                    # Fallback: parse tool_data to extract actual file paths
+                    tool_data = result["result"].get("tool_data", "")
+                    if "requirements.txt" in tool_data.lower():
+                        lines = tool_data.split('\n')
+                        for line in lines:
+                            line = line.strip()
+                            # Look for lines like "1. requirements.txt (/full/path/to/requirements.txt)"
+                            if 'requirements.txt' in line.lower() and '(' in line and ')' in line:
+                                # Extract path from parentheses
+                                import re
+                                path_match = re.search(r'\(([^)]+)\)', line)
+                                if path_match:
+                                    file_path = path_match.group(1)
+                                    logger.info(f"🔍 Extracted path from parentheses: {file_path}")
+                                    return file_path
+                            # Also check for plain file paths
+                            elif ('requirements.txt' in line.lower() and
+                                  (line.startswith('./') or line.startswith('/') or
+                                   line.count('/') > 0) and
+                                  not line.startswith(('1.', '2.', '3.', '4.', '5.'))):
+                                logger.info(f"🔍 Found plain requirements.txt path: {line}")
+                                return line
+
+            logger.warning("⚠️ No file path found in file search results")
+            return None
+
+        except Exception as e:
+            logger.error(f"❌ Error extracting file path from results: {str(e)}")
+            return None

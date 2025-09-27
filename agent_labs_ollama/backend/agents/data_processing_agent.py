@@ -287,7 +287,8 @@ Respond with just the operation name that best matches the request."""
                 except Exception as e:
                     logger.error(f"📄 Failed to read file {file_path}: {str(e)}")
                     return {
-                            "success": False,
+                        "tool": "data_processing",
+                        "success": False,
                         "error": f"Failed to read file {file_path}: {str(e)}",
                         "timestamp": datetime.now().isoformat()
                     }
@@ -380,6 +381,7 @@ Respond with just the operation name that best matches the request."""
 
             if not result.get("success", False):
                 return {
+                    "tool": "data_processing",
                     "success": False,
                     "error": f"Data processing tool failed: {result.get('error', 'Unknown error')}",
                     "timestamp": datetime.now().isoformat()
