@@ -87,11 +87,15 @@ CRITICAL RULES:
 1. ONLY use the EXACT tool names from the list above - do NOT invent new tool names
 2. Think about EXECUTION ORDER - tools that produce data must run BEFORE tools that consume that data
 3. Select only tools that directly fulfill the user's request
+4. PREFER SINGLE TOOLS when they can handle the complete request
+5. Avoid combining tools unless the output of one is needed as input to another
 
 Examples of correct ordering:
 - For "analyze stock and forecast": stock_analysis → forecast
 - For "get cost data and visualize": cost_analysis → visualization
 - For "forecast stock and visualize": stock_analysis → forecast → visualization
+- For "what time is it": example_server:get_time (single tool sufficient - no need for echo)
+- For simple information requests: use ONE tool that provides the complete answer
 
 Respond with:
 - EXACT tool names from the list above, separated by → if multiple tools needed
@@ -123,8 +127,17 @@ Respond with:
 
                 for tool_raw in tools_in_line:
                     tool = tool_raw.strip().lower().replace('-', '').replace('*', '').strip()
+                    # First try exact match
                     if tool in available_tools and tool not in selected:
                         selected.append(tool)
+                    # If no exact match, try to find MCP tool with this base name
+                    else:
+                        for available_tool in available_tools:
+                            # Check if this is an MCP tool that matches the base name
+                            if ':' in available_tool and available_tool.endswith(':' + tool):
+                                if available_tool not in selected:
+                                    selected.append(available_tool)
+                                    break
 
             # Check if any valid tools were selected
             if selected:
