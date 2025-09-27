@@ -83,16 +83,18 @@ class OrchestratorAgent:
 Available tools:
 {chr(10).join(available_desc)}
 
-Look at what the user is asking for and match it to the tool descriptions. Select only the tools that directly fulfill their request. Do not add tools they did not ask for.
+CRITICAL RULES:
+1. ONLY use the EXACT tool names from the list above - do NOT invent new tool names
+2. Think about EXECUTION ORDER - tools that produce data must run BEFORE tools that consume that data
+3. Select only tools that directly fulfill the user's request
 
-CRITICAL: Think about EXECUTION ORDER - tools that produce data must run BEFORE tools that consume that data.
-Examples:
+Examples of correct ordering:
 - For "analyze stock and forecast": stock_analysis → forecast
-- For "get data and visualize": data_tool → visualization
+- For "get cost data and visualize": cost_analysis → visualization
 - For "forecast stock and visualize": stock_analysis → forecast → visualization
 
 Respond with:
-- Tool names (one per line) IN LOGICAL EXECUTION ORDER if tools should be used
+- EXACT tool names from the list above, separated by → if multiple tools needed
 - "NONE" ONLY if the user has selected NO tools AND the query is purely conversational"""
 
             logger.info("🤔 Orchestrator thinking...")
