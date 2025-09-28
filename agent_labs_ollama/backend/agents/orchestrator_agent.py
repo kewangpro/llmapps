@@ -98,7 +98,8 @@ Examples of correct ordering:
 - For simple information requests: use ONE tool that provides the complete answer
 
 Respond with:
-- EXACT tool names from the list above, separated by → if multiple tools needed
+- For single tool: just the EXACT tool name (e.g., "example_server:get_time")
+- For multiple tools: EXACT tool names separated by → (e.g., "stock_analysis → forecast")
 - "NONE" ONLY if the user has selected NO tools AND the query is purely conversational"""
 
             logger.info("🤔 Orchestrator thinking...")

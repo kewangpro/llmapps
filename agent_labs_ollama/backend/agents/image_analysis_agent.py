@@ -48,13 +48,24 @@ class ImageAnalysisAgent(BaseAgent):
                     logger.info(f"🖼️ Extracted image path from query: {file_path}")
                     logger.info(f"🖼️ All matches found: {matches}")
                 else:
-                    # Fallback: try simple word splitting
-                    file_path = "image.jpg"  # Default
+                    # Try simple word splitting as last attempt
+                    file_path = None
                     for word in query.split():
                         if any(word.lower().endswith(ext) for ext in image_extensions):
                             file_path = word.rstrip('.,')  # Remove trailing punctuation
                             break
-                    logger.info(f"🖼️ Using fallback extraction: {file_path}")
+
+                    if not file_path:
+                        # No valid image file path found
+                        logger.error(f"🖼️ No image file path found in query: '{query}'")
+                        return {
+                            "tool": "image_analysis",
+                            "success": False,
+                            "error": "No file or file is not supported.",
+                            "timestamp": datetime.now().isoformat()
+                        }
+
+                    logger.info(f"🖼️ Using word extraction: {file_path}")
 
                 clean_query = query
 
