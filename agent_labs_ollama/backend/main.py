@@ -121,16 +121,6 @@ def handle_attached_file(attached_file_data: Dict[str, Any], file_content: str) 
             header, base64_data = file_content.split(",", 1)
             logger.info(f"🔍 Base64 data length: {len(base64_data)}")
 
-            # Clean and fix base64 data
-            import re
-            base64_data = base64_data.strip()
-            # Remove any non-base64 characters (keep only A-Z, a-z, 0-9, +, /, =)
-            base64_data = re.sub(r'[^A-Za-z0-9+/=]', '', base64_data)
-
-            missing_padding = len(base64_data) % 4
-            if missing_padding:
-                base64_data += '=' * (4 - missing_padding)
-                logger.info(f"🔧 Cleaned and fixed base64 data, new length: {len(base64_data)}")
 
             # Decode base64 to binary with better error handling
             try:
