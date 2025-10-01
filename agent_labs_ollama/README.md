@@ -6,14 +6,15 @@ AI-powered chat interface with intelligent multi-agent orchestration and real-ti
 
 ## Key Features
 
-- **Multi-Agent Orchestration** - Intelligent task routing to specialized agents
-- **Real-Time Tool Execution** - 10+ powerful tools for file analysis, web search, data processing, visualization
+- **Multi-Agent Orchestration** - Intelligent task routing with 13+ specialized agents
+- **Real-Time Tool Execution** - 10 powerful built-in tools for file analysis, web search, data processing, visualization, presentations
 - **MCP Integration** - Connect to external Model Context Protocol servers for extended capabilities
 - **Visual Content Analysis** - AI-powered image analysis with actual visual understanding
 - **Interactive Results** - Charts, images, presentations displayed directly in chat
-- **File Upload Support** - Automatic content analysis and tool selection
+- **File Upload Support** - Automatic content analysis and smart tool selection
 - **Multiple LLM Support** - Ollama, OpenAI, Google Gemini with vision capabilities
 - **Downloadable Outputs** - Generated files saved with timestamps for easy access
+- **Cloud Deployment Ready** - Production-ready deployment to Google Cloud Run
 
 ## Architecture
 
@@ -26,20 +27,20 @@ AI-powered chat interface with intelligent multi-agent orchestration and real-ti
 
 ## Available Tools
 
-### Built-in Tools
-#### General (5)
-- **File Search** - Intelligent file discovery and pattern matching
-- **Web Search** - Real-time web search and information retrieval
-- **System Info** - Comprehensive system monitoring and diagnostics
-- **Presentation** - PowerPoint generation with downloadable outputs
-- **Visualization** - Interactive chart generation from data files
+### Built-in Tools (10 Total)
+#### General Tools (5)
+- **File Search** - Intelligent file discovery and pattern matching across filesystems
+- **Web Search** - Real-time web search with current information retrieval
+- **System Info** - Comprehensive system monitoring, CPU, memory, disk, and network diagnostics
+- **Presentation** - PowerPoint generation from structured data with downloadable PPTX files
+- **Visualization** - Interactive chart and graph generation from CSV/JSON data
 
-#### Analytics (5)
-- **Data Processing** - CSV/JSON conversion, text analysis, data transformation
-- **Cost Analysis** - Financial data analysis with downloadable CSV reports and spending insights
-- **Image Analysis** - Visual content analysis with metadata extraction
-- **Stock Analysis** - Financial market data and technical analysis
-- **Forecast** - LSTM neural network time series prediction and forecasting
+#### Analytics Tools (5)
+- **Data Processing** - CSV/JSON conversion, text analysis, data transformation and cleaning
+- **Cost Analysis** - Financial data analysis with business unit breakdown and spending insights
+- **Image Analysis** - Visual content analysis with metadata extraction and object detection
+- **Stock Analysis** - Financial market data analysis with Yahoo Finance integration
+- **Forecast** - LSTM neural network time series prediction with visualization support
 
 ### MCP Tools
 - **External Integration** - Connect to MCP servers for additional specialized tools
@@ -51,13 +52,14 @@ AI-powered chat interface with intelligent multi-agent orchestration and real-ti
 
 ## Quick Start
 
-### Docker (Recommended)
+### Docker Compose (Recommended for Local Development with Ollama)
 ```bash
 git clone <repository-url>
 cd agent_labs_ollama
 docker-compose up --build
 ```
 **Access**: http://localhost:3000
+**Note**: This setup includes both the application and an Ollama service
 
 ### Manual Setup
 1. **Clone and Install**:
@@ -68,11 +70,12 @@ docker-compose up --build
    npm install
    ```
 
-2. **Setup Ollama**:
+2. **Setup Ollama** (if using Ollama provider):
    ```bash
-   # Install Ollama locally
+   # Install and start Ollama
    ollama serve
-   ollama pull gemma3:latest
+   # Pull models
+   ollama pull llama3.2:latest
    ollama pull llama3.1:latest
    ```
 
@@ -83,20 +86,19 @@ docker-compose up --build
    ```
    **Access**: http://localhost:3000
 
-**Environment Variables**: Create `.env` file with:
+**Environment Variables**: Create `.env` file (see [.env.example](.env.example)):
 ```bash
-# LLM Configuration
-LLM_PROVIDER=ollama  # or openai, gemini
-LLM_MODEL=gemma3:latest
-
-# Optional API Keys
-OPENAI_API_KEY=your_openai_key
-GEMINI_API_KEY=your_gemini_key
-GOOGLE_SEARCH_API_KEY=your_google_search_key
+# Google Search API (for web search tool)
+GOOGLE_SEARCH_API_KEY=your_google_api_key
 GOOGLE_SEARCH_ENGINE_ID=your_search_engine_id
 
+# LLM Provider API Keys
+OPENAI_API_KEY=your_openai_key       # For OpenAI models
+GEMINI_API_KEY=your_gemini_key       # For Google Gemini models
+OLLAMA_BASE_URL=http://localhost:11434  # For Ollama (local or remote)
+
 # MCP Server Configuration (optional)
-MCP_SERVERS=example_server
+MCP_SERVERS=example-server
 MCP_EXAMPLE_SERVER_URL=http://localhost:8000
 MCP_EXAMPLE_SERVER_TOOLS=echo,get_time,search_web
 MCP_EXAMPLE_SERVER_DESCRIPTION=Basic MCP server for testing
@@ -111,7 +113,7 @@ Agent Labs supports the Model Context Protocol (MCP) for connecting to external 
 Configure MCP servers in your `.env` file:
 ```bash
 # Define server names (comma-separated)
-MCP_SERVERS=example_server,custom_server
+MCP_SERVERS=example-server,custom-server
 
 # Configure each server
 MCP_EXAMPLE_SERVER_URL=http://localhost:8000
@@ -132,7 +134,7 @@ MCP_CUSTOM_SERVER_DESCRIPTION=Custom analytics server
 ### Usage Examples
 ```bash
 # With echo tool selected
-"Hello world"  # Will use example_server:echo tool
+"Hello world"  # Will use example-server:echo tool
 
 # With multiple tools
 "Analyze this data and echo the results"  # Uses both MCP and built-in tools
@@ -144,7 +146,12 @@ MCP_CUSTOM_SERVER_DESCRIPTION=Custom analytics server
 2. **Upload files** or type questions
 3. **View results** with interactive charts, images, and downloadable content
 
-**Examples**: "Analyze this cost data", "Check system performance", "Create a chart from this CSV"
+**Examples**:
+- "Analyze cost per business unit and create presentation"
+- "Check system performance and show metrics"
+- "Create charts from this CSV data"
+- "Search for files containing 'config'"
+- "Get Tesla stock analysis with forecast"
 
 ## Deployment
 
@@ -161,13 +168,17 @@ The application can be deployed to Google Cloud using Cloud Build and Cloud Run:
 ```bash
 # From project root directory
 ~/google-cloud-sdk/bin/gcloud builds submit . --project=YOUR_PROJECT_ID
+
+# Example for existing deployment
+~/google-cloud-sdk/bin/gcloud builds submit . --project=agent-labs-1758473505
 ```
 
 #### Environment Setup for Production
 ```bash
 # Set environment variables in Cloud Run
-gcloud run services update agent-labs \
-  --set-env-vars="LLM_PROVIDER=ollama,LLM_MODEL=gemma3:latest" \
+~/google-cloud-sdk/bin/gcloud run services update agent-labs \
+  --set-env-vars="LLM_PROVIDER=openai,OPENAI_API_KEY=your_key" \
+  --region=us-central1 \
   --project=YOUR_PROJECT_ID
 ```
 
@@ -176,26 +187,31 @@ gcloud run services update agent-labs \
 - **Runtime Logs**: Google Cloud Console → Cloud Run → Service Logs
 - **Health Check**: `GET /health` endpoint for service status
 
-### Docker Deployment
+### Docker Deployment (Single Container)
 
 ```bash
-# Build and run with Docker
+# Build and run single container (for cloud deployment)
 docker build -t agent-labs .
-docker run -p 3000:3000 -p 8000:8000 agent-labs
+docker run -p 3000:3000 \
+  -e OPENAI_API_KEY=your_key \
+  -e GEMINI_API_KEY=your_key \
+  agent-labs
 ```
+**Note**: This is a multi-stage build that bundles both frontend and backend. Best for cloud deployment (Cloud Run, etc.).
 
-### Local Development with Production Configuration
+### Local Development
 
 ```bash
-# Use production environment variables
+# Use environment variables
 cp .env.example .env
-# Edit .env with your configuration
-npm run dev
+# Edit .env with your API keys and configuration
+python main.py
 ```
+**Access**: http://localhost:3000
 
 ## Development
 
-**Tech Stack**: Next.js + FastAPI + Ollama
+**Tech Stack**: Next.js 14 + FastAPI + Multiple LLM Providers (Ollama/OpenAI/Gemini)
 **Communication**: WebSocket for real-time interaction
 **Architecture**: Multi-agent pattern with specialized tool execution
 
@@ -209,18 +225,19 @@ npm run dev
 ### Current Features
 
 **Architecture**
-- ✅ **Multi-Agent System** - 11+ specialized agents with intelligent orchestration
+- ✅ **Multi-Agent System** - 13+ specialized agents with intelligent orchestration and precise tool selection
 - ✅ **Real-Time Streaming** - WebSocket-based communication with character-level streaming
-- ✅ **Tool Integration** - 10+ powerful tools with automatic parameter extraction
+- ✅ **Tool Integration** - 10 powerful built-in tools with automatic parameter extraction and smart routing
 - ✅ **MCP Protocol Support** - Connect to external MCP servers for extended functionality
 - ✅ **File Management** - Timestamped outputs saved to dedicated outputs folder
+- ✅ **Cloud Deployment** - Production-ready deployment to Google Cloud Run with health monitoring
 
 **Capabilities**
-- ✅ **Data Processing** - CSV/JSON conversion, text analysis, duplicate removal
-- ✅ **Visual Analysis** - AI-powered image understanding and metadata extraction
-- ✅ **Financial Analytics** - Cost analysis, stock market data visualization, and time series forecasting
-- ✅ **Content Generation** - PowerPoint presentations and interactive charts
-- ✅ **System Integration** - File search, web search, system monitoring
+- ✅ **Data Processing** - CSV/JSON conversion, text analysis, data transformation and cleaning
+- ✅ **Visual Analysis** - AI-powered image understanding with metadata extraction and object detection
+- ✅ **Financial Analytics** - Cost analysis, stock market data, business unit breakdowns, and LSTM forecasting
+- ✅ **Content Generation** - PowerPoint presentations, interactive charts, and downloadable reports
+- ✅ **System Integration** - File search, web search, system monitoring with comprehensive diagnostics
 - ✅ **External Tool Integration** - Dynamic discovery and execution of MCP server tools
 
 ### Contributing
