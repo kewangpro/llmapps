@@ -11,6 +11,8 @@ import ProcessedFileViewer from './ProcessedFileViewer';
 import ForecastViewer from './ForecastViewer';
 import CostAnalysisViewer from './CostAnalysisViewer';
 import VisualizationChart from './VisualizationChart';
+import FlightCard from './FlightCard';
+import WebSearchCard from './WebSearchCard';
 
 interface ChatInterfaceProps {
   messages: Message[];
@@ -321,7 +323,7 @@ export default function ChatInterface({
               {message.role === 'assistant' && message.toolResults && message.toolResults.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {message.toolResults.map((result, index) => {
-                    const hasSpecialViewer = ['image_analysis', 'presentation', 'data_processing', 'forecast', 'cost_analysis', 'visualization'].includes(result.tool);
+                    const hasSpecialViewer = ['image_analysis', 'presentation', 'data_processing', 'forecast', 'cost_analysis', 'visualization', 'flight', 'web_search'].includes(result.tool);
                     const isExpanded = hasSpecialViewer || expandedToolResults.has(`${message.id}-${index}`);
                     return (
                       <div key={`${message.id}-${index}`} className="rounded-lg bg-green-50 border border-green-200">
@@ -423,8 +425,30 @@ export default function ChatInterface({
                               </div>
                             )}
 
+                            {/* Display flight search results if available */}
+                            {result.tool === 'flight' && result.result?.flights && (
+                              <div className="mb-3">
+                                <FlightCard
+                                  flights={result.result.flights}
+                                  query={result.result.query}
+                                  resultsCount={result.result.results_count || 0}
+                                />
+                              </div>
+                            )}
+
+                            {/* Display web search results if available */}
+                            {result.tool === 'web_search' && result.result?.results && (
+                              <div className="mb-3">
+                                <WebSearchCard
+                                  searchResults={result.result.results}
+                                  query={result.result.query}
+                                  resultsCount={result.result.results_count || result.result.results.length}
+                                />
+                              </div>
+                            )}
+
                             {/* Default/fallback renderer for tools without specific handlers */}
-                            {!['image_analysis', 'presentation', 'data_processing', 'forecast', 'cost_analysis', 'visualization'].includes(result.tool) && result.result && (
+                            {!['image_analysis', 'presentation', 'data_processing', 'forecast', 'cost_analysis', 'visualization', 'flight', 'web_search'].includes(result.tool) && result.result && (
                               <div className="mb-3">
                                 <div className="bg-green-50 p-4 rounded-lg border border-green-200">
                                   <pre className="text-xs text-green-800 whitespace-pre-wrap font-sans">

@@ -122,6 +122,16 @@ const getToolTips = (toolName: string) => {
         "Upload stock prices and request: \"forecast price movements\""
       ],
       extra: "Uses: LSTM neural networks, automatic data preprocessing, model performance metrics, downloadable predictions"
+    },
+    flight: {
+      icon: Globe,
+      title: "✈️ Search for flights between cities:",
+      examples: [
+        "One-way: \"find flights from San Francisco to Tokyo on Dec 20\"",
+        "Round trip: \"flights from NYC to London, leaving Jan 10 returning Jan 20\"",
+        "With codes: \"search flights SFO to NRT departing March 15\""
+      ],
+      extra: "Searches: multiple booking sites, airlines, aggregators - provides direct links to book"
     }
   };
 
