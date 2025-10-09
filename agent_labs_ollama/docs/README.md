@@ -42,6 +42,10 @@ This directory contains all project documentation for Agent Labs.
 ![Web Search Demo](./images/web-search-demo.png)
 *Intelligent web search with result analysis and content extraction*
 
+#### Flight Search
+![Flight Search Demo](./images/flight-search-demo.png)
+*Smart flight search with realistic airline information, pricing, schedules, and flight durations*
+
 #### Data Processing
 ![Data Processing Demo](./images/data-processing-demo.png)
 *Automated data cleaning, transformation, and processing with real-time feedback*
