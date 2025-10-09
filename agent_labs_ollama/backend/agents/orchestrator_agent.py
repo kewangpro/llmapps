@@ -17,6 +17,7 @@ from .image_analysis_agent import ImageAnalysisAgent
 from .stock_analysis_agent import StockAnalysisAgent
 from .visualization_agent import VisualizationAgent
 from .forecast_agent import ForecastAgent
+from .flight_agent import FlightAgent
 from .mcp_agent import MCPAgent
 
 logger = logging.getLogger("OrchestratorAgent")
@@ -38,7 +39,8 @@ class OrchestratorAgent:
             "image_analysis": ImageAnalysisAgent(),
             "stock_analysis": StockAnalysisAgent(),
             "visualization": VisualizationAgent(),
-            "forecast": ForecastAgent()
+            "forecast": ForecastAgent(),
+            "flight": FlightAgent()
         }
         # Initialize MCP agent
         self.mcp_agent = MCPAgent()
@@ -57,7 +59,8 @@ class OrchestratorAgent:
             # Get tool descriptions from MultiAgentSystem
             from multi_agent_system import MultiAgentSystem
             all_tools = MultiAgentSystem.get_available_tools()
-            tools_desc = {tool["name"]: tool["short_description"] for tool in all_tools}
+            # Map by ID, not name!
+            tools_desc = {tool["id"]: tool["short_description"] for tool in all_tools}
 
             available_desc = [f"- {tool}: {tools_desc[tool]}" for tool in available_tools if tool in tools_desc]
 
@@ -76,7 +79,7 @@ class OrchestratorAgent:
             tool_selection_context = ""
 
             if user_has_selected_tools:
-                tool_selection_context = f"\nIMPORTANT: The user has specifically selected these tools: {available_tools}. Unless the query is completely unrelated, you should use the user's selected tools."
+                tool_selection_context = f"\nIMPORTANT: The user has pre-selected these tools: {available_tools}. Choose ONLY the tools from this list that are actually relevant to the query. Ignore tools that don't match the user's request."
 
             prompt = f"""Given this user query: "{query}"{file_context}{tool_selection_context}
 

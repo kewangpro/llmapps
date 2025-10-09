@@ -58,7 +58,11 @@ Respond with just the optimized query, no additional text."""
 
             result = {
                 "tool_data": formatted_tool_data,  # Formatted data for chaining
-                "llm_analysis": llm_analysis       # LLM insights
+                "llm_analysis": llm_analysis,      # LLM insights
+                # Include raw data for WebSearchCard component
+                "results": tool_result.get("results", []),
+                "query": tool_result.get("query", optimized_query),
+                "results_count": tool_result.get("results_count", len(tool_result.get("results", [])))
             }
 
             return {
