@@ -6,11 +6,11 @@ AI-powered chat interface with intelligent multi-agent orchestration and real-ti
 
 ## Key Features
 
-- **Multi-Agent Orchestration** - Intelligent task routing with 13+ specialized agents
-- **Real-Time Tool Execution** - 10 powerful built-in tools for file analysis, web search, data processing, visualization, presentations
+- **Multi-Agent Orchestration** - Intelligent task routing with 14+ specialized agents
+- **Real-Time Tool Execution** - 11 powerful built-in tools for file analysis, web search, data processing, visualization, presentations, and flight search
 - **MCP Integration** - Connect to external Model Context Protocol servers for extended capabilities
 - **Visual Content Analysis** - AI-powered image analysis with actual visual understanding
-- **Interactive Results** - Charts, images, presentations displayed directly in chat
+- **Interactive Results** - Charts, images, presentations, and flight information displayed directly in chat
 - **File Upload Support** - Automatic content analysis and smart tool selection
 - **Multiple LLM Support** - Ollama, OpenAI, Google Gemini with vision capabilities
 - **Downloadable Outputs** - Generated files saved with timestamps for easy access
@@ -27,12 +27,13 @@ AI-powered chat interface with intelligent multi-agent orchestration and real-ti
 
 ## Available Tools
 
-### Built-in Tools (10 Total)
-#### General Tools (5)
+### Built-in Tools (11 Total)
+#### General Tools (6)
 - **File Search** - Intelligent file discovery and pattern matching across filesystems
 - **Web Search** - Real-time web search with current information retrieval
 - **System Info** - Comprehensive system monitoring, CPU, memory, disk, and network diagnostics
 - **Presentation** - PowerPoint generation from structured data with downloadable PPTX files
+- **Flight Search** - Intelligent flight search with realistic flight information including airlines, times, prices, and duration
 - **Visualization** - Interactive chart and graph generation from CSV/JSON data
 
 #### Analytics Tools (5)
@@ -147,6 +148,8 @@ MCP_CUSTOM_SERVER_DESCRIPTION=Custom analytics server
 3. **View results** with interactive charts, images, and downloadable content
 
 **Examples**:
+- "Find flights from San Francisco to Tokyo on December 20"
+- "Search the web for latest AI developments"
 - "Analyze cost per business unit and create presentation"
 - "Check system performance and show metrics"
 - "Create charts from this CSV data"
@@ -225,9 +228,9 @@ python main.py
 ### Current Features
 
 **Architecture**
-- ✅ **Multi-Agent System** - 13+ specialized agents with intelligent orchestration and precise tool selection
+- ✅ **Multi-Agent System** - 14+ specialized agents with intelligent orchestration and precise tool selection
 - ✅ **Real-Time Streaming** - WebSocket-based communication with character-level streaming
-- ✅ **Tool Integration** - 10 powerful built-in tools with automatic parameter extraction and smart routing
+- ✅ **Tool Integration** - 11 powerful built-in tools with automatic parameter extraction and smart routing
 - ✅ **MCP Protocol Support** - Connect to external MCP servers for extended functionality
 - ✅ **File Management** - Timestamped outputs saved to dedicated outputs folder
 - ✅ **Cloud Deployment** - Production-ready deployment to Google Cloud Run with health monitoring
@@ -238,6 +241,7 @@ python main.py
 - ✅ **Financial Analytics** - Cost analysis, stock market data, business unit breakdowns, and LSTM forecasting
 - ✅ **Content Generation** - PowerPoint presentations, interactive charts, and downloadable reports
 - ✅ **System Integration** - File search, web search, system monitoring with comprehensive diagnostics
+- ✅ **Flight Search** - Intelligent flight search with realistic airline, pricing, and schedule information
 - ✅ **External Tool Integration** - Dynamic discovery and execution of MCP server tools
 
 ### Contributing
