@@ -1,5 +1,5 @@
-import React from 'react';
-import { Plane, MapPin, Calendar, Clock, DollarSign} from 'lucide-react';
+import React, { useState } from 'react';
+import { Plane, MapPin, Calendar, Clock, DollarSign, ChevronDown, ChevronUp} from 'lucide-react';
 
 interface Flight {
   airline: string;
@@ -10,7 +10,7 @@ interface Flight {
   price: string;
   date: string;
   duration: string;
-  stops: number;
+  stops: number | string;  // Can be number or "See website"
 }
 
 interface FlightQuery {
@@ -35,6 +35,8 @@ const FlightCard: React.FC<FlightCardProps> = ({
   query,
   resultsCount
 }) => {
+  const [showAllOutbound, setShowAllOutbound] = useState(false);
+  const [showAllReturn, setShowAllReturn] = useState(false);
   // Format date for display
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -76,7 +78,10 @@ const FlightCard: React.FC<FlightCardProps> = ({
             <Plane className="w-4 h-4 text-blue-500 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white" />
           </div>
           <div className="text-xs text-gray-500 mt-1">
-            {flight.stops === 0 ? 'Nonstop' : `${flight.stops} stop${flight.stops > 1 ? 's' : ''}`}
+            {typeof flight.stops === 'number'
+              ? (flight.stops === 0 ? 'Nonstop' : `${flight.stops} stop${flight.stops > 1 ? 's' : ''}`)
+              : flight.stops
+            }
           </div>
         </div>
 
@@ -117,8 +122,28 @@ const FlightCard: React.FC<FlightCardProps> = ({
       {flights.outbound && flights.outbound.length > 0 && (
         <div className="mb-4">
           <div className="space-y-3">
-            {flights.outbound.map((flight, index) => renderFlight(flight, index))}
+            {(showAllOutbound ? flights.outbound : flights.outbound.slice(0, 2)).map((flight, index) =>
+              renderFlight(flight, index)
+            )}
           </div>
+          {flights.outbound.length > 2 && (
+            <button
+              onClick={() => setShowAllOutbound(!showAllOutbound)}
+              className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors text-sm font-medium"
+            >
+              {showAllOutbound ? (
+                <>
+                  <ChevronUp className="w-4 h-4" />
+                  Show less
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="w-4 h-4" />
+                  Show {flights.outbound.length - 2} more flight{flights.outbound.length - 2 > 1 ? 's' : ''}
+                </>
+              )}
+            </button>
+          )}
         </div>
       )}
 
@@ -126,8 +151,28 @@ const FlightCard: React.FC<FlightCardProps> = ({
       {flights.return && flights.return.length > 0 && (
         <div>
           <div className="space-y-3">
-            {flights.return.map((flight, index) => renderFlight(flight, index))}
+            {(showAllReturn ? flights.return : flights.return.slice(0, 2)).map((flight, index) =>
+              renderFlight(flight, index)
+            )}
           </div>
+          {flights.return.length > 2 && (
+            <button
+              onClick={() => setShowAllReturn(!showAllReturn)}
+              className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors text-sm font-medium"
+            >
+              {showAllReturn ? (
+                <>
+                  <ChevronUp className="w-4 h-4" />
+                  Show less
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="w-4 h-4" />
+                  Show {flights.return.length - 2} more flight{flights.return.length - 2 > 1 ? 's' : ''}
+                </>
+              )}
+            </button>
+          )}
         </div>
       )}
 
