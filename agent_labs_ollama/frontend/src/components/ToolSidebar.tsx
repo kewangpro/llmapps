@@ -211,11 +211,13 @@ export default function ToolSidebar({ selectedTools, onToolToggle }: ToolSidebar
     );
   }
 
+  const totalTools = Object.keys(tools).length;
+
   return (
     <div className="w-80 bg-gray-50 border-r border-gray-200 p-4 overflow-y-auto">
       <div className="flex items-center gap-2 mb-6">
         <Wrench className="w-5 h-5 text-blue-600" />
-        <h2 className="text-lg font-semibold text-gray-900">Available Tools</h2>
+        <h2 className="text-lg font-semibold text-gray-900">Available Tools ({totalTools})</h2>
       </div>
 
       <div className="space-y-6">
