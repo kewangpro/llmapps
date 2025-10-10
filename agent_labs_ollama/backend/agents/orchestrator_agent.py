@@ -17,7 +17,7 @@ from .image_analysis_agent import ImageAnalysisAgent
 from .stock_analysis_agent import StockAnalysisAgent
 from .visualization_agent import VisualizationAgent
 from .forecast_agent import ForecastAgent
-from .flight_agent import FlightAgent
+from .flight_search_agent import FlightSearchAgent
 from .mcp_agent import MCPAgent
 
 logger = logging.getLogger("OrchestratorAgent")
@@ -40,7 +40,7 @@ class OrchestratorAgent:
             "stock_analysis": StockAnalysisAgent(),
             "visualization": VisualizationAgent(),
             "forecast": ForecastAgent(),
-            "flight": FlightAgent()
+            "flight_search": FlightSearchAgent()
         }
         # Initialize MCP agent
         self.mcp_agent = MCPAgent()
