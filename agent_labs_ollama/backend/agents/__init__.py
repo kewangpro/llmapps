@@ -12,6 +12,7 @@ from .stock_analysis_agent import StockAnalysisAgent
 from .visualization_agent import VisualizationAgent
 from .forecast_agent import ForecastAgent
 from .flight_search_agent import FlightSearchAgent
+from .hotel_search_agent import HotelSearchAgent
 from .mcp_agent import MCPAgent
 from .orchestrator_agent import OrchestratorAgent
 
@@ -28,6 +29,7 @@ __all__ = [
     'VisualizationAgent',
     'ForecastAgent',
     'FlightSearchAgent',
+    'HotelSearchAgent',
     'MCPAgent',
     'OrchestratorAgent'
 ]
