@@ -123,7 +123,7 @@ const getToolTips = (toolName: string) => {
       ],
       extra: "Uses: LSTM neural networks, automatic data preprocessing, model performance metrics, downloadable predictions"
     },
-    flight: {
+    flight_search: {
       icon: Globe,
       title: "✈️ Search for flights between cities:",
       examples: [

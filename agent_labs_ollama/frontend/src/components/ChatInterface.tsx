@@ -323,7 +323,7 @@ export default function ChatInterface({
               {message.role === 'assistant' && message.toolResults && message.toolResults.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {message.toolResults.map((result, index) => {
-                    const hasSpecialViewer = ['image_analysis', 'presentation', 'data_processing', 'forecast', 'cost_analysis', 'visualization', 'flight', 'web_search'].includes(result.tool);
+                    const hasSpecialViewer = ['image_analysis', 'presentation', 'data_processing', 'forecast', 'cost_analysis', 'visualization', 'flight_search', 'web_search'].includes(result.tool);
                     const isExpanded = hasSpecialViewer || expandedToolResults.has(`${message.id}-${index}`);
                     return (
                       <div key={`${message.id}-${index}`} className="rounded-lg bg-green-50 border border-green-200">
@@ -426,7 +426,7 @@ export default function ChatInterface({
                             )}
 
                             {/* Display flight search results if available */}
-                            {result.tool === 'flight' && result.result?.flights && (
+                            {result.tool === 'flight_search' && result.result?.flights && (
                               <div className="mb-3">
                                 <FlightCard
                                   flights={result.result.flights}
@@ -448,7 +448,7 @@ export default function ChatInterface({
                             )}
 
                             {/* Default/fallback renderer for tools without specific handlers */}
-                            {!['image_analysis', 'presentation', 'data_processing', 'forecast', 'cost_analysis', 'visualization', 'flight', 'web_search'].includes(result.tool) && result.result && (
+                            {!['image_analysis', 'presentation', 'data_processing', 'forecast', 'cost_analysis', 'visualization', 'flight_search', 'web_search'].includes(result.tool) && result.result && (
                               <div className="mb-3">
                                 <div className="bg-green-50 p-4 rounded-lg border border-green-200">
                                   <pre className="text-xs text-green-800 whitespace-pre-wrap font-sans">
