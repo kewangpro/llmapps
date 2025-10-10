@@ -132,6 +132,16 @@ const getToolTips = (toolName: string) => {
         "With codes: \"search flights SFO to NRT departing March 15\""
       ],
       extra: "Searches: multiple booking sites, airlines, aggregators - provides direct links to book"
+    },
+    hotel_search: {
+      icon: Globe,
+      title: "🏨 Search for hotels by location:",
+      examples: [
+        "Basic search: \"find hotels in San Francisco from Dec 20 to Dec 25\"",
+        "With guests: \"hotels in Paris tomorrow for 3 nights, 4 people\"",
+        "Specific dates: \"book hotel in Tokyo checking in Jan 10 checking out Jan 15\""
+      ],
+      extra: "Shows: prices, ratings, amenities, locations - provides direct links to book"
     }
   };
 

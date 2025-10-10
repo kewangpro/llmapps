@@ -12,6 +12,7 @@ import ForecastViewer from './ForecastViewer';
 import CostAnalysisViewer from './CostAnalysisViewer';
 import VisualizationChart from './VisualizationChart';
 import FlightCard from './FlightCard';
+import HotelCard from './HotelCard';
 import WebSearchCard from './WebSearchCard';
 
 interface ChatInterfaceProps {
@@ -323,13 +324,19 @@ export default function ChatInterface({
               {message.role === 'assistant' && message.toolResults && message.toolResults.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {message.toolResults.map((result, index) => {
-                    const hasSpecialViewer = ['image_analysis', 'presentation', 'data_processing', 'forecast', 'cost_analysis', 'visualization', 'flight_search', 'web_search'].includes(result.tool);
-                    const isExpanded = hasSpecialViewer || expandedToolResults.has(`${message.id}-${index}`);
+                    const hasSpecialViewer = ['image_analysis', 'presentation', 'data_processing', 'forecast', 'cost_analysis', 'visualization', 'flight_search', 'hotel_search', 'web_search'].includes(result.tool);
+                    const resultKey = `${message.id}-${index}`;
+                    // Tools with special viewers start expanded by default (not in the set)
+                    // When toggled, they're added to the set with opposite state
+                    // If not in set: special viewers are expanded, others are collapsed
+                    // If in set: it has been toggled, so show opposite of default
+                    const defaultState = hasSpecialViewer;
+                    const isExpanded = expandedToolResults.has(resultKey) ? !defaultState : defaultState;
                     return (
                       <div key={`${message.id}-${index}`} className="rounded-lg bg-green-50 border border-green-200">
                         <div
                           className="p-3 cursor-pointer hover:bg-green-100 transition-colors"
-                          onClick={() => toggleToolResultExpand(`${message.id}-${index}`)}
+                          onClick={() => toggleToolResultExpand(resultKey)}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
@@ -436,6 +443,17 @@ export default function ChatInterface({
                               </div>
                             )}
 
+                            {/* Display hotel search results if available */}
+                            {result.tool === 'hotel_search' && result.result?.hotels && (
+                              <div className="mb-3">
+                                <HotelCard
+                                  hotels={result.result.hotels}
+                                  query={result.result.query}
+                                  resultsCount={result.result.results_count || 0}
+                                />
+                              </div>
+                            )}
+
                             {/* Display web search results if available */}
                             {result.tool === 'web_search' && result.result?.results && (
                               <div className="mb-3">
@@ -448,7 +466,7 @@ export default function ChatInterface({
                             )}
 
                             {/* Default/fallback renderer for tools without specific handlers */}
-                            {!['image_analysis', 'presentation', 'data_processing', 'forecast', 'cost_analysis', 'visualization', 'flight_search', 'web_search'].includes(result.tool) && result.result && (
+                            {!['image_analysis', 'presentation', 'data_processing', 'forecast', 'cost_analysis', 'visualization', 'flight_search', 'hotel_search', 'web_search'].includes(result.tool) && result.result && (
                               <div className="mb-3">
                                 <div className="bg-green-50 p-4 rounded-lg border border-green-200">
                                   <pre className="text-xs text-green-800 whitespace-pre-wrap font-sans">
