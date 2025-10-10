@@ -60,6 +60,7 @@ This directory contains all project documentation for Agent Labs.
 - **[Product Requirements Document (PRD)](./ollama-chat-agent-prd.md)** - Complete product specification and requirements
 - **[Technical Context](./technical-context.md)** - Technical architecture and implementation details
 - **[Feature Context](./feature-context.md)** - Feature specifications and functionality overview
+- **[Agent and Tool Protocol](./agent-tool-protocol.md)** - Agent communication protocols, naming conventions, and integration contracts
 
 ### Research & Discovery
 - **[Discovery Context](./discovery-context.md)** - Initial project discovery and research findings
