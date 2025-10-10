@@ -156,7 +156,9 @@ Respond with JSON only:
         """Use LLM to analyze flight search results and provide insights"""
         try:
             # Extract relevant information from tool result
-            flight_results = tool_result.get("results", [])
+            flights_data = tool_result.get("flights", {"outbound": [], "return": []})
+            outbound_flights = flights_data.get("outbound", [])
+            return_flights = flights_data.get("return", [])
             query_info = tool_result.get("query", {})
             origin = query_info.get("origin", "Unknown")
             destination = query_info.get("destination", "Unknown")
@@ -170,24 +172,28 @@ Flight Search Details:
 - Route: {origin} → {destination}
 - Departure Date: {departure_date}
 {"- Return Date: " + return_date if return_date else "- Trip Type: One Way"}
-- Number of Results Found: {len(flight_results)}
+- Outbound Flights Found: {len(outbound_flights)}
+{"- Return Flights Found: " + str(len(return_flights)) if return_flights else ""}
 
-Search Results:
-{self._format_flight_results_for_analysis(flight_results)}
+Outbound Flight Options:
+{self._format_flight_results_for_analysis(outbound_flights)}
+
+{"Return Flight Options:" if return_flights else ""}
+{self._format_flight_results_for_analysis(return_flights) if return_flights else ""}
 
 Please provide:
-1. **Summary** - Brief overview of available flight options
-2. **Key Findings** - Important information about routes, airlines, and booking sites
-3. **Recommendations** - Suggest which sources to check or what to look for when booking
+1. **Summary** - Brief overview of available flight options and price ranges
+2. **Key Findings** - Highlight the cheapest options, nonstop flights, and airline choices
+3. **Recommendations** - Suggest the best value flights based on price, duration, and stops
 4. **Booking Tips** - Any relevant advice about timing, prices, or airlines for this route
 
 Format your response with:
 - Clear section headers using **bold** markdown
 - Well-organized information
 - Bullet points for easy reading
-- Highlight important details
+- Highlight important details like prices and flight times
 
-Focus on providing actionable information to help the user find and book the best flight."""
+Focus on providing actionable information to help the user choose and book the best flight."""
 
             llm_response = self.llm.call(analysis_prompt)
             logger.info(f"✈️  Generated LLM analysis for flight search results")
@@ -201,22 +207,22 @@ Focus on providing actionable information to help the user find and book the bes
         """Format flight results for LLM analysis"""
         try:
             if not results:
-                return "No flight results found"
+                return "No flight options available"
 
             formatted = ""
-            for i, result in enumerate(results[:8], 1):  # Show top 8 results
-                title = result.get("title", "No title")
-                snippet = result.get("snippet", "No details")
-                url = result.get("url", "No URL")
-                source = result.get("source", "Unknown")
+            for i, flight in enumerate(results, 1):
+                airline = flight.get("airline", "Unknown")
+                price = flight.get("price", "N/A")
+                duration = flight.get("duration", "N/A")
+                stops = flight.get("stops", "N/A")
+                departure_time = flight.get("departure_time", "N/A")
+                arrival_time = flight.get("arrival_time", "N/A")
 
-                formatted += f"{i}. {title}\n"
-                formatted += f"   Source: {source}\n"
-                formatted += f"   Details: {snippet}\n"
-                formatted += f"   Link: {url}\n\n"
+                stops_text = "Nonstop" if stops == 0 else f"{stops} stop(s)" if isinstance(stops, int) else str(stops)
 
-            if len(results) > 8:
-                formatted += f"... and {len(results) - 8} more results\n"
+                formatted += f"{i}. {airline} - {price}\n"
+                formatted += f"   Time: {departure_time} → {arrival_time}\n"
+                formatted += f"   Duration: {duration}, {stops_text}\n\n"
 
             return formatted
         except Exception as e:
