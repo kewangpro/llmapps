@@ -245,6 +245,11 @@ def forecast_timeseries(data: str, forecast_periods: int = 30, time_steps: int =
         predictions = scaler.inverse_transform(predictions)
         predictions = predictions.flatten()
 
+        # Ensure predictions don't go negative (especially important for stock prices, prices, counts, etc.)
+        # Apply a minimum threshold based on historical data
+        min_historical_value = values.min()
+        predictions = np.maximum(predictions, max(0, min_historical_value * 0.1))
+
         # Create future dates
         last_date = df[date_column].iloc[-1]
         future_dates = pd.date_range(start=last_date + timedelta(days=1), periods=forecast_periods)
