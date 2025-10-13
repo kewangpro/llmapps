@@ -45,6 +45,10 @@ export default function Home() {
     sendMessage(message, tools, model, attachedFile, displayMessage);
   };
 
+  const handleToolsChange = (tools: string[]) => {
+    setSelectedTools(tools);
+  };
+
   return (
     <div className="h-screen flex bg-gray-100">
       <ToolSidebar
@@ -58,6 +62,7 @@ export default function Home() {
         isLoading={isLoading}
         onSendMessage={handleSendMessage}
         selectedTools={selectedTools}
+        onToolsChange={handleToolsChange}
       />
 
       {/* Connection status indicator */}
