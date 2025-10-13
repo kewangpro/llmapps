@@ -7,7 +7,8 @@ AI-powered chat interface with intelligent multi-agent orchestration and real-ti
 ## Key Features
 
 - **Multi-Agent Orchestration** - Intelligent task routing with 14+ specialized agents
-- **Real-Time Tool Execution** - 11 powerful built-in tools for file analysis, web search, data processing, visualization, presentations, and flight search
+- **Real-Time Tool Execution** - 12 powerful built-in tools for file analysis, web search, data processing, visualization, presentations, flight search, and hotel search
+- **Tool Mentions** - Use `@tool_name` syntax to explicitly select tools in your messages
 - **MCP Integration** - Connect to external Model Context Protocol servers for extended capabilities
 - **Visual Content Analysis** - AI-powered image analysis with actual visual understanding
 - **Interactive Results** - Charts, images, presentations, and flight information displayed directly in chat
@@ -27,13 +28,14 @@ AI-powered chat interface with intelligent multi-agent orchestration and real-ti
 
 ## Available Tools
 
-### Built-in Tools (11 Total)
-#### General Tools (6)
+### Built-in Tools (12 Total)
+#### General Tools (7)
 - **File Search** - Intelligent file discovery and pattern matching across filesystems
 - **Web Search** - Real-time web search with current information retrieval
 - **System Info** - Comprehensive system monitoring, CPU, memory, disk, and network diagnostics
 - **Presentation** - PowerPoint generation from structured data with downloadable PPTX files
-- **Flight Search** - Intelligent flight search with realistic flight information including airlines, times, prices, and duration
+- **Flight Search** - Search for flights between cities
+- **Hotel Search** - Search for hotel accommodations
 - **Visualization** - Interactive chart and graph generation from CSV/JSON data
 
 #### Analytics Tools (5)
@@ -89,14 +91,14 @@ docker-compose up --build
 
 **Environment Variables**: Create `.env` file (see [.env.example](.env.example)):
 ```bash
-# Google Search API (for web search tool)
-GOOGLE_SEARCH_API_KEY=your_google_api_key
-GOOGLE_SEARCH_ENGINE_ID=your_search_engine_id
-
 # LLM Provider API Keys
 OPENAI_API_KEY=your_openai_key       # For OpenAI models
 GEMINI_API_KEY=your_gemini_key       # For Google Gemini models
 OLLAMA_BASE_URL=http://localhost:11434  # For Ollama (local or remote)
+
+# Google Search API (optional, for web search tool)
+GOOGLE_SEARCH_API_KEY=your_google_api_key
+GOOGLE_SEARCH_ENGINE_ID=your_search_engine_id
 
 # MCP Server Configuration (optional)
 MCP_SERVERS=example-server
@@ -143,18 +145,37 @@ MCP_CUSTOM_SERVER_DESCRIPTION=Custom analytics server
 
 ## Usage
 
-1. **Select tools** from sidebar based on your task
-2. **Upload files** or type questions
-3. **View results** with interactive charts, images, and downloadable content
+### Tool Selection Methods
 
-**Examples**:
-- "Find flights from San Francisco to Tokyo on December 20"
-- "Search the web for latest AI developments"
-- "Analyze cost per business unit and create presentation"
-- "Check system performance and show metrics"
-- "Create charts from this CSV data"
-- "Search for files containing 'config'"
-- "Get Tesla stock analysis with forecast"
+**1. Sidebar Selection**
+- Click tools in the sidebar to select them
+- Selected tools will be used for your query
+- Multiple tools can be selected for complex workflows
+
+**2. @ Mention (Explicit Selection)**
+- Type `@` to see available tools
+- Select from dropdown or type `@tool_name` directly
+- When using `@`, ONLY mentioned tools will be used (sidebar selection is ignored)
+- Examples:
+  - `@flight_search find flights from Seattle to Tokyo`
+  - `@web_search latest AI developments`
+  - `@data_processing @visualization analyze and chart this data`
+
+### Examples
+
+**Travel Search**:
+- `@flight_search find flights from San Francisco to Tokyo on December 20`
+- `@hotel_search find hotels in Paris from January 10 to January 15`
+
+**Information & Analysis**:
+- `@web_search latest AI developments`
+- `@system_info check system performance and show metrics`
+- `@file_search search for files containing 'config'`
+
+**Data Processing**:
+- `@data_processing @visualization create charts from this CSV data`
+- `@cost_analysis analyze cost per business unit and create presentation`
+- `@stock_analysis get Tesla stock analysis with forecast`
 
 ## Deployment
 
@@ -230,7 +251,8 @@ python main.py
 **Architecture**
 - ✅ **Multi-Agent System** - 14+ specialized agents with intelligent orchestration and precise tool selection
 - ✅ **Real-Time Streaming** - WebSocket-based communication with character-level streaming
-- ✅ **Tool Integration** - 11 powerful built-in tools with automatic parameter extraction and smart routing
+- ✅ **Tool Integration** - 12 powerful built-in tools with automatic parameter extraction and smart routing
+- ✅ **Tool Mentions** - `@tool_name` syntax for explicit tool selection in messages
 - ✅ **MCP Protocol Support** - Connect to external MCP servers for extended functionality
 - ✅ **File Management** - Timestamped outputs saved to dedicated outputs folder
 - ✅ **Cloud Deployment** - Production-ready deployment to Google Cloud Run with health monitoring
@@ -241,7 +263,7 @@ python main.py
 - ✅ **Financial Analytics** - Cost analysis, stock market data, business unit breakdowns, and LSTM forecasting
 - ✅ **Content Generation** - PowerPoint presentations, interactive charts, and downloadable reports
 - ✅ **System Integration** - File search, web search, system monitoring with comprehensive diagnostics
-- ✅ **Flight Search** - Intelligent flight search with realistic airline, pricing, and schedule information
+- ✅ **Travel Search** - Flight and hotel search with pricing, schedules, ratings, and booking information
 - ✅ **External Tool Integration** - Dynamic discovery and execution of MCP server tools
 
 ### Contributing
