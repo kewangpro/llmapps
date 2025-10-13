@@ -81,7 +81,7 @@ class OrchestratorAgent:
             tool_selection_context = ""
 
             if user_has_selected_tools:
-                tool_selection_context = f"\nIMPORTANT: The user has pre-selected these tools: {available_tools}. Choose ONLY the tools from this list that are actually relevant to the query. Ignore tools that don't match the user's request."
+                tool_selection_context = f"\nCRITICAL: The user has EXPLICITLY selected these tools: {available_tools}. You MUST use ONLY the tools from this list that match the query. DO NOT add any other tools. DO NOT skip any mentioned tools."
 
             prompt = f"""Given this user query: "{query}"{file_context}{tool_selection_context}
 
@@ -89,11 +89,12 @@ Available tools:
 {chr(10).join(available_desc)}
 
 CRITICAL RULES:
-1. ONLY use the EXACT tool names from the list above - do NOT invent new tool names
-2. Think about EXECUTION ORDER - tools that produce data must run BEFORE tools that consume that data
-3. Select only tools that directly fulfill the user's request
-4. PREFER SINGLE TOOLS when they can handle the complete request
-5. Avoid combining tools unless the output of one is needed as input to another
+1. ONLY use the EXACT tool names from the available tools list above
+2. If the user pre-selected tools, use ONLY those tools (don't add extras)
+3. Think about EXECUTION ORDER - tools that produce data must run BEFORE tools that consume that data
+4. Select only tools that directly fulfill the user's request
+5. PREFER SINGLE TOOLS when they can handle the complete request
+6. DO NOT combine tools unless the output of one is explicitly needed as input to another
 
 Examples of correct ordering:
 - For "analyze stock and forecast": stock_analysis → forecast
