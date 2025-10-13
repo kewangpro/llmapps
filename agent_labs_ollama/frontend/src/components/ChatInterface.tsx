@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Message, ToolResult } from '@/types';
+import { Message, ToolResult, Tool } from '@/types';
 import { apiUrl } from '@/utils/api';
 import { getDefaultLLMConfig, getAvailableModels } from '@/utils/llm';
 import { Send, Bot, User, Loader2, Wrench, ChevronDown, ChevronRight, Paperclip, X } from 'lucide-react';
@@ -21,6 +21,7 @@ interface ChatInterfaceProps {
   isLoading: boolean;
   onSendMessage: (message: string, selectedTools: string[], model: string, attachedFile?: {name: string, size: number, type: string, content?: string}, displayMessage?: string) => void;
   selectedTools: string[];
+  onToolsChange: (tools: string[]) => void;
 }
 
 export default function ChatInterface({
@@ -28,7 +29,8 @@ export default function ChatInterface({
   currentResponse,
   isLoading,
   onSendMessage,
-  selectedTools
+  selectedTools,
+  onToolsChange
 }: ChatInterfaceProps) {
   const [inputMessage, setInputMessage] = useState('');
   const [selectedModel, setSelectedModel] = useState(() => {
@@ -40,8 +42,15 @@ export default function ChatInterface({
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [fileContent, setFileContent] = useState<string>('');
   const [fileWarning, setFileWarning] = useState<string>('');
+  const [tools, setTools] = useState<Record<string, Tool>>({});
+  const [showMentionDropdown, setShowMentionDropdown] = useState(false);
+  const [mentionSearch, setMentionSearch] = useState('');
+  const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 });
+  const [cursorPosition, setCursorPosition] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const mentionDropdownRef = useRef<HTMLDivElement>(null);
 
   // File size limits
   const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -54,6 +63,21 @@ export default function ChatInterface({
   useEffect(() => {
     scrollToBottom();
   }, [messages, currentResponse]);
+
+  // Fetch available tools on component mount
+  useEffect(() => {
+    const fetchTools = async () => {
+      try {
+        const response = await fetch(apiUrl('/api/tools'));
+        const data = await response.json();
+        setTools(data.tools);
+      } catch (error) {
+        console.error('Failed to fetch tools:', error);
+      }
+    };
+
+    fetchTools();
+  }, []);
 
   // Fetch available models on component mount
   useEffect(() => {
@@ -112,9 +136,45 @@ export default function ChatInterface({
     }
   };
 
+  // Parse @ mentions from message and extract tool IDs
+  const extractMentionedTools = (text: string): string[] => {
+    const mentionRegex = /@(\w+(?:[:\-_]\w+)*)/g;
+    const mentionedTools: string[] = [];
+    let match;
+
+    while ((match = mentionRegex.exec(text)) !== null) {
+      const mentionedName = match[1].toLowerCase();
+      // Find matching tool by ID or name
+      const tool = Object.values(tools).find(t =>
+        t.id.toLowerCase() === mentionedName ||
+        t.name.toLowerCase().replace(/\s+/g, '_') === mentionedName ||
+        t.name.toLowerCase().replace(/\s+/g, '-') === mentionedName ||
+        t.name.toLowerCase().replace(/\s+/g, '') === mentionedName
+      );
+
+      if (tool && !mentionedTools.includes(tool.id)) {
+        mentionedTools.push(tool.id);
+      }
+    }
+
+    return mentionedTools;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (inputMessage.trim() && !isLoading) {
+      // Extract mentioned tools from message
+      const mentionedTools = extractMentionedTools(inputMessage);
+
+      // If tools are mentioned with @, use ONLY those tools (don't merge with sidebar selection)
+      // Otherwise, use the sidebar selected tools
+      const allTools = mentionedTools.length > 0 ? mentionedTools : selectedTools;
+
+      // Auto-select mentioned tools in the sidebar for visual feedback
+      if (mentionedTools.length > 0) {
+        onToolsChange(mentionedTools);
+      }
+
       // Send clean message (not containing file content)
       const messageForBackend = inputMessage.trim();
 
@@ -129,10 +189,11 @@ export default function ChatInterface({
         content: fileContent  // Include file content for backend
       } : undefined;
 
-      onSendMessage(messageForBackend, selectedTools, selectedModel, fileMetadata, messageForDisplay);
+      onSendMessage(messageForBackend, allTools, selectedModel, fileMetadata, messageForDisplay);
       setInputMessage('');
       setAttachedFile(null);
       setFileContent('');
+      setShowMentionDropdown(false);
     }
   };
 
@@ -195,6 +256,45 @@ export default function ChatInterface({
     });
   };
 
+  // Format message content with @ mentions highlighted
+  const formatMessageWithMentions = (text: string) => {
+    const mentionRegex = /@(\w+(?:[:\-_]\w+)*)/g;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = mentionRegex.exec(text)) !== null) {
+      // Add text before mention
+      if (match.index > lastIndex) {
+        parts.push(text.substring(lastIndex, match.index));
+      }
+
+      // Add mention with highlighting
+      const mentionedToolId = match[1];
+      const tool = Object.values(tools).find(t => t.id === mentionedToolId);
+
+      parts.push(
+        <span
+          key={match.index}
+          className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-600 text-white rounded font-medium"
+          title={tool ? tool.description : mentionedToolId}
+        >
+          <Wrench className="w-3 h-3" />
+          @{mentionedToolId}
+        </span>
+      );
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Add remaining text
+    if (lastIndex < text.length) {
+      parts.push(text.substring(lastIndex));
+    }
+
+    return parts.length > 0 ? parts : text;
+  };
+
   const toggleToolResultExpand = (key: string | number) => {
     setExpandedToolResults(prev => {
       const newSet = new Set(prev);
@@ -206,6 +306,82 @@ export default function ChatInterface({
       return newSet;
     });
   };
+
+  // Handle input change and detect @ mentions
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    const cursorPos = e.target.selectionStart || 0;
+    setInputMessage(value);
+    setCursorPosition(cursorPos);
+
+    // Check if user typed @ to trigger mention dropdown
+    const textBeforeCursor = value.substring(0, cursorPos);
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+
+    if (lastAtIndex !== -1) {
+      const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
+      // Only show dropdown if @ is at start or after whitespace, and no space after @
+      const charBeforeAt = lastAtIndex > 0 ? textBeforeCursor[lastAtIndex - 1] : ' ';
+      if ((charBeforeAt === ' ' || charBeforeAt === '\n' || lastAtIndex === 0) && !textAfterAt.includes(' ')) {
+        setMentionSearch(textAfterAt.toLowerCase());
+        setShowMentionDropdown(true);
+
+        // Calculate dropdown position
+        if (inputRef.current) {
+          const inputRect = inputRef.current.getBoundingClientRect();
+          setMentionPosition({
+            top: inputRect.top - 200, // Show above input
+            left: inputRect.left + 10
+          });
+        }
+      } else {
+        setShowMentionDropdown(false);
+      }
+    } else {
+      setShowMentionDropdown(false);
+    }
+  };
+
+  // Filter tools based on mention search
+  const filteredTools = Object.values(tools).filter(tool =>
+    tool.name.toLowerCase().includes(mentionSearch) ||
+    tool.id.toLowerCase().includes(mentionSearch) ||
+    tool.description.toLowerCase().includes(mentionSearch)
+  );
+
+  // Handle tool selection from mention dropdown
+  const handleMentionSelect = (toolId: string) => {
+    const textBeforeCursor = inputMessage.substring(0, cursorPosition);
+    const textAfterCursor = inputMessage.substring(cursorPosition);
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+
+    if (lastAtIndex !== -1) {
+      const newText = textBeforeCursor.substring(0, lastAtIndex) + `@${toolId} ` + textAfterCursor;
+      setInputMessage(newText);
+      setShowMentionDropdown(false);
+
+      // Focus back on input
+      setTimeout(() => {
+        if (inputRef.current) {
+          const newCursorPos = lastAtIndex + toolId.length + 2;
+          inputRef.current.focus();
+          inputRef.current.setSelectionRange(newCursorPos, newCursorPos);
+        }
+      }, 0);
+    }
+  };
+
+  // Close mention dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (mentionDropdownRef.current && !mentionDropdownRef.current.contains(event.target as Node)) {
+        setShowMentionDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <div className="flex-1 flex flex-col bg-white">
@@ -286,7 +462,9 @@ export default function ChatInterface({
                     <p className="whitespace-pre-wrap">{message.content}</p>
                   </div>
                 ) : (
-                  <p className="whitespace-pre-wrap break-words overflow-hidden text-sm leading-relaxed">{message.content}</p>
+                  <p className="whitespace-pre-wrap break-words overflow-hidden text-sm leading-relaxed">
+                    {formatMessageWithMentions(message.content)}
+                  </p>
                 )}
               </div>
 
@@ -603,14 +781,58 @@ export default function ChatInterface({
             <Paperclip className="w-4 h-4 text-gray-600" />
           </button>
 
-          <input
-            type="text"
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
-            placeholder={attachedFile ? "Describe what you want to do with the attached file (e.g., analyze data, create a chart, generate presentation)..." : "Type your message..."}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
-            disabled={isLoading}
-          />
+          <div className="flex-1 relative">
+            <input
+              ref={inputRef}
+              type="text"
+              value={inputMessage}
+              onChange={handleInputChange}
+              placeholder={attachedFile ? "Describe what you want to do with the attached file (e.g., analyze data, create a chart, generate presentation)... Type @ to mention tools" : "Type your message... Use @ to mention tools"}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+              disabled={isLoading}
+            />
+
+            {/* @ Mention Dropdown */}
+            {showMentionDropdown && filteredTools.length > 0 && (
+              <div
+                ref={mentionDropdownRef}
+                className="absolute bottom-full left-0 mb-2 w-full max-w-md bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto z-50"
+              >
+                <div className="p-2 border-b border-gray-100 bg-gray-50">
+                  <p className="text-xs text-gray-600 font-medium">Select a tool to mention</p>
+                </div>
+                <div className="py-1">
+                  {filteredTools.slice(0, 10).map((tool) => (
+                    <button
+                      key={tool.id}
+                      onClick={() => handleMentionSelect(tool.id)}
+                      className="w-full px-3 py-2 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none transition-colors"
+                    >
+                      <div className="flex items-start gap-2">
+                        <Wrench className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-900 truncate">
+                            @{tool.id}
+                          </div>
+                          <div className="text-xs text-gray-600 truncate">
+                            {tool.name}
+                          </div>
+                          <div className="text-xs text-gray-500 line-clamp-1 mt-0.5">
+                            {tool.description}
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                  {filteredTools.length > 10 && (
+                    <div className="px-3 py-2 text-xs text-gray-500 text-center border-t border-gray-100">
+                      {filteredTools.length - 10} more tools available
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
           <button
             type="submit"
             disabled={!inputMessage.trim() || isLoading}
