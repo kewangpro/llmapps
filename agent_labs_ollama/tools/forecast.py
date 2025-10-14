@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """
 Forecast Tool
-Uses LSTM neural networks to predict future data points based on time series data
+Uses GRU or N-BEATS neural networks to predict future data points based on time series data
+
+GRU (Gated Recurrent Unit) is the default model - fast, stable, and accurate.
+N-BEATS (Neural Basis Expansion Analysis) is available as an experimental alternative
+for datasets with strong patterns.
 """
 
 import json
@@ -20,9 +24,10 @@ from datetime import datetime, timedelta
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Dropout
+from tensorflow.keras.models import Sequential, Model
+from tensorflow.keras.layers import LSTM, GRU, Dense, Dropout, Input, Lambda, Concatenate, Add
 from tensorflow.keras.optimizers import Adam
+import tensorflow.keras.backend as K
 import warnings
 
 # Suppress warnings and optimize for production
@@ -56,31 +61,140 @@ def save_to_outputs_folder(content: str, filename: str) -> str:
         f.write(content)
     return output_path
 
-def create_lstm_model(input_shape: Tuple[int, int]) -> Sequential:
-    """Create LSTM model architecture - optimized for production"""
+def create_gru_model(input_shape: Tuple[int, int]) -> Sequential:
+    """Create GRU model architecture - faster and often more accurate than LSTM"""
     model = Sequential([
-        LSTM(32, return_sequences=True, input_shape=input_shape),
-        Dropout(0.1),
-        LSTM(32),
-        Dropout(0.1),
+        GRU(64, return_sequences=True, input_shape=input_shape),
+        Dropout(0.15),
+        GRU(64, return_sequences=True),
+        Dropout(0.15),
+        GRU(32),
+        Dropout(0.15),
+        Dense(16, activation='relu'),
         Dense(1)
     ])
 
     model.compile(
-        optimizer=Adam(learning_rate=0.01),
+        optimizer=Adam(learning_rate=0.001),
         loss='mean_squared_error',
         metrics=['mae']
     )
 
     return model
 
-def prepare_lstm_data(data: np.array, time_steps: int = 60) -> Tuple[np.array, np.array]:
-    """Prepare data for LSTM training"""
+def create_nbeats_block(input_layer, block_id: int, units: int, lookback: int, forecast_horizon: int):
+    """
+    Create a single N-BEATS block (generic architecture)
+    Each block learns a basis expansion for backcast and forecast
+    """
+    # Fully connected stack
+    fc = Dense(units, activation='relu', name=f'block_{block_id}_fc1')(input_layer)
+    fc = Dense(units, activation='relu', name=f'block_{block_id}_fc2')(fc)
+    fc = Dense(units, activation='relu', name=f'block_{block_id}_fc3')(fc)
+    fc = Dense(units, activation='relu', name=f'block_{block_id}_fc4')(fc)
+
+    # Backcast (reconstruction of input)
+    backcast = Dense(lookback, activation='linear', name=f'block_{block_id}_backcast')(fc)
+
+    # Forecast (prediction of future)
+    forecast = Dense(forecast_horizon, activation='linear', name=f'block_{block_id}_forecast')(fc)
+
+    return backcast, forecast
+
+def create_nbeats_model(lookback: int, forecast_horizon: int, num_blocks: int = 2, units: int = 64) -> Model:
+    """
+    Create N-BEATS (Neural Basis Expansion Analysis for Time Series) model
+
+    N-BEATS uses a stack of blocks, each producing a backcast (residual) and forecast.
+    The architecture ensures smooth transitions and interpretable decomposition.
+
+    Args:
+        lookback: Number of historical time steps
+        forecast_horizon: Number of future time steps to predict
+        num_blocks: Number of stacked blocks (default: 2 for faster training)
+        units: Hidden units per block (default: 64 for smaller model)
+    """
+    input_layer = Input(shape=(lookback,), name='input')
+
+    # Store residuals and forecasts from each block
+    residuals = input_layer
+    forecast_outputs = []
+
+    for block_id in range(num_blocks):
+        # Create block
+        backcast, forecast = create_nbeats_block(
+            residuals, block_id, units, lookback, forecast_horizon
+        )
+
+        # Subtract backcast from residuals (doubly residual architecture)
+        residuals = Lambda(lambda x: x[0] - x[1], name=f'residual_{block_id}')([residuals, backcast])
+
+        # Store forecast
+        forecast_outputs.append(forecast)
+
+    # Sum all forecasts (hierarchical aggregation)
+    if len(forecast_outputs) > 1:
+        final_forecast = Add(name='forecast_sum')(forecast_outputs)
+    else:
+        final_forecast = forecast_outputs[0]
+
+    model = Model(inputs=input_layer, outputs=final_forecast, name='nbeats')
+
+    model.compile(
+        optimizer=Adam(learning_rate=0.0005),  # Lower learning rate for stability
+        loss='mean_squared_error',
+        metrics=['mae']
+    )
+
+    return model
+
+def calculate_trend_momentum(data: np.array, window: int = 20) -> float:
+    """
+    Calculate recent trend momentum from historical data
+    Returns the average rate of change over the last 'window' periods
+    """
+    if len(data) < window:
+        window = len(data)
+
+    recent_data = data[-window:].flatten()
+
+    # Calculate linear regression slope for trend direction
+    x = np.arange(len(recent_data))
+    coeffs = np.polyfit(x, recent_data, 1)
+    momentum = coeffs[0]  # Slope represents trend momentum
+
+    return momentum
+
+def prepare_sequence_data(data: np.array, time_steps: int = 60) -> Tuple[np.array, np.array]:
+    """Prepare data for GRU/RNN training"""
     X, y = [], []
 
     for i in range(time_steps, len(data)):
         X.append(data[i-time_steps:i, 0])
         y.append(data[i, 0])
+
+    return np.array(X), np.array(y)
+
+def prepare_nbeats_data(data: np.array, lookback: int, forecast_horizon: int) -> Tuple[np.array, np.array]:
+    """
+    Prepare data for N-BEATS training
+
+    Args:
+        data: Scaled time series data
+        lookback: Number of historical time steps (input window)
+        forecast_horizon: Number of future time steps (output window)
+
+    Returns:
+        X: Input sequences of shape (samples, lookback)
+        y: Target sequences of shape (samples, forecast_horizon)
+    """
+    X, y = [], []
+
+    for i in range(lookback, len(data) - forecast_horizon + 1):
+        # Input: lookback window
+        X.append(data[i-lookback:i, 0])
+        # Output: forecast_horizon window
+        y.append(data[i:i+forecast_horizon, 0])
 
     return np.array(X), np.array(y)
 
@@ -101,7 +215,7 @@ def create_forecast_visualization(historical_data: pd.DataFrame, predictions: np
     plt.plot(future_dates, predictions,
              label='Forecast', color='red', linewidth=2, linestyle='--')
 
-    plt.title('Time Series Forecast using LSTM', fontsize=16, fontweight='bold')
+    plt.title('Time Series Forecast', fontsize=16, fontweight='bold')
     plt.xlabel('Date', fontsize=12)
     plt.ylabel('Value', fontsize=12)
     plt.legend()
@@ -119,16 +233,17 @@ def create_forecast_visualization(historical_data: pd.DataFrame, predictions: np
     return image_base64
 
 def forecast_timeseries(data: str, forecast_periods: int = 30, time_steps: int = 60,
-                       date_column: str = None, value_column: str = None) -> Dict[str, Any]:
+                       date_column: str = None, value_column: str = None, model_type: str = "gru") -> Dict[str, Any]:
     """
-    Forecast future values using LSTM neural network
+    Forecast future values using GRU or N-BEATS neural network
 
     Args:
         data: CSV data containing time series
         forecast_periods: Number of periods to forecast
-        time_steps: Number of time steps for LSTM lookback
+        time_steps: Number of time steps for lookback
         date_column: Name of date column
         value_column: Name of value column
+        model_type: Model to use - "gru" (default, more stable) or "nbeats" (experimental)
 
     Returns:
         Dictionary with forecast results and visualization
@@ -197,58 +312,107 @@ def forecast_timeseries(data: str, forecast_periods: int = 30, time_steps: int =
                 "visualization": None
             }
 
-        # Adjust time_steps based on available data
+        # Adjust time_steps based on available data (keep reasonable lookback)
         if len(scaled_data) < time_steps + 20:
-            time_steps = max(10, min(30, len(scaled_data) // 3))
+            time_steps = max(20, min(40, len(scaled_data) // 2))
 
-        # Prepare training data
-        X, y = prepare_lstm_data(scaled_data, time_steps)
+        # Import early stopping
+        from tensorflow.keras.callbacks import EarlyStopping
+        early_stop = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
 
-        # Reshape for LSTM
-        X = X.reshape(X.shape[0], X.shape[1], 1)
+        if model_type == "nbeats":
+            # N-BEATS: Direct multi-step forecasting
+            # Prepare data for N-BEATS
+            X, y = prepare_nbeats_data(scaled_data, time_steps, forecast_periods)
 
-        # Split data (use last 20% for validation)
-        split_index = int(len(X) * 0.8)
-        X_train, X_val = X[:split_index], X[split_index:]
-        y_train, y_val = y[:split_index], y[split_index:]
+            if len(X) < 10:
+                # Fall back to GRU if not enough data for N-BEATS
+                model_type = "gru"
+            else:
+                # Split data (use last 20% for validation)
+                split_index = int(len(X) * 0.8)
+                X_train, X_val = X[:split_index], X[split_index:]
+                y_train, y_val = y[:split_index], y[split_index:]
 
-        # Create and train model
-        model = create_lstm_model((time_steps, 1))
+                # Create and train N-BEATS model with regularization
+                model = create_nbeats_model(time_steps, forecast_periods, num_blocks=2, units=32)
 
-        # Train with reduced epochs for production
-        history = model.fit(
-            X_train, y_train,
-            epochs=20,
-            batch_size=16,
-            validation_data=(X_val, y_val),
-            verbose=0,
-            shuffle=False
-        )
+                history = model.fit(
+                    X_train, y_train,
+                    epochs=30,  # Fewer epochs to prevent overfitting
+                    batch_size=32,  # Larger batch for smoother gradients
+                    validation_data=(X_val, y_val),
+                    verbose=0,
+                    shuffle=False,
+                    callbacks=[early_stop]
+                )
 
-        # Make predictions
-        last_sequence = scaled_data[-time_steps:]
-        predictions = []
+                # Make prediction with N-BEATS (single multi-step prediction)
+                last_sequence = scaled_data[-time_steps:, 0].reshape(1, -1)
+                predictions = model.predict(last_sequence, verbose=0)
+                predictions = predictions.flatten()
 
-        for _ in range(forecast_periods):
-            # Reshape for prediction
-            current_sequence = last_sequence.reshape(1, time_steps, 1)
+        if model_type == "gru":
+            # GRU: Iterative single-step forecasting
+            # Prepare training data
+            X, y = prepare_sequence_data(scaled_data, time_steps)
 
-            # Predict next value
-            next_pred = model.predict(current_sequence, verbose=0)
-            predictions.append(next_pred[0, 0])
+            # Reshape for GRU
+            X = X.reshape(X.shape[0], X.shape[1], 1)
 
-            # Update sequence for next prediction
-            last_sequence = np.append(last_sequence[1:], next_pred[0, 0])
+            # Split data (use last 20% for validation)
+            split_index = int(len(X) * 0.8)
+            X_train, X_val = X[:split_index], X[split_index:]
+            y_train, y_val = y[:split_index], y[split_index:]
+
+            # Create and train model
+            model = create_gru_model((time_steps, 1))
+
+            history = model.fit(
+                X_train, y_train,
+                epochs=100,
+                batch_size=32,
+                validation_data=(X_val, y_val),
+                verbose=0,
+                shuffle=False,
+                callbacks=[early_stop]
+            )
+
+            # Make predictions using GRU model (iterative)
+            last_sequence = scaled_data[-time_steps:].copy()
+            predictions = []
+
+            for i in range(forecast_periods):
+                # Reshape for prediction
+                current_sequence = last_sequence.reshape(1, time_steps, 1)
+
+                # Predict next value with GRU
+                next_pred = model.predict(current_sequence, verbose=0)
+                pred_value = next_pred[0, 0]
+
+                # Use the GRU prediction directly
+                predictions.append(pred_value)
+
+                # Update sequence for next prediction
+                last_sequence = np.roll(last_sequence, -1)
+                last_sequence[-1] = pred_value
+
+            predictions = np.array(predictions)
 
         # Scale predictions back to original scale
-        predictions = np.array(predictions).reshape(-1, 1)
+        predictions = predictions.reshape(-1, 1)
         predictions = scaler.inverse_transform(predictions)
         predictions = predictions.flatten()
 
-        # Ensure predictions don't go negative (especially important for stock prices, prices, counts, etc.)
-        # Apply a minimum threshold based on historical data
-        min_historical_value = values.min()
-        predictions = np.maximum(predictions, max(0, min_historical_value * 0.1))
+        # Apply reasonable bounds based on historical data statistics
+        # Use wider bounds (±4σ) to allow more variation while preventing extremes
+        historical_mean = values.mean()
+        historical_std = values.std()
+        min_bound = max(0, historical_mean - 4 * historical_std)
+        max_bound = historical_mean + 4 * historical_std
+
+        # Soft clipping - allow deviation while preventing extreme outliers
+        predictions = np.clip(predictions, min_bound, max_bound)
 
         # Create future dates
         last_date = df[date_column].iloc[-1]
@@ -268,11 +432,18 @@ def forecast_timeseries(data: str, forecast_periods: int = 30, time_steps: int =
 
         # Calculate model metrics on validation set
         val_predictions = model.predict(X_val, verbose=0)
-        val_predictions = scaler.inverse_transform(val_predictions)
-        y_val_original = scaler.inverse_transform(y_val.reshape(-1, 1))
 
-        mae = mean_absolute_error(y_val_original, val_predictions)
-        mse = mean_squared_error(y_val_original, val_predictions)
+        if model_type == "nbeats":
+            # N-BEATS outputs multi-step predictions
+            val_predictions_scaled = scaler.inverse_transform(val_predictions)
+            y_val_scaled = scaler.inverse_transform(y_val)
+        else:
+            # GRU outputs single-step predictions
+            val_predictions_scaled = scaler.inverse_transform(val_predictions)
+            y_val_scaled = scaler.inverse_transform(y_val.reshape(-1, 1))
+
+        mae = mean_absolute_error(y_val_scaled, val_predictions_scaled)
+        mse = mean_squared_error(y_val_scaled, val_predictions_scaled)
         rmse = np.sqrt(mse)
 
         # Save forecast to CSV
@@ -346,8 +517,9 @@ def main():
         time_steps = params.get("time_steps", 60)
         date_column = params.get("date_column")
         value_column = params.get("value_column")
+        model_type = params.get("model_type", "gru")
 
-        result = forecast_timeseries(data, forecast_periods, time_steps, date_column, value_column)
+        result = forecast_timeseries(data, forecast_periods, time_steps, date_column, value_column, model_type)
         print(json.dumps(result))
 
     except json.JSONDecodeError as e:
