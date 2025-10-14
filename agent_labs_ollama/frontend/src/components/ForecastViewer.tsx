@@ -105,8 +105,12 @@ const ForecastViewer: React.FC<ForecastViewerProps> = ({
         <div className="flex items-center gap-2 text-sm text-green-700">
           <FileText className="w-4 h-4" />
           <span className="font-medium">{forecastFileData.filename}</span>
-          {fileSizeMb && (
-            <span className="text-green-600">({fileSizeMb.toFixed(2)} MB)</span>
+          {fileSizeMb !== undefined && (
+            <span className="text-green-600">
+              {fileSizeMb < 0.01
+                ? `(${(fileSizeMb * 1024).toFixed(2)} KB)`
+                : `(${fileSizeMb.toFixed(2)} MB)`}
+            </span>
           )}
         </div>
         <div className="flex gap-2">
