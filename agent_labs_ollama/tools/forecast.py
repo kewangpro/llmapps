@@ -3,7 +3,9 @@
 Forecast Tool
 Uses GRU or N-BEATS neural networks to predict future data points based on time series data
 
-GRU (Gated Recurrent Unit) is the default model - fast, stable, and accurate.
+GRU (Gated Recurrent Unit) is the default model - uses multi-horizon forecasting to predict
+all future steps simultaneously, preserving trends and patterns better than iterative methods.
+
 N-BEATS (Neural Basis Expansion Analysis) is available as an experimental alternative
 for datasets with strong patterns.
 """
@@ -61,8 +63,14 @@ def save_to_outputs_folder(content: str, filename: str) -> str:
         f.write(content)
     return output_path
 
-def create_gru_model(input_shape: Tuple[int, int]) -> Sequential:
-    """Create GRU model architecture - faster and often more accurate than LSTM"""
+def create_gru_model(input_shape: Tuple[int, int], forecast_horizon: int = 1) -> Sequential:
+    """
+    Create GRU model architecture - faster and often more accurate than LSTM
+
+    Args:
+        input_shape: (time_steps, features) shape for input sequences
+        forecast_horizon: Number of future steps to predict (1 for single-step, >1 for multi-horizon)
+    """
     model = Sequential([
         GRU(64, return_sequences=True, input_shape=input_shape),
         Dropout(0.15),
@@ -71,7 +79,7 @@ def create_gru_model(input_shape: Tuple[int, int]) -> Sequential:
         GRU(32),
         Dropout(0.15),
         Dense(16, activation='relu'),
-        Dense(1)
+        Dense(forecast_horizon)  # Output layer predicts 'forecast_horizon' steps
     ])
 
     model.compile(
@@ -165,13 +173,28 @@ def calculate_trend_momentum(data: np.array, window: int = 20) -> float:
 
     return momentum
 
-def prepare_sequence_data(data: np.array, time_steps: int = 60) -> Tuple[np.array, np.array]:
-    """Prepare data for GRU/RNN training"""
+def prepare_sequence_data(data: np.array, time_steps: int = 60, forecast_horizon: int = 1) -> Tuple[np.array, np.array]:
+    """
+    Prepare data for GRU/RNN training
+
+    Args:
+        data: Input time series data
+        time_steps: Lookback window size
+        forecast_horizon: Number of steps to predict ahead (1 for single-step, >1 for multi-horizon)
+
+    Returns:
+        X: Input sequences of shape (samples, time_steps)
+        y: Target sequences of shape (samples,) for single-step or (samples, forecast_horizon) for multi-horizon
+    """
     X, y = [], []
 
-    for i in range(time_steps, len(data)):
+    for i in range(time_steps, len(data) - forecast_horizon + 1):
         X.append(data[i-time_steps:i, 0])
-        y.append(data[i, 0])
+        if forecast_horizon == 1:
+            y.append(data[i, 0])
+        else:
+            # Multi-horizon: predict next 'forecast_horizon' steps
+            y.append(data[i:i+forecast_horizon, 0])
 
     return np.array(X), np.array(y)
 
@@ -353,9 +376,9 @@ def forecast_timeseries(data: str, forecast_periods: int = 30, time_steps: int =
                 predictions = predictions.flatten()
 
         if model_type == "gru":
-            # GRU: Iterative single-step forecasting
-            # Prepare training data
-            X, y = prepare_sequence_data(scaled_data, time_steps)
+            # GRU: Direct multi-horizon forecasting (predicts all steps at once)
+            # Prepare training data for multi-horizon forecasting
+            X, y = prepare_sequence_data(scaled_data, time_steps, forecast_horizon=forecast_periods)
 
             # Reshape for GRU
             X = X.reshape(X.shape[0], X.shape[1], 1)
@@ -365,8 +388,8 @@ def forecast_timeseries(data: str, forecast_periods: int = 30, time_steps: int =
             X_train, X_val = X[:split_index], X[split_index:]
             y_train, y_val = y[:split_index], y[split_index:]
 
-            # Create and train model
-            model = create_gru_model((time_steps, 1))
+            # Create and train model with multi-horizon output
+            model = create_gru_model((time_steps, 1), forecast_horizon=forecast_periods)
 
             history = model.fit(
                 X_train, y_train,
@@ -378,26 +401,12 @@ def forecast_timeseries(data: str, forecast_periods: int = 30, time_steps: int =
                 callbacks=[early_stop]
             )
 
-            # Make predictions using GRU model (iterative)
-            last_sequence = scaled_data[-time_steps:].copy()
-            predictions = []
+            # Make predictions using GRU model (direct multi-horizon)
+            last_sequence = scaled_data[-time_steps:].reshape(1, time_steps, 1)
 
-            for i in range(forecast_periods):
-                # Reshape for prediction
-                current_sequence = last_sequence.reshape(1, time_steps, 1)
-
-                # Predict next value with GRU
-                next_pred = model.predict(current_sequence, verbose=0)
-                pred_value = next_pred[0, 0]
-
-                # Use the GRU prediction directly
-                predictions.append(pred_value)
-
-                # Update sequence for next prediction
-                last_sequence = np.roll(last_sequence, -1)
-                last_sequence[-1] = pred_value
-
-            predictions = np.array(predictions)
+            # Predict all future steps at once
+            predictions = model.predict(last_sequence, verbose=0)
+            predictions = predictions.flatten()
 
         # Scale predictions back to original scale
         predictions = predictions.reshape(-1, 1)
@@ -433,12 +442,16 @@ def forecast_timeseries(data: str, forecast_periods: int = 30, time_steps: int =
         # Calculate model metrics on validation set
         val_predictions = model.predict(X_val, verbose=0)
 
-        if model_type == "nbeats":
-            # N-BEATS outputs multi-step predictions
-            val_predictions_scaled = scaler.inverse_transform(val_predictions)
-            y_val_scaled = scaler.inverse_transform(y_val)
+        if model_type == "nbeats" or model_type == "gru":
+            # Both N-BEATS and GRU now output multi-step predictions
+            # Flatten predictions and targets for metrics calculation
+            val_predictions_flat = val_predictions.flatten().reshape(-1, 1)
+            y_val_flat = y_val.flatten().reshape(-1, 1)
+
+            val_predictions_scaled = scaler.inverse_transform(val_predictions_flat)
+            y_val_scaled = scaler.inverse_transform(y_val_flat)
         else:
-            # GRU outputs single-step predictions
+            # Fallback for other model types
             val_predictions_scaled = scaler.inverse_transform(val_predictions)
             y_val_scaled = scaler.inverse_transform(y_val.reshape(-1, 1))
 
