@@ -69,7 +69,7 @@ const ForecastViewer: React.FC<ForecastViewerProps> = ({
         <div className="flex items-center gap-2">
           <Brain className="w-5 h-5 text-green-600" />
           <div>
-            <h3 className="font-semibold text-green-800">LSTM Forecast Results</h3>
+            <h3 className="font-semibold text-green-800">GRU Forecast Results</h3>
             <p className="text-sm text-green-600">
               {forecastPeriods ? `${forecastPeriods} period forecast` : 'Time series predictions'}
               {historicalPoints && ` based on ${historicalPoints} historical points`}
