@@ -29,14 +29,16 @@ AI-powered chat interface with intelligent multi-agent orchestration and real-ti
 ## Available Tools
 
 ### Built-in Tools (12 Total)
-#### General Tools (7)
-- **File Search** - Intelligent file discovery and pattern matching across filesystems
-- **Web Search** - Real-time web search with current information retrieval
+#### General Tools (3)
 - **System Info** - Comprehensive system monitoring, CPU, memory, disk, and network diagnostics
 - **Presentation** - PowerPoint generation from structured data with downloadable PPTX files
+- **Visualization** - Interactive chart and graph generation from CSV/JSON data
+
+#### Search Tools (4)
+- **File Search** - Intelligent file discovery and pattern matching across filesystems
+- **Web Search** - Real-time web search with current information retrieval
 - **Flight Search** - Search for flights between cities
 - **Hotel Search** - Search for hotel accommodations
-- **Visualization** - Interactive chart and graph generation from CSV/JSON data
 
 #### Analytics Tools (5)
 - **Data Processing** - CSV/JSON conversion, text analysis, data transformation and cleaning
