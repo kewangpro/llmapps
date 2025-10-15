@@ -12,6 +12,7 @@ interface ToolSidebarProps {
 
 const toolIcons: Record<string, any> = {
   general: Settings,
+  search: Search,
   analytics: BarChart3,
   filesystem: Monitor,
   web: Globe,
@@ -196,6 +197,18 @@ export default function ToolSidebar({ selectedTools, onToolToggle }: ToolSidebar
     return acc;
   }, {} as Record<string, Tool[]>);
 
+  // Define category order
+  const categoryOrder = ['general', 'search', 'analytics', 'mcp'];
+  const sortedCategories = Object.keys(groupedTools).sort((a, b) => {
+    const indexA = categoryOrder.indexOf(a);
+    const indexB = categoryOrder.indexOf(b);
+    // If category not in order array, put it at the end
+    if (indexA === -1 && indexB === -1) return 0;
+    if (indexA === -1) return 1;
+    if (indexB === -1) return -1;
+    return indexA - indexB;
+  });
+
   if (loading) {
     return (
       <div className="w-80 bg-gray-50 border-r border-gray-200 p-4">
@@ -221,7 +234,8 @@ export default function ToolSidebar({ selectedTools, onToolToggle }: ToolSidebar
       </div>
 
       <div className="space-y-6">
-        {Object.entries(groupedTools).map(([category, categoryTools]) => {
+        {sortedCategories.map((category) => {
+          const categoryTools = groupedTools[category];
           const IconComponent = toolIcons[category] || Wrench;
 
           return (
