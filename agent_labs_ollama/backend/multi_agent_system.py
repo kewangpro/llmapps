@@ -36,18 +36,19 @@ class MultiAgentSystem:
     def get_available_tools() -> List[Dict[str, str]]:
         """Get list of available tools including MCP tools"""
         # Built-in tools (id = name for consistency)
+        # Order: general -> search -> analytics
         tools = [
-            {"id": "file_search", "name": "File Search", "description": "Search for files and directories in the filesystem", "short_description": "search for files and directories", "category": "general"},
-            {"id": "web_search", "name": "Web Search", "description": "Search the web for current information and news", "short_description": "search the internet for information", "category": "general"},
             {"id": "system_info", "name": "System Info", "description": "Get system information including CPU, memory, disk usage", "short_description": "get system information (CPU, memory, disk, network)", "category": "general"},
             {"id": "presentation", "name": "Presentation", "description": "Generate PowerPoint presentations from text or files", "short_description": "generate PowerPoint presentations from text or files", "category": "general"},
-            {"id": "flight_search", "name": "Flight Search", "description": "Search for flights between cities", "short_description": "search for flights between cities", "category": "general"},
-            {"id": "hotel_search", "name": "Hotel Search", "description": "Search for hotel accommodations", "short_description": "search for hotel accommodations", "category": "general"},
+            {"id": "visualization", "name": "Visualization", "description": "Create charts and visualizations from data", "short_description": "create charts and visualizations from data", "category": "general"},
+            {"id": "file_search", "name": "File Search", "description": "Search for files and directories in the filesystem", "short_description": "search for files and directories", "category": "search"},
+            {"id": "web_search", "name": "Web Search", "description": "Search the web for current information and news", "short_description": "search the internet for information", "category": "search"},
+            {"id": "flight_search", "name": "Flight Search", "description": "Search for flights between cities", "short_description": "search for flights between cities", "category": "search"},
+            {"id": "hotel_search", "name": "Hotel Search", "description": "Search for hotel accommodations", "short_description": "search for hotel accommodations", "category": "search"},
             {"id": "cost_analysis", "name": "Cost Analysis", "description": "Analyze cost data, COGS, and spending patterns", "short_description": "analyze cost data, COGS, and spending patterns", "category": "analytics"},
             {"id": "data_processing", "name": "Data Processing", "description": "Process, analyze, and transform data", "short_description": "process, analyze, or transform data", "category": "analytics"},
             {"id": "image_analysis", "name": "Image Analysis", "description": "Analyze image files for content, objects, text, and metadata", "short_description": "analyze image files for content, text, and metadata", "category": "analytics"},
             {"id": "stock_analysis", "name": "Stock Analysis", "description": "Analyze stock market data and performance using Yahoo Finance", "short_description": "analyze stock market data and performance using Yahoo Finance", "category": "analytics"},
-            {"id": "visualization", "name": "Visualization", "description": "Create charts and visualizations from data", "short_description": "create charts and visualizations from data", "category": "general"},
             {"id": "forecast", "name": "Forecast", "description": "Predict future values using LSTM neural networks for time series data", "short_description": "forecast future trends using LSTM neural networks", "category": "analytics"}
         ]
 
