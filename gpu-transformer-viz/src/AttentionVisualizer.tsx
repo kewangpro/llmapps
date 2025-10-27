@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { ArrowRight, Zap } from 'lucide-react';
 
@@ -65,10 +65,10 @@ const AttentionVisualizer = () => {
     return subset.map(row => row.slice(0, dModel));
   }, [dModel]);
   
-  const matMul = (a, b) => {
-    return a.map(row => 
-      b[0].map((_, j) => 
-        row.reduce((sum, val, k) => sum + val * b[k][j], 0)
+  const matMul = (a: number[][], b: number[][]) => {
+    return a.map((row: number[]) =>
+      b[0].map((_: number, j: number) =>
+        row.reduce((sum: number, val: number, k: number) => sum + val * b[k][j], 0)
       )
     );
   };
@@ -79,8 +79,8 @@ const AttentionVisualizer = () => {
   
   const scores = useMemo(() => {
     const q = Q[queryIdx];
-    return K.map(k => {
-      const dotProduct = q.reduce((sum, val, i) => sum + val * k[i], 0);
+    return K.map((k: number[]) => {
+      const dotProduct = q.reduce((sum: number, val: number, i: number) => sum + val * k[i], 0);
       const scaled = dotProduct / Math.sqrt(dModel);
       return scaled / temperature;
     });
@@ -88,14 +88,14 @@ const AttentionVisualizer = () => {
   
   const attentionWeights = useMemo(() => {
     const maxScore = Math.max(...scores);
-    const expScores = scores.map(s => Math.exp(s - maxScore));
-    const sumExp = expScores.reduce((a, b) => a + b, 0);
-    return expScores.map(e => e / sumExp);
+    const expScores = scores.map((s: number) => Math.exp(s - maxScore));
+    const sumExp = expScores.reduce((a: number, b: number) => a + b, 0);
+    return expScores.map((e: number) => e / sumExp);
   }, [scores]);
   
   const output = useMemo(() => {
-    return V[0].map((_, i) => 
-      attentionWeights.reduce((sum, weight, j) => sum + weight * V[j][i], 0)
+    return V[0].map((_: number, i: number) =>
+      attentionWeights.reduce((sum: number, weight: number, j: number) => sum + weight * V[j][i], 0)
     );
   }, [V, attentionWeights]);
   
@@ -212,7 +212,7 @@ const AttentionVisualizer = () => {
                 }`}>
                   <div className="font-bold text-center mb-1">{token}</div>
                   <div className="text-xs font-mono text-gray-600">
-                    [{embeddings[i].map(v => v.toFixed(1)).join(', ')}]
+                    [{embeddings[i].map((v: number) => v.toFixed(1)).join(', ')}]
                   </div>
                 </div>
               ))}
@@ -238,7 +238,7 @@ const AttentionVisualizer = () => {
                   Q[{queryIdx}] ({tokens[queryIdx]}):
                 </div>
                 <div className="text-xs font-mono bg-orange-100 p-2 rounded border border-orange-200">
-                  [{Q[queryIdx].map(v => v.toFixed(2)).join(', ')}]
+                  [{Q[queryIdx].map((v: number) => v.toFixed(2)).join(', ')}]
                 </div>
               </div>
               <div className="bg-white p-4 rounded-lg border-2 border-green-300 shadow">
@@ -248,11 +248,11 @@ const AttentionVisualizer = () => {
                 </div>
                 <div className="text-xs text-gray-600 mb-1 text-center font-semibold">All Keys:</div>
                 <div className="space-y-1 max-h-32 overflow-y-auto">
-                  {K.map((k, i) => (
+                  {K.map((k: number[], i: number) => (
                     <div key={i} className={`text-xs font-mono p-1 rounded ${
                       i === queryIdx ? 'bg-green-200 font-bold' : 'bg-green-50'
                     }`}>
-                      {tokens[i]}: [{k.map(v => v.toFixed(2)).join(', ')}]
+                      {tokens[i]}: [{k.map((v: number) => v.toFixed(2)).join(', ')}]
                     </div>
                   ))}
                 </div>
@@ -264,11 +264,11 @@ const AttentionVisualizer = () => {
                 </div>
                 <div className="text-xs text-gray-600 mb-1 text-center font-semibold">All Values:</div>
                 <div className="space-y-1 max-h-32 overflow-y-auto">
-                  {V.map((v, i) => (
+                  {V.map((v: number[], i: number) => (
                     <div key={i} className={`text-xs font-mono p-1 rounded ${
                       i === queryIdx ? 'bg-blue-200 font-bold' : 'bg-blue-50'
                     }`}>
-                      {tokens[i]}: [{v.map(val => val.toFixed(2)).join(', ')}]
+                      {tokens[i]}: [{v.map((val: number) => val.toFixed(2)).join(', ')}]
                     </div>
                   ))}
                 </div>
@@ -290,7 +290,7 @@ const AttentionVisualizer = () => {
                 Query "<span className="font-bold text-blue-600">{tokens[queryIdx]}</span>" attending to:
               </div>
               <div className="grid grid-cols-5 gap-2">
-                {scores.map((score, i) => (
+                {scores.map((score: number, i: number) => (
                   <div key={i} className="text-center">
                     <div className="text-xs text-gray-600 mb-1">{tokens[i]}</div>
                     <div className={`p-2 rounded font-mono text-sm font-bold ${
@@ -366,11 +366,11 @@ const AttentionVisualizer = () => {
               </div>
               <div className="bg-gradient-to-r from-red-100 to-pink-100 p-4 rounded-lg border-2 border-red-300">
                 <div className="font-mono text-center text-lg font-bold text-red-700">
-                  [{output.map(v => v.toFixed(3)).join(', ')}]
+                  [{output.map((v: number) => v.toFixed(3)).join(', ')}]
                 </div>
               </div>
               <div className="mt-4 flex justify-center gap-2">
-                {output.map((val, i) => (
+                {output.map((val: number, i: number) => (
                   <div key={i} className="flex flex-col items-center">
                     <div className="w-16 bg-gradient-to-t from-red-500 to-pink-400 rounded-t" 
                          style={{ height: `${Math.max(5, Math.abs(val) * 80)}px` }}>
