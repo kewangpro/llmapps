@@ -81,12 +81,13 @@ gpu-transformer-viz/
 ├── src/
 │   ├── components/
 │   │   └── ui/
-│   │       └── card.tsx           # UI component
+│   │       └── card.tsx            # Reusable UI card component
 │   ├── App.tsx                     # Main app with navigation
-│   ├── GPUArchitectureAnimation.jsx # GPU viz component
+│   ├── GPUArchitectureAnimation.tsx # GPU viz component
 │   ├── AttentionVisualizer.tsx     # Attention viz component
-│   ├── index.css                   # Tailwind imports
-│   └── main.tsx                    # App entry point
+│   ├── index.css                   # Tailwind CSS imports
+│   ├── main.tsx                    # App entry point
+│   └── App.css                     # Unused Vite boilerplate
 ├── tailwind.config.js              # Tailwind configuration
 ├── postcss.config.js               # PostCSS with Tailwind plugin
 ├── vite.config.ts                  # Vite configuration
