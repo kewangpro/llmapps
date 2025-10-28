@@ -66,7 +66,7 @@ const AttentionVisualizer = () => {
   }, [dModel]);
   
   const matMul = (a: number[][], b: number[][]) => {
-    return a.map((row: number[]) =>
+    return a.map(row =>
       b[0].map((_: number, j: number) =>
         row.reduce((sum: number, val: number, k: number) => sum + val * b[k][j], 0)
       )
@@ -77,21 +77,28 @@ const AttentionVisualizer = () => {
   const K = useMemo(() => matMul(embeddings, Wk), [embeddings, Wk]);
   const V = useMemo(() => matMul(embeddings, Wv), [embeddings, Wv]);
   
-  const scores = useMemo(() => {
+  const rawScores = useMemo(() => {
     const q = Q[queryIdx];
     return K.map((k: number[]) => {
       const dotProduct = q.reduce((sum: number, val: number, i: number) => sum + val * k[i], 0);
-      const scaled = dotProduct / Math.sqrt(dModel);
-      return scaled / temperature;
+      return dotProduct;
     });
-  }, [Q, K, queryIdx, dModel, temperature]);
+  }, [Q, K, queryIdx]);
+  
+  const scaledScores = useMemo(() => {
+    return rawScores.map((score: number) => score / Math.sqrt(dModel));
+  }, [rawScores, dModel]);
+
+  const temperatureScores = useMemo(() => {
+    return scaledScores.map((score: number) => score / temperature);
+  }, [scaledScores, temperature]);
   
   const attentionWeights = useMemo(() => {
-    const maxScore = Math.max(...scores);
-    const expScores = scores.map((s: number) => Math.exp(s - maxScore));
+    const maxScore = Math.max(...temperatureScores);
+    const expScores = temperatureScores.map((s: number) => Math.exp(s - maxScore));
     const sumExp = expScores.reduce((a: number, b: number) => a + b, 0);
     return expScores.map((e: number) => e / sumExp);
-  }, [scores]);
+  }, [temperatureScores]);
   
   const output = useMemo(() => {
     return V[0].map((_: number, i: number) =>
@@ -287,10 +294,10 @@ const AttentionVisualizer = () => {
             </div>
             <div className="bg-white p-4 rounded-lg shadow">
               <div className="text-sm mb-3 text-center text-gray-700">
-                Query "<span className="font-bold text-blue-600">{tokens[queryIdx]}</span>" attending to:
+                Raw dot product: Query "<span className="font-bold text-blue-600">{tokens[queryIdx]}</span>" · each Key
               </div>
               <div className="grid grid-cols-5 gap-2">
-                {scores.map((score: number, i: number) => (
+                {rawScores.map((score: number, i: number) => (
                   <div key={i} className="text-center">
                     <div className="text-xs text-gray-600 mb-1">{tokens[i]}</div>
                     <div className={`p-2 rounded font-mono text-sm font-bold ${
@@ -307,13 +314,50 @@ const AttentionVisualizer = () => {
             </div>
           </div>
 
-          <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-4 rounded-lg border-2 border-indigo-300">
-            <div className="text-center mb-3">
+          <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-6 rounded-lg border-2 border-indigo-300">
+            <div className="text-center mb-4">
               <span className="bg-indigo-600 text-white px-4 py-2 rounded-full font-bold text-sm">
-                STEP 4: Scale by √d<sub>k</sub> = {Math.sqrt(dModel).toFixed(2)}
+                STEP 4: Scale by √d<sub>k</sub> = {Math.sqrt(dModel).toFixed(2)} and Apply Temperature = {temperature.toFixed(2)}
               </span>
             </div>
-            <div className="flex justify-center mt-3">
+            <div className="bg-white p-4 rounded-lg shadow mb-3">
+              <div className="text-sm mb-3 text-center text-gray-700 font-semibold">
+                Scaled scores = Raw scores / √{dModel}
+              </div>
+              <div className="grid grid-cols-5 gap-2">
+                {scaledScores.map((score: number, i: number) => (
+                  <div key={i} className="text-center">
+                    <div className="text-xs text-gray-600 mb-1">{tokens[i]}</div>
+                    <div className={`p-2 rounded font-mono text-sm font-bold ${
+                      i === queryIdx ? 'bg-indigo-200 border-2 border-indigo-500' : 'bg-gray-100'
+                    }`}>
+                      {score.toFixed(2)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="text-center my-2">
+              <span className="text-indigo-600 font-bold">↓</span>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow">
+              <div className="text-sm mb-3 text-center text-gray-700 font-semibold">
+                Final scores = Scaled scores / {temperature.toFixed(2)}
+              </div>
+              <div className="grid grid-cols-5 gap-2">
+                {temperatureScores.map((score: number, i: number) => (
+                  <div key={i} className="text-center">
+                    <div className="text-xs text-gray-600 mb-1">{tokens[i]}</div>
+                    <div className={`p-2 rounded font-mono text-sm font-bold ${
+                      i === queryIdx ? 'bg-purple-200 border-2 border-purple-500' : 'bg-gray-100'
+                    }`}>
+                      {score.toFixed(2)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex justify-center mt-4">
               <ArrowRight className="text-indigo-500" size={32} />
             </div>
           </div>
@@ -322,7 +366,7 @@ const AttentionVisualizer = () => {
             <div className="text-center mb-4">
               <span className="bg-green-600 text-white px-4 py-2 rounded-full font-bold text-sm inline-flex items-center gap-2">
                 <Zap size={16} />
-                STEP 5: Softmax
+                STEP 5: Attention Weights (Softmax)
               </span>
             </div>
             <div className="bg-white p-4 rounded-lg shadow space-y-2">
@@ -372,7 +416,7 @@ const AttentionVisualizer = () => {
               <div className="mt-4 flex justify-center gap-2">
                 {output.map((val: number, i: number) => (
                   <div key={i} className="flex flex-col items-center">
-                    <div className="w-16 bg-gradient-to-t from-red-500 to-pink-400 rounded-t" 
+                    <div className="w-16 bg-gradient-to-t from-red-500 to-pink-400 rounded-t"
                          style={{ height: `${Math.max(5, Math.abs(val) * 80)}px` }}>
                     </div>
                     <div className="text-xs mt-1 font-semibold">d{i}</div>
