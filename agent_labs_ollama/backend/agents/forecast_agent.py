@@ -79,18 +79,23 @@ Content preview:
 {file_content[:2000]}
 
 This is a generic time series dataset. Analyze the CSV structure and identify:
-1. The date/time column name (usually 'date', 'time', 'timestamp')
+1. The date/time column name (usually 'date', 'time', 'timestamp', 'month')
 2. The numeric value column to forecast
    - If format is "date,value" -> use "value"
    - If format is "date,series,value" -> use "value" (the actual numeric column)
    - If format has multiple numeric columns, pick the main one
-3. Suggest appropriate forecast periods (default 30)
-4. Suggest LSTM time steps (default 60)
+3. The grouping/category column (for multi-series forecasting)
+   - If format is "month,business_unit,cost" -> group_column is "business_unit"
+   - If format is "date,category,value" -> group_column is "category"
+   - If no categorical column exists, set to null
+4. Suggest appropriate forecast periods (default 30)
+5. Suggest LSTM time steps (default 60)
 
 Format your response as JSON:
 {{
     "date_column": "actual_column_name_from_headers",
     "value_column": "actual_column_name_from_headers",
+    "group_column": "actual_column_name_or_null",
     "forecast_periods": 30,
     "time_steps": 60,
     "data_description": "brief description"
@@ -129,7 +134,8 @@ IMPORTANT: Use the EXACT column names from the CSV headers, not conceptual names
                 "forecast_periods": params.get("forecast_periods", 30),
                 "time_steps": params.get("time_steps", 60),
                 "date_column": params.get("date_column"),
-                "value_column": params.get("value_column")
+                "value_column": params.get("value_column"),
+                "group_column": params.get("group_column")  # NEW: Support multi-series forecasting
             }
 
             logger.info(f"📈 Executing forecast tool with parameters: {tool_params}")
@@ -471,45 +477,122 @@ Format with clear sections and actionable insights."""
     def _format_tool_data(self, tool_result: Dict[str, Any], params: Dict[str, Any]) -> str:
         """Format tool result as CSV data for downstream agents (especially visualization)"""
         try:
+            import pandas as pd
+
             forecast_data = tool_result.get("forecast_data", [])
 
             if not forecast_data:
                 return "Time series forecast failed to generate predictions"
 
-            # Format as CSV for visualization: combine historical + forecast data
-            # Create CSV with date,series,value format where series indicates Historical vs Forecast
-            csv_data = "date,series,value\n"
+            # Check if this is multi-series forecasting
+            data_info = tool_result.get("data_info", {})
+            group_column = data_info.get("group_column")
 
-            # Get original data from params if available
-            original_data = params.get("data", "")
-            historical_count = 0
-            if original_data and "date,series,value" in original_data:
-                # Add historical data first (mark as Historical)
-                lines = original_data.strip().split('\n')[1:]  # Skip header
-                for line in lines:
-                    line = line.strip()
-                    if line and ',' in line:
-                        parts = line.split(',')
-                        if len(parts) >= 3:
-                            date, series, value = parts[0], parts[1], parts[2]
-                            # Only include Price series for historical data (not moving averages)
-                            if series == 'Price':
-                                csv_data += f"{date},Historical,{value}\n"
-                                historical_count += 1
+            if group_column:
+                # Multi-series case: combine historical + forecast with group dimension
+                # SAME PATTERN AS STOCK: date,group,series,value (where series = Historical or Forecast)
+                logger.info(f"📈 Multi-series format: combining historical + forecast data (group: {group_column})")
 
-            # Add forecast data (mark as Forecast)
-            forecast_count = 0
-            for item in forecast_data:
-                date = item.get("date", "")
-                value = item.get("predicted_value", 0)
-                csv_data += f"{date},Forecast,{value:.2f}\n"
-                forecast_count += 1
+                # Parse historical data from params
+                original_data = params.get("data", "")
+                if not original_data:
+                    logger.warning("⚠️ No historical data available for multi-series forecast")
+                    return "Multi-series forecast requires historical data"
 
-            logger.info(f"📈 Formatted tool data: {historical_count} historical points, {forecast_count} forecast points")
-            logger.info(f"📈 Sample CSV output (first 3 lines):\n{chr(10).join(csv_data.split(chr(10))[:4])}")
+                # Parse historical CSV
+                historical_df = pd.read_csv(pd.io.common.StringIO(original_data))
 
-            return csv_data
+                # Standardize column names (detect common patterns)
+                date_col = data_info.get("date_column", "date")
+                value_col = data_info.get("value_column", "value")
+
+                # Rename columns to standard format
+                rename_map = {}
+                if "month" in historical_df.columns:
+                    rename_map["month"] = "date"
+                elif date_col in historical_df.columns and date_col != "date":
+                    rename_map[date_col] = "date"
+
+                if "cost" in historical_df.columns:
+                    rename_map["cost"] = "value"
+                elif value_col in historical_df.columns and value_col != "value":
+                    rename_map[value_col] = "value"
+
+                if rename_map:
+                    historical_df = historical_df.rename(columns=rename_map)
+
+                # Add series column to historical data (same pattern as stock)
+                historical_df["series"] = "Historical"
+
+                # Convert forecast_data to DataFrame (same pattern as stock)
+                forecast_records = []
+                for item in forecast_data:
+                    forecast_records.append({
+                        "date": item.get("date"),
+                        group_column: item.get(group_column) or item.get("business_unit"),
+                        "series": "Forecast",
+                        "value": item.get("predicted_value")  # Use value column (same as stock pattern)
+                    })
+
+                forecast_df = pd.DataFrame(forecast_records)
+
+                # Combine historical and forecast
+                combined_df = pd.concat([historical_df, forecast_df], ignore_index=True)
+
+                # Ensure consistent column order: date, group, series, value (same pattern as stock)
+                column_order = ["date", group_column, "series", "value"]
+                combined_df = combined_df[column_order]
+
+                # Convert to CSV
+                csv_data = combined_df.to_csv(index=False)
+
+                historical_count = len(historical_df)
+                forecast_count = len(forecast_df)
+                logger.info(f"📈 Multi-series combined: {historical_count} historical + {forecast_count} forecast = {len(combined_df)} total rows")
+                logger.info(f"📈 Sample CSV output (first 5 lines):\n{chr(10).join(csv_data.split(chr(10))[:6])}")
+
+                return csv_data
+
+            else:
+                # Single-series case: original logic for stock forecasting
+                logger.info(f"📈 Single-series format: combining historical + forecast data")
+
+                # Format as CSV for visualization: combine historical + forecast data
+                # Create CSV with date,series,value format where series indicates Historical vs Forecast
+                csv_data = "date,series,value\n"
+
+                # Get original data from params if available
+                original_data = params.get("data", "")
+                historical_count = 0
+                if original_data and "date,series,value" in original_data:
+                    # Add historical data first (mark as Historical)
+                    lines = original_data.strip().split('\n')[1:]  # Skip header
+                    for line in lines:
+                        line = line.strip()
+                        if line and ',' in line:
+                            parts = line.split(',')
+                            if len(parts) >= 3:
+                                date, series, value = parts[0], parts[1], parts[2]
+                                # Only include Price series for historical data (not moving averages)
+                                if series == 'Price':
+                                    csv_data += f"{date},Historical,{value}\n"
+                                    historical_count += 1
+
+                # Add forecast data (mark as Forecast)
+                forecast_count = 0
+                for item in forecast_data:
+                    date = item.get("date", "")
+                    value = item.get("predicted_value", 0)
+                    csv_data += f"{date},Forecast,{value:.2f}\n"
+                    forecast_count += 1
+
+                logger.info(f"📈 Single-series combined: {historical_count} historical + {forecast_count} forecast points")
+                logger.info(f"📈 Sample CSV output (first 5 lines):\n{chr(10).join(csv_data.split(chr(10))[:6])}")
+
+                return csv_data
 
         except Exception as e:
             logger.error(f"📈 Error formatting tool data: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return f"Error formatting forecast results: {str(e)}"
