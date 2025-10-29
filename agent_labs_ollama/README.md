@@ -45,7 +45,7 @@ AI-powered chat interface with intelligent multi-agent orchestration and real-ti
 - **Cost Analysis** - Financial data analysis with business unit breakdown and spending insights
 - **Image Analysis** - Visual content analysis with metadata extraction and object detection
 - **Stock Analysis** - Financial market data analysis with Yahoo Finance integration
-- **Forecast** - GRU neural network time series prediction with N-BEATS support and visualization
+- **Forecast** - GRU neural network time series forecasting with multi-series support, small dataset handling (6-8 points), automatic time granularity detection, and N-BEATS experimental support
 
 ### MCP Tools
 - **External Integration** - Connect to MCP servers for additional specialized tools
@@ -262,7 +262,7 @@ python main.py
 **Capabilities**
 - ✅ **Data Processing** - CSV/JSON conversion, text analysis, data transformation and cleaning
 - ✅ **Visual Analysis** - AI-powered image understanding with metadata extraction and object detection
-- ✅ **Financial Analytics** - Cost analysis, stock market data, business unit breakdowns, and GRU/N-BEATS neural network forecasting
+- ✅ **Financial Analytics** - Cost analysis, stock market data, business unit breakdowns, and GRU/N-BEATS neural network forecasting with multi-series predictions
 - ✅ **Content Generation** - PowerPoint presentations, interactive charts, and downloadable reports
 - ✅ **System Integration** - File search, web search, system monitoring with comprehensive diagnostics
 - ✅ **Travel Search** - Flight and hotel search with pricing, schedules, ratings, and booking information
