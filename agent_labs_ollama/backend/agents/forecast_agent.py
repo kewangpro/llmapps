@@ -302,21 +302,66 @@ Format response as JSON:
             is_multivariate = False
 
             for line in lines:
-                # New multivariate format
+                # Wide multivariate format (direct from forecast-optimized export)
                 if line.startswith("date,close,open,high,low,volume"):
                     in_data_section = True
                     is_multivariate = True
                     csv_data_lines.append(line)  # Keep full header
-                    logger.info("📊 Detected MULTIVARIATE stock data format with Priority 1 features")
+                    logger.info("📊 Detected WIDE multivariate format")
                     continue
 
-                # Legacy univariate format (backward compatible)
+                # Long format with multiple series (from stock analysis)
+                # Need to pivot to wide format for multivariate forecasting
                 elif line.startswith("date,series,value"):
-                    in_data_section = True
-                    is_multivariate = False
-                    csv_data_lines.append("date,value")  # Convert to simple format
-                    logger.info("📊 Detected LEGACY univariate stock data format")
-                    continue
+                    logger.info("📊 Detected LONG format with multiple series - converting to WIDE")
+                    csv_data = self._convert_long_to_wide_format(query)
+                    if csv_data:
+                        is_multivariate = True
+                        # Prepare multivariate forecast parameters
+                        tool_params = {
+                            "data": csv_data,
+                            "forecast_periods": 30,
+                            "time_steps": 60,
+                            "date_column": "date",
+                            "value_column": "close",
+                            "feature_columns": "rsi,ma_20,ma_50"  # Available features from long format
+                        }
+                        logger.info(f"📊 Converted to WIDE format for multivariate forecasting")
+
+                        # Execute forecast
+                        tool_result = self._execute_tool_script("forecast", tool_params)
+
+                        if not tool_result.get("success", False):
+                            return {
+                                "tool": "forecast",
+                                "success": False,
+                                "error": f"Forecast tool failed: {tool_result.get('error', 'Unknown error')}",
+                                "timestamp": datetime.now().isoformat()
+                            }
+
+                        # Generate analysis and format for downstream
+                        llm_analysis = self._analyze_stock_forecast_with_llm(tool_result, query)
+                        formatted_tool_data = self._format_tool_data(tool_result, tool_params)
+
+                        result = {
+                            "tool_data": formatted_tool_data,
+                            "llm_analysis": llm_analysis
+                        }
+
+                        return {
+                            "tool": "forecast",
+                            "parameters": tool_params,
+                            "result": result,
+                            "success": True,
+                            "timestamp": datetime.now().isoformat()
+                        }
+                    else:
+                        # Fallback to univariate if conversion fails
+                        in_data_section = True
+                        is_multivariate = False
+                        csv_data_lines.append("date,value")
+                        logger.warning("📊 Failed to convert LONG to WIDE, falling back to univariate")
+                        continue
 
                 # Process data lines
                 if in_data_section:
@@ -598,7 +643,7 @@ Format with clear sections and actionable insights."""
                 return csv_data
 
             else:
-                # Single-series case: original logic for stock forecasting
+                # Single-series case: stock forecasting (supports both old and new formats)
                 logger.info(f"📈 Single-series format: combining historical + forecast data")
 
                 # Format as CSV for visualization: combine historical + forecast data
@@ -608,19 +653,40 @@ Format with clear sections and actionable insights."""
                 # Get original data from params if available
                 original_data = params.get("data", "")
                 historical_count = 0
-                if original_data and "date,series,value" in original_data:
-                    # Add historical data first (mark as Historical)
-                    lines = original_data.strip().split('\n')[1:]  # Skip header
-                    for line in lines:
-                        line = line.strip()
-                        if line and ',' in line:
-                            parts = line.split(',')
-                            if len(parts) >= 3:
-                                date, series, value = parts[0], parts[1], parts[2]
-                                # Only include Price series for historical data (not moving averages)
-                                if series == 'Price':
-                                    csv_data += f"{date},Historical,{value}\n"
+
+                if original_data:
+                    # Detect format: new multivariate or old univariate
+                    is_multivariate_format = "date,close,open,high,low,volume" in original_data
+                    is_old_format = "date,series,value" in original_data
+
+                    if is_multivariate_format:
+                        # NEW FORMAT: date,close,open,high,low,volume,rsi,volatility,ma_20,ma_50
+                        logger.info(f"📈 Detected NEW multivariate format from stock analysis")
+                        lines = original_data.strip().split('\n')[1:]  # Skip header
+                        for line in lines:
+                            line = line.strip()
+                            if line and ',' in line:
+                                parts = line.split(',')
+                                if len(parts) >= 2:  # Need at least date and close
+                                    date = parts[0]
+                                    close_price = parts[1]  # close is always the 2nd column
+                                    csv_data += f"{date},Historical,{close_price}\n"
                                     historical_count += 1
+
+                    elif is_old_format:
+                        # OLD FORMAT: date,series,value (backward compatible)
+                        logger.info(f"📈 Detected OLD univariate format (backward compatible)")
+                        lines = original_data.strip().split('\n')[1:]  # Skip header
+                        for line in lines:
+                            line = line.strip()
+                            if line and ',' in line:
+                                parts = line.split(',')
+                                if len(parts) >= 3:
+                                    date, series, value = parts[0], parts[1], parts[2]
+                                    # Only include Price series for historical data (not moving averages)
+                                    if series == 'Price':
+                                        csv_data += f"{date},Historical,{value}\n"
+                                        historical_count += 1
 
                 # Add forecast data (mark as Forecast)
                 forecast_count = 0
@@ -640,3 +706,79 @@ Format with clear sections and actionable insights."""
             import traceback
             logger.error(traceback.format_exc())
             return f"Error formatting forecast results: {str(e)}"
+
+    def _convert_long_to_wide_format(self, query: str) -> str:
+        """Convert LONG format (date,series,value) to WIDE format for multivariate forecasting
+
+        Input (LONG):
+            date,series,value
+            2024-11-01,Price,407.31
+            2024-11-01,RSI,62.10
+            2024-11-01,20-day MA,396.50
+            2024-11-01,50-day MA,386.30
+
+        Output (WIDE):
+            date,close,rsi,ma_20,ma_50
+            2024-11-01,407.31,62.10,396.50,386.30
+        """
+        try:
+            import pandas as pd
+
+            # Extract CSV data from query
+            lines = query.split('\n')
+            csv_lines = []
+            in_data = False
+
+            for line in lines:
+                if line.startswith("date,series,value"):
+                    in_data = True
+                    csv_lines.append(line)
+                    continue
+
+                if in_data:
+                    if line.strip() and ',' in line:
+                        csv_lines.append(line)
+                    elif not line.strip():
+                        break
+
+            if len(csv_lines) < 2:
+                logger.error("📈 Not enough data to convert LONG to WIDE")
+                return None
+
+            csv_data = '\n'.join(csv_lines)
+
+            # Parse as DataFrame
+            df = pd.read_csv(pd.io.common.StringIO(csv_data))
+
+            # Pivot: rows=dates, columns=series names, values=values
+            df_wide = df.pivot(index='date', columns='series', values='value')
+
+            # Rename columns to match forecast expectations
+            column_mapping = {
+                'Price': 'close',
+                'RSI': 'rsi',
+                '20-day MA': 'ma_20',
+                '50-day MA': 'ma_50',
+                'Volume (norm)': 'volume_norm'
+            }
+
+            # Only rename columns that exist
+            rename_dict = {k: v for k, v in column_mapping.items() if k in df_wide.columns}
+            df_wide = df_wide.rename(columns=rename_dict)
+
+            # Reset index to make 'date' a column
+            df_wide = df_wide.reset_index()
+
+            # Convert to CSV
+            wide_csv = df_wide.to_csv(index=False)
+
+            logger.info(f"📈 Converted LONG to WIDE: {len(df_wide)} rows × {len(df_wide.columns)} columns")
+            logger.info(f"📈 Columns: {list(df_wide.columns)}")
+
+            return wide_csv
+
+        except Exception as e:
+            logger.error(f"📈 Error converting LONG to WIDE format: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return None

@@ -264,8 +264,74 @@ Format your response in a clear, professional manner that would be helpful for a
             return f"Unable to generate analysis at this time: {str(e)}"
 
     def _format_tool_data_as_csv(self, tool_result: Dict[str, Any]) -> str:
-        """Format tool result as CSV with multivariate features for enhanced forecasting
+        """Format tool result as CSV - exports in LONG format for visualization
 
+        Long format allows visualization to show multiple metrics as separate lines:
+        - Price, RSI, MA-20, MA-50, Volume (normalized)
+
+        Wide format (with all features) is generated on-demand by forecast agent
+        """
+        try:
+            historical_data = tool_result.get("historical_data", {})
+            if not historical_data:
+                return "No historical data available"
+
+            dates = historical_data.get("dates", [])
+            prices = historical_data.get("prices", [])
+            volumes = historical_data.get("volumes", [])
+            ma_20 = historical_data.get("ma_20", [])
+            ma_50 = historical_data.get("ma_50", [])
+
+            if not dates or not prices:
+                return "Insufficient data for CSV export"
+
+            # Calculate RSI time series (14-period)
+            rsi_values = self._calculate_rsi_series(prices)
+
+            # Format in LONG format for visualization: date,series,value
+            # This allows visualization tool to show multiple metrics as separate lines
+            csv_data = "date,series,value\n"
+
+            for i in range(len(dates)):
+                date = dates[i] if i < len(dates) else ""
+
+                # Add price data
+                if i < len(prices) and prices[i] != "":
+                    csv_data += f"{date},Price,{prices[i]}\n"
+
+                # Add RSI data (only if not None/empty)
+                if i < len(rsi_values) and rsi_values[i] is not None:
+                    csv_data += f"{date},RSI,{rsi_values[i]:.2f}\n"
+
+                # Add MA-20 data (only if not None/empty)
+                if i < len(ma_20) and ma_20[i] is not None and ma_20[i] != "":
+                    csv_data += f"{date},20-day MA,{ma_20[i]:.2f}\n"
+
+                # Add MA-50 data (only if not None/empty)
+                if i < len(ma_50) and ma_50[i] is not None and ma_50[i] != "":
+                    csv_data += f"{date},50-day MA,{ma_50[i]:.2f}\n"
+
+                # Add normalized volume (scaled to price range for visualization)
+                if i < len(volumes) and volumes[i] is not None and volumes[i] != "":
+                    # Normalize volume to be visible on same chart as price
+                    # Scale volume to 0-100 range for better visualization
+                    max_volume = max([v for v in volumes if v is not None and v != ""])
+                    if max_volume > 0:
+                        normalized_volume = (volumes[i] / max_volume) * 100
+                        csv_data += f"{date},Volume (norm),{normalized_volume:.2f}\n"
+
+            logger.info(f"📊 Formatted stock data in LONG format with {len(dates)} dates and 5 series")
+            logger.info(f"📊 Series: Price, RSI, 20-day MA, 50-day MA, Volume (normalized)")
+            return csv_data
+
+        except Exception as e:
+            logger.error(f"📈 Failed to format tool data as CSV: {str(e)}")
+            return f"Error formatting data: {str(e)}"
+
+    def _format_tool_data_as_wide_csv(self, tool_result: Dict[str, Any]) -> str:
+        """Format tool result as WIDE CSV for multivariate forecasting
+
+        Called by forecast agent to get all features for multivariate model training.
         Exports Priority 1 essential features:
         - Volume: Predicts volatility spikes
         - RSI: Momentum indicator
@@ -324,7 +390,7 @@ Format your response in a clear, professional manner that would be helpful for a
                 1 if ma_50 else 0
             ])
 
-            logger.info(f"📊 Formatted multivariate stock data: {len(dates)} dates × {feature_count} features")
+            logger.info(f"📊 Formatted multivariate stock data (WIDE): {len(dates)} dates × {feature_count} features")
             logger.info(f"📊 Features: close, open, high, low, volume, rsi, volatility, ma_20, ma_50")
             return csv_data
 
