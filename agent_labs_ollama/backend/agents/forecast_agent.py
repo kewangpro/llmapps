@@ -191,7 +191,8 @@ IMPORTANT: Use the EXACT column names from the CSV headers, not conceptual names
         """Process forecast request without file (extract from query)"""
         try:
             # Check if this is a context-aware query from orchestrator with stock data
-            if "date,series,value" in query and "Price," in query:
+            # New format: date,close,open,high,low,volume,rsi,volatility,ma_20,ma_50
+            if "date,close,open,high,low,volume" in query or ("date,series,value" in query and "Price," in query):
                 return self._process_stock_price_data(query)
 
             # Use LLM to understand the forecast request
@@ -283,7 +284,12 @@ Format response as JSON:
             }
 
     def _process_stock_price_data(self, query: str) -> Dict[str, Any]:
-        """Process stock price data for forecasting"""
+        """Process stock price data for multivariate forecasting
+
+        Handles both formats:
+        - New: date,close,open,high,low,volume,rsi,volatility,ma_20,ma_50 (multivariate)
+        - Legacy: date,series,value (univariate, backward compatible)
+        """
         try:
             logger.info("📈 Processing stock price data for forecasting...")
 
@@ -291,50 +297,88 @@ Format response as JSON:
             lines = query.split('\n')
             csv_data_lines = []
 
-            # Look for the CSV data section
+            # Detect format: multivariate (new) or univariate (legacy)
             in_data_section = False
+            is_multivariate = False
+
             for line in lines:
-                if line.startswith("date,series,value"):
+                # New multivariate format
+                if line.startswith("date,close,open,high,low,volume"):
                     in_data_section = True
-                    # Convert to standard date,value format for forecasting
-                    csv_data_lines.append("date,value")
+                    is_multivariate = True
+                    csv_data_lines.append(line)  # Keep full header
+                    logger.info("📊 Detected MULTIVARIATE stock data format with Priority 1 features")
                     continue
 
-                if in_data_section and "Price," in line:
-                    parts = line.split(',')
-                    if len(parts) >= 3:
-                        date = parts[0]
-                        value = parts[2]
-                        csv_data_lines.append(f"{date},{value}")
-                elif in_data_section and line.strip() == "":
-                    break
-                elif in_data_section and not line.startswith("2024") and not line.startswith("2023"):
-                    # End of data section
-                    break
+                # Legacy univariate format (backward compatible)
+                elif line.startswith("date,series,value"):
+                    in_data_section = True
+                    is_multivariate = False
+                    csv_data_lines.append("date,value")  # Convert to simple format
+                    logger.info("📊 Detected LEGACY univariate stock data format")
+                    continue
+
+                # Process data lines
+                if in_data_section:
+                    line = line.strip()
+
+                    # Empty line ends data section
+                    if not line:
+                        break
+
+                    # Multivariate format: keep all features
+                    if is_multivariate:
+                        # Data lines start with date (YYYY-MM-DD format)
+                        if line and len(line) > 10 and line[4] == '-' and line[7] == '-':
+                            csv_data_lines.append(line)
+
+                    # Legacy format: extract price only
+                    else:
+                        if "Price," in line:
+                            parts = line.split(',')
+                            if len(parts) >= 3:
+                                date = parts[0]
+                                value = parts[2]
+                                csv_data_lines.append(f"{date},{value}")
 
             if not csv_data_lines or len(csv_data_lines) < 2:
                 return {
                     "tool": "forecast",
                     "success": False,
-                    "error": "No valid stock price data found for forecasting. Need historical price data with dates and values.",
+                    "error": "No valid stock data found for forecasting. Need historical data with dates and values.",
                     "timestamp": datetime.now().isoformat()
                 }
 
             # Convert to CSV string
             csv_data = '\n'.join(csv_data_lines)
 
-            logger.info(f"📈 Extracted {len(csv_data_lines)-1} price data points for forecasting")
+            data_points = len(csv_data_lines) - 1  # Subtract header
+            logger.info(f"📈 Extracted {data_points} data points for {'MULTIVARIATE' if is_multivariate else 'UNIVARIATE'} forecasting")
 
-            # Execute forecast with stock price data
-            tool_params = {
-                "data": csv_data,
-                "forecast_periods": 30,  # Default for stock forecasting
-                "time_steps": 60,
-                "date_column": "date",
-                "value_column": "value"
-            }
+            # Prepare forecast parameters
+            if is_multivariate:
+                # Multivariate forecasting with all features
+                tool_params = {
+                    "data": csv_data,
+                    "forecast_periods": 30,
+                    "time_steps": 60,
+                    "date_column": "date",
+                    "value_column": "close",  # Target variable to forecast
+                    "feature_columns": "open,high,low,volume,rsi,volatility,ma_20,ma_50"  # Additional features
+                }
+                logger.info(f"📊 MULTIVARIATE forecast with features: close (target) + 8 predictors")
+            else:
+                # Univariate forecasting (legacy)
+                tool_params = {
+                    "data": csv_data,
+                    "forecast_periods": 30,
+                    "time_steps": 60,
+                    "date_column": "date",
+                    "value_column": "value"
+                }
+                logger.info(f"📊 UNIVARIATE forecast with price only")
 
-            logger.info(f"📈 Executing forecast tool with stock price data: {len(csv_data)} chars")
+            logger.info(f"📈 Executing forecast tool with {len(csv_data)} chars of stock data")
 
             tool_result = self._execute_tool_script("forecast", tool_params)
 

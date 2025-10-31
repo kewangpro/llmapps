@@ -264,7 +264,14 @@ Format your response in a clear, professional manner that would be helpful for a
             return f"Unable to generate analysis at this time: {str(e)}"
 
     def _format_tool_data_as_csv(self, tool_result: Dict[str, Any]) -> str:
-        """Format tool result as CSV string for downstream agents in long format like cost analysis"""
+        """Format tool result as CSV with multivariate features for enhanced forecasting
+
+        Exports Priority 1 essential features:
+        - Volume: Predicts volatility spikes
+        - RSI: Momentum indicator
+        - Volatility: Market uncertainty measure
+        - High/Low: Price range and volatility
+        """
         try:
             historical_data = tool_result.get("historical_data", {})
             if not historical_data:
@@ -272,35 +279,146 @@ Format your response in a clear, professional manner that would be helpful for a
 
             dates = historical_data.get("dates", [])
             prices = historical_data.get("prices", [])
+            opens = historical_data.get("opens", [])
+            highs = historical_data.get("highs", [])
+            lows = historical_data.get("lows", [])
+            volumes = historical_data.get("volumes", [])
             ma_20 = historical_data.get("ma_20", [])
             ma_50 = historical_data.get("ma_50", [])
 
             if not dates or not prices:
                 return "Insufficient data for CSV export"
 
-            # Format in long format like cost analysis: date,series,value
-            # This allows visualization tool to use 'series' as color_column for multiple lines
-            csv_data = "date,series,value\n"
+            # Calculate RSI time series (14-period)
+            rsi_values = self._calculate_rsi_series(prices)
+
+            # Calculate rolling volatility time series (20-period annualized)
+            volatility_values = self._calculate_volatility_series(prices)
+
+            # Format as wide CSV with all features for multivariate forecasting
+            csv_data = "date,close,open,high,low,volume,rsi,volatility,ma_20,ma_50\n"
 
             for i in range(len(dates)):
-                date = dates[i] if i < len(dates) else ""
+                date = dates[i]
+                close = prices[i] if i < len(prices) else ""
+                open_price = opens[i] if i < len(opens) else ""
+                high = highs[i] if i < len(highs) else ""
+                low = lows[i] if i < len(lows) else ""
+                volume = volumes[i] if i < len(volumes) else ""
+                rsi = f"{rsi_values[i]:.2f}" if i < len(rsi_values) and rsi_values[i] is not None else ""
+                volatility = f"{volatility_values[i]:.4f}" if i < len(volatility_values) and volatility_values[i] is not None else ""
+                ma20 = f"{ma_20[i]:.2f}" if i < len(ma_20) and ma_20[i] is not None else ""
+                ma50 = f"{ma_50[i]:.2f}" if i < len(ma_50) and ma_50[i] is not None else ""
 
-                # Add price data
-                if i < len(prices) and prices[i] != "":
-                    csv_data += f"{date},Price,{prices[i]}\n"
+                csv_data += f"{date},{close},{open_price},{high},{low},{volume},{rsi},{volatility},{ma20},{ma50}\n"
 
-                # Add MA-20 data (only if not None/empty)
-                if i < len(ma_20) and ma_20[i] is not None and ma_20[i] != "":
-                    csv_data += f"{date},20-day MA,{ma_20[i]}\n"
+            feature_count = sum([
+                1,  # close (always present)
+                1 if opens else 0,
+                1 if highs else 0,
+                1 if lows else 0,
+                1 if volumes else 0,
+                1,  # rsi (calculated)
+                1,  # volatility (calculated)
+                1 if ma_20 else 0,
+                1 if ma_50 else 0
+            ])
 
-                # Add MA-50 data (only if not None/empty)
-                if i < len(ma_50) and ma_50[i] is not None and ma_50[i] != "":
-                    csv_data += f"{date},50-day MA,{ma_50[i]}\n"
-
-            logger.info(f"📊 Formatted stock data in long format with {len(dates)} dates and multiple series")
+            logger.info(f"📊 Formatted multivariate stock data: {len(dates)} dates × {feature_count} features")
+            logger.info(f"📊 Features: close, open, high, low, volume, rsi, volatility, ma_20, ma_50")
             return csv_data
 
         except Exception as e:
             logger.error(f"📈 Failed to format tool data as CSV: {str(e)}")
             return f"Error formatting data: {str(e)}"
+
+    def _calculate_rsi_series(self, prices: list, period: int = 14) -> list:
+        """Calculate RSI (Relative Strength Index) time series
+
+        RSI = 100 - (100 / (1 + RS))
+        where RS = Average Gain / Average Loss over period
+        """
+        try:
+            if len(prices) < period + 1:
+                return [None] * len(prices)
+
+            rsi_values = [None] * period  # First 'period' values are None
+
+            # Calculate price changes
+            deltas = []
+            for i in range(1, len(prices)):
+                delta = prices[i] - prices[i-1]
+                deltas.append(delta)
+
+            # Separate gains and losses
+            gains = [max(d, 0) for d in deltas]
+            losses = [abs(min(d, 0)) for d in deltas]
+
+            # Calculate initial average gain/loss
+            avg_gain = sum(gains[:period]) / period
+            avg_loss = sum(losses[:period]) / period
+
+            # Calculate first RSI value
+            if avg_loss == 0:
+                rsi_values.append(100)
+            else:
+                rs = avg_gain / avg_loss
+                rsi_values.append(100 - (100 / (1 + rs)))
+
+            # Calculate subsequent RSI values using smoothed averages
+            for i in range(period, len(deltas)):
+                avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+                avg_loss = (avg_loss * (period - 1) + losses[i]) / period
+
+                if avg_loss == 0:
+                    rsi_values.append(100)
+                else:
+                    rs = avg_gain / avg_loss
+                    rsi_values.append(100 - (100 / (1 + rs)))
+
+            return rsi_values
+
+        except Exception as e:
+            logger.error(f"📈 RSI calculation error: {str(e)}")
+            return [None] * len(prices)
+
+    def _calculate_volatility_series(self, prices: list, window: int = 20) -> list:
+        """Calculate rolling volatility (annualized standard deviation of returns)
+
+        Volatility = StdDev(returns) * sqrt(252)
+        where returns = (price[t] - price[t-1]) / price[t-1]
+        """
+        try:
+            if len(prices) < window + 1:
+                return [None] * len(prices)
+
+            volatility_values = [None] * window  # First 'window' values are None
+
+            # Calculate returns
+            returns = []
+            for i in range(1, len(prices)):
+                if prices[i-1] != 0:
+                    ret = (prices[i] - prices[i-1]) / prices[i-1]
+                    returns.append(ret)
+                else:
+                    returns.append(0)
+
+            # Calculate rolling volatility
+            for i in range(window - 1, len(returns)):
+                window_returns = returns[i - window + 1:i + 1]
+
+                # Calculate standard deviation
+                mean_return = sum(window_returns) / len(window_returns)
+                variance = sum((r - mean_return) ** 2 for r in window_returns) / len(window_returns)
+                std_dev = variance ** 0.5
+
+                # Annualize (252 trading days per year)
+                annualized_volatility = std_dev * (252 ** 0.5)
+                volatility_values.append(annualized_volatility)
+
+            return volatility_values
+
+        except Exception as e:
+            logger.error(f"📈 Volatility calculation error: {str(e)}")
+            return [None] * len(prices)
 
