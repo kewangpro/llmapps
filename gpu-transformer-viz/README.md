@@ -136,22 +136,29 @@ gpu-transformer-viz/
 │   │   │   ├── card.tsx            # Reusable card component
 │   │   │   └── dialog.tsx          # Dialog component
 │   │   ├── CustomDialog.tsx        # AI generation dialog
+│   │   ├── CustomVizMenu.tsx       # Custom visualizations menu popup
 │   │   └── ErrorBoundary.tsx       # Error handling wrapper
 │   ├── customized/                 # Custom AI-generated visualizations
 │   │   ├── .gitkeep
-│   │   └── ExampleViz.tsx          # Example custom visualization
+│   │   ├── ExampleViz.tsx          # Example custom visualization
+│   │   ├── GradientBoostViz.tsx    # Gradient boosting visualization
+│   │   └── ShowingBubbleSortArrayViz.tsx  # Bubble sort visualization
 │   ├── utils/
 │   │   └── customVizLoader.ts      # Dynamic component loader
 │   ├── App.tsx                     # Main app with navigation
-│   ├── GPUArchitectureAnimation.tsx # GPU visualization
-│   ├── AttentionVisualizer.tsx     # Attention visualization
+│   ├── App.css                     # App-specific styles
+│   ├── GPUArchitectureAnimation.tsx # GPU SM components visualization
+│   ├── AttentionVisualizer.tsx     # Transformer attention visualization
 │   ├── index.css                   # Tailwind CSS imports
 │   └── main.tsx                    # App entry point
-├── server.js                       # Express backend for Ollama
-├── tailwind.config.js              # Tailwind configuration
+├── server.js                       # Express backend for Ollama AI
+├── tailwind.config.js              # Tailwind CSS v4 configuration
 ├── postcss.config.js               # PostCSS with Tailwind plugin
-├── vite.config.ts                  # Vite configuration
+├── vite.config.ts                  # Vite build configuration
+├── tsconfig.json                   # TypeScript configuration
+├── eslint.config.js                # ESLint configuration
 ├── CUSTOM_VIZ_GUIDE.md            # Detailed custom viz documentation
+├── README.md                       # This file
 └── package.json                    # Dependencies & scripts
 ```
 
