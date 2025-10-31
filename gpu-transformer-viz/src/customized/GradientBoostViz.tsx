@@ -582,11 +582,27 @@ export default function GradientBoostViz() {
             />
           )}
 
-          {currentForecasts.map((v, idx) => (
-            <g key={`p-${idx}`} onClick={() => setInspectIdx(idx)} style={{ cursor: "pointer" }}>
-              <circle cx={50 + (yTrue.length + idx) * 38} cy={yScale.toCY(v)} r={6} fill="#10b981" />
-            </g>
-          ))}
+          {currentForecasts.map((v, idx) => {
+            const cx = 50 + (yTrue.length + idx) * 38;
+            const cy = yScale.toCY(v);
+            const isSelected = inspectIdx === idx;
+            return (
+              <g key={`p-${idx}`} style={{ cursor: "pointer" }} onClick={() => setInspectIdx(idx)}>
+                {/* Larger invisible click target */}
+                <circle cx={cx} cy={cy} r={12} fill="transparent" pointerEvents="all" />
+                {/* Visible dot */}
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={isSelected ? 8 : 6}
+                  fill="#10b981"
+                  stroke={isSelected ? "#ffffff" : "none"}
+                  strokeWidth={isSelected ? 2 : 0}
+                  pointerEvents="none"
+                />
+              </g>
+            );
+          })}
         </svg>
       </div>
 
