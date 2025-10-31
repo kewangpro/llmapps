@@ -735,24 +735,46 @@ def forecast_timeseries(data: str, forecast_periods: int = 30, time_steps: int =
         predictions = predictions.reshape(-1, 1)
 
         if is_multivariate:
-            # For multivariate, create a target-only scaler for inverse transformation
-            # (predictions are only for the target variable, not all features)
-            target_scaler = MinMaxScaler(feature_range=(0, 1))
+            # For multivariate, create a dedicated scaler for JUST the target column
+            # The predictions are only for the target (first column), not all features
             target_values = df[value_column].values.reshape(-1, 1)
+            target_scaler = MinMaxScaler(feature_range=(0, 1))
             target_scaler.fit(target_values)
+
+            print(f"[DEBUG] Multivariate inverse transform:", file=sys.stderr)
+            print(f"  Target column: {value_column}", file=sys.stderr)
+            print(f"  Target min: {target_values.min():.2f}, max: {target_values.max():.2f}", file=sys.stderr)
+            print(f"  Predictions (scaled) min: {predictions.min():.4f}, max: {predictions.max():.4f}", file=sys.stderr)
+            print(f"  Last 3 historical values: {target_values[-3:].flatten()}", file=sys.stderr)
+
+            # Use target-specific scaler for inverse transform
             predictions = target_scaler.inverse_transform(predictions)
+
+            print(f"  Predictions (unscaled) min: {predictions.min():.2f}, max: {predictions.max():.2f}", file=sys.stderr)
+            print(f"  First 3 predictions: {predictions[:3].flatten()}", file=sys.stderr)
         else:
-            # For univariate, use the same scaler
+            # For univariate, use the same scaler directly
             predictions = scaler.inverse_transform(predictions)
 
         predictions = predictions.flatten()
 
-        # Apply reasonable bounds based on historical data statistics
-        # Use wider bounds (±4σ) to allow more variation while preventing extremes
-        historical_mean = values.mean()
-        historical_std = values.std()
-        min_bound = max(0, historical_mean - 4 * historical_std)
-        max_bound = historical_mean + 4 * historical_std
+        # Apply reasonable bounds based on RECENT historical trend, not overall mean
+        # This prevents forecasts from reverting to historical mean when there's a strong trend
+        recent_window = min(30, len(values) // 4)  # Last 30 days or 25% of data
+        recent_values = values[-recent_window:, 0] if is_multivariate else values[-recent_window:, 0]
+        recent_mean = recent_values.mean()
+        recent_std = recent_values.std()
+
+        # Use last known value as anchor point
+        last_value = values[-1, 0] if is_multivariate else values[-1, 0]
+
+        # Allow predictions to deviate ±50% from last value, or ±4σ from recent mean, whichever is wider
+        deviation_from_last = abs(last_value * 0.5)
+        deviation_from_trend = 4 * recent_std
+        max_deviation = max(deviation_from_last, deviation_from_trend)
+
+        min_bound = max(0, last_value - max_deviation)
+        max_bound = last_value + max_deviation
 
         # Soft clipping - allow deviation while preventing extreme outliers
         predictions = np.clip(predictions, min_bound, max_bound)
@@ -783,7 +805,7 @@ def forecast_timeseries(data: str, forecast_periods: int = 30, time_steps: int =
             y_val_flat = y_val.flatten().reshape(-1, 1)
 
             if is_multivariate:
-                # Use target-only scaler for multivariate
+                # Use target-specific scaler (same as predictions above)
                 val_predictions_scaled = target_scaler.inverse_transform(val_predictions_flat)
                 y_val_scaled = target_scaler.inverse_transform(y_val_flat)
             else:
