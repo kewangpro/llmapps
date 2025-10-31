@@ -175,25 +175,35 @@ def calculate_trend_momentum(data: np.array, window: int = 20) -> float:
 
 def prepare_sequence_data(data: np.array, time_steps: int = 60, forecast_horizon: int = 1) -> Tuple[np.array, np.array]:
     """
-    Prepare data for GRU/RNN training
+    Prepare data for GRU/RNN training - supports both univariate and multivariate
 
     Args:
-        data: Input time series data
+        data: Input time series data, shape (samples, features) or (samples, 1)
         time_steps: Lookback window size
         forecast_horizon: Number of steps to predict ahead (1 for single-step, >1 for multi-horizon)
 
     Returns:
-        X: Input sequences of shape (samples, time_steps)
+        X: Input sequences of shape (samples, time_steps, features) for multivariate
+           or (samples, time_steps) for univariate
         y: Target sequences of shape (samples,) for single-step or (samples, forecast_horizon) for multi-horizon
+           Note: y always uses only the first feature (target variable)
     """
     X, y = [], []
+    num_features = data.shape[1] if len(data.shape) > 1 else 1
 
     for i in range(time_steps, len(data) - forecast_horizon + 1):
-        X.append(data[i-time_steps:i, 0])
+        if num_features > 1:
+            # Multivariate: X includes all features
+            X.append(data[i-time_steps:i, :])  # Shape: (time_steps, num_features)
+        else:
+            # Univariate: X includes single feature
+            X.append(data[i-time_steps:i, 0])  # Shape: (time_steps,)
+
         if forecast_horizon == 1:
+            # Single-step: predict next value of target (first feature)
             y.append(data[i, 0])
         else:
-            # Multi-horizon: predict next 'forecast_horizon' steps
+            # Multi-horizon: predict next 'forecast_horizon' steps of target
             y.append(data[i:i+forecast_horizon, 0])
 
     return np.array(X), np.array(y)
@@ -506,19 +516,23 @@ def _forecast_multi_series(df: pd.DataFrame, date_column: str, value_column: str
 
 def forecast_timeseries(data: str, forecast_periods: int = 30, time_steps: int = 60,
                        date_column: str = None, value_column: str = None,
-                       group_column: str = None, model_type: str = "gru") -> Dict[str, Any]:
+                       group_column: str = None, model_type: str = "gru",
+                       feature_columns: str = None) -> Dict[str, Any]:
     """
     Forecast future values using GRU or N-BEATS neural network
     Supports multi-series forecasting when group_column is provided
+    Supports multivariate forecasting when feature_columns is provided
 
     Args:
         data: CSV data containing time series
         forecast_periods: Number of periods to forecast
         time_steps: Number of time steps for lookback
         date_column: Name of date column
-        value_column: Name of value column
+        value_column: Name of value column (target variable to forecast)
         group_column: Name of grouping column (e.g., 'business_unit') for separate forecasts
         model_type: Model to use - "gru" (default, more stable) or "nbeats" (experimental)
+        feature_columns: Comma-separated additional feature columns for multivariate forecasting
+                        (e.g., "open,high,low,volume,rsi,volatility,ma_20,ma_50")
 
     Returns:
         Dictionary with forecast results and visualization
@@ -593,10 +607,36 @@ def forecast_timeseries(data: str, forecast_periods: int = 30, time_steps: int =
         df[date_column] = pd.to_datetime(df[date_column])
         df = df.sort_values(by=date_column)
 
-        # Prepare data
-        values = df[value_column].values.reshape(-1, 1)
+        # Prepare data - MULTIVARIATE or UNIVARIATE
+        is_multivariate = feature_columns is not None and feature_columns.strip() != ""
 
-        # Scale the data
+        if is_multivariate:
+            # Multivariate forecasting: target + additional features
+            feature_list = [value_column] + [f.strip() for f in feature_columns.split(',')]
+
+            # Filter out any features that don't exist in DataFrame
+            available_features = [f for f in feature_list if f in df.columns]
+            missing_features = [f for f in feature_list if f not in df.columns]
+
+            if missing_features:
+                print(f"Warning: Missing features in data: {missing_features}", file=sys.stderr)
+
+            if len(available_features) < 2:
+                # Not enough features, fall back to univariate
+                print(f"Warning: Not enough features available, falling back to univariate", file=sys.stderr)
+                is_multivariate = False
+                values = df[value_column].values.reshape(-1, 1)
+            else:
+                # Extract all feature columns
+                values = df[available_features].values  # Shape: (samples, num_features)
+                num_features = values.shape[1]
+                print(f"Multivariate forecasting with {num_features} features: {available_features}", file=sys.stderr)
+        else:
+            # Univariate forecasting: only target variable
+            values = df[value_column].values.reshape(-1, 1)
+            num_features = 1
+
+        # Scale the data (each feature independently)
         scaler = MinMaxScaler(feature_range=(0, 1))
         scaled_data = scaler.fit_transform(values)
 
@@ -654,8 +694,13 @@ def forecast_timeseries(data: str, forecast_periods: int = 30, time_steps: int =
             # Prepare training data for multi-horizon forecasting
             X, y = prepare_sequence_data(scaled_data, time_steps, forecast_horizon=forecast_periods)
 
-            # Reshape for GRU
-            X = X.reshape(X.shape[0], X.shape[1], 1)
+            if is_multivariate:
+                # Multivariate: X already has shape (samples, time_steps, num_features)
+                # y has shape (samples, forecast_periods) - only target variable
+                pass  # No reshaping needed, prepare_sequence_data handles it
+            else:
+                # Univariate: X has shape (samples, time_steps), reshape to (samples, time_steps, 1)
+                X = X.reshape(X.shape[0], X.shape[1], 1)
 
             # Split data (use last 20% for validation)
             split_index = int(len(X) * 0.8)
@@ -663,7 +708,8 @@ def forecast_timeseries(data: str, forecast_periods: int = 30, time_steps: int =
             y_train, y_val = y[:split_index], y[split_index:]
 
             # Create and train model with multi-horizon output
-            model = create_gru_model((time_steps, 1), forecast_horizon=forecast_periods)
+            # Input shape: (time_steps, num_features)
+            model = create_gru_model((time_steps, num_features), forecast_horizon=forecast_periods)
 
             history = model.fit(
                 X_train, y_train,
@@ -676,7 +722,10 @@ def forecast_timeseries(data: str, forecast_periods: int = 30, time_steps: int =
             )
 
             # Make predictions using GRU model (direct multi-horizon)
-            last_sequence = scaled_data[-time_steps:].reshape(1, time_steps, 1)
+            if is_multivariate:
+                last_sequence = scaled_data[-time_steps:].reshape(1, time_steps, num_features)
+            else:
+                last_sequence = scaled_data[-time_steps:].reshape(1, time_steps, 1)
 
             # Predict all future steps at once
             predictions = model.predict(last_sequence, verbose=0)
@@ -684,7 +733,18 @@ def forecast_timeseries(data: str, forecast_periods: int = 30, time_steps: int =
 
         # Scale predictions back to original scale
         predictions = predictions.reshape(-1, 1)
-        predictions = scaler.inverse_transform(predictions)
+
+        if is_multivariate:
+            # For multivariate, create a target-only scaler for inverse transformation
+            # (predictions are only for the target variable, not all features)
+            target_scaler = MinMaxScaler(feature_range=(0, 1))
+            target_values = df[value_column].values.reshape(-1, 1)
+            target_scaler.fit(target_values)
+            predictions = target_scaler.inverse_transform(predictions)
+        else:
+            # For univariate, use the same scaler
+            predictions = scaler.inverse_transform(predictions)
+
         predictions = predictions.flatten()
 
         # Apply reasonable bounds based on historical data statistics
@@ -722,12 +782,22 @@ def forecast_timeseries(data: str, forecast_periods: int = 30, time_steps: int =
             val_predictions_flat = val_predictions.flatten().reshape(-1, 1)
             y_val_flat = y_val.flatten().reshape(-1, 1)
 
-            val_predictions_scaled = scaler.inverse_transform(val_predictions_flat)
-            y_val_scaled = scaler.inverse_transform(y_val_flat)
+            if is_multivariate:
+                # Use target-only scaler for multivariate
+                val_predictions_scaled = target_scaler.inverse_transform(val_predictions_flat)
+                y_val_scaled = target_scaler.inverse_transform(y_val_flat)
+            else:
+                # Use full scaler for univariate
+                val_predictions_scaled = scaler.inverse_transform(val_predictions_flat)
+                y_val_scaled = scaler.inverse_transform(y_val_flat)
         else:
             # Fallback for other model types
-            val_predictions_scaled = scaler.inverse_transform(val_predictions)
-            y_val_scaled = scaler.inverse_transform(y_val.reshape(-1, 1))
+            if is_multivariate:
+                val_predictions_scaled = target_scaler.inverse_transform(val_predictions)
+                y_val_scaled = target_scaler.inverse_transform(y_val.reshape(-1, 1))
+            else:
+                val_predictions_scaled = scaler.inverse_transform(val_predictions)
+                y_val_scaled = scaler.inverse_transform(y_val.reshape(-1, 1))
 
         mae = mean_absolute_error(y_val_scaled, val_predictions_scaled)
         mse = mean_squared_error(y_val_scaled, val_predictions_scaled)
@@ -804,10 +874,12 @@ def main():
         time_steps = params.get("time_steps", 60)
         date_column = params.get("date_column")
         value_column = params.get("value_column")
-        group_column = params.get("group_column")  # NEW: Support for grouping column
+        group_column = params.get("group_column")  # Support for grouping column
         model_type = params.get("model_type", "gru")
+        feature_columns = params.get("feature_columns")  # NEW: Support for multivariate features
 
-        result = forecast_timeseries(data, forecast_periods, time_steps, date_column, value_column, group_column, model_type)
+        result = forecast_timeseries(data, forecast_periods, time_steps, date_column, value_column,
+                                    group_column, model_type, feature_columns)
         print(json.dumps(result))
 
     except json.JSONDecodeError as e:
