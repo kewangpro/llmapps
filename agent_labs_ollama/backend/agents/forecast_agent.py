@@ -71,7 +71,70 @@ class ForecastAgent(BaseAgent):
             else:
                 raise ValueError("No file or file path found in query")
 
-            # Use LLM to analyze the file and extract parameters
+            # CRITICAL: Check if this is LONG format stock data and convert to WIDE for multivariate forecasting
+            is_stock_data_long_format = "date,series,value" in file_content and ("Price," in file_content or "RSI," in file_content)
+
+            if is_stock_data_long_format:
+                logger.info("📊 Detected LONG format stock data - converting to WIDE for multivariate forecasting")
+
+                # Convert LONG → WIDE
+                wide_csv = self._convert_long_to_wide_format(file_content)
+
+                if wide_csv:
+                    # Use wide format for multivariate forecasting
+                    file_content = wide_csv
+                    logger.info("📊 Successfully converted to WIDE format for multivariate forecasting")
+
+                    # Set parameters directly for stock data
+                    tool_params = {
+                        "data": file_content,
+                        "forecast_periods": 30,
+                        "time_steps": 60,
+                        "date_column": "date",
+                        "value_column": "close",
+                        "feature_columns": "rsi,ma_20,ma_50"  # Available features from stock analysis
+                    }
+
+                    logger.info(f"📈 Executing MULTIVARIATE forecast with stock data")
+
+                    # Execute forecast tool
+                    tool_result = self._execute_tool_script("forecast", tool_params)
+
+                    if not tool_result.get("success", False):
+                        return {
+                            "tool": "forecast",
+                            "success": False,
+                            "error": f"Forecast tool failed: {tool_result.get('error', 'Unknown error')}",
+                            "timestamp": datetime.now().isoformat()
+                        }
+
+                    # Generate LLM analysis
+                    params = {
+                        "date_column": "date",
+                        "value_column": "close",
+                        "forecast_periods": 30,
+                        "time_steps": 60
+                    }
+                    llm_analysis = self._analyze_forecast_with_llm(tool_result, query, params)
+                    formatted_tool_data = self._format_tool_data(tool_result, tool_params)
+
+                    result = {
+                        **tool_result,
+                        "tool_data": formatted_tool_data,
+                        "llm_analysis": llm_analysis
+                    }
+
+                    return {
+                        "tool": "forecast",
+                        "parameters": tool_params,
+                        "result": result,
+                        "success": True,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                else:
+                    logger.warning("📊 LONG→WIDE conversion failed, falling back to LLM analysis")
+
+            # FALLBACK: Use LLM to analyze the file and extract parameters (for non-stock data or if conversion failed)
             analysis_prompt = f"""Analyze this time series data file and extract forecasting parameters:
 
 Filename: {file_name}
@@ -135,7 +198,7 @@ IMPORTANT: Use the EXACT column names from the CSV headers, not conceptual names
                 "time_steps": params.get("time_steps", 60),
                 "date_column": params.get("date_column"),
                 "value_column": params.get("value_column"),
-                "group_column": params.get("group_column")  # NEW: Support multi-series forecasting
+                "group_column": params.get("group_column")  # Support multi-series forecasting
             }
 
             logger.info(f"📈 Executing forecast tool with parameters: {tool_params}")
@@ -655,23 +718,37 @@ Format with clear sections and actionable insights."""
                 historical_count = 0
 
                 if original_data:
-                    # Detect format: new multivariate or old univariate
-                    is_multivariate_format = "date,close,open,high,low,volume" in original_data
+                    # Detect format: multiple possible formats
+                    # Check if this is WIDE format with 'date' and 'close' columns (order-independent)
+                    header_line = original_data.split('\n')[0] if original_data else ""
+                    is_stock_multivariate = ("date" in header_line and "close" in header_line and
+                                            header_line.count(',') >= 2)  # At least date,close,feature
                     is_old_format = "date,series,value" in original_data
 
-                    if is_multivariate_format:
-                        # NEW FORMAT: date,close,open,high,low,volume,rsi,volatility,ma_20,ma_50
-                        logger.info(f"📈 Detected NEW multivariate format from stock analysis")
-                        lines = original_data.strip().split('\n')[1:]  # Skip header
-                        for line in lines:
-                            line = line.strip()
-                            if line and ',' in line:
-                                parts = line.split(',')
-                                if len(parts) >= 2:  # Need at least date and close
-                                    date = parts[0]
-                                    close_price = parts[1]  # close is always the 2nd column
-                                    csv_data += f"{date},Historical,{close_price}\n"
-                                    historical_count += 1
+                    if is_stock_multivariate:
+                        # STOCK MULTIVARIATE FORMAT: date,close,feature1,feature2,...
+                        logger.info(f"📈 Detected stock multivariate format (close + features)")
+
+                        # Parse header to find column indices
+                        lines = original_data.strip().split('\n')
+                        if len(lines) > 0:
+                            header = lines[0].split(',')
+                            try:
+                                date_idx = header.index('date')
+                                close_idx = header.index('close')
+
+                                # Extract historical data
+                                for line in lines[1:]:  # Skip header
+                                    line = line.strip()
+                                    if line and ',' in line:
+                                        parts = line.split(',')
+                                        if len(parts) > max(date_idx, close_idx):
+                                            date = parts[date_idx]
+                                            close_price = parts[close_idx]
+                                            csv_data += f"{date},Historical,{close_price}\n"
+                                            historical_count += 1
+                            except (ValueError, IndexError) as e:
+                                logger.warning(f"📈 Failed to parse multivariate format: {e}")
 
                     elif is_old_format:
                         # OLD FORMAT: date,series,value (backward compatible)
@@ -768,6 +845,22 @@ Format with clear sections and actionable insights."""
 
             # Reset index to make 'date' a column
             df_wide = df_wide.reset_index()
+
+            # CRITICAL: Drop rows with NaN values (from RSI/MA warmup periods)
+            # This ensures all features are available for training
+            logger.info(f"📈 Before dropping NaN: {len(df_wide)} rows")
+            df_wide = df_wide.dropna()
+            logger.info(f"📈 After dropping NaN: {len(df_wide)} rows (removed warmup period)")
+
+            # Reorder columns to ensure consistent format: date, close, then other features
+            # This is critical for the _format_tool_data() detection logic to work
+            desired_order = ['date', 'close']
+            # Add any remaining columns (rsi, ma_20, ma_50, volume_norm, etc.)
+            remaining_cols = [col for col in df_wide.columns if col not in desired_order]
+            final_order = desired_order + sorted(remaining_cols)  # Sort remaining for consistency
+            df_wide = df_wide[final_order]
+
+            logger.info(f"📈 Final column order: {list(df_wide.columns)}")
 
             # Convert to CSV
             wide_csv = df_wide.to_csv(index=False)
