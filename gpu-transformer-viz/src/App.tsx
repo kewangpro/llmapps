@@ -1,10 +1,11 @@
 import { useState, useEffect, Suspense } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import GPUArchitectureAnimation from './GPUArchitectureAnimation'
 import AttentionVisualizer from './AttentionVisualizer'
 import CustomDialog from './components/CustomDialog'
+import CustomVizMenu from './components/CustomVizMenu'
 import ErrorBoundary from './components/ErrorBoundary'
-import { Cpu, Brain, Plus, Loader2 } from 'lucide-react'
-import * as LucideIcons from 'lucide-react'
+import { Cpu, Brain, Sparkles, Loader2 } from 'lucide-react'
 import { loadCustomVisualizations } from './utils/customVizLoader'
 
 type ViewType = 'gpu' | 'attention' | string;
@@ -20,6 +21,7 @@ function App() {
   const [activeView, setActiveView] = useState<ViewType>('gpu')
   const [customVizs, setCustomVizs] = useState<CustomViz[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
 
   // Load custom visualizations on mount and when new ones are created
   const loadVizs = async () => {
@@ -47,12 +49,6 @@ function App() {
     console.log('📥 Fetching updated visualization list...');
     await loadVizs();
     console.log('✅ Visualization list reloaded');
-  }
-
-  const getIconComponent = (iconName: string) => {
-    // @ts-ignore - Dynamic icon lookup
-    const IconComponent = LucideIcons[iconName] || LucideIcons.Sparkles
-    return IconComponent
   }
 
   const renderActiveView = () => {
@@ -91,65 +87,45 @@ function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <h1 className="text-2xl font-bold text-gray-900">
-              GPU & Transformer Visualizations
+              Visualizations
             </h1>
             <div className="flex gap-2">
-              {/* Built-in visualizations - Always visible */}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setActiveView('gpu')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all whitespace-nowrap ${
-                    activeView === 'gpu'
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  <Cpu size={20} />
-                  GPU
-                </button>
-                <button
-                  onClick={() => setActiveView('attention')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all whitespace-nowrap ${
-                    activeView === 'attention'
-                      ? 'bg-purple-600 text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  <Brain size={20} />
-                  Attention
-                </button>
-              </div>
-
-              {/* Custom visualizations - Scrollable if many */}
-              {customVizs.length > 0 && (
-                <div className="flex gap-2 overflow-x-auto max-w-md">
-                  {customVizs.map(viz => {
-                    const IconComponent = getIconComponent(viz.icon)
-                    return (
-                      <button
-                        key={viz.id}
-                        onClick={() => setActiveView(viz.id)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all whitespace-nowrap ${
-                          activeView === viz.id
-                            ? 'bg-green-600 text-white shadow-md'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                      >
-                        <IconComponent size={20} />
-                        {viz.name}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-
-              {/* Add Custom Button - Always visible */}
+              {/* Built-in visualizations */}
               <button
-                onClick={() => setIsDialogOpen(true)}
+                onClick={() => setActiveView('gpu')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all whitespace-nowrap ${
+                  activeView === 'gpu'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <Cpu size={20} />
+                GPU Architecture
+              </button>
+              <button
+                onClick={() => setActiveView('attention')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all whitespace-nowrap ${
+                  activeView === 'attention'
+                    ? 'bg-purple-600 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <Brain size={20} />
+                Transformers Attention
+              </button>
+
+              {/* Custom visualizations menu */}
+              <button
+                onClick={() => setIsMenuOpen(true)}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all bg-gradient-to-r from-yellow-400 to-orange-500 text-white hover:from-yellow-500 hover:to-orange-600 shadow-md whitespace-nowrap"
               >
-                <Plus size={20} />
+                <Sparkles size={20} />
                 Custom
+                {customVizs.length > 0 && (
+                  <span className="ml-1 px-2 py-0.5 bg-white/30 rounded-full text-xs">
+                    {customVizs.length}
+                  </span>
+                )}
               </button>
             </div>
           </div>
@@ -161,12 +137,25 @@ function App() {
         {renderActiveView()}
       </main>
 
-      {/* Custom Visualization Dialog */}
+      {/* Custom Visualization Generation Dialog */}
       <CustomDialog
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
         onVisualizationCreated={handleVisualizationCreated}
       />
+
+      {/* Custom Visualizations Menu */}
+      <AnimatePresence>
+        {isMenuOpen && (
+          <CustomVizMenu
+            customVizs={customVizs}
+            activeView={activeView}
+            onSelectViz={setActiveView}
+            onAddNew={() => setIsDialogOpen(true)}
+            onClose={() => setIsMenuOpen(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }
