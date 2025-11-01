@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Stock Analysis AI Platform - Main Entry Point
+Stock Analysis and Trading AI Platform - Main Entry Point
 """
 
 import sys
@@ -41,7 +41,7 @@ def setup_logging():
 def main():
     """Main application entry point"""
     logger = setup_logging()
-    logger.info("Starting Stock Analysis AI Platform")
+    logger.info("Starting Stock Analysis and Trading AI Platform")
     
     try:
         # Configure Panel
@@ -54,7 +54,7 @@ def main():
         
         # Serve the application
         logger.info(f"Starting server on {Config.PANEL_HOST}:{Config.PANEL_PORT}")
-        print(f"\n🚀 Stock Analysis AI Platform")
+        print(f"\n🚀 Stock Analysis and Trading AI Platform")
         print(f"📊 Server starting at: http://{Config.PANEL_HOST}:{Config.PANEL_PORT}")
         print("🔍 Ready to analyze stocks with AI!")
         print("💡 Try queries like: 'Analyze AAPL' or 'Predict GOOGL'\n")
@@ -70,7 +70,7 @@ def main():
         
     except KeyboardInterrupt:
         logger.info("Application stopped by user")
-        print("\n👋 Stock Analysis AI Platform stopped")
+        print("\n👋 Stock Analysis and Trading AI Platform stopped")
     except Exception as e:
         logger.error(f"Application failed to start: {e}")
         print(f"\n❌ Failed to start application: {e}")

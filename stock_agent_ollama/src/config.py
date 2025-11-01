@@ -39,9 +39,22 @@ class Config:
     # Logging
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
     LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    
+
+    # RL Trading settings
+    RL_MODEL_DIR = MODEL_DIR / "rl"
+    RL_DEFAULT_INITIAL_BALANCE = float(os.getenv("RL_INITIAL_BALANCE", "10000.0"))
+    RL_TRANSACTION_COST_RATE = float(os.getenv("RL_TRANSACTION_COST", "0.001"))
+    RL_SLIPPAGE_RATE = float(os.getenv("RL_SLIPPAGE", "0.0"))
+    RL_DEFAULT_TRAINING_TIMESTEPS = int(os.getenv("RL_TRAINING_TIMESTEPS", "50000"))
+    RL_LOOKBACK_WINDOW = int(os.getenv("RL_LOOKBACK_WINDOW", "60"))
+
+    # RL Agent default hyperparameters
+    RL_PPO_LEARNING_RATE = float(os.getenv("RL_PPO_LR", "0.0003"))
+    RL_A2C_LEARNING_RATE = float(os.getenv("RL_A2C_LR", "0.0007"))
+    RL_GAMMA = float(os.getenv("RL_GAMMA", "0.99"))
+
     @classmethod
     def ensure_directories(cls):
         """Create necessary directories if they don't exist"""
-        for directory in [cls.DATA_DIR, cls.CACHE_DIR, cls.MODEL_DIR, cls.LOG_DIR]:
+        for directory in [cls.DATA_DIR, cls.CACHE_DIR, cls.MODEL_DIR, cls.LOG_DIR, cls.RL_MODEL_DIR]:
             directory.mkdir(parents=True, exist_ok=True)
