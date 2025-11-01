@@ -30,6 +30,12 @@ class TrainingConfig:
     learning_rate: float = 3e-4
     gamma: float = 0.99
 
+    # LSTM feature extractor (hybrid architecture)
+    use_lstm: bool = False
+    lstm_hidden_size: int = 64
+    lstm_layers: int = 2
+    features_dim: int = 128
+
     # Training settings
     total_timesteps: int = 50000
     reward_type: str = "risk_adjusted"  # simple, risk_adjusted, customizable
@@ -132,6 +138,15 @@ class RLTrainer:
             'verbose': self.config.verbose
         }
 
+        # Add LSTM parameters if enabled
+        if self.config.use_lstm:
+            agent_params.update({
+                'use_lstm': True,
+                'lstm_hidden_size': self.config.lstm_hidden_size,
+                'lstm_layers': self.config.lstm_layers,
+                'features_dim': self.config.features_dim
+            })
+
         # Create agent
         agent = create_agent(
             self.config.agent_type,
@@ -171,9 +186,14 @@ class RLTrainer:
             print(f"Starting RL Training")
             print(f"{'='*60}")
             print(f"Stock: {self.config.symbol}")
-            print(f"Agent: {self.config.agent_type.upper()}")
+            agent_name = self.config.agent_type.upper()
+            if self.config.use_lstm:
+                agent_name += "-LSTM"
+            print(f"Agent: {agent_name}")
             print(f"Period: {self.config.start_date} to {self.config.end_date}")
             print(f"Total Timesteps: {self.config.total_timesteps}")
+            if self.config.use_lstm:
+                print(f"LSTM Features: Enabled (hidden_size={self.config.lstm_hidden_size}, layers={self.config.lstm_layers})")
             print(f"Save Directory: {self.save_dir}")
             print(f"{'='*60}\n")
 
