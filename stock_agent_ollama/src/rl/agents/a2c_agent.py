@@ -5,11 +5,41 @@ A2C (Advantage Actor-Critic) agent for trading.
 import numpy as np
 from typing import Optional, Dict, Any, Tuple
 from pathlib import Path
+import torch.nn as nn
 
 from stable_baselines3 import A2C
 from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
 from .base_agent import BaseRLAgent
+from ..networks import create_lstm_feature_extractor
+
+
+class LSTMFeaturesExtractor(BaseFeaturesExtractor):
+    """
+    Wrapper to make LSTM feature extractor compatible with Stable-Baselines3.
+    """
+
+    def __init__(
+        self,
+        observation_space,
+        features_dim: int = 128,
+        lstm_hidden_size: int = 64,
+        num_lstm_layers: int = 2,
+        use_attention: bool = False
+    ):
+        super().__init__(observation_space, features_dim)
+
+        self.lstm_extractor = create_lstm_feature_extractor(
+            observation_space=observation_space,
+            features_dim=features_dim,
+            lstm_hidden_size=lstm_hidden_size,
+            num_lstm_layers=num_lstm_layers,
+            use_attention=use_attention
+        )
+
+    def forward(self, observations):
+        return self.lstm_extractor(observations)
 
 
 class A2CAgent(BaseRLAgent):
@@ -33,6 +63,10 @@ class A2CAgent(BaseRLAgent):
         rms_prop_eps: float = 1e-5,
         use_rms_prop: bool = True,
         normalize_advantage: bool = False,
+        use_lstm: bool = False,
+        lstm_hidden_size: int = 64,
+        lstm_layers: int = 2,
+        features_dim: int = 128,
         verbose: int = 0,
         **kwargs
     ):
@@ -51,10 +85,31 @@ class A2CAgent(BaseRLAgent):
             rms_prop_eps: RMSProp epsilon
             use_rms_prop: Whether to use RMSProp optimizer
             normalize_advantage: Whether to normalize advantages
+            use_lstm: Whether to use LSTM feature extractor (hybrid architecture)
+            lstm_hidden_size: LSTM hidden state size (if use_lstm=True)
+            lstm_layers: Number of LSTM layers (if use_lstm=True)
+            features_dim: Feature dimension output from extractor
             verbose: Verbosity level
             **kwargs: Additional A2C parameters
         """
-        super().__init__(name="A2C")
+        super().__init__(name="A2C-LSTM" if use_lstm else "A2C")
+
+        # Configure policy kwargs for LSTM feature extractor
+        policy_kwargs = kwargs.pop('policy_kwargs', {})
+
+        if use_lstm:
+            # Use custom LSTM feature extractor
+            policy_kwargs['features_extractor_class'] = LSTMFeaturesExtractor
+            policy_kwargs['features_extractor_kwargs'] = {
+                'features_dim': features_dim,
+                'lstm_hidden_size': lstm_hidden_size,
+                'num_lstm_layers': lstm_layers,
+                'use_attention': False
+            }
+            # Configure actor-critic network architecture (post-LSTM)
+            policy_kwargs['net_arch'] = [
+                dict(pi=[128, 64], vf=[128, 64])  # Separate actor/critic networks
+            ]
 
         self.model = A2C(
             "MlpPolicy",
@@ -69,10 +124,12 @@ class A2CAgent(BaseRLAgent):
             rms_prop_eps=rms_prop_eps,
             use_rms_prop=use_rms_prop,
             normalize_advantage=normalize_advantage,
+            policy_kwargs=policy_kwargs,
             verbose=verbose,
             **kwargs
         )
 
+        self.use_lstm = use_lstm
         self.training_stats = {}
 
     def train(
