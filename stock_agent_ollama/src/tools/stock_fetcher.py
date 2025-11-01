@@ -40,19 +40,37 @@ class StockFetcher:
         return symbol
         
     def fetch_stock_data(
-        self, 
-        symbol: str, 
+        self,
+        symbol: str,
         period: str = "1y",
         interval: str = "1d",
-        force_refresh: bool = False
+        force_refresh: bool = False,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
     ) -> pd.DataFrame:
-        """Fetch stock data with caching"""
-        
+        """
+        Fetch stock data with caching.
+
+        Args:
+            symbol: Stock ticker symbol
+            period: Time period (e.g., "1y", "6mo") - ignored if start_date/end_date provided
+            interval: Data interval (e.g., "1d", "1h")
+            force_refresh: Force refresh from API
+            start_date: Start date in YYYY-MM-DD format (optional)
+            end_date: End date in YYYY-MM-DD format (optional)
+
+        Returns:
+            DataFrame with stock data
+        """
+
         # Validate and sanitize the symbol
         validated_symbol = self._validate_symbol(symbol)
-        
+
         # Generate cache key using validated symbol
-        cache_key = f"{validated_symbol}_{period}_{interval}"
+        if start_date and end_date:
+            cache_key = f"{validated_symbol}_{start_date}_{end_date}_{interval}"
+        else:
+            cache_key = f"{validated_symbol}_{period}_{interval}"
         
         # Check cache first (unless force refresh)
         if not force_refresh:
@@ -93,7 +111,12 @@ class StockFetcher:
         try:
             logger.info(f"Fetching fresh data for {validated_symbol}")
             ticker = yf.Ticker(validated_symbol)
-            data = ticker.history(period=period, interval=interval)
+
+            # Use start/end dates if provided, otherwise use period
+            if start_date and end_date:
+                data = ticker.history(start=start_date, end=end_date, interval=interval)
+            else:
+                data = ticker.history(period=period, interval=interval)
             
             if data.empty:
                 raise ValueError(f"No data found for symbol {validated_symbol}")
