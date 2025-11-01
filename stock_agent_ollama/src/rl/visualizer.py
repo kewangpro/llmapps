@@ -347,6 +347,167 @@ class RLVisualizer:
         return fig
 
     @staticmethod
+    def plot_action_timeline(
+        result: BacktestResult,
+        title: str = "Action Timeline"
+    ) -> go.Figure:
+        """
+        Plot equity curve with action markers over time.
+
+        Args:
+            result: Backtest result
+            title: Plot title
+
+        Returns:
+            Plotly figure
+        """
+        action_names = {
+            0: 'SELL',
+            1: 'HOLD',
+            2: 'BUY_SMALL',
+            3: 'BUY_LARGE'
+        }
+
+        action_colors = {
+            0: 'red',      # SELL
+            1: 'gray',     # HOLD
+            2: 'lightblue', # BUY_SMALL
+            3: 'blue'      # BUY_LARGE
+        }
+
+        fig = go.Figure()
+
+        # Portfolio value line
+        fig.add_trace(go.Scatter(
+            x=result.dates,
+            y=result.portfolio_values[1:],
+            mode='lines',
+            name='Portfolio Value',
+            line=dict(color='green', width=2),
+            hovertemplate='Date: %{x}<br>Value: $%{y:.2f}<extra></extra>'
+        ))
+
+        # Add action markers grouped by type
+        for action_id, action_name in action_names.items():
+            # Find indices where this action was taken
+            action_indices = [i for i, a in enumerate(result.actions) if a == action_id]
+
+            if action_indices:
+                action_dates = [result.dates[i] for i in action_indices]
+                action_values = [result.portfolio_values[i + 1] for i in action_indices]
+
+                fig.add_trace(go.Scatter(
+                    x=action_dates,
+                    y=action_values,
+                    mode='markers',
+                    name=action_name,
+                    marker=dict(
+                        size=8,
+                        color=action_colors[action_id],
+                        symbol='circle',
+                        line=dict(width=1, color='white')
+                    ),
+                    hovertemplate=f'{action_name}<br>Date: %{{x}}<br>Value: $%{{y:.2f}}<extra></extra>'
+                ))
+
+        fig.update_layout(
+            title=title,
+            xaxis_title="Date",
+            yaxis_title="Portfolio Value ($)",
+            template="plotly_white",
+            hovermode='closest',
+            height=450,
+            legend=dict(
+                yanchor="top",
+                y=0.99,
+                xanchor="right",
+                x=0.99
+            )
+        )
+
+        return fig
+
+    @staticmethod
+    def plot_action_comparison(
+        results: Dict[str, BacktestResult],
+        title: str = "Action Distribution Comparison"
+    ) -> go.Figure:
+        """
+        Plot stacked bar chart comparing action distributions across strategies.
+
+        Args:
+            results: Dictionary mapping strategy names to results
+            title: Plot title
+
+        Returns:
+            Plotly figure
+        """
+        action_names = {
+            0: 'SELL',
+            1: 'HOLD',
+            2: 'BUY_SMALL',
+            3: 'BUY_LARGE'
+        }
+
+        action_colors = {
+            'SELL': '#ef4444',
+            'HOLD': '#9ca3af',
+            'BUY_SMALL': '#60a5fa',
+            'BUY_LARGE': '#3b82f6'
+        }
+
+        strategy_names = list(results.keys())
+
+        # Count actions for each strategy
+        action_data = {action_name: [] for action_name in action_names.values()}
+
+        for strategy_name in strategy_names:
+            result = results[strategy_name]
+            action_counts = {action_name: 0 for action_name in action_names.values()}
+
+            for action in result.actions:
+                action_name = action_names.get(action, f'Action {action}')
+                action_counts[action_name] += 1
+
+            # Convert to percentages
+            total_actions = sum(action_counts.values())
+            for action_name in action_names.values():
+                percentage = (action_counts[action_name] / total_actions * 100) if total_actions > 0 else 0
+                action_data[action_name].append(percentage)
+
+        fig = go.Figure()
+
+        # Add bars for each action type
+        for action_name in ['SELL', 'HOLD', 'BUY_SMALL', 'BUY_LARGE']:
+            fig.add_trace(go.Bar(
+                name=action_name,
+                x=strategy_names,
+                y=action_data[action_name],
+                marker_color=action_colors[action_name],
+                text=[f'{v:.1f}%' for v in action_data[action_name]],
+                textposition='inside',
+                hovertemplate=f'{action_name}: %{{y:.1f}}%<extra></extra>'
+            ))
+
+        fig.update_layout(
+            title=title,
+            xaxis_title="Strategy",
+            yaxis_title="Percentage of Actions (%)",
+            barmode='stack',
+            template="plotly_white",
+            height=400,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            )
+        )
+
+        return fig
+
+    @staticmethod
     def create_comprehensive_report(
         result: BacktestResult,
         strategy_name: str = "Strategy"
