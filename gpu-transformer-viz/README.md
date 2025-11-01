@@ -142,7 +142,8 @@ gpu-transformer-viz/
 │   │   ├── .gitkeep
 │   │   ├── ExampleViz.tsx          # Example custom visualization
 │   │   ├── GradientBoostViz.tsx    # Gradient boosting visualization
-│   │   └── ShowingBubbleSortArrayViz.tsx  # Bubble sort visualization
+│   │   ├── BubbleSortViz.tsx       # Bubble sort visualization
+│   │   └── CostForecastViz.tsx     # Cost forecasting visualization
 │   ├── utils/
 │   │   └── customVizLoader.ts      # Dynamic component loader
 │   ├── App.tsx                     # Main app with navigation
@@ -209,14 +210,14 @@ See `CUSTOM_VIZ_GUIDE.md` for:
 - Best practices and tips
 - Example prompts and templates
 
-### File Naming
+### File Naming Convention
 
-File names are automatically generated from your prompt by:
-- Extracting meaningful keywords (filtering out "create", "show", "visualize", etc.)
-- Converting to PascalCase format
-- Adding "Viz" suffix
+Custom visualization files follow this naming pattern:
+- Use PascalCase format
+- Keep names concise and descriptive
+- Add "Viz" suffix to indicate it's a visualization component
 
-Examples: `LocalitySensitiveHashingViz.tsx`, `BinarySearchAlgorithmViz.tsx`, `BubbleSortViz.tsx`
+Examples: `BubbleSortViz.tsx`, `CostForecastViz.tsx`, `GradientBoostViz.tsx`
 
 ### Custom Visualization Format
 
