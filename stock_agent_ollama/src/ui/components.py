@@ -405,8 +405,8 @@ class StockAnalysisApp(param.Parameterized):
 
     def get_analysis_tab(self):
         """Get the analysis tab layout"""
-        return pn.Column(
-            pn.pane.HTML("<h3 style='margin: 0 0 15px 0; color: #374151;'>Stock Analysis</h3>"),
+        # Input controls section with similar style to RL Trading
+        input_section = pn.Column(
             pn.Row(
                 self.query_input,
                 self.submit_button,
@@ -414,30 +414,55 @@ class StockAnalysisApp(param.Parameterized):
                 sizing_mode="stretch_width"
             ),
             self.quick_buttons,
-            pn.layout.Divider(margin=(10, 0)),
+            styles=dict(background='#f9fafb', border_radius='8px', padding='15px'),
+            margin=(0, 0, 15, 0)
+        )
+
+        # Disclaimer at bottom
+        disclaimer_html = """
+        <div style='background: #fef3c7; border: 1px solid #fbbf24; padding: 15px; border-radius: 8px; margin-top: 20px;'>
+            <h4 style='margin: 0 0 10px 0; color: #92400e;'>⚠️ Educational Disclaimer</h4>
+            <ul style='margin: 0; padding-left: 20px; font-size: 12px; color: #78350f; line-height: 1.6;'>
+                <li><strong>Educational purpose only.</strong> Not financial advice.</li>
+                <li><strong>AI Analysis:</strong> Powered by Ollama and LSTM models for learning purposes</li>
+                <li><strong>Technical Indicators:</strong> Past performance doesn't guarantee future results</li>
+                <li><strong>Predictions:</strong> 30-day forecasts are experimental and for educational use only</li>
+            </ul>
+            <div style='margin-top: 8px; padding-top: 8px; border-top: 1px solid #fbbf24; font-size: 11px; color: #78350f;'>
+                Always consult qualified financial professionals before making investment decisions.
+            </div>
+        </div>
+        """
+
+        return pn.Column(
+            input_section,
             self.results_column,
+            pn.pane.HTML(disclaimer_html),
             sizing_mode="stretch_width",
         )
 
 
 def create_app():
     """Create and configure the Panel application with tabs"""
-    from src.ui.rl_components import create_compact_rl_panel
+    from src.ui.rl_components import CompactRLPanel
 
     # Create main app
     main_app = StockAnalysisApp()
 
+    # Create RL panel
+    rl_panel = CompactRLPanel()
+
     # Create tabs
     tabs = pn.Tabs(
         ('📊 Analysis', main_app.get_analysis_tab()),
-        ('🤖 RL Trading', create_compact_rl_panel()),
+        ('🤖 RL Trading', rl_panel.get_panel()),
         dynamic=True,
         sizing_mode="stretch_width",
         tabs_location='above',
         active=0
     )
 
-    # Main layout
+    # Main layout (no header)
     layout = pn.Column(
         tabs,
         sizing_mode="stretch_width",

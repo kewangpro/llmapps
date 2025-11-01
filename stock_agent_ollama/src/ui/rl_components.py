@@ -319,18 +319,20 @@ class CompactRLPanel(param.Parameterized):
 
     def get_panel(self):
         """Get the main panel."""
-        # Configuration card (compact)
-        config_card = pn.Card(
-            pn.pane.HTML("<h4 style='margin: 0 0 10px 0;'>Configuration</h4>"),
+        # Simplified configuration layout with stock selector
+        config_section = pn.Column(
             pn.Row(
                 pn.Column(
-                    pn.pane.HTML("<div style='font-size: 12px; color: #6b7280; margin-bottom: 5px;'>Stock Symbol</div>"),
-                    pn.widgets.Select.from_param(self.param.symbol, width=120, height=35),
+                    pn.pane.HTML("<div style='font-size: 12px; color: #6b7280; margin-bottom: 5px; font-weight: 500;'>Symbol</div>"),
+                    pn.widgets.Select.from_param(self.param.symbol, name='', width=120, height=35),
+                    width=150
                 ),
                 pn.Column(
-                    pn.pane.HTML("<div style='font-size: 12px; color: #6b7280; margin-bottom: 5px;'>Algorithm</div>"),
+                    pn.pane.HTML("<div style='font-size: 12px; color: #6b7280; margin-bottom: 5px; font-weight: 500;'>Algorithm</div>"),
                     self.agent_type,
+                    width=200
                 ),
+                align='start',
                 sizing_mode="stretch_width"
             ),
             pn.Row(
@@ -344,36 +346,30 @@ class CompactRLPanel(param.Parameterized):
                 sizing_mode="stretch_width"
             ),
             self.progress_bar,
-            title="⚙️ Settings",
-            collapsed=False,
-            collapsible=True,
-            header_background='#f3f4f6',
-            header_color='#374151',
+            styles=dict(background='#f9fafb', border_radius='8px', padding='15px'),
             margin=(0, 0, 15, 0)
         )
 
-        # Info card
-        info_html = """
-        <div style='background: #f0f9ff; border: 1px solid #bae6fd; padding: 15px; border-radius: 8px; margin-bottom: 15px;'>
-            <h4 style='margin: 0 0 10px 0; color: #0369a1;'>ℹ️ About RL Trading</h4>
-            <ul style='margin: 0; padding-left: 20px; font-size: 13px; color: #075985; line-height: 1.6;'>
-                <li><strong>Training:</strong> Teach AI agents to learn profitable trading strategies</li>
-                <li><strong>Backtesting:</strong> Compare strategies on historical data</li>
-                <li><strong>PPO:</strong> Stable, sample-efficient (recommended)</li>
-                <li><strong>A2C:</strong> Faster training, good for experimentation</li>
-                <li><strong>Training time:</strong> 5-10 minutes for 50k steps</li>
+        # Disclaimer at bottom (moved from top)
+        disclaimer_html = """
+        <div style='background: #fef3c7; border: 1px solid #fbbf24; padding: 15px; border-radius: 8px; margin-top: 20px;'>
+            <h4 style='margin: 0 0 10px 0; color: #92400e;'>⚠️ Educational Disclaimer</h4>
+            <ul style='margin: 0; padding-left: 20px; font-size: 12px; color: #78350f; line-height: 1.6;'>
+                <li><strong>Educational purpose only.</strong> Not financial advice.</li>
+                <li><strong>Training:</strong> AI agents learn from historical data (5-10 min for 50k steps)</li>
+                <li><strong>Backtesting:</strong> Past performance doesn't guarantee future results</li>
+                <li><strong>PPO:</strong> Stable, sample-efficient (recommended) • <strong>A2C:</strong> Faster, experimental</li>
             </ul>
-            <div style='margin-top: 10px; padding-top: 10px; border-top: 1px solid #bae6fd; font-size: 12px; color: #0c4a6e;'>
-                ⚠️ <strong>Educational purpose only.</strong> Not financial advice. Past performance doesn't guarantee future results.
+            <div style='margin-top: 8px; padding-top: 8px; border-top: 1px solid #fbbf24; font-size: 11px; color: #78350f;'>
+                Always consult qualified financial professionals before making investment decisions.
             </div>
         </div>
         """
 
         return pn.Column(
-            pn.pane.HTML("<h3 style='margin: 0 0 15px 0; color: #374151;'>🤖 Reinforcement Learning Trading</h3>"),
-            pn.pane.HTML(info_html),
-            config_card,
+            config_section,
             self.results_panel,
+            pn.pane.HTML(disclaimer_html),
             sizing_mode="stretch_width"
         )
 
