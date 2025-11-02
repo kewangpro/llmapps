@@ -36,6 +36,12 @@ class CompactRLPanel(param.Parameterized):
             button_style='outline'
         )
 
+        # LSTM feature extractor option
+        self.use_lstm = pn.widgets.Checkbox(
+            name='Use LSTM Features',
+            value=False
+        )
+
         self.training_days = pn.widgets.IntSlider(
             name='Training Period (days)',
             start=30,
@@ -114,6 +120,7 @@ class CompactRLPanel(param.Parameterized):
                     end_date=end_date,
                     agent_type=self.agent_type.value.lower(),
                     total_timesteps=self.timesteps.value,
+                    use_lstm=self.use_lstm.value,
                     verbose=1
                 )
 
@@ -153,6 +160,10 @@ class CompactRLPanel(param.Parameterized):
         self.results_panel.clear()
 
         # Summary card
+        agent_name = self.agent_type.value
+        if self.use_lstm.value:
+            agent_name += "-LSTM"
+
         summary_html = f"""
         <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                     color: white; padding: 20px; border-radius: 8px; margin-bottom: 15px;'>
@@ -160,7 +171,7 @@ class CompactRLPanel(param.Parameterized):
             <div style='display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;'>
                 <div>
                     <div style='opacity: 0.8; font-size: 12px;'>Agent</div>
-                    <div style='font-size: 20px; font-weight: bold;'>{self.agent_type.value}</div>
+                    <div style='font-size: 20px; font-weight: bold;'>{agent_name}</div>
                 </div>
                 <div>
                     <div style='opacity: 0.8; font-size: 12px;'>Stock</div>
@@ -189,7 +200,7 @@ class CompactRLPanel(param.Parameterized):
                 from src.rl import RLVisualizer
                 fig = RLVisualizer.plot_training_progress(
                     results['training_stats'],
-                    title=f"{self.agent_type.value} Training Progress - {self.symbol}"
+                    title=f"{agent_name} Training Progress - {self.symbol}"
                 )
                 self.results_panel.append(pn.pane.Plotly(fig, sizing_mode="stretch_width", height=350))
             except Exception as e:
@@ -198,6 +209,41 @@ class CompactRLPanel(param.Parameterized):
                     f"**Chart Error:** Could not create training progress chart: {str(e)}",
                     alert_type="warning"
                 ))
+
+    def _find_latest_model(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Find the most recently trained model for a symbol."""
+        models_dir = Path("data/models/rl")
+        if not models_dir.exists():
+            return None
+
+        # Find all model directories for this symbol
+        matching_dirs = []
+        for agent_type in ['ppo', 'a2c']:
+            pattern = f"{agent_type}_{symbol}_*"
+            matching_dirs.extend(models_dir.glob(pattern))
+
+        if not matching_dirs:
+            return None
+
+        # Sort by modification time (most recent first)
+        matching_dirs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+
+        # Check if final_model.zip exists in the most recent directory
+        latest_dir = matching_dirs[0]
+        model_path = latest_dir / "final_model.zip"
+
+        if not model_path.exists():
+            return None
+
+        # Extract agent type from directory name
+        dir_name = latest_dir.name
+        agent_type = 'ppo' if dir_name.startswith('ppo_') else 'a2c'
+
+        return {
+            'path': model_path,
+            'agent_type': agent_type,
+            'directory': latest_dir
+        }
 
     def _run_backtest(self, event):
         """Run backtest comparison."""
@@ -208,7 +254,7 @@ class CompactRLPanel(param.Parameterized):
 
         def backtest_thread():
             try:
-                from src.rl import BacktestEngine, BacktestConfig
+                from src.rl import BacktestEngine, BacktestConfig, RLTrainer
                 from src.rl.baselines import BuyHoldStrategy, MomentumStrategy
 
                 # Setup dates (last 6 months)
@@ -227,6 +273,33 @@ class CompactRLPanel(param.Parameterized):
                 # Run strategies
                 results = {}
 
+                # Check if there's a trained RL model for this symbol
+                model_info = self._find_latest_model(self.symbol)
+                if model_info:
+                    try:
+                        # Load the trained agent
+                        agent = RLTrainer.load_agent(
+                            model_path=model_info['path'],
+                            agent_type=model_info['agent_type'],
+                            env=engine.env
+                        )
+
+                        # Run backtest with the RL agent (deterministic mode)
+                        agent_name = f"{model_info['agent_type'].upper()} Agent"
+                        results[agent_name] = engine.run_agent_backtest(agent, deterministic=True)
+
+                        pn.state.execute(lambda: pn.state.notifications.info(
+                            f"Loaded trained {model_info['agent_type'].upper()} model",
+                            duration=3000
+                        ))
+                    except Exception as e:
+                        logger.error(f"Error loading RL agent: {e}", exc_info=True)
+                        pn.state.execute(lambda: pn.state.notifications.warning(
+                            f"Could not load RL agent: {str(e)}",
+                            duration=4000
+                        ))
+
+                # Run baseline strategies
                 buy_hold = BuyHoldStrategy()
                 results['Buy & Hold'] = engine.run_strategy_backtest(buy_hold.get_action)
 
@@ -284,6 +357,59 @@ class CompactRLPanel(param.Parameterized):
         metrics_html += "</tbody></table></div>"
         self.results_panel.append(pn.pane.HTML(metrics_html))
 
+        # Action Distribution Summary Table
+        action_names = {0: 'SELL', 1: 'HOLD', 2: 'BUY_SMALL', 3: 'BUY_LARGE'}
+        action_html = "<div style='overflow-x: auto; margin-top: 20px;'>"
+        action_html += "<h4 style='color: #374151; margin-bottom: 10px;'>🎯 Action Distribution</h4>"
+        action_html += "<table style='width: 100%; border-collapse: collapse; font-size: 13px;'>"
+        action_html += "<thead><tr style='background: #f3f4f6;'>"
+        action_html += "<th style='padding: 10px; text-align: left; border: 1px solid #e5e7eb;'>Strategy</th>"
+        action_html += "<th style='padding: 10px; text-align: center; border: 1px solid #e5e7eb;'>SELL</th>"
+        action_html += "<th style='padding: 10px; text-align: center; border: 1px solid #e5e7eb;'>HOLD</th>"
+        action_html += "<th style='padding: 10px; text-align: center; border: 1px solid #e5e7eb;'>BUY_SMALL</th>"
+        action_html += "<th style='padding: 10px; text-align: center; border: 1px solid #e5e7eb;'>BUY_LARGE</th>"
+        action_html += "<th style='padding: 10px; text-align: center; border: 1px solid #e5e7eb;'>Total Trades</th>"
+        action_html += "</tr></thead><tbody>"
+
+        for name, result in results.items():
+            # Count actions
+            action_counts = {action_name: 0 for action_name in action_names.values()}
+            for action in result.actions:
+                action_name = action_names.get(action, f'Action {action}')
+                action_counts[action_name] += 1
+
+            total_actions = sum(action_counts.values())
+            total_trades = len(result.trades)
+
+            action_html += f"<tr style='border: 1px solid #e5e7eb;'>"
+            action_html += f"<td style='padding: 10px; font-weight: bold;'>{name}</td>"
+
+            # Color code action counts
+            for action_name in ['SELL', 'HOLD', 'BUY_SMALL', 'BUY_LARGE']:
+                count = action_counts[action_name]
+                pct = (count / total_actions * 100) if total_actions > 0 else 0
+
+                # Color based on action type
+                if action_name == 'SELL':
+                    color = '#ef4444'
+                elif action_name == 'HOLD':
+                    color = '#6b7280'
+                elif action_name == 'BUY_SMALL':
+                    color = '#60a5fa'
+                else:  # BUY_LARGE
+                    color = '#3b82f6'
+
+                action_html += f"<td style='padding: 10px; text-align: center;'>"
+                action_html += f"<span style='color: {color}; font-weight: bold;'>{count}</span> "
+                action_html += f"<span style='color: #9ca3af; font-size: 11px;'>({pct:.0f}%)</span>"
+                action_html += "</td>"
+
+            action_html += f"<td style='padding: 10px; text-align: center; font-weight: bold; color: #059669;'>{total_trades}</td>"
+            action_html += "</tr>"
+
+        action_html += "</tbody></table></div>"
+        self.results_panel.append(pn.pane.HTML(action_html))
+
         # Charts
         try:
             from src.rl import RLVisualizer
@@ -296,6 +422,17 @@ class CompactRLPanel(param.Parameterized):
                 logger.error(f"Error plotting strategy comparison: {e}", exc_info=True)
                 self.results_panel.append(pn.pane.Alert(
                     f"**Chart Error:** Could not create strategy comparison chart: {str(e)}",
+                    alert_type="warning"
+                ))
+
+            # Action comparison chart
+            try:
+                fig_actions = RLVisualizer.plot_action_comparison(results, title="Action Distribution Comparison")
+                self.results_panel.append(pn.pane.Plotly(fig_actions, sizing_mode="stretch_width", height=400))
+            except Exception as e:
+                logger.error(f"Error plotting action comparison: {e}", exc_info=True)
+                self.results_panel.append(pn.pane.Alert(
+                    f"**Chart Error:** Could not create action comparison chart: {str(e)}",
                     alert_type="warning"
                 ))
 
@@ -332,6 +469,11 @@ class CompactRLPanel(param.Parameterized):
                     self.agent_type,
                     width=200
                 ),
+                pn.Column(
+                    pn.pane.HTML("<div style='font-size: 12px; color: #6b7280; margin-bottom: 5px; font-weight: 500;'>Features</div>"),
+                    self.use_lstm,
+                    width=180
+                ),
                 align='start',
                 sizing_mode="stretch_width"
             ),
@@ -359,6 +501,7 @@ class CompactRLPanel(param.Parameterized):
                 <li><strong>Training:</strong> AI agents learn from historical data (5-10 min for 50k steps)</li>
                 <li><strong>Backtesting:</strong> Past performance doesn't guarantee future results</li>
                 <li><strong>PPO:</strong> Stable, sample-efficient (recommended) • <strong>A2C:</strong> Faster, experimental</li>
+                <li><strong>LSTM Features:</strong> Hybrid architecture extracts temporal patterns (may increase training time)</li>
             </ul>
             <div style='margin-top: 8px; padding-top: 8px; border-top: 1px solid #fbbf24; font-size: 11px; color: #78350f;'>
                 Always consult qualified financial professionals before making investment decisions.
