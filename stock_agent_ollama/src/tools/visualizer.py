@@ -478,7 +478,144 @@ class Visualizer:
         )
         
         return fig
-    
+
+    def create_lstm_training_chart(
+        self,
+        training_histories: list,
+        symbol: str
+    ) -> go.Figure:
+        """Create LSTM training history visualization
+
+        Args:
+            training_histories: List of training histories from metadata
+            symbol: Stock symbol
+
+        Returns:
+            Plotly figure with training metrics
+        """
+        from plotly.subplots import make_subplots
+
+        if not training_histories or len(training_histories) == 0:
+            return self._create_empty_chart("No training history available")
+
+        # Create subplots: Loss and MAE
+        fig = make_subplots(
+            rows=2, cols=1,
+            subplot_titles=('Training & Validation Loss', 'Mean Absolute Error (MAE)'),
+            vertical_spacing=0.12,
+            specs=[[{"secondary_y": False}], [{"secondary_y": False}]]
+        )
+
+        # Average metrics across ensemble models
+        num_models = len(training_histories)
+        epochs = len(training_histories[0].get('loss', []))
+
+        # Initialize arrays for averaging
+        avg_loss = [0] * epochs
+        avg_val_loss = [0] * epochs
+        avg_mae = [0] * epochs
+        avg_val_mae = [0] * epochs
+
+        # Compute averages
+        for history in training_histories:
+            for i in range(epochs):
+                if 'loss' in history and i < len(history['loss']):
+                    avg_loss[i] += history['loss'][i]
+                if 'val_loss' in history and i < len(history['val_loss']):
+                    avg_val_loss[i] += history['val_loss'][i]
+                if 'mean_absolute_error' in history and i < len(history['mean_absolute_error']):
+                    avg_mae[i] += history['mean_absolute_error'][i]
+                if 'val_mean_absolute_error' in history and i < len(history['val_mean_absolute_error']):
+                    avg_val_mae[i] += history['val_mean_absolute_error'][i]
+
+        # Divide by number of models
+        avg_loss = [x / num_models for x in avg_loss]
+        avg_val_loss = [x / num_models for x in avg_val_loss]
+        avg_mae = [x / num_models for x in avg_mae]
+        avg_val_mae = [x / num_models for x in avg_val_mae]
+
+        epoch_range = list(range(1, epochs + 1))
+
+        # Plot 1: Loss
+        fig.add_trace(
+            go.Scatter(
+                x=epoch_range,
+                y=avg_loss,
+                mode='lines',
+                name='Training Loss',
+                line=dict(color='#3498db', width=2),
+                hovertemplate='Epoch %{x}<br>Loss: %{y:.4f}<extra></extra>'
+            ),
+            row=1, col=1
+        )
+
+        fig.add_trace(
+            go.Scatter(
+                x=epoch_range,
+                y=avg_val_loss,
+                mode='lines',
+                name='Validation Loss',
+                line=dict(color='#e74c3c', width=2, dash='dash'),
+                hovertemplate='Epoch %{x}<br>Val Loss: %{y:.4f}<extra></extra>'
+            ),
+            row=1, col=1
+        )
+
+        # Plot 2: MAE
+        fig.add_trace(
+            go.Scatter(
+                x=epoch_range,
+                y=avg_mae,
+                mode='lines',
+                name='Training MAE',
+                line=dict(color='#2ecc71', width=2),
+                hovertemplate='Epoch %{x}<br>MAE: %{y:.4f}<extra></extra>',
+                showlegend=True
+            ),
+            row=2, col=1
+        )
+
+        fig.add_trace(
+            go.Scatter(
+                x=epoch_range,
+                y=avg_val_mae,
+                mode='lines',
+                name='Validation MAE',
+                line=dict(color='#f39c12', width=2, dash='dash'),
+                hovertemplate='Epoch %{x}<br>Val MAE: %{y:.4f}<extra></extra>',
+                showlegend=True
+            ),
+            row=2, col=1
+        )
+
+        # Update axes
+        fig.update_xaxes(title_text="Epoch", row=1, col=1)
+        fig.update_xaxes(title_text="Epoch", row=2, col=1)
+        fig.update_yaxes(title_text="Loss", row=1, col=1)
+        fig.update_yaxes(title_text="MAE", row=2, col=1)
+
+        # Update layout
+        fig.update_layout(
+            title=dict(
+                text=f'LSTM Training History - {symbol}<br><sub>Ensemble of {num_models} models, {epochs} epochs</sub>',
+                x=0.5,
+                xanchor='center'
+            ),
+            height=600,
+            template="plotly_white",
+            hovermode='x unified',
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            margin=dict(l=60, r=50, t=100, b=60)
+        )
+
+        return fig
+
     def _create_empty_chart(self, message: str) -> go.Figure:
         """Create empty chart with message"""
         fig = go.Figure()

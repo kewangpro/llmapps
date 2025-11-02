@@ -25,12 +25,13 @@ class LSTMPredictor:
         raise NotImplementedError("prepare_data is now handled internally by LSTMPredictionService.train_ensemble or .predict")
         
     def train_ensemble(
-        self, 
-        data: pd.DataFrame, 
+        self,
+        data: pd.DataFrame,
         symbol: str,
         validation_split: float = 0.2,
         epochs: int = None,
-        batch_size: int = None
+        batch_size: int = None,
+        progress_callback: Any = None
     ) -> Dict[str, Any]:
         """Train ensemble of LSTM models"""
         return self.service.train_ensemble(
@@ -38,7 +39,8 @@ class LSTMPredictor:
             symbol=symbol,
             validation_split=validation_split,
             epochs=epochs,
-            batch_size=batch_size
+            batch_size=batch_size,
+            progress_callback=progress_callback
         )
 
     def predict(
