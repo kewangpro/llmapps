@@ -52,6 +52,7 @@ Type natural language queries in the input box:
 2. **Configure**:
    - **Symbol**: Select stock from dropdown (AAPL, MSFT, GOOGL, AMZN, TSLA, META, NVDA, ORCL)
    - **Algorithm**: Choose PPO (recommended, stable) or A2C (faster, experimental)
+   - **LSTM Features**: Enable checkbox for temporal pattern extraction (optional, hybrid architecture)
    - **Training Days**: 365 days (default, recommended)
    - **Training Steps**: 50,000 (default, 5-10 minutes training time)
 3. **Train**: Click "🚀 Start Training"
@@ -66,10 +67,13 @@ Type natural language queries in the input box:
 1. **Select Stock**: Choose symbol from dropdown (top of RL Trading tab)
 2. **Click**: "📊 Run Backtest"
 3. **Wait**: ~30 seconds
-4. **Results**:
-   - Comparison table (Buy & Hold vs Momentum strategies)
+4. **Auto-Load**: Automatically loads your most recent trained RL agent (if available)
+5. **Results**:
+   - Comparison table (RL Agent vs Buy & Hold vs Momentum strategies)
+   - Action distribution table (SELL/HOLD/BUY_SMALL/BUY_LARGE counts and percentages)
    - Performance metrics: Return, Sharpe ratio, Max drawdown, Win rate
    - Performance comparison chart (portfolio value over time)
+   - Action distribution comparison chart (stacked bar chart)
    - Metrics bar chart (side-by-side comparison)
 
 ### Understanding Results
@@ -102,11 +106,13 @@ Type natural language queries in the input box:
 ### RL Trading
 - ✅ **PPO** is recommended for stable, reliable strategies
 - ✅ **A2C** is faster for quick experiments
+- ✅ **LSTM Features** extract temporal patterns (may increase training time)
 - ✅ **365 days** of training data balances learning vs. overfitting
 - ✅ **50,000 steps** is a good default (balance of time vs. performance)
 - ✅ Training runs in background - UI stays responsive
 - ✅ Models are saved automatically - reusable across sessions
-- ✅ Backtests compare strategies on last 6 months of data
+- ✅ Backtests auto-load trained models and compare against baselines
+- ✅ Action visualization shows SELL/HOLD/BUY_SMALL/BUY_LARGE decisions
 
 ### Performance
 - ⚡ Stock data caches for faster repeated queries
@@ -341,7 +347,6 @@ Type natural language queries in the input box:
 ### Documentation
 - **README.md**: Complete project overview, features, architecture
 - **RL_DESIGN.md**: Detailed RL system design and components
-- **UI_IMPROVEMENTS.md**: UI architecture and design decisions
 
 ### Key Files
 - **Models**: `data/models/lstm/` (LSTM models) and `data/models/rl/` (RL agents)

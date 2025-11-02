@@ -18,8 +18,10 @@ An intelligent financial platform combining **AI-powered analysis**, **LSTM neur
 
 ### 🎮 Reinforcement Learning Trading
 - **🚀 RL Agents**: Train intelligent trading agents using PPO and A2C algorithms
+- **🧠 LSTM Features**: Optional LSTM feature extractor for temporal pattern recognition (hybrid architecture)
 - **📊 Backtesting Engine**: Test strategies on historical data with comprehensive metrics
-- **⚖️ Strategy Comparison**: Compare RL agents against baseline strategies (Buy & Hold, Momentum)
+- **🎯 Action Analysis**: Visualize trading decisions (SELL/HOLD/BUY_SMALL/BUY_LARGE) with action distribution charts
+- **⚖️ Strategy Comparison**: Auto-loads trained models and compares against baseline strategies (Buy & Hold, Momentum)
 - **📈 Performance Metrics**: Sharpe ratio, Sortino ratio, Calmar ratio, max drawdown, win rate, and more
 - **🎯 Custom Environments**: Realistic trading simulation with transaction costs and slippage
 
@@ -60,15 +62,17 @@ python src/main.py
 **Train RL Agents:**
 1. Select stock symbol (AAPL, MSFT, GOOGL, etc.)
 2. Choose algorithm (PPO or A2C)
-3. Set training period (30-730 days)
-4. Configure training steps (10k-100k)
-5. Click "Start Training" and watch the agent learn
+3. Enable LSTM Features (optional, for temporal pattern extraction)
+4. Set training period (30-730 days)
+5. Configure training steps (10k-100k)
+6. Click "Start Training" and watch the agent learn
 
 **Backtest Strategies:**
 1. Select stock symbol
 2. Click "Run Backtest"
-3. Compare RL strategies against Buy & Hold and Momentum baselines
-4. Analyze performance metrics and visualizations
+3. Automatically loads trained model if available
+4. Compare RL agents against Buy & Hold and Momentum baselines
+5. Analyze action distribution charts and performance metrics
 
 ## 🏗️ Architecture
 
@@ -145,22 +149,16 @@ stock_agent_ollama/
 │   │   ├── technical_analysis.py   # Indicators & signals
 │   │   └── conversation_manager.py # Session management
 │   ├── rl/                         # Reinforcement Learning
-│   │   ├── environments/           # Trading environments
-│   │   │   ├── base_env.py         # Base trading environment
-│   │   │   └── single_stock_env.py # Single stock environment
-│   │   ├── agents/                 # RL agents
-│   │   │   ├── ppo_agent.py        # PPO agent
-│   │   │   └── a2c_agent.py        # A2C agent
-│   │   ├── training/               # Training pipeline
-│   │   │   ├── trainer.py          # Training orchestrator
-│   │   │   ├── callbacks.py        # Training callbacks
-│   │   │   └── reward_functions.py # Reward engineering
-│   │   ├── backtesting/            # Backtesting engine
-│   │   │   ├── backtest_engine.py  # Strategy backtesting
-│   │   │   └── metrics_calculator.py # Performance metrics
-│   │   └── baselines/              # Baseline strategies
-│   │       ├── buy_hold.py         # Buy and hold strategy
-│   │       └── momentum.py         # Momentum strategy
+│   │   ├── agents/                 # RL agents (PPO, A2C)
+│   │   │   ├── base_agent.py       # Base agent interface
+│   │   │   ├── ppo_agent.py        # PPO agent implementation
+│   │   │   └── a2c_agent.py        # A2C agent implementation
+│   │   ├── environments.py         # Trading environments (Base + SingleStock)
+│   │   ├── training.py             # Training pipeline (Trainer + Callbacks + Rewards)
+│   │   ├── backtesting.py          # Backtesting (Engine + Metrics Calculator)
+│   │   ├── baselines.py            # Baseline strategies (Buy&Hold, Momentum)
+│   │   ├── networks.py             # Neural networks (LSTM feature extractor)
+│   │   └── visualizer.py           # RL visualization tools
 │   └── ui/                         # User interface
 │       ├── components.py           # Main UI components
 │       └── rl_components.py        # RL trading UI
@@ -241,7 +239,7 @@ tail -f data/logs/app.log
 
 # Test RL environment
 python -c "
-from src.rl.environments import SingleStockTradingEnv
+from src.rl import SingleStockTradingEnv
 from datetime import datetime, timedelta
 
 end_date = datetime.now().strftime('%Y-%m-%d')
@@ -271,10 +269,12 @@ print(f'✅ Environment created with {env.max_steps} steps')
 
 ### Reinforcement Learning
 - **State-of-the-Art Algorithms**: PPO and A2C from Stable-Baselines3
+- **Hybrid Architecture**: Optional LSTM feature extractor for temporal pattern recognition
 - **Realistic Environments**: Transaction costs, slippage, and position limits
 - **Multiple Reward Functions**: Simple returns, risk-adjusted, and customizable
 - **Comprehensive Backtesting**: 15+ performance metrics including Sharpe, Sortino, Calmar ratios
-- **Baseline Comparisons**: Evaluate RL agents against traditional strategies
+- **Action Visualization**: See exactly what decisions agents make (SELL/HOLD/BUY_SMALL/BUY_LARGE)
+- **Baseline Comparisons**: Auto-loads trained models and evaluates against traditional strategies
 
 ### User Experience
 - **Tabbed Interface**: Separate workflows for analysis and RL trading
@@ -288,6 +288,7 @@ print(f'✅ Environment created with {env.max_steps} steps')
 1. **Select Parameters**:
    - Symbol: AAPL, MSFT, GOOGL, etc.
    - Algorithm: PPO (recommended) or A2C
+   - LSTM Features: Enable for temporal pattern extraction (optional)
    - Training Period: 365 days (recommended)
    - Training Steps: 50,000 (5-10 minutes)
 
@@ -303,11 +304,14 @@ print(f'✅ Environment created with {env.max_steps} steps')
 
 ### Backtesting Workflow
 1. **Run Backtest**: Tests strategies on last 6 months of data
-2. **Compare Metrics**: Side-by-side comparison table
-3. **Analyze Charts**:
+2. **Auto-Load Model**: Automatically loads your most recent trained agent for the selected symbol
+3. **Compare Metrics**: Side-by-side comparison table (RL Agent vs Buy & Hold vs Momentum)
+4. **Action Analysis**: View action distribution table showing SELL/HOLD/BUY_SMALL/BUY_LARGE counts
+5. **Analyze Charts**:
    - Portfolio value over time
+   - Action distribution comparison (stacked bar chart)
    - Drawdown curves
-   - Performance metrics radar chart
+   - Performance metrics comparison
 
 ### Performance Metrics Explained
 - **Total Return**: Overall percentage gain/loss

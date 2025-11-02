@@ -33,12 +33,15 @@ This RL trading system adds advanced reinforcement learning capabilities to the 
 ### Key Features
 
 ✅ **RL Agents**: PPO and A2C algorithms via Stable-Baselines3
+✅ **LSTM Features**: Optional LSTM feature extractor for temporal pattern extraction (hybrid architecture)
 ✅ **Trading Environment**: Gymnasium-based single-stock trading simulation
 ✅ **Reward Engineering**: Multiple reward functions (simple, risk-adjusted, customizable)
 ✅ **Backtesting**: Comprehensive performance evaluation with 15+ metrics
+✅ **Action Analysis**: Visualize trading decisions with action distribution charts
+✅ **Auto-Load Models**: Automatically loads trained models for backtesting
 ✅ **Baseline Strategies**: Buy-and-hold and momentum for comparison
 ✅ **Interactive UI**: Panel-based web interface for training and backtesting
-✅ **Visualization**: Training progress, equity curves, drawdown charts
+✅ **Visualization**: Training progress, equity curves, action distributions, drawdown charts
 
 ### Design Philosophy
 
@@ -57,35 +60,30 @@ This RL trading system adds advanced reinforcement learning capabilities to the 
 ```
 src/rl/
 ├── __init__.py                 # Main RL module exports
-├── environments/               # Trading environments
-│   ├── base_env.py            # Base Gymnasium environment
-│   └── single_stock_env.py    # Single-stock trading environment
 ├── agents/                     # RL algorithms
 │   ├── base_agent.py          # Agent interface
 │   ├── ppo_agent.py           # PPO implementation
 │   ├── a2c_agent.py           # A2C implementation
 │   └── __init__.py
-├── training/                   # Training pipeline
-│   ├── trainer.py             # Training orchestrator
-│   ├── callbacks.py           # Progress tracking callbacks
-│   ├── reward_functions.py    # Reward engineering
-│   └── __init__.py
-├── backtesting/               # Strategy evaluation
-│   ├── backtest_engine.py     # Backtesting framework
-│   ├── metrics_calculator.py  # Performance metrics
-│   └── __init__.py
-├── baselines/                 # Baseline strategies
-│   ├── buy_hold.py           # Buy-and-hold strategy
-│   ├── momentum.py           # Momentum trading
-│   └── __init__.py
-├── comparison/                # Strategy comparison (reserved)
-└── visualizer.py              # RL-specific visualizations
+├── environments.py             # Trading environments (Base + SingleStock)
+├── training.py                 # Training pipeline (Trainer + Callbacks + Rewards)
+├── backtesting.py              # Backtesting (Engine + Metrics Calculator)
+├── baselines.py                # Baseline strategies (Buy&Hold, Momentum)
+├── networks.py                 # Neural networks (LSTM feature extractor)
+└── visualizer.py               # RL-specific visualizations
 
 src/ui/
 └── rl_components.py           # Panel UI for RL features
 
 src/config.py                  # RL configuration added
 ```
+
+**Note**: The module structure has been simplified by merging related files:
+- **environments.py**: Contains `BaseTradingEnv` and `SingleStockTradingEnv`
+- **training.py**: Contains `RLTrainer`, training callbacks, and reward functions
+- **backtesting.py**: Contains `BacktestEngine` and `MetricsCalculator`
+- **baselines.py**: Contains `BuyHoldStrategy` and `MomentumStrategy`
+- **networks.py**: Contains LSTM feature extractor for hybrid architecture
 
 ### Data Flow
 
@@ -128,7 +126,7 @@ Results Display (UI)
 
 ### 1. Trading Environment
 
-**File**: `src/rl/environments/single_stock_env.py`
+**File**: `src/rl/environments.py`
 
 #### Observation Space
 
@@ -235,7 +233,7 @@ reward = (
 
 ### 3. Training Pipeline
 
-**File**: `src/rl/training/trainer.py`
+**File**: `src/rl/training.py`
 
 #### Training Configuration
 
@@ -296,7 +294,7 @@ results = trainer.train()
 
 ### 4. Backtesting Engine
 
-**File**: `src/rl/backtesting/backtest_engine.py`
+**File**: `src/rl/backtesting.py`
 
 #### Performance Metrics (15+)
 
@@ -363,7 +361,7 @@ df = result.equity_curve
 
 #### Buy-and-Hold
 
-**File**: `src/rl/baselines/buy_hold.py`
+**File**: `src/rl/baselines.py`
 
 **Logic**:
 1. Buy large (30% of capital) on first step
@@ -374,7 +372,7 @@ df = result.equity_curve
 
 #### Momentum
 
-**File**: `src/rl/baselines/momentum.py`
+**File**: `src/rl/baselines.py`
 
 **Logic**:
 1. Calculate price momentum over lookback period
@@ -693,7 +691,7 @@ def create_agent(agent_type, env, **kwargs):
 ### Adding New Baseline Strategies
 
 ```python
-# src/rl/baselines/my_strategy.py
+# Add to src/rl/baselines.py
 class MyStrategy:
     def __init__(self, param1, param2):
         self.param1 = param1
@@ -711,7 +709,7 @@ class MyStrategy:
 ### Adding New Reward Functions
 
 ```python
-# src/rl/training/reward_functions.py
+# Add to src/rl/training.py
 class MyRewardFunction(RewardFunction):
     def calculate(self, portfolio_value, action, **kwargs):
         # Custom reward calculation
@@ -727,7 +725,7 @@ def get_reward_function(reward_type, **kwargs):
 ### Adding New Metrics
 
 ```python
-# src/rl/backtesting/metrics_calculator.py
+# Add to src/rl/backtesting.py (MetricsCalculator class)
 @staticmethod
 def calculate_my_metric(portfolio_values, trades):
     # Custom metric calculation
