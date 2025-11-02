@@ -166,30 +166,15 @@ class CompactRLPanel(param.Parameterized):
 
         summary_html = f"""
         <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white; padding: 20px; border-radius: 8px; margin-bottom: 15px;'>
-            <h3 style='margin: 0 0 15px 0;'>✅ Training Complete</h3>
-            <div style='display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;'>
-                <div>
-                    <div style='opacity: 0.8; font-size: 12px;'>Agent</div>
-                    <div style='font-size: 20px; font-weight: bold;'>{agent_name}</div>
-                </div>
-                <div>
-                    <div style='opacity: 0.8; font-size: 12px;'>Stock</div>
-                    <div style='font-size: 20px; font-weight: bold;'>{self.symbol}</div>
-                </div>
-                <div>
-                    <div style='opacity: 0.8; font-size: 12px;'>Episodes</div>
-                    <div style='font-size: 20px; font-weight: bold;'>{results.get('total_episodes', 0)}</div>
-                </div>
-                <div>
-                    <div style='opacity: 0.8; font-size: 12px;'>Time</div>
-                    <div style='font-size: 20px; font-weight: bold;'>{results.get('training_time', 0):.1f}s</div>
-                </div>
-            </div>
-            <div style='margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.2);
-                        font-size: 13px; opacity: 0.9;'>
-                Model saved: {Path(results.get('final_model_path', '')).name}
-            </div>
+                    color: white; padding: 12px; border-radius: 8px; margin-bottom: 10px;'>
+            <h3 style='margin: 0;'>✅ Training Complete</h3>
+            <p style='margin: 5px 0 0 0; font-size: 0.9em; opacity: 0.9;'>
+                Agent: {agent_name} |
+                Stock: {self.symbol} |
+                Episodes: {results.get('total_episodes', 0)} |
+                Time: {results.get('training_time', 0):.1f}s |
+                Model: {Path(results.get('final_model_path', '')).name}
+            </p>
         </div>
         """
         self.results_panel.append(pn.pane.HTML(summary_html))
@@ -333,45 +318,27 @@ class CompactRLPanel(param.Parameterized):
         """
         self.results_panel.append(pn.pane.HTML(header_html))
 
-        # Metrics comparison table (compact)
-        metrics_html = "<div style='overflow-x: auto;'><table style='width: 100%; border-collapse: collapse; font-size: 13px;'>"
-        metrics_html += "<thead><tr style='background: #f3f4f6;'>"
-        metrics_html += "<th style='padding: 10px; text-align: left; border: 1px solid #e5e7eb;'>Strategy</th>"
-        metrics_html += "<th style='padding: 10px; text-align: right; border: 1px solid #e5e7eb;'>Return</th>"
-        metrics_html += "<th style='padding: 10px; text-align: right; border: 1px solid #e5e7eb;'>Sharpe</th>"
-        metrics_html += "<th style='padding: 10px; text-align: right; border: 1px solid #e5e7eb;'>Max DD</th>"
-        metrics_html += "<th style='padding: 10px; text-align: right; border: 1px solid #e5e7eb;'>Win Rate</th>"
-        metrics_html += "</tr></thead><tbody>"
+        # Combined Metrics and Action Distribution Table
+        action_names = {0: 'SELL', 1: 'HOLD', 2: 'BUY_SMALL', 3: 'BUY_LARGE'}
+
+        combined_html = "<div style='overflow-x: auto;'><table style='width: 100%; border-collapse: collapse; font-size: 13px;'>"
+        combined_html += "<thead><tr style='background: #f3f4f6;'>"
+        combined_html += "<th style='padding: 10px; text-align: left; border: 1px solid #e5e7eb;'>Strategy</th>"
+        combined_html += "<th style='padding: 10px; text-align: right; border: 1px solid #e5e7eb;'>Return</th>"
+        combined_html += "<th style='padding: 10px; text-align: right; border: 1px solid #e5e7eb;'>Sharpe</th>"
+        combined_html += "<th style='padding: 10px; text-align: right; border: 1px solid #e5e7eb;'>Max DD</th>"
+        combined_html += "<th style='padding: 10px; text-align: right; border: 1px solid #e5e7eb;'>Win Rate</th>"
+        combined_html += "<th style='padding: 10px; text-align: center; border: 1px solid #e5e7eb;'>SELL</th>"
+        combined_html += "<th style='padding: 10px; text-align: center; border: 1px solid #e5e7eb;'>HOLD</th>"
+        combined_html += "<th style='padding: 10px; text-align: center; border: 1px solid #e5e7eb;'>BUY_S</th>"
+        combined_html += "<th style='padding: 10px; text-align: center; border: 1px solid #e5e7eb;'>BUY_L</th>"
+        combined_html += "<th style='padding: 10px; text-align: center; border: 1px solid #e5e7eb;'>Executed</th>"
+        combined_html += "</tr></thead><tbody>"
 
         for name, result in results.items():
             m = result.metrics
             return_color = '#10b981' if m.total_return_pct >= 0 else '#ef4444'
-            metrics_html += f"<tr style='border: 1px solid #e5e7eb;'>"
-            metrics_html += f"<td style='padding: 10px; font-weight: bold;'>{name}</td>"
-            metrics_html += f"<td style='padding: 10px; text-align: right; color: {return_color}; font-weight: bold;'>{m.total_return_pct:+.2f}%</td>"
-            metrics_html += f"<td style='padding: 10px; text-align: right;'>{m.sharpe_ratio:.2f}</td>"
-            metrics_html += f"<td style='padding: 10px; text-align: right; color: #ef4444;'>{abs(m.max_drawdown)*100:.2f}%</td>"
-            metrics_html += f"<td style='padding: 10px; text-align: right;'>{m.win_rate*100:.0f}%</td>"
-            metrics_html += "</tr>"
 
-        metrics_html += "</tbody></table></div>"
-        self.results_panel.append(pn.pane.HTML(metrics_html))
-
-        # Action Distribution Summary Table
-        action_names = {0: 'SELL', 1: 'HOLD', 2: 'BUY_SMALL', 3: 'BUY_LARGE'}
-        action_html = "<div style='overflow-x: auto; margin-top: 20px;'>"
-        action_html += "<h4 style='color: #374151; margin-bottom: 10px;'>🎯 Action Distribution</h4>"
-        action_html += "<table style='width: 100%; border-collapse: collapse; font-size: 13px;'>"
-        action_html += "<thead><tr style='background: #f3f4f6;'>"
-        action_html += "<th style='padding: 10px; text-align: left; border: 1px solid #e5e7eb;'>Strategy</th>"
-        action_html += "<th style='padding: 10px; text-align: center; border: 1px solid #e5e7eb;'>SELL</th>"
-        action_html += "<th style='padding: 10px; text-align: center; border: 1px solid #e5e7eb;'>HOLD</th>"
-        action_html += "<th style='padding: 10px; text-align: center; border: 1px solid #e5e7eb;'>BUY_SMALL</th>"
-        action_html += "<th style='padding: 10px; text-align: center; border: 1px solid #e5e7eb;'>BUY_LARGE</th>"
-        action_html += "<th style='padding: 10px; text-align: center; border: 1px solid #e5e7eb;'>Total Trades</th>"
-        action_html += "</tr></thead><tbody>"
-
-        for name, result in results.items():
             # Count actions
             action_counts = {action_name: 0 for action_name in action_names.values()}
             for action in result.actions:
@@ -381,10 +348,14 @@ class CompactRLPanel(param.Parameterized):
             total_actions = sum(action_counts.values())
             total_trades = len(result.trades)
 
-            action_html += f"<tr style='border: 1px solid #e5e7eb;'>"
-            action_html += f"<td style='padding: 10px; font-weight: bold;'>{name}</td>"
+            combined_html += f"<tr style='border: 1px solid #e5e7eb;'>"
+            combined_html += f"<td style='padding: 10px; font-weight: bold;'>{name}</td>"
+            combined_html += f"<td style='padding: 10px; text-align: right; color: {return_color}; font-weight: bold;'>{m.total_return_pct:+.2f}%</td>"
+            combined_html += f"<td style='padding: 10px; text-align: right;'>{m.sharpe_ratio:.2f}</td>"
+            combined_html += f"<td style='padding: 10px; text-align: right; color: #ef4444;'>{abs(m.max_drawdown)*100:.2f}%</td>"
+            combined_html += f"<td style='padding: 10px; text-align: right;'>{m.win_rate*100:.0f}%</td>"
 
-            # Color code action counts
+            # Add action counts with colors
             for action_name in ['SELL', 'HOLD', 'BUY_SMALL', 'BUY_LARGE']:
                 count = action_counts[action_name]
                 pct = (count / total_actions * 100) if total_actions > 0 else 0
@@ -399,16 +370,16 @@ class CompactRLPanel(param.Parameterized):
                 else:  # BUY_LARGE
                     color = '#3b82f6'
 
-                action_html += f"<td style='padding: 10px; text-align: center;'>"
-                action_html += f"<span style='color: {color}; font-weight: bold;'>{count}</span> "
-                action_html += f"<span style='color: #9ca3af; font-size: 11px;'>({pct:.0f}%)</span>"
-                action_html += "</td>"
+                combined_html += f"<td style='padding: 10px; text-align: center;'>"
+                combined_html += f"<span style='color: {color}; font-weight: bold;'>{count}</span> "
+                combined_html += f"<span style='color: #9ca3af; font-size: 11px;'>({pct:.0f}%)</span>"
+                combined_html += "</td>"
 
-            action_html += f"<td style='padding: 10px; text-align: center; font-weight: bold; color: #059669;'>{total_trades}</td>"
-            action_html += "</tr>"
+            combined_html += f"<td style='padding: 10px; text-align: center; font-weight: bold; color: #059669;'>{total_trades}</td>"
+            combined_html += "</tr>"
 
-        action_html += "</tbody></table></div>"
-        self.results_panel.append(pn.pane.HTML(action_html))
+        combined_html += "</tbody></table></div>"
+        self.results_panel.append(pn.pane.HTML(combined_html))
 
         # Charts
         try:
