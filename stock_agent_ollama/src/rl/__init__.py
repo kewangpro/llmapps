@@ -12,7 +12,7 @@ This module provides a complete RL trading framework including:
 
 from .environments import SingleStockTradingEnv, BaseTradingEnv, TradingAction
 from .agents import PPOAgent, A2CAgent, create_agent
-from .training import RLTrainer, TrainingConfig, RewardConfig
+from .training import RLTrainer, TrainingConfig, RewardConfig, get_reward_function
 from .backtesting import BacktestEngine, BacktestConfig, PerformanceMetrics
 from .baselines import BuyHoldStrategy, MomentumStrategy
 from .visualizer import RLVisualizer
