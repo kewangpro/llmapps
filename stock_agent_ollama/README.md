@@ -24,6 +24,9 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 - **AI-Powered Analysis** with natural language insights
 - **Trading Signals** (BUY/SELL/HOLD) with confidence scores
 
+![Stock Analysis Screenshot](docs/screenshots/analysis.png)
+*Stock analysis with interactive charts, technical indicators, and AI-powered insights*
+
 ### 🤖 Reinforcement Learning Trading
 - **Train RL Agents** using PPO and A2C algorithms
 - **LSTM Hybrid Architecture** for temporal pattern extraction
@@ -31,6 +34,9 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 - **Strategy Comparison** against Buy & Hold and Momentum baselines
 - **Performance Metrics** (Returns, Sharpe Ratio, Max Drawdown, Win Rate)
 - **Action Analysis** (SELL, HOLD, BUY_SMALL, BUY_LARGE distribution)
+
+![RL Trading Screenshot](docs/screenshots/rl_trading.png)
+*Train and backtest RL agents with comprehensive performance metrics and strategy comparison*
 
 ### 🗂️ Model Registry
 - **LSTM Models** with performance metrics (Final Loss, Val Loss)
