@@ -312,13 +312,22 @@ class StockAnalysisApp(param.Parameterized):
         change_color = Colors.SUCCESS_GREEN if change >= 0 else Colors.DANGER_RED
         change_symbol = '▲' if change >= 0 else '▼'
 
+        # Helper function to format values safely
+        def format_value(value, prefix="", suffix="", decimals=2, is_number=False):
+            if value is None or (isinstance(value, (int, float)) and value == 0 and not is_number):
+                return "N/A"
+            if is_number:
+                return f"{prefix}{value:,.{decimals}f}{suffix}" if isinstance(value, float) else f"{prefix}{value:,}{suffix}"
+            return f"{prefix}{value}{suffix}"
+
+        market_cap = current_data.get('market_cap')
         stats = {
-            "Market Cap": f"${current_data.get('market_cap', 0) / 1e9:.2f}B",
-            "P/E Ratio": f"{stock_info.get('trailingPE', 'N/A')}",
-            "EPS": f"${stock_info.get('trailingEps', 'N/A')}",
-            "52-Wk High": f"${stock_info.get('fiftyTwoWeekHigh', 'N/A')}",
-            "52-Wk Low": f"${stock_info.get('fiftyTwoWeekLow', 'N/A')}",
-            "Avg Volume": f"{current_data.get('average_volume', 0):,}"
+            "Market Cap": format_value(market_cap / 1e9 if market_cap else None, "$", "B", 2, True),
+            "P/E Ratio": format_value(stock_info.get('trailingPE'), "", "", 2, True),
+            "EPS": format_value(stock_info.get('trailingEps'), "$", "", 2, True),
+            "52-Wk High": format_value(stock_info.get('fiftyTwoWeekHigh'), "$", "", 2, True),
+            "52-Wk Low": format_value(stock_info.get('fiftyTwoWeekLow'), "$", "", 2, True),
+            "Avg Volume": format_value(stock_info.get('averageVolume'), "", "", 0, True)
         }
 
         stats_html = "".join([f"<div style='text-align: right;'><div style='font-size: 0.7rem; color: {Colors.TEXT_SECONDARY};'>{k}</div><div style='font-size: 0.9rem; font-weight: 600; font-family: monospace;'>{v}</div></div>" for k, v in stats.items()])
