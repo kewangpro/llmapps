@@ -473,7 +473,6 @@ class CompactRLPanel(param.Parameterized):
             margin=(0, 0, 15, 0)
         )
 
-        # Disclaimer at bottom (moved from top)
         disclaimer_html = """
         <div style='background: #F8F9FA;
                     border-top: 1px solid #DEE2E6;
@@ -481,10 +480,7 @@ class CompactRLPanel(param.Parameterized):
                     text-align: center;
                     font-size: 11px;
                     color: #6C757D;
-                    margin-top: 40px;
-                    position: relative;
-                    bottom: 0;
-                    width: 100%;'>
+                    margin-top: 20px;'>
             ⚠️ <strong>Educational Disclaimer:</strong> For educational purposes only. Not financial advice. RL training typically takes 5-10 minutes for 50k steps. Past performance does not guarantee future results. Always consult qualified financial professionals before making investment decisions.
         </div>
         """
@@ -492,8 +488,9 @@ class CompactRLPanel(param.Parameterized):
         return pn.Column(
             config_section,
             self.results_panel,
+            pn.layout.VSpacer(),
             pn.pane.HTML(disclaimer_html),
-            sizing_mode="stretch_width"
+            sizing_mode="stretch_both"
         )
 
 

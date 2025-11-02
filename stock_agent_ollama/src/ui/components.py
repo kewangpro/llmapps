@@ -2,8 +2,10 @@ import panel as pn
 import param
 import asyncio
 import html
+import json
 from typing import Dict, Any, Optional, Tuple
 import logging
+import pandas as pd
 
 from src.agents.query_processor import QueryProcessor
 from src.tools.visualizer import Visualizer
@@ -12,6 +14,23 @@ logger = logging.getLogger(__name__)
 
 # Configure Panel
 pn.extension('plotly', template='bootstrap', notifications=True)
+
+class PandasEncoder(json.JSONEncoder):
+    """Custom JSON encoder to handle pandas Series and NaN values."""
+    def default(self, obj):
+        if isinstance(obj, pd.Series):
+            return obj.where(pd.notna(obj), None).tolist()
+        return super().default(obj)
+
+def replace_nan_with_none(obj):
+    """Recursively replace NaN values with None in nested data structures."""
+    if isinstance(obj, dict):
+        return {k: replace_nan_with_none(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [replace_nan_with_none(i) for i in obj]
+    elif isinstance(obj, float) and pd.isna(obj):
+        return None
+    return obj
 
 class StockAnalysisApp(param.Parameterized):
     """Main Stock Analysis Panel Application with RL Integration"""
@@ -52,6 +71,8 @@ class StockAnalysisApp(param.Parameterized):
         self.results_column = pn.Column(
             sizing_mode="stretch_width",
             min_height=300,
+            max_height=700, # Constrain height to prevent excessive scrolling
+            scroll=True, # Make the column itself scrollable
         )
 
         # LSTM Training progress tracking
@@ -80,8 +101,7 @@ class StockAnalysisApp(param.Parameterized):
         for button in self.quick_buttons:
             button.on_click(self._handle_quick_button)
 
-        # Initial welcome message
-        self._show_welcome()
+
 
     def _on_enter_key(self, event):
         """Handle Enter key press"""
@@ -277,15 +297,14 @@ class StockAnalysisApp(param.Parameterized):
             self._display_general_response(result)
 
     def _display_stock_analysis(self, result: Dict[str, Any]):
-        """Display comprehensive stock analysis results - compact version"""
-        # Import design system
-        from src.ui.design_system import Colors, HTMLComponents
+        """Display comprehensive stock analysis results in a two-column layout."""
+        from src.ui.design_system import Colors
 
         symbol = result.get('symbol', 'Unknown')
         stock_info = result.get('stock_info', {})
         current_data = result.get('current_data', {})
 
-        # Compact header with price
+        # Header
         price = current_data.get('current_price', 0)
         prev_close = current_data.get('previous_close', 0)
         change = price - prev_close if price and prev_close else 0
@@ -293,40 +312,46 @@ class StockAnalysisApp(param.Parameterized):
         change_color = Colors.SUCCESS_GREEN if change >= 0 else Colors.DANGER_RED
         change_symbol = '▲' if change >= 0 else '▼'
 
+        stats = {
+            "Market Cap": f"${current_data.get('market_cap', 0) / 1e9:.2f}B",
+            "P/E Ratio": f"{stock_info.get('trailingPE', 'N/A')}",
+            "EPS": f"${stock_info.get('trailingEps', 'N/A')}",
+            "52-Wk High": f"${stock_info.get('fiftyTwoWeekHigh', 'N/A')}",
+            "52-Wk Low": f"${stock_info.get('fiftyTwoWeekLow', 'N/A')}",
+            "Avg Volume": f"{current_data.get('average_volume', 0):,}"
+        }
+
+        stats_html = "".join([f"<div style='text-align: right;'><div style='font-size: 0.7rem; color: {Colors.TEXT_SECONDARY};'>{k}</div><div style='font-size: 0.9rem; font-weight: 600; font-family: monospace;'>{v}</div></div>" for k, v in stats.items()])
+
         header_html = f"""
-        <div style='background: {Colors.BG_SECONDARY};
-                    border: 1px solid {Colors.BORDER_SUBTLE};
-                    border-left: 4px solid {Colors.ACCENT_PURPLE};
-                    padding: 12px 15px;
-                    border-radius: 8px;
-                    margin-bottom: 12px;
-                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);'>
+        <div style='background: {Colors.BG_SECONDARY}; border: 1px solid {Colors.BORDER_SUBTLE}; border-left: 4px solid {Colors.ACCENT_PURPLE}; padding: 12px 15px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);'>
             <div style='display: flex; justify-content: space-between; align-items: center;'>
-                <div>
+                <div style='flex: 1;'>
                     <h2 style='margin: 0; font-size: 1.5rem; color: {Colors.TEXT_PRIMARY};'>{html.escape(symbol)}</h2>
                     <p style='margin: 3px 0 0 0; color: {Colors.TEXT_SECONDARY}; font-size: 0.8rem;'>{html.escape(stock_info.get('name', symbol))}</p>
                 </div>
-                <div style='text-align: right;'>
+                <div style='flex: 1; text-align: right;'>
                     <div style='font-size: 1.75rem; font-weight: bold; color: {Colors.TEXT_PRIMARY}; font-family: monospace;'>${price:.2f}</div>
-                    <div style='font-size: 0.85rem; color: {change_color}; font-weight: 600;'>
-                        {change_symbol} {change_pct:+.2f}%
-                    </div>
+                    <div style='font-size: 0.85rem; color: {change_color}; font-weight: 600;'>{change_symbol} {change_pct:+.2f}%</div>
+                </div>
+                <div style='flex: 3; display: flex; justify-content: space-around; align-items: center; margin-left: 20px;'>
+                    {stats_html}
                 </div>
             </div>
         </div>
         """
         self.results_column.append(pn.pane.HTML(header_html))
 
-        # Create side-by-side layout: Chart (left 60%) + Info cards (right 40%)
-        left_column = pn.Column(sizing_mode="stretch_width")
-        right_column = pn.Column(sizing_mode="stretch_width", max_width=450)
+        # --- Two-Column Layout ---
+        left_column = pn.Column(sizing_mode="stretch_width", scroll=True, max_height=600)
+        right_column = pn.Column(sizing_mode="stretch_width", scroll=True, max_height=600) # Scrollable right column
 
-        # Main chart on left
+        # --- Left Column (70%) ---
+        # Main Chart
         if 'chart_data' in result:
             try:
                 chart = self.visualizer.create_price_chart(
-                    result['chart_data'],
-                    symbol,
+                    result['chart_data'], symbol,
                     predictions=result.get('predictions'),
                     technical_indicators=result.get('technical_analysis', {}).get('indicators', {})
                 )
@@ -334,34 +359,53 @@ class StockAnalysisApp(param.Parameterized):
             except Exception as e:
                 logger.error(f"Chart creation failed: {e}")
 
-        # Info cards on right (stacked vertically)
-        # Trading signals card (compact)
+        # --- Right Column (30%) ---
+        # Trading Signals - stack vertically with full width
         if 'trading_signals' in result:
             right_column.append(self._create_compact_signals_card(result['trading_signals']))
 
-        # Predictions card (compact)
+        # Predictions - stack vertically with full width
         if result.get('predictions'):
             right_column.append(self._create_compact_predictions_card(result['predictions']))
 
-        # Add side-by-side row
-        self.results_column.append(
-            pn.Row(
-                left_column,
-                right_column,
-                sizing_mode="stretch_width"
-            )
-        )
-
-        # AI Analysis (collapsible) - full width at bottom
+        # AI Analysis
         if 'analysis' in result:
-            analysis_text = html.escape(str(result['analysis'])).replace('\n', '<br>')
-            analysis_html = f"""
-            <details style='background: {Colors.BG_SECONDARY}; padding: 12px; border-radius: 8px; margin-top: 10px; border: 1px solid {Colors.BORDER_SUBTLE};'>
-                <summary style='cursor: pointer; font-weight: 600; font-size: 0.95rem; color: {Colors.TEXT_PRIMARY};'>🤖 AI Analysis</summary>
-                <div style='margin-top: 10px; line-height: 1.6; font-size: 0.875rem; color: {Colors.TEXT_SECONDARY};'>{analysis_text}</div>
-            </details>
-            """
-            self.results_column.append(pn.pane.HTML(analysis_html))
+            right_column.append(self._create_ai_analysis_card(result['analysis']))
+
+        # Add columns to the main layout
+        self.results_column.append(pn.Row(
+            pn.Column(left_column, width_policy='max', width=700), # 70%
+            pn.Column(right_column, width_policy='max', width=300), # 30%
+            sizing_mode="stretch_width"
+        ))
+
+    def _create_ai_analysis_card(self, analysis_text: str) -> pn.pane.HTML:
+        from src.ui.design_system import Colors
+        analysis_html = html.escape(analysis_text).replace('\n', '<br>')
+        return pn.pane.HTML(f"""
+            <div style='background: {Colors.BG_SECONDARY}; padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid {Colors.BORDER_SUBTLE};'>
+                <div style='font-weight: 600; font-size: 0.95rem; color: {Colors.TEXT_PRIMARY}; margin-bottom: 10px;'>🤖 AI Analysis</div>
+                <div style='line-height: 1.6; font-size: 0.875rem; color: {Colors.TEXT_SECONDARY};'>{analysis_html}</div>
+            </div>
+        """)
+
+    def _create_technical_analysis_tabs(self, tech_analysis: Dict) -> pn.Tabs:
+        tabs = []
+        indicators_dict = tech_analysis.get('indicators', {})
+        
+        try:
+            # Convert to DataFrame for better readability
+            df = pd.DataFrame(indicators_dict)
+            # Format numbers to 4 decimal places for consistency
+            df = df.apply(lambda x: pd.to_numeric(x, errors='coerce')).round(4)
+
+            indicators_tab = pn.pane.DataFrame(df, name="Indicators", sizing_mode="stretch_width", max_height=400)
+        except Exception as e:
+            logger.error(f"Failed to create indicators table: {e}")
+            indicators_tab = pn.pane.Alert(f"Could not display indicators: {e}", alert_type='danger')
+
+        tabs.append(indicators_tab)
+        return pn.Tabs(*tabs, sizing_mode="stretch_width")
 
     def _display_prediction_results(self, result: Dict[str, Any]):
         """Display prediction results - compact"""
@@ -516,7 +560,7 @@ class StockAnalysisApp(param.Parameterized):
         recs_html = ''.join([f"<li style='font-size: 13px;'>{html.escape(str(r))}</li>" for r in recommendations])
 
         html_content = f"""
-        <div style='background: {Colors.BG_PRIMARY}; padding: 15px; border-radius: 8px; border: 1px solid {Colors.BORDER_SUBTLE}; flex: 1;'>
+        <div style='background: {Colors.BG_PRIMARY}; padding: 15px; border-radius: 8px; border: 1px solid {Colors.BORDER_SUBTLE}; margin-bottom: 10px; width: 100%;'>
             <div style='font-size: 13px; color: {Colors.TEXT_SECONDARY}; margin-bottom: 5px;'>Trading Signal</div>
             <div style='font-size: 24px; font-weight: bold; color: {color};'>{signal}</div>
             <div style='font-size: 12px; color: {Colors.TEXT_MUTED}; margin: 5px 0;'>{confidence:.0f}% confidence</div>
@@ -544,7 +588,7 @@ class StockAnalysisApp(param.Parameterized):
             symbol = '→'
 
         html_content = f"""
-        <div style='background: {Colors.BG_PRIMARY}; padding: 15px; border-radius: 8px; border: 1px solid {Colors.BORDER_SUBTLE}; flex: 1;'>
+        <div style='background: {Colors.BG_PRIMARY}; padding: 15px; border-radius: 8px; border: 1px solid {Colors.BORDER_SUBTLE}; margin-bottom: 10px; width: 100%;'>
             <div style='font-size: 13px; color: {Colors.TEXT_SECONDARY}; margin-bottom: 5px;'>30-Day Prediction</div>
             <div style='font-size: 24px; font-weight: bold; color: {Colors.TEXT_PRIMARY};'>${avg_pred:.2f}</div>
             <div style='font-size: 14px; color: {color}; margin: 5px 0;'>
@@ -560,36 +604,7 @@ class StockAnalysisApp(param.Parameterized):
         """
         return pn.pane.HTML(html_content)
 
-    def _show_welcome(self):
-        """Show professional welcome message"""
-        from src.ui.design_system import Colors
 
-        welcome_html = f"""
-        <div style='background: {Colors.BG_SECONDARY};
-                    border: 1px solid {Colors.BORDER_SUBTLE};
-                    padding: 25px;
-                    border-radius: 8px;
-                    text-align: center;
-                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);'>
-            <h2 style='margin: 0 0 10px 0; color: {Colors.TEXT_PRIMARY};'>📈 Stock Analysis and Trading AI</h2>
-            <p style='margin: 0 0 20px 0; color: {Colors.TEXT_SECONDARY};'>AI-powered stock analysis, predictions, and RL trading strategies</p>
-            <div style='display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; text-align: left;'>
-                <div style='background: {Colors.BG_PRIMARY}; border: 1px solid {Colors.BORDER_SUBTLE}; padding: 12px; border-radius: 6px;'>
-                    <div style='font-weight: bold; margin-bottom: 5px; color: {Colors.TEXT_PRIMARY};'>📊 Analysis</div>
-                    <div style='font-size: 13px; color: {Colors.TEXT_SECONDARY};'>Technical analysis & signals</div>
-                </div>
-                <div style='background: {Colors.BG_PRIMARY}; border: 1px solid {Colors.BORDER_SUBTLE}; padding: 12px; border-radius: 6px;'>
-                    <div style='font-weight: bold; margin-bottom: 5px; color: {Colors.TEXT_PRIMARY};'>🔮 Predictions</div>
-                    <div style='font-size: 13px; color: {Colors.TEXT_SECONDARY};'>LSTM price forecasting</div>
-                </div>
-                <div style='background: {Colors.BG_PRIMARY}; border: 1px solid {Colors.BORDER_SUBTLE}; padding: 12px; border-radius: 6px;'>
-                    <div style='font-weight: bold; margin-bottom: 5px; color: {Colors.TEXT_PRIMARY};'>🤖 RL Trading</div>
-                    <div style='font-size: 13px; color: {Colors.TEXT_SECONDARY};'>Train AI trading agents</div>
-                </div>
-            </div>
-        </div>
-        """
-        self.results_column.append(pn.pane.HTML(welcome_html))
 
     def _show_error(self, message: str):
         """Show error notification"""
@@ -670,11 +685,79 @@ def create_app():
         margin=(0, 0)
     )
 
+    # Create the global watchlist in the sidebar
+    from src.tools.stock_fetcher import StockFetcher
+    stock_fetcher = StockFetcher()
+
+    def create_watchlist_sidebar():
+        """Create interactive watchlist for sidebar"""
+        from src.ui.design_system import Colors
+
+        watchlist_symbols = ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA"]
+
+        watchlist_html = f"""
+        <div style='background: {Colors.BG_SECONDARY}; border: 1px solid {Colors.BORDER_SUBTLE}; border-radius: 8px; padding: 10px;'>
+            <h3 style='margin: 0 0 10px 0; font-size: 1rem; color: {Colors.TEXT_PRIMARY}; border-bottom: 2px solid {Colors.BORDER_SUBTLE}; padding-bottom: 8px;'>
+                ⭐ Watchlist
+            </h3>
+            <div style='max-height: 500px; overflow-y: auto;'>
+        """
+
+        for symbol in watchlist_symbols:
+            try:
+                real_time_data = stock_fetcher.get_real_time_price(symbol)
+                price = real_time_data.get('current_price', 0) or 0
+                prev_close = real_time_data.get('previous_close', 0) or 0
+                change = price - prev_close
+                change_pct = (change / prev_close * 100) if prev_close else 0
+                color = Colors.SUCCESS_GREEN if change >= 0 else Colors.DANGER_RED
+                symbol_icon = '▲' if change >= 0 else '▼'
+
+                watchlist_html += f"""
+                <div style='background: {Colors.BG_PRIMARY};
+                            border: 1px solid {Colors.BORDER_SUBTLE};
+                            border-radius: 6px;
+                            padding: 10px;
+                            margin-bottom: 8px;
+                            cursor: pointer;
+                            transition: all 0.2s;'
+                     onmouseover='this.style.background="{Colors.BG_HOVER}"'
+                     onmouseout='this.style.background="{Colors.BG_PRIMARY}"'>
+                    <div style='display: flex; justify-content: space-between; align-items: center;'>
+                        <div style='font-weight: 600; color: {Colors.TEXT_PRIMARY}; font-size: 0.9rem;'>{symbol}</div>
+                        <div style='text-align: right;'>
+                            <div style='font-family: monospace; font-size: 0.85rem; color: {Colors.TEXT_PRIMARY};'>${price:.2f}</div>
+                            <div style='font-size: 0.75rem; color: {color}; font-weight: 600;'>{symbol_icon} {change_pct:+.2f}%</div>
+                        </div>
+                    </div>
+                </div>
+                """
+            except Exception as e:
+                logger.warning(f"Failed to fetch {symbol} for watchlist: {e}")
+                watchlist_html += f"""
+                <div style='background: {Colors.BG_PRIMARY}; border: 1px solid {Colors.BORDER_SUBTLE}; border-radius: 6px; padding: 10px; margin-bottom: 8px; opacity: 0.5;'>
+                    <div style='font-weight: 600; color: {Colors.TEXT_SECONDARY}; font-size: 0.9rem;'>{symbol}</div>
+                    <div style='font-size: 0.75rem; color: {Colors.TEXT_MUTED};'>Loading...</div>
+                </div>
+                """
+
+        watchlist_html += """
+            </div>
+        </div>
+        """
+
+        return pn.pane.HTML(watchlist_html, sizing_mode="stretch_width")
+
+    watchlist_sidebar = pn.Column(
+        create_watchlist_sidebar(),
+        sizing_mode="stretch_width"
+    )
+
     # Create template with light theme
     template = pn.template.FastListTemplate(
         title="Stock Agent Pro",
-        sidebar=[],
-        header_background=Colors.ACCENT_PURPLE,  # Use purple for better visibility
+        sidebar=[watchlist_sidebar],
+        header_background=Colors.ACCENT_PURPLE,  # Use accent purple for better visibility
         theme='default',
         main_max_width='1600px',
         theme_toggle=False,  # Disable theme toggle
