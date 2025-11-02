@@ -75,18 +75,25 @@ class QueryProcessor:
             '2y': 730
         }
     
-    async def process_query(self, query: str) -> Dict[str, Any]:
-        """Process natural language query and return structured response"""
+    async def process_query(self, query: str, force_retrain: bool = False, progress_callback: Any = None, training_complete_callback: Any = None) -> Dict[str, Any]:
+        """Process natural language query and return structured response
+
+        Args:
+            query: Natural language query string
+            force_retrain: If True, force retrain LSTM models for predictions
+            progress_callback: Optional callback for LSTM training progress
+            training_complete_callback: Optional callback when training completes
+        """
         try:
             query_lower = query.lower().strip()
-            
+
             # Extract intent and entities
             intent, entities = self._extract_intent_and_entities(query_lower)
-            
+
             if intent == 'analyze':
                 return await self._handle_analyze_query(entities)
             elif intent == 'predict':
-                return await self._handle_predict_query(entities)
+                return await self._handle_predict_query(entities, force_retrain=force_retrain, progress_callback=progress_callback, training_complete_callback=training_complete_callback)
             elif intent == 'compare':
                 return await self._handle_compare_query(entities)
             elif intent == 'price':
@@ -273,43 +280,68 @@ class QueryProcessor:
                 'message': f"Failed to analyze {symbol}: {str(e)}"
             }
     
-    async def _handle_predict_query(self, entities: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle stock prediction queries"""
+    async def _handle_predict_query(self, entities: Dict[str, Any], force_retrain: bool = False, progress_callback: Any = None, training_complete_callback: Any = None) -> Dict[str, Any]:
+        """Handle stock prediction queries
+
+        Args:
+            entities: Extracted entities from query
+            force_retrain: If True, retrain model even if it exists
+            progress_callback: Optional callback for training progress
+            training_complete_callback: Optional callback when training completes
+        """
         symbols = entities.get('symbols', [])
-        logger.debug(f"Prediction request - entities: {entities}")
-        
+        logger.debug(f"Prediction request - entities: {entities}, force_retrain: {force_retrain}")
+
         if not symbols:
             logger.warning("No symbols found in prediction request")
             return {
                 'type': 'error',
                 'message': 'Please specify a stock symbol to predict (e.g., AAPL, GOOGL, MSFT)'
             }
-        
+
         symbol = symbols[0]
-        logger.info(f"Processing prediction request for symbol: {symbol}")
+        logger.info(f"Processing prediction request for symbol: {symbol}, force_retrain: {force_retrain}")
         
         try:
-            # Check if model is trained
-            if not self.lstm_predictor.is_model_trained(symbol):
-                # Train model with available data
-                logger.info(f"Training new model for {symbol}")
+            # Check if model needs training
+            needs_training = force_retrain or not self.lstm_predictor.is_model_trained(symbol)
+            training_metrics = None
+
+            if needs_training:
+                # Train/retrain model with available data
+                action = "Retraining" if force_retrain else "Training new"
+                logger.info(f"{action} model for {symbol}")
                 stock_data = self.stock_fetcher.fetch_stock_data(symbol, '2y')
-                
+
                 if len(stock_data) < 120:  # Need minimum data
                     return {
                         'type': 'error',
                         'message': f"Insufficient data to train prediction model for {symbol}. Need at least 120 days of data."
                     }
-                
+
                 try:
-                    training_metrics = self.lstm_predictor.train_ensemble(stock_data, symbol)
+                    training_metrics = self.lstm_predictor.train_ensemble(
+                        stock_data,
+                        symbol,
+                        progress_callback=progress_callback
+                    )
                     logger.info(f"Model trained for {symbol} with RMSE: {training_metrics['rmse']:.4f}")
+
+                    # Show training history immediately after training completes
+                    if training_complete_callback:
+                        model_info = self.lstm_predictor.get_model_info(symbol)
+                        training_complete_callback({
+                            'symbol': symbol,
+                            'model_info': model_info,
+                            'training_metrics': training_metrics
+                        })
+
                 except Exception as e:
                     return {
                         'type': 'error',
                         'message': f"Failed to train prediction model for {symbol}: {str(e)}"
                     }
-            
+
             # Generate predictions
             logger.debug(f"Fetching stock data for predictions: {symbol}")
             stock_data = self.stock_fetcher.fetch_stock_data(symbol, '1y')
@@ -322,13 +354,19 @@ class QueryProcessor:
             # Get current data for context
             logger.debug(f"Fetching current data for {symbol}")
             current_data = self.stock_fetcher.get_real_time_price(symbol)
-            
+
+            # Get model info for training history
+            model_info = self.lstm_predictor.get_model_info(symbol)
+
             result = {
                 'type': 'prediction',
                 'symbol': symbol,
                 'predictions': predictions,
                 'current_data': current_data,
                 'chart_data': stock_data.tail(60),  # Show recent data for context
+                'training_metrics': training_metrics,  # Include training metrics if just trained
+                'model_info': model_info,  # Include model metadata with training history
+                'was_retrained': needs_training,  # True if model was just trained
                 'message': f"Generated {predictions['prediction_period_days']}-day price prediction for {symbol}"
             }
             logger.info(f"Prediction result prepared for {symbol}")
