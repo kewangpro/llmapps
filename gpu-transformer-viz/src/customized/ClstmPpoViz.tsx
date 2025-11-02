@@ -740,9 +740,42 @@ export default function ClstmPpoViz() {
 
   return (
     <div className="max-w-7xl mx-auto p-8">
-      <h1 className="text-3xl font-bold mb-6 text-center text-gray-900">
+      <h1 className="text-3xl font-bold mb-4 text-center text-gray-900">
         CLSTM-PPO Training & Trading Simulation
       </h1>
+
+      {/* Controls */}
+      <div className="flex flex-wrap items-center justify-center gap-4 mb-6">
+        <button
+          onClick={() => setIsPlaying((p) => !p)}
+          className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-md"
+        >
+          {isPlaying ? 'Pause' : 'Play'}
+        </button>
+        <div className="w-full md:w-1/2 px-4">
+          <input
+            type="range"
+            min={0}
+            max={FRAMES - 1}
+            step={1}
+            value={frame}
+            onChange={(e) => setFrame(Number(e.target.value))}
+            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+          />
+        </div>
+        <span className="tabular-nums text-gray-700 font-medium">
+          Frame: {frame + 1}/{FRAMES}
+        </span>
+        <button
+          onClick={() => {
+            setFrame(0);
+            setIsPlaying(false);
+          }}
+          className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-colors shadow-md"
+        >
+          Reset
+        </button>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 min-h-[280px]">
         {/* Left: Reward + Stock charts */}
@@ -955,39 +988,6 @@ export default function ClstmPpoViz() {
             </Card>
           </div>
         </div>
-      </div>
-
-      {/* Controls */}
-      <div className="flex flex-wrap items-center justify-center gap-4 mt-6">
-        <button
-          onClick={() => setIsPlaying((p) => !p)}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-md"
-        >
-          {isPlaying ? 'Pause' : 'Play'}
-        </button>
-        <div className="w-full md:w-1/2 px-4">
-          <input
-            type="range"
-            min={0}
-            max={FRAMES - 1}
-            step={1}
-            value={frame}
-            onChange={(e) => setFrame(Number(e.target.value))}
-            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-          />
-        </div>
-        <span className="tabular-nums text-gray-700 font-medium">
-          Frame: {frame + 1}/{FRAMES}
-        </span>
-        <button
-          onClick={() => {
-            setFrame(0);
-            setIsPlaying(false);
-          }}
-          className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-colors shadow-md"
-        >
-          Reset
-        </button>
       </div>
     </div>
   );
