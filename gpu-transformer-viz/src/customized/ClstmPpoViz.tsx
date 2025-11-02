@@ -72,10 +72,10 @@ interface NodeLayout {
 const LAYOUT = {
   nodes: {
     market: { x: 20, y: 350, w: 180, h: 100, label: 'Market Data' },
-    extractor: { x: 260, y: 350, w: 210, h: 110, label: 'LSTM Extractor' },
-    actor: { x: 560, y: 200, w: 190, h: 100, label: 'Actor' },
+    extractor: { x: 260, y: 350, w: 210, h: 110, label: 'LSTM Feature Extractor' },
+    actor: { x: 560, y: 200, w: 190, h: 100, label: 'Actor (LSTM network)' },
     ppo: { x: 560, y: 380, w: 190, h: 80, label: 'PPO Update' },
-    critic: { x: 560, y: 540, w: 190, h: 100, label: 'Critic' },
+    critic: { x: 560, y: 540, w: 190, h: 100, label: 'Critic (LSTM network)' },
     actions: { x: 830, y: 200, w: 220, h: 100, label: 'Actions (Buy / Sell / Hold)' },
     value: { x: 830, y: 540, w: 220, h: 100, label: 'State Value E[V|s]' },
   },

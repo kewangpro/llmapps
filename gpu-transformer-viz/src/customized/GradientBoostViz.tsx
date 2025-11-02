@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { TrendingUp } from 'lucide-react';
+import { Zap } from 'lucide-react';
 
 // Required metadata export
 export const metadata = {
   name: "Gradient Boost",
-  icon: "TrendingUp"
+  icon: "Zap"
 };
 
 // ===================== Small GBM-on-Residuals Sandbox =====================
@@ -491,7 +491,7 @@ export default function GradientBoostViz() {
   return (
     <div className="flex flex-col items-center p-6 space-y-4 text-gray-900 w-full max-w-7xl mx-auto">
       <div className="flex items-center gap-3 mb-2">
-        <TrendingUp className="text-blue-600" size={32} />
+        <Zap className="text-blue-600" size={32} />
         <h2 className="text-2xl font-bold text-gray-900">Gradient Boosting Visualization</h2>
       </div>
       <p className="text-sm text-gray-600 text-center max-w-3xl">
