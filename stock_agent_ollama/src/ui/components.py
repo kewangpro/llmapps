@@ -37,6 +37,12 @@ class StockAnalysisApp(param.Parameterized):
             icon='search',
         )
 
+        self.force_retrain_checkbox = pn.widgets.Checkbox(
+            name="Force Retrain LSTM Model",
+            value=False,
+            margin=(5, 10),
+        )
+
         self.loading_indicator = pn.indicators.LoadingSpinner(
             value=False,
             size=25,
@@ -47,6 +53,17 @@ class StockAnalysisApp(param.Parameterized):
             sizing_mode="stretch_width",
             min_height=300,
         )
+
+        # LSTM Training progress tracking
+        self.lstm_training_progress = pn.Column(visible=False)
+        self.lstm_progress_bar = pn.indicators.Progress(
+            name='LSTM Training Progress',
+            value=0,
+            max=100,
+            width=300,
+            bar_color='success'
+        )
+        self.lstm_status_text = pn.pane.HTML("")
 
         # Quick action buttons - more compact
         quick_stocks = ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META"]
@@ -76,6 +93,104 @@ class StockAnalysisApp(param.Parameterized):
         self.query_input.value = f"Analyze {symbol}"
         self._handle_query()
 
+    def _update_lstm_progress(self, progress_data: Dict):
+        """Update LSTM training progress."""
+        progress_type = progress_data.get('type', '')
+
+        if progress_type == 'lstm_training_start':
+            # Show progress panel
+            pn.state.execute(lambda: setattr(self.lstm_training_progress, 'visible', True))
+            pn.state.execute(lambda: setattr(self.lstm_progress_bar, 'value', 0))
+
+            status_html = f"""
+            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white; padding: 15px; border-radius: 8px; margin: 10px 0;'>
+                <h3 style='margin: 0 0 10px 0;'>🧠 Training LSTM Models for {progress_data.get('symbol', '')}...</h3>
+                <p style='margin: 0; opacity: 0.9;'>{progress_data.get('status', '')}</p>
+            </div>
+            """
+            pn.state.execute(lambda: setattr(self.lstm_status_text, 'object', status_html))
+
+        elif progress_type == 'lstm_training_progress':
+            # Update progress bar based on epoch and model
+            model = progress_data.get('model', 1)
+            total_models = progress_data.get('total_models', 3)
+            epoch = progress_data.get('epoch', 1)
+
+            # Estimate: assume 50 epochs per model
+            estimated_total_epochs = total_models * 50
+            current_total_epochs = (model - 1) * 50 + epoch
+            progress_percent = int((current_total_epochs / estimated_total_epochs) * 100)
+
+            pn.state.execute(lambda: setattr(self.lstm_progress_bar, 'value', min(progress_percent, 100)))
+
+            # Update status with metrics
+            loss = progress_data.get('loss', 0)
+            val_loss = progress_data.get('val_loss', 0)
+            elapsed = progress_data.get('elapsed_time', 0)
+
+            status_html = f"""
+            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white; padding: 15px; border-radius: 8px; margin: 10px 0;'>
+                <h3 style='margin: 0 0 10px 0;'>🧠 Training LSTM Models for {progress_data.get('symbol', '')}...</h3>
+                <p style='margin: 0; opacity: 0.9;'>{progress_data.get('status', '')}</p>
+                <div style='margin-top: 10px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;'>
+                    <div><small>Loss:</small> <strong>{loss:.4f}</strong></div>
+                    <div><small>Val Loss:</small> <strong>{val_loss:.4f}</strong></div>
+                    <div><small>Time:</small> <strong>{elapsed:.1f}s</strong></div>
+                </div>
+            </div>
+            """
+            pn.state.execute(lambda: setattr(self.lstm_status_text, 'object', status_html))
+
+        elif progress_type == 'lstm_training_complete':
+            # Mark model complete
+            model = progress_data.get('model', 1)
+            total_models = progress_data.get('total_models', 3)
+
+            if model >= total_models:
+                # All models complete - hide the progress panel
+                # Training history chart will be displayed immediately via callback
+                pn.state.execute(lambda: setattr(self.lstm_training_progress, 'visible', False))
+
+    def _display_training_history_immediate(self, training_data: Dict):
+        """Display training history immediately after training completes"""
+        symbol = training_data.get('symbol', 'Unknown')
+        model_info = training_data.get('model_info')
+
+        if not model_info or 'training_histories' not in model_info or not model_info['training_histories']:
+            return
+
+        try:
+            training_chart = self.visualizer.create_lstm_training_chart(
+                model_info['training_histories'],
+                symbol
+            )
+
+            # Add header for training chart
+            training_header = f"""
+            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white; padding: 12px; border-radius: 8px; margin: 10px 0;'>
+                <h3 style='margin: 0;'>📊 LSTM Training History</h3>
+                <p style='margin: 5px 0 0 0; font-size: 0.9em; opacity: 0.9;'>
+                    Trained: {model_info.get('training_date', 'Unknown')[:10]} |
+                    Models: {model_info.get('ensemble_size', 'N/A')} |
+                    Format: {model_info.get('model_format', 'N/A')}
+                </p>
+            </div>
+            """
+
+            # Use pn.state.execute to update UI from background thread
+            def update_ui():
+                self.results_column.append(pn.pane.HTML(training_header))
+                self.results_column.append(pn.pane.Plotly(training_chart, sizing_mode="stretch_width", height=600))
+
+            pn.state.execute(update_ui)
+            logger.info(f"Training history displayed for {symbol}")
+
+        except Exception as e:
+            logger.error(f"Failed to display training history: {e}")
+
     def _handle_query(self, event=None):
         """Handle query submission with async processing"""
         query = self.query_input.value.strip()
@@ -84,18 +199,27 @@ class StockAnalysisApp(param.Parameterized):
             pn.state.notifications.error("Please enter a query", duration=3000)
             return
 
-        # Clear previous results
+        # Clear previous results and hide progress
         self.results_column.clear()
+        self.lstm_training_progress.visible = False
 
         # Show loading state
         self._set_loading_state(True)
+
+        # Get force retrain checkbox value
+        force_retrain = self.force_retrain_checkbox.value
 
         # Create and run async task
         def run_async_query():
             try:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                result = loop.run_until_complete(self.query_processor.process_query(query))
+                result = loop.run_until_complete(self.query_processor.process_query(
+                    query,
+                    force_retrain=force_retrain,
+                    progress_callback=self._update_lstm_progress,
+                    training_complete_callback=self._display_training_history_immediate
+                ))
                 loop.close()
 
                 pn.state.execute(lambda: self._handle_query_result(result, query))
@@ -228,14 +352,38 @@ class StockAnalysisApp(param.Parameterized):
         symbol = result.get('symbol', 'Unknown')
         predictions = result.get('predictions', {})
 
+        # Calculate prediction metrics
+        pred_values = predictions.get('predictions', [])
+        last_price = predictions.get('last_price', 0)
+
+        if pred_values:
+            avg_pred = sum(pred_values) / len(pred_values)
+            change_pct = ((avg_pred - last_price) / last_price * 100) if last_price else 0
+            change_color = '#10b981' if change_pct >= 0 else '#ef4444'
+            change_symbol = '▲' if change_pct >= 0 else '▼'
+        else:
+            avg_pred = last_price
+            change_pct = 0
+            change_color = '#9ca3af'
+            change_symbol = '→'
+
+        # Training history is only shown when training actually happens
+        # It's displayed immediately via training_complete_callback
+        # No need to show it here for existing models
+
+        # Display prediction header and chart
         header_html = f"""
         <div style='background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-                    color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;'>
-            <h2 style='margin: 0;'>🔮 Price Prediction: {html.escape(symbol)}</h2>
+                    color: white; padding: 12px; border-radius: 8px; margin: 20px 0 10px 0;'>
+            <h3 style='margin: 0;'>🔮 Price Prediction: {html.escape(symbol)}</h3>
+            <p style='margin: 5px 0 0 0; font-size: 0.9em; opacity: 0.9;'>
+                30-Day: ${avg_pred:.2f} |
+                Change: <span style='color: {change_color};'>{change_symbol} {abs(change_pct):.1f}%</span> |
+                Current: ${last_price:.2f}
+            </p>
         </div>
         """
         self.results_column.append(pn.pane.HTML(header_html))
-
         if 'chart_data' in result and predictions:
             try:
                 chart = self.visualizer.create_prediction_chart(
@@ -246,8 +394,6 @@ class StockAnalysisApp(param.Parameterized):
                 self.results_column.append(pn.pane.Plotly(chart, sizing_mode="stretch_width", height=400))
             except Exception as e:
                 logger.error(f"Prediction chart failed: {e}")
-
-        self.results_column.append(self._create_compact_predictions_card(predictions))
 
     def _display_comparison_results(self, result: Dict[str, Any]):
         """Display stock comparison"""
@@ -413,10 +559,18 @@ class StockAnalysisApp(param.Parameterized):
                 self.loading_indicator,
                 sizing_mode="stretch_width"
             ),
+            self.force_retrain_checkbox,
             self.quick_buttons,
             styles=dict(background='#f9fafb', border_radius='8px', padding='15px'),
             margin=(0, 0, 15, 0)
         )
+
+        # LSTM Training progress section
+        self.lstm_training_progress.clear()
+        self.lstm_training_progress.extend([
+            self.lstm_status_text,
+            self.lstm_progress_bar
+        ])
 
         # Disclaimer at bottom
         disclaimer_html = """
@@ -436,6 +590,7 @@ class StockAnalysisApp(param.Parameterized):
 
         return pn.Column(
             input_section,
+            self.lstm_training_progress,
             self.results_column,
             pn.pane.HTML(disclaimer_html),
             sizing_mode="stretch_width",
