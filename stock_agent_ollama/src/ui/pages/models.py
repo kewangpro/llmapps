@@ -46,7 +46,7 @@ class ModelsPage(param.Parameterized):
         lstm_models = self._get_lstm_models()
 
         if lstm_models:
-            headers = ["Model Name", "Symbol", "Trained", "MAE", "Size", "Actions"]
+            headers = ["Model Name", "Symbol", "Trained", "Final Loss", "Val Loss", "Size", "Actions"]
             rows = []
 
             for model in lstm_models:
@@ -54,7 +54,8 @@ class ModelsPage(param.Parameterized):
                     model['name'],
                     model['symbol'],
                     model['trained'],
-                    model['mae'],
+                    model['final_loss'],
+                    model['val_loss'],
                     model['size'],
                     f'<button style="background: {Colors.ACCENT_PURPLE}; color: white; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 0.75rem;">View</button>'
                 ])
@@ -90,15 +91,17 @@ class ModelsPage(param.Parameterized):
                 # Check if return is a number and set color accordingly
                 if isinstance(perf_value, (int, float)):
                     perf_color = Colors.SUCCESS_GREEN if perf_value >= 0 else Colors.DANGER_RED
+                    perf_display = f'{perf_value:+.2f}%'
                 else:
                     perf_color = Colors.TEXT_SECONDARY
+                    perf_display = '<span style="font-size: 0.7rem;">Run backtest →</span>'
 
                 rows.append([
                     model['name'],
                     model['symbol'],
                     model['algorithm'],
                     model['trained'],
-                    f'<span style="color: {perf_color};">{perf_value}</span>',
+                    f'<span style="color: {perf_color};">{perf_display}</span>',
                     f'<button style="background: {Colors.ACCENT_PURPLE}; color: white; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 0.75rem;">Load</button>'
                 ])
 
@@ -126,23 +129,62 @@ class ModelsPage(param.Parameterized):
             return models
 
         try:
-            for model_dir in models_dir.iterdir():
-                if model_dir.is_dir():
-                    # Look for .keras files
-                    keras_files = list(model_dir.glob("*.keras"))
-                    if keras_files:
-                        # Extract symbol from directory name
-                        parts = model_dir.name.split('_')
-                        symbol = parts[0] if parts else "Unknown"
+            # Look for metadata.json files directly in the lstm directory
+            import json
+            metadata_files = list(models_dir.glob("*_metadata.json"))
 
-                        model_info = {
-                            'name': model_dir.name,
-                            'symbol': symbol.upper(),
-                            'trained': datetime.fromtimestamp(model_dir.stat().st_mtime).strftime('%Y-%m-%d'),
-                            'mae': 'N/A',  # Would need to load metadata
-                            'size': f'{len(keras_files)} models'
-                        }
-                        models.append(model_info)
+            for metadata_file in metadata_files:
+                # Extract symbol from filename (e.g., AAPL_metadata.json -> AAPL)
+                symbol = metadata_file.stem.replace('_metadata', '')
+
+                # Count associated keras model files
+                keras_files = list(models_dir.glob(f"{symbol}_model_*.keras"))
+
+                # Try to load metadata for performance metrics
+                final_loss = 'N/A'
+                val_loss = 'N/A'
+                trained_date = datetime.fromtimestamp(metadata_file.stat().st_mtime).strftime('%Y-%m-%d')
+
+                try:
+                    with open(metadata_file, 'r') as f:
+                        metadata = json.load(f)
+
+                        # Get training date if available
+                        if 'training_date' in metadata:
+                            trained_date = metadata['training_date'][:10]  # Get YYYY-MM-DD part
+
+                        # Extract performance metrics from training histories
+                        if 'training_histories' in metadata and metadata['training_histories']:
+                            # Calculate average final loss and val_loss across all models
+                            final_losses = []
+                            val_losses = []
+
+                            for history in metadata['training_histories']:
+                                if 'loss' in history and history['loss']:
+                                    final_losses.append(history['loss'][-1])
+                                if 'val_loss' in history and history['val_loss']:
+                                    val_losses.append(history['val_loss'][-1])
+
+                            if final_losses:
+                                avg_final_loss = sum(final_losses) / len(final_losses)
+                                final_loss = f"{avg_final_loss:.4f}"
+
+                            if val_losses:
+                                avg_val_loss = sum(val_losses) / len(val_losses)
+                                val_loss = f"{avg_val_loss:.4f}"
+
+                except Exception as e:
+                    logger.warning(f"Could not load metadata for {symbol}: {e}")
+
+                model_info = {
+                    'name': f"{symbol} LSTM Ensemble",
+                    'symbol': symbol.upper(),
+                    'trained': trained_date,
+                    'final_loss': final_loss,
+                    'val_loss': val_loss,
+                    'size': f'{len(keras_files)} models'
+                }
+                models.append(model_info)
 
         except Exception as e:
             logger.error(f"Error loading LSTM models: {e}")
