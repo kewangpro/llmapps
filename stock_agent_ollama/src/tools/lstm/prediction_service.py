@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 import logging
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Dict, Any, List, Tuple, Optional, Callable
 from datetime import datetime
 from pathlib import Path
 
@@ -53,6 +53,74 @@ def _ensure_datetime_index(data: pd.DataFrame) -> pd.DataFrame:
         data_copy.index = new_index
         return data_copy
 
+
+class LSTMProgressCallback(tf.keras.callbacks.Callback):
+    """Custom callback for reporting LSTM training progress to UI"""
+
+    def __init__(self, progress_callback: Optional[Callable], model_index: int, total_models: int, symbol: str):
+        super().__init__()
+        self.progress_callback = progress_callback
+        self.model_index = model_index
+        self.total_models = total_models
+        self.symbol = symbol
+        self.start_time = None
+
+    def on_train_begin(self, logs=None):
+        """Called at the beginning of training"""
+        import time
+        self.start_time = time.time()
+
+        if self.progress_callback:
+            self.progress_callback({
+                'type': 'lstm_training_start',
+                'symbol': self.symbol,
+                'model': self.model_index + 1,
+                'total_models': self.total_models,
+                'status': f'Training model {self.model_index + 1}/{self.total_models}'
+            })
+
+    def on_epoch_end(self, epoch, logs=None):
+        """Called at the end of each epoch"""
+        import time
+        logs = logs or {}
+
+        if self.progress_callback:
+            elapsed_time = time.time() - self.start_time if self.start_time else 0
+
+            self.progress_callback({
+                'type': 'lstm_training_progress',
+                'symbol': self.symbol,
+                'model': self.model_index + 1,
+                'total_models': self.total_models,
+                'epoch': epoch + 1,
+                'loss': float(logs.get('loss', 0)),
+                'val_loss': float(logs.get('val_loss', 0)),
+                'mae': float(logs.get('mean_absolute_error', 0)),
+                'val_mae': float(logs.get('val_mean_absolute_error', 0)),
+                'elapsed_time': elapsed_time,
+                'status': f'Model {self.model_index + 1}/{self.total_models} - Epoch {epoch + 1}'
+            })
+
+    def on_train_end(self, logs=None):
+        """Called at the end of training"""
+        import time
+        logs = logs or {}
+
+        if self.progress_callback:
+            elapsed_time = time.time() - self.start_time if self.start_time else 0
+
+            self.progress_callback({
+                'type': 'lstm_training_complete',
+                'symbol': self.symbol,
+                'model': self.model_index + 1,
+                'total_models': self.total_models,
+                'final_loss': float(logs.get('loss', 0)),
+                'final_val_loss': float(logs.get('val_loss', 0)),
+                'elapsed_time': elapsed_time,
+                'status': f'Completed model {self.model_index + 1}/{self.total_models}'
+            })
+
+
 class LSTMPredictionService:
     """Core service for training, predicting, and managing LSTM models"""
     
@@ -85,15 +153,25 @@ class LSTMPredictionService:
         return np.mean(predictions, axis=0)
 
     def train_ensemble(
-        self, 
-        data: pd.DataFrame, 
+        self,
+        data: pd.DataFrame,
         symbol: str,
         validation_split: float = 0.2,
         epochs: int = None,
-        batch_size: int = None
+        batch_size: int = None,
+        progress_callback: Optional[Callable] = None
     ) -> Dict[str, Any]:
-        """Train ensemble of LSTM models"""
-        
+        """Train ensemble of LSTM models
+
+        Args:
+            data: Stock price DataFrame
+            symbol: Stock symbol
+            validation_split: Validation split ratio
+            epochs: Number of training epochs
+            batch_size: Batch size for training
+            progress_callback: Optional callback for progress updates
+        """
+
         epochs = epochs or Config.EPOCHS
         batch_size = batch_size or Config.BATCH_SIZE
         
@@ -130,20 +208,20 @@ class LSTMPredictionService:
         # Train ensemble
         for i in range(self.ensemble_size):
             logger.info(f"Training model {i+1}/{self.ensemble_size}")
-            
+
             model = create_lstm_model((X.shape[1], X.shape[2]))
-            
+
             # IMPROVED: Enhanced callbacks for better training stability
             callbacks = [
                 tf.keras.callbacks.EarlyStopping(
-                    monitor='val_loss', 
+                    monitor='val_loss',
                     patience=15,  # Increased patience for stability
                     restore_best_weights=True,
                     min_delta=1e-4,  # Minimum improvement threshold
                     verbose=0
                 ),
                 tf.keras.callbacks.ReduceLROnPlateau(
-                    monitor='val_loss', 
+                    monitor='val_loss',
                     factor=0.7,  # Less aggressive reduction
                     patience=8,  # More patience before reducing LR
                     min_lr=1e-7,
@@ -155,6 +233,10 @@ class LSTMPredictionService:
                     verbose=0
                 )
             ]
+
+            # Add progress callback if provided
+            if progress_callback:
+                callbacks.append(LSTMProgressCallback(progress_callback, i, self.ensemble_size, symbol))
             
             # Train the model
             history = model.fit(
