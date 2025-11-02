@@ -16,6 +16,7 @@ sys.path.insert(0, str(project_root))
 import panel as pn
 from src.config import Config
 from src.ui.components import create_app
+from src.ui.design_system import Colors
 
 def setup_logging():
     """Setup basic logging configuration"""
@@ -44,12 +45,25 @@ def main():
     logger.info("Starting Stock Analysis and Trading AI Platform")
     
     try:
-        # Configure Panel
+        # Configure Panel with custom CSS for light theme
         pn.config.console_output = 'disable'
+        pn.config.raw_css.append(f"""
+            body {{
+                background: {Colors.BG_PRIMARY} !important;
+                color: {Colors.TEXT_PRIMARY} !important;
+            }}
+            .bk-root {{
+                background: {Colors.BG_PRIMARY} !important;
+            }}
+            /* Hide theme toggle */
+            .theme-toggle {{
+                display: none !important;
+            }}
+        """)
         pn.extension('plotly')
-        
+
         # Create the application
-        logger.info("Creating Panel application")
+        logger.info("Creating Panel application with professional light theme")
         app = create_app()
         
         # Serve the application
@@ -72,8 +86,10 @@ def main():
         logger.info("Application stopped by user")
         print("\n👋 Stock Analysis and Trading AI Platform stopped")
     except Exception as e:
-        logger.error(f"Application failed to start: {e}")
+        logger.error(f"Application failed to start: {e}", exc_info=True)
         print(f"\n❌ Failed to start application: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 if __name__ == "__main__":
