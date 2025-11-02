@@ -333,7 +333,7 @@ class RLVisualizer:
         )
 
         strategy_names = list(results.keys())
-        colors = ['blue', 'green', 'red', 'purple', 'orange']
+        colors = ['blue', 'purple', 'orange', 'brown', 'darkgray', 'navy']
 
         for col_idx, metric in enumerate(metrics, 1):
             values = []
@@ -518,10 +518,10 @@ class RLVisualizer:
         }
 
         action_colors = {
-            'SELL': '#ef4444',
-            'HOLD': '#9ca3af',
-            'BUY_SMALL': '#60a5fa',
-            'BUY_LARGE': '#3b82f6'
+            'SELL': '#ef4444',      # Red
+            'HOLD': '#9ca3af',      # Gray
+            'BUY_SMALL': '#10b981', # Green
+            'BUY_LARGE': '#059669'  # Darker green
         }
 
         strategy_names = list(results.keys())
