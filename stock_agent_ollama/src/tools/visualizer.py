@@ -589,7 +589,7 @@ class Visualizer:
         )
 
         # Update axes
-        fig.update_xaxes(title_text="Epoch", row=1, col=1)
+        fig.update_xaxes(title_text="", row=1, col=1)
         fig.update_xaxes(title_text="Epoch", row=2, col=1)
         fig.update_yaxes(title_text="Loss", row=1, col=1)
         fig.update_yaxes(title_text="MAE", row=2, col=1)
@@ -597,7 +597,7 @@ class Visualizer:
         # Update layout
         fig.update_layout(
             title=dict(
-                text=f'LSTM Training History - {symbol}<br><sub>Ensemble of {num_models} models, {epochs} epochs</sub>',
+                text=f'LSTM Training History - {symbol}',
                 x=0.5,
                 xanchor='center'
             ),
@@ -611,7 +611,7 @@ class Visualizer:
                 xanchor="right",
                 x=1
             ),
-            margin=dict(l=60, r=50, t=100, b=60)
+            margin=dict(l=60, r=50, t=80, b=60)
         )
 
         return fig
