@@ -1,4 +1,4 @@
-# Stock Analysis and Trading AI - Quick Start Guide
+# Stock Agent Pro - Quick Start Guide
 
 ## 🚀 Getting Started
 
@@ -19,384 +19,400 @@ The application will open at: **http://localhost:5006**
 
 ---
 
-## 📊 Using Stock Analysis
+## 🎯 Interface Overview
 
-### Quick Analysis (2 clicks)
-1. Click the **📊 Analysis** tab
-2. Click a quick stock button (AAPL, GOOGL, MSFT, TSLA, AMZN, NVDA, META)
-3. View results instantly!
+### Main Navigation
 
-### Custom Queries
-Type natural language queries in the input box:
-- `"Analyze AAPL"`
-- `"Predict GOOGL for 30 days"`
-- `"Compare MSFT vs AAPL"`
-- `"What is TSLA current price?"`
-- `"Explain RSI for beginners"`
+The platform features a professional light-theme interface with 5 main pages:
 
-### Results You'll See
-- **Stock Info Card**: Company name, current price, daily change, market cap
-- **Interactive Chart**: Price history with technical indicators (hover for details)
-- **Trading Signal**: BUY/SELL/HOLD recommendation with confidence level
-- **Technical Analysis**: RSI, MACD, Bollinger Bands, and 15+ indicators
-- **AI Analysis**: Natural language explanation of trends and signals
-- **30-Day Prediction**: LSTM neural network forecast (if model is trained)
+```
+┌──────────────────────────────────────────────────────┐
+│ 📊 Stock Agent Pro                                   │
+├──────────────────────────────────────────────────────┤
+│ Dashboard | Analysis | Trading | Portfolio | Models  │
+└──────────────────────────────────────────────────────┘
+```
+
+**Page Overview:**
+- **Dashboard** - Market overview and quick actions
+- **Analysis** - Stock charts, technical analysis, LSTM predictions
+- **Trading** - RL agent training and backtesting
+- **Portfolio** - Holdings and performance tracking
+- **Models** - LSTM and RL model registry
+
+**Sidebar:**
+- Live **Watchlist** with real-time prices
+- Stocks: AAPL, GOOGL, MSFT, TSLA, AMZN, NVDA
+- Click any symbol to analyze
 
 ---
 
-## 🤖 Using RL Trading
+## 📊 Dashboard
+
+### Quick Overview (1 click)
+1. Click **Dashboard** tab
+2. View market indices (S&P 500, NASDAQ, Dow Jones, Russell 2000)
+3. Monitor your watchlist stocks
+4. Use quick actions for common tasks
+
+**Features:**
+- Real-time market data with live updates
+- Quick action buttons (Train LSTM, Backtest, Compare, Report)
+- Compact card-based layout
+
+---
+
+## 📈 Stock Analysis
+
+### Quick Analysis
+1. Click **Analysis** tab
+2. Select a stock from the dropdown (AAPL, GOOGL, MSFT, TSLA, AMZN, NVDA, META, TEAM)
+3. Optional: Check "Force Retrain LSTM Model" to retrain
+4. Click **Analyze** button
+5. View comprehensive results
+
+### What You'll See
+
+**Left Panel (70%):**
+- **Stock Header**: Company name, current price, daily change
+- **Interactive Chart**: Candlestick chart with volume
+  - Moving averages (MA-20, MA-50, MA-200)
+  - Bollinger Bands
+  - RSI and MACD indicators
+  - Zoom and pan capabilities
+- **Technical Analysis Tabs**:
+  - Statistics: Key metrics and price levels
+  - Predictions: Detailed LSTM forecast data
+
+**Right Panel (30%):**
+- **Trading Signal**: BUY/SELL/HOLD recommendation
+  - Confidence percentage
+  - Support/resistance levels
+  - Entry and exit suggestions
+- **30-Day Prediction**: LSTM forecast
+  - Predicted price and change percentage
+  - Confidence interval
+  - Model metadata (training date, accuracy)
+- **AI Analysis**: Natural language market summary
+  - Technical trends
+  - Volume and momentum analysis
+  - Risk assessment
+
+---
+
+## 🤖 RL Trading
 
 ### Training an Agent (5-10 minutes)
 
-1. **Navigate**: Click **🤖 RL Trading** tab
-2. **Configure**:
-   - **Symbol**: Select stock from dropdown (AAPL, MSFT, GOOGL, AMZN, TSLA, META, NVDA, ORCL)
-   - **Algorithm**: Choose PPO (recommended, stable) or A2C (faster, experimental)
-   - **LSTM Features**: Enable checkbox for temporal pattern extraction (optional, hybrid architecture)
-   - **Training Days**: 365 days (default, recommended)
-   - **Training Steps**: 50,000 (default, 5-10 minutes training time)
-3. **Train**: Click "🚀 Start Training"
-4. **Monitor**: Watch the progress bar
-5. **Results**:
-   - Training summary card with episodes, time, and model path
-   - Training progress chart showing reward improvement
-   - Model automatically saved to `data/models/rl/`
+1. Click **Trading** tab
+2. **Configure Agent**:
+   - **Symbol**: Select from dropdown (AAPL, MSFT, GOOGL, AMZN, TSLA, META, NVDA, ORCL)
+   - **Algorithm**: Choose PPO (stable, recommended) or A2C (faster)
+   - **LSTM Features**: Check to enable temporal pattern extraction
+   - **Training Period**: 365 days (default, recommended)
+   - **Training Steps**: 50,000 (balance of time vs. performance)
+3. Click **"🚀 Start Training"**
+4. Monitor progress bar and real-time chart
+5. Review training results when complete
+
+**Training Results:**
+- Summary card with agent details, episodes, and training time
+- Training progress chart showing reward improvement over episodes
+- Model automatically saved to `data/models/rl/`
 
 ### Running Backtests
 
-1. **Select Stock**: Choose symbol from dropdown (top of RL Trading tab)
-2. **Click**: "📊 Run Backtest"
-3. **Wait**: ~30 seconds
-4. **Auto-Load**: Automatically loads your most recent trained RL agent (if available)
-5. **Results**:
-   - Comparison table (RL Agent vs Buy & Hold vs Momentum strategies)
-   - Action distribution table (SELL/HOLD/BUY_SMALL/BUY_LARGE counts and percentages)
-   - Performance metrics: Return, Sharpe ratio, Max drawdown, Win rate
-   - Performance comparison chart (portfolio value over time)
-   - Action distribution comparison chart (stacked bar chart)
-   - Metrics bar chart (side-by-side comparison)
+1. **Trading** tab
+2. Select stock symbol from dropdown
+3. Click **"📊 Run Backtest"**
+4. Wait ~30 seconds
+5. Review comprehensive results
 
-### Understanding Results
-
-**Training Results:**
-- **Agent**: Algorithm type (PPO or A2C)
-- **Stock**: Symbol trained on
-- **Episodes**: Number of complete trading episodes
-- **Time**: Total training duration in seconds
-- **Model Path**: Where the trained model is saved
-- **Chart**: Episode rewards over time (shows learning progress)
-
-**Backtest Metrics:**
-- **Return**: Total profit/loss percentage over test period
-- **Sharpe Ratio**: Risk-adjusted return (higher is better, >1 is good)
-- **Max Drawdown**: Largest peak-to-trough decline (lower is better)
-- **Win Rate**: Percentage of profitable trades
+**Backtest Results:**
+- **Performance Table**: RL Agent vs Buy & Hold vs Momentum
+  - Metrics: Total Return %, Sharpe Ratio, Max Drawdown, Win Rate
+  - Action distribution (SELL, HOLD, BUY_SMALL, BUY_LARGE)
+- **Charts**:
+  - Portfolio value over time (strategy comparison)
+  - Action distribution comparison
+  - Key metrics bar chart
 
 ---
 
-## 💡 Tips & Tricks
+## 🗂️ Models Page
+
+### Viewing Trained Models
+
+1. Click **Models** tab
+2. View all trained models in two sections
+
+**LSTM Models:**
+- Lists all LSTM ensemble models (3 models per symbol)
+- Shows performance metrics: Final Loss, Validation Loss
+- Training date and model size
+- Click "View" to see details (if enabled)
+
+**RL Trading Agents:**
+- Lists all trained PPO and A2C agents
+- Shows algorithm type, symbol, training date
+- Performance column shows "Run backtest →" hint
+  - Performance data calculated when you run backtests
+  - Not stored with models
+- Click "Load" to use in backtesting (if enabled)
+
+---
+
+## 💼 Portfolio Page
+
+**Status**: Basic implementation
+
+View simulated portfolio with:
+- Total value and P&L metrics
+- Holdings table
+- Asset allocation chart
+- Risk metrics
+
+*Note: Full implementation in progress*
+
+---
+
+## 💡 Tips & Best Practices
 
 ### Stock Analysis
-- ✅ Use quick buttons for fastest analysis
-- ✅ Charts are interactive - hover over points for exact values
+- ✅ Use sidebar watchlist for quick symbol switching
+- ✅ Charts are interactive - hover for exact values
 - ✅ Green signals = bullish, Red = bearish, Orange = neutral
-- ✅ LSTM predictions require trained models (train with "Predict [SYMBOL]")
-- ✅ AI explanations adapt to query context
+- ✅ LSTM predictions require trained models (auto-train on first analysis)
+- ✅ Force retrain checkbox updates models with latest data
 
 ### RL Trading
-- ✅ **PPO** is recommended for stable, reliable strategies
-- ✅ **A2C** is faster for quick experiments
-- ✅ **LSTM Features** extract temporal patterns (may increase training time)
-- ✅ **365 days** of training data balances learning vs. overfitting
-- ✅ **50,000 steps** is a good default (balance of time vs. performance)
+- ✅ **PPO** recommended for stable, reliable strategies
+- ✅ **A2C** faster but more experimental
+- ✅ **LSTM Features** may improve performance (increases training time)
+- ✅ **365 days** balances learning vs. overfitting
+- ✅ **50,000 steps** is optimal default (5-10 min training time)
 - ✅ Training runs in background - UI stays responsive
-- ✅ Models are saved automatically - reusable across sessions
-- ✅ Backtests auto-load trained models and compare against baselines
-- ✅ Action visualization shows SELL/HOLD/BUY_SMALL/BUY_LARGE decisions
+- ✅ Models saved automatically - reusable across sessions
+- ✅ Backtests auto-load most recent trained model
 
 ### Performance
-- ⚡ Stock data caches for faster repeated queries
-- ⚡ Training is CPU-intensive - reduce steps for faster testing
-- ⚡ Backtests are fast (~30 seconds per symbol)
-- ⚡ LSTM predictions load existing models (fast) or train new ones (5-10 min)
+- ⚡ Real-time data with 5-second refresh
+- ⚡ Stock data cached for faster queries
+- ⚡ Reduce training steps to 30k for quick experiments
+- ⚡ LSTM predictions load existing models or train new ones
 
 ---
 
 ## 🎯 Example Workflows
 
-### Workflow 1: Quick Stock Check (5 seconds)
+### Workflow 1: Quick Market Check (10 seconds)
 ```
-1. Click "📊 Analysis" tab
-2. Click "AAPL" quick button
-3. Review current price and signals
-4. Scroll down to see AI analysis
-```
-
-### Workflow 2: Deep Analysis with Prediction (10 seconds)
-```
-1. Type: "Predict TSLA for 30 days"
-2. Review current technical indicators
-3. Check 30-day LSTM forecast chart
-4. Read AI analysis of trends
+1. Open Dashboard tab
+2. Check market indices (S&P 500, NASDAQ, etc.)
+3. Review watchlist prices and changes
+4. Use quick actions if needed
 ```
 
-### Workflow 3: Compare Multiple Stocks (15 seconds)
+### Workflow 2: Deep Stock Analysis (30 seconds)
 ```
-1. Type: "Compare MSFT vs GOOGL vs NVDA"
-2. Review side-by-side metrics
-3. Compare performance charts
-4. Check which has better momentum
+1. Click Analysis tab
+2. Select symbol from dropdown (e.g., AAPL)
+3. Click Analyze button
+4. Review chart with technical indicators
+5. Check trading signals and AI analysis
+6. Review 30-day LSTM prediction
 ```
 
-### Workflow 4: Train Your First RL Agent (10 minutes)
+### Workflow 3: Train RL Agent (10 minutes)
 ```
-1. Click "🤖 RL Trading" tab
-2. Select stock: NVDA (from dropdown)
+1. Click Trading tab
+2. Select symbol: NVDA
 3. Choose algorithm: PPO
-4. Keep defaults: 365 days, 50,000 steps
-5. Click "🚀 Start Training"
-6. Wait 5-10 minutes (watch progress)
-7. Review training chart and results
+4. Enable LSTM Features checkbox
+5. Keep defaults: 365 days, 50,000 steps
+6. Click "🚀 Start Training"
+7. Monitor progress (5-10 minutes)
+8. Review training results and charts
 ```
 
-### Workflow 5: Backtest Strategies (30 seconds)
+### Workflow 4: Backtest Strategy (30 seconds)
 ```
-1. RL Trading tab
-2. Select stock: AAPL
+1. Trading tab
+2. Select symbol: AAPL
 3. Click "📊 Run Backtest"
-4. Compare Buy & Hold vs Momentum
-5. Review metrics: returns, Sharpe, drawdown
-6. Analyze performance charts
+4. Compare RL Agent vs Buy & Hold vs Momentum
+5. Review metrics and performance charts
+6. Analyze action distribution
+```
+
+### Workflow 5: Model Management (5 seconds)
+```
+1. Click Models tab
+2. Review all trained LSTM models
+3. Check RL agents and training dates
+4. Note: Run backtests to see RL performance
 ```
 
 ---
 
-## 🔍 Understanding the Interface
+## 🔍 Understanding Performance Metrics
 
-### Main Layout
-```
-┌─────────────────────────────────────────────────────┐
-│  Stock Analysis and Trading AI  (browser header)    │
-├─────────────────────────────────────────────────────┤
-│  [📊 Analysis] [🤖 RL Trading]  ← Tabs              │
-├─────────────────────────────────────────────────────┤
-│                                                      │
-│  Tab content appears here                           │
-│                                                      │
-└─────────────────────────────────────────────────────┘
-```
+### LSTM Model Metrics
+- **Final Loss**: Average loss across ensemble models (lower is better)
+- **Val Loss**: Validation loss (measures overfitting, lower is better)
+- **Size**: Number of models in ensemble (typically 3)
 
-### Analysis Tab
-```
-┌─────────────────────────────────────────────────────┐
-│ ┌─────────────────────────────────────────────────┐ │
-│ │ [Search input___________________] [Analyze] ⟳   │ │
-│ │ [AAPL] [GOOGL] [MSFT] [TSLA] [AMZN] [NVDA] ... │ │
-│ └─────────────────────────────────────────────────┘ │ ← Input controls
-├─────────────────────────────────────────────────────┤
-│                                                      │
-│  📈 Stock Info Card                                 │
-│  📊 Interactive Price Chart                         │
-│  🎯 Trading Signal                                  │
-│  📈 30-Day Prediction (if available)                │
-│  🤖 AI Analysis                                     │
-│                                                      │
-├─────────────────────────────────────────────────────┤
-│ ⚠️ Educational Disclaimer                           │
-└─────────────────────────────────────────────────────┘
-```
+### RL Performance Metrics
+- **Total Return**: Overall profit/loss percentage
+- **Sharpe Ratio**: Risk-adjusted return (>1 good, >2 excellent)
+- **Sortino Ratio**: Return per unit of downside risk
+- **Calmar Ratio**: Return divided by max drawdown
+- **Max Drawdown**: Worst peak-to-trough decline (risk measure)
+- **Win Rate**: Percentage of profitable trades
 
-### RL Trading Tab
-```
-┌─────────────────────────────────────────────────────┐
-│ ┌─────────────────────────────────────────────────┐ │
-│ │  Symbol        Algorithm                        │ │
-│ │  [AAPL ▾]      [PPO] [A2C]                      │ │
-│ │                                                  │ │
-│ │  Training Period: ──●────── 365 days            │ │
-│ │  Training Steps:  ──●────── 50000               │ │
-│ │                                                  │ │
-│ │  [🚀 Start Training]  [📊 Run Backtest]         │ │
-│ │  Progress: ████████░░ 80%                       │ │
-│ └─────────────────────────────────────────────────┘ │ ← Controls
-├─────────────────────────────────────────────────────┤
-│                                                      │
-│  Training/Backtest Results:                         │
-│  - Summary cards                                    │
-│  - Progress charts                                  │
-│  - Metrics tables                                   │
-│  - Comparison visualizations                        │
-│                                                      │
-├─────────────────────────────────────────────────────┤
-│ ⚠️ Educational Disclaimer                           │
-└─────────────────────────────────────────────────────┘
-```
+### Trading Actions
+- **SELL**: Liquidate position
+- **HOLD**: Maintain current position
+- **BUY_SMALL**: Small position increase
+- **BUY_LARGE**: Large position increase
 
 ---
 
 ## 📚 Key Concepts
 
-### Stock Analysis
-- **Technical Indicators**: Mathematical calculations on price/volume data
-  - **RSI** (0-100): Oversold (<30) or Overbought (>70)
-  - **MACD**: Trend strength and direction
-  - **Bollinger Bands**: Volatility and price extremes
-  - **Moving Averages**: Trend identification
+### Technical Analysis
+- **RSI** (Relative Strength Index): 0-100 scale
+  - <30: Oversold (potential buy)
+  - >70: Overbought (potential sell)
+- **MACD**: Trend strength and direction
+- **Bollinger Bands**: Volatility and price extremes
+- **Moving Averages**: Trend identification (20, 50, 200-day)
 
-- **Trading Signals**: BUY/SELL/HOLD recommendations based on multiple indicators
-- **LSTM Predictions**: Neural network forecasts trained on 2 years of data
+### LSTM Predictions
+- Neural network trained on 2 years of historical data
+- Ensemble of 3 models for robustness
+- 30-day price forecasts with confidence intervals
+- Auto-training on first analysis
 
-### RL Trading
-- **RL Agent**: AI that learns to trade through trial and error
-  - **PPO** (Proximal Policy Optimization): Stable, sample-efficient
-  - **A2C** (Advantage Actor-Critic): Faster, good for experiments
-
-- **Training**: Agent practices thousands of trading episodes on historical data
-- **Environment**: Simulates realistic trading with transaction costs and slippage
-- **Reward**: Agent learns to maximize risk-adjusted returns
-
-- **Baseline Strategies**:
-  - **Buy & Hold**: Buy on day 1, hold until end
-  - **Momentum**: Buy on uptrends, sell on downtrends
-
-### Performance Metrics
-- **Total Return**: Overall profit/loss percentage
-- **Sharpe Ratio**: Return per unit of risk (>1 good, >2 excellent)
-- **Sortino Ratio**: Return per unit of downside risk
-- **Calmar Ratio**: Return divided by max drawdown
-- **Max Drawdown**: Worst peak-to-trough decline (risk measure)
-- **Win Rate**: Percentage of profitable trades
+### Reinforcement Learning
+- **Agent**: AI that learns optimal trading policy
+- **Environment**: Simulates realistic trading with costs
+- **Reward**: Maximizes risk-adjusted returns
+- **Training**: 1000s of episodes on historical data
 
 ---
 
 ## ⚠️ Important Notes
 
 ### Educational Use Only
-- ✋ This platform is for **learning and research**
+- ✋ Platform for **learning and research**
 - ✋ **NOT financial advice**
 - ✋ **NOT for real trading decisions**
-- ✋ Past performance does NOT guarantee future results
-- ✋ RL agents trained on historical data may not work in live markets
+- ✋ Past performance ≠ future results
 - ✋ Always consult qualified financial professionals
 
-### Data Sources
-- **Yahoo Finance**: Real-time and historical stock data
-- **Free**: No API key required
-- **Coverage**: Major US stocks and indices
-- **Updates**: Automatic data fetching with intelligent caching
-
-### System Requirements
-- **Python**: 3.9 or higher
-- **RAM**: 4GB minimum, 8GB+ recommended (for RL training)
-- **Storage**: 1GB+ (for models, data cache, and logs)
-- **Internet**: Required for fetching stock data
-- **CPU**: Multi-core recommended for faster RL training
+### Data & Requirements
+- **Data Source**: Yahoo Finance (real-time, free, no API key)
+- **Python**: 3.9 or higher required
+- **RAM**: 8GB+ recommended for RL training
+- **Storage**: 1GB+ for models and cache
+- **Internet**: Required for stock data
 
 ---
 
 ## 🐛 Troubleshooting
 
 ### "Training failed" or "Insufficient data"
-**Cause**: Not enough historical data for the selected stock
-**Fix**:
-- Choose established stocks (AAPL, MSFT, GOOGL, AMZN, TSLA)
+**Fix:**
+- Choose established stocks (AAPL, MSFT, GOOGL)
 - Reduce training period to 180 days
 - Check internet connection
 
-### "No trained models found for [SYMBOL]"
-**Cause**: LSTM model hasn't been trained for this symbol
-**Fix**:
-- Use explicit prediction query: "Predict [SYMBOL]" to auto-train
-- Training takes 5-10 minutes on first request
-- Models save automatically for reuse
+### "No LSTM models" on Analysis
+**Fix:**
+- Run analysis once - auto-trains model (5-10 min)
+- Check `data/models/lstm/` directory
+- Ensure sufficient disk space
 
 ### Charts Not Displaying
-**Cause**: Missing Plotly dependency or browser compatibility
-**Fix**:
-- Run: `pip install plotly`
-- Try different browser (Chrome recommended)
+**Fix:**
+- Install Plotly: `pip install plotly`
+- Try Chrome browser
 - Clear browser cache
 
 ### Slow RL Training
-**Cause**: High number of timesteps or CPU limitations
-**Fix**:
+**Fix:**
 - Reduce to 30,000 steps for testing
 - Reduce training period to 180 days
 - Close other applications
-- Use PPO (generally faster than A2C)
+- Use PPO (more efficient than A2C)
 
 ### "Module not found" Error
-**Cause**: Missing dependencies
-**Fix**:
-- Activate virtual environment: `source .venv/bin/activate`
-- Run: `pip install -r requirements.txt`
+**Fix:**
+- Activate environment: `source .venv/bin/activate`
+- Install dependencies: `pip install -r requirements.txt`
 - Check Python version: `python --version` (need 3.9+)
 
-### Memory Errors During Training
-**Cause**: Insufficient RAM
-**Fix**:
-- Close other applications
-- Reduce training steps to 30,000
-- Reduce training period to 180 days
-- Reduce lookback window in config
+### RL Models Show "Run backtest →"
+**Explanation:**
+- RL performance calculated during backtesting
+- Not stored with models
+- Click "Run Backtest" in Trading tab to see metrics
 
 ---
 
 ## 🎓 Learn More
 
 ### Documentation
-- **README.md**: Complete project overview, features, architecture
-- **RL_DESIGN.md**: Detailed RL system design and components
+- **README.md**: Project overview and architecture
+- **UX.md**: Interface design and layout philosophy
+- **RL_DESIGN.md**: Detailed RL system design
 
-### Key Files
-- **Models**: `data/models/lstm/` (LSTM models) and `data/models/rl/` (RL agents)
-- **Cache**: `data/cache/stock_data/` (cached stock data)
-- **Logs**: `data/logs/app.log` (application logs)
-- **Config**: `src/config.py` (configuration settings)
+### Key Directories
+- **Models**: `data/models/lstm/` and `data/models/rl/`
+- **Cache**: `data/cache/stock_data/`
+- **Logs**: `data/logs/app.log`
+
+### Debugging
+1. Check logs: `tail -f data/logs/app.log`
+2. Verify dependencies: `pip list | grep -E "panel|tensorflow|stable-baselines3"`
+3. Browser console: F12 for JavaScript errors
 
 ---
 
 ## 🆘 Need Help?
 
-### Debugging Steps
-1. Check application logs: `tail -f data/logs/app.log`
-2. Verify dependencies: `pip list | grep -E "panel|tensorflow|stable-baselines3"`
-3. Test basic functionality: Run health checks from README
-4. Review error messages in browser console (F12)
+### First Steps
+1. Review this guide thoroughly
+2. Check error messages in application
+3. Look for similar issues in logs
+4. Try the troubleshooting section above
 
 ### Resources
-- **RL Questions**: See RL_DESIGN.md for architecture details
-- **UI Questions**: See UI_IMPROVEMENTS.md for interface design
-- **Code Issues**: Check GitHub issues or create a new one
-- **General Help**: Review this guide and README.md
+- **Interface Questions**: See UX.md for design details
+- **RL Questions**: See RL_DESIGN.md for architecture
+- **General Issues**: Check README.md
 
 ---
 
-## 🎉 You're Ready!
+## 🎉 Quick Start Checklist
 
-### Recommended First Steps
+**For Beginners:**
+- [ ] Open Dashboard, check market indices
+- [ ] Click sidebar watchlist symbol (e.g., AAPL)
+- [ ] Review Analysis page results
+- [ ] Switch to Trading tab, run a backtest
+- [ ] Explore Models page to see trained models
 
-**Beginner Path:**
-1. 📊 Click "AAPL" button to see instant analysis
-2. 🔍 Try typing "Predict TSLA" to see forecasts
-3. 📊 Switch to RL Trading and click "Run Backtest"
-4. 📖 Review the results and learn the metrics
-
-**Advanced Path:**
-1. 🤖 Train your first RL agent (PPO, NVDA, 365 days)
-2. 📊 Run backtest to compare strategies
-3. 🔬 Experiment with different stocks and algorithms
-4. 📈 Compare multiple training configurations
-
-**Tips for Learning:**
-- Start with familiar stocks (AAPL, MSFT)
-- Read the disclaimers at bottom of each tab
-- Experiment with different query styles
-- Compare RL strategies to understand performance metrics
-- Use smaller timesteps (30k) for faster experiments
+**For Advanced Users:**
+- [ ] Train first RL agent (PPO, 365 days, 50k steps)
+- [ ] Run backtest to compare strategies
+- [ ] Experiment with LSTM features enabled
+- [ ] Compare different symbols and algorithms
+- [ ] Analyze action distributions and metrics
 
 ---
 
-**Enjoy exploring AI-powered stock analysis and reinforcement learning trading!** 📈🤖
+**Ready to explore AI-powered finance!** 📈🤖
 
-*Remember: This is for education only. Never use AI predictions for real trading without consulting financial professionals.*
+*Educational platform only - Not for real trading decisions*
