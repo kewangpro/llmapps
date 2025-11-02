@@ -110,7 +110,9 @@ class StockAnalysisApp(param.Parameterized):
     def _handle_quick_button(self, event):
         """Handle quick action button clicks"""
         symbol = event.obj.name
-        self.query_input.value = f"Analyze {symbol}"
+        # Use "Predict" if force retrain is checked, otherwise "Analyze"
+        action = "Predict" if self.force_retrain_checkbox.value else "Analyze"
+        self.query_input.value = f"{action} {symbol}"
         self._handle_query()
 
     def _update_lstm_progress(self, progress_data: Dict):
