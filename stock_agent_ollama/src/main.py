@@ -15,7 +15,7 @@ sys.path.insert(0, str(project_root))
 
 import panel as pn
 from src.config import Config
-from src.ui.components import create_app
+from src.ui.pages.analysis import create_app
 from src.ui.design_system import Colors
 
 def setup_logging():
