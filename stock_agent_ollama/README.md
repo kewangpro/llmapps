@@ -25,7 +25,7 @@ An intelligent financial platform combining **AI-powered analysis**, **LSTM neur
 - **Train RL Agents** using PPO and A2C algorithms (Stable-Baselines3)
 - **LSTM Hybrid Architecture** for temporal pattern extraction (optional)
 - **Comprehensive Backtesting** with 15+ risk metrics
-- **Action Visualization** - see agent decisions (SELL/HOLD/BUY_SMALL/BUY_LARGE)
+- **Action Visualization** - see agent decisions (SELL/HOLD/BUY_SMALL/BUY_LARGE) with buy/sell markers on performance charts
 - **Strategy Comparison** against Buy & Hold and Momentum baselines
 - **Auto-Load Models** for seamless backtesting workflow
 
