@@ -165,10 +165,15 @@ class CompactRLPanel(param.Parameterized):
             agent_name += "-LSTM"
 
         summary_html = f"""
-        <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white; padding: 12px; border-radius: 8px; margin-bottom: 10px;'>
-            <h3 style='margin: 0;'>✅ Training Complete</h3>
-            <p style='margin: 5px 0 0 0; font-size: 0.9em; opacity: 0.9;'>
+        <div style='background: #F8F9FA;
+                    border: 1px solid #DEE2E6;
+                    border-left: 4px solid #0F9D58;
+                    padding: 12px;
+                    border-radius: 8px;
+                    margin-bottom: 10px;
+                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);'>
+            <h3 style='margin: 0; color: #212529;'>✅ Training Complete</h3>
+            <p style='margin: 5px 0 0 0; font-size: 0.9em; color: #495057;'>
                 Agent: {agent_name} |
                 Stock: {self.symbol} |
                 Episodes: {results.get('total_episodes', 0)} |
@@ -310,10 +315,15 @@ class CompactRLPanel(param.Parameterized):
 
         # Header
         header_html = f"""
-        <div style='background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-                    color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;'>
-            <h3 style='margin: 0;'>📊 Backtest Results: {self.symbol}</h3>
-            <p style='margin: 5px 0 0 0; opacity: 0.9; font-size: 13px;'>Last 6 months performance comparison</p>
+        <div style='background: #F8F9FA;
+                    border: 1px solid #DEE2E6;
+                    border-left: 4px solid #0891B2;
+                    padding: 15px;
+                    border-radius: 8px;
+                    margin-bottom: 15px;
+                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);'>
+            <h3 style='margin: 0; color: #212529;'>📊 Backtest Results: {self.symbol}</h3>
+            <p style='margin: 5px 0 0 0; color: #495057; font-size: 13px;'>Last 6 months performance comparison</p>
         </div>
         """
         self.results_panel.append(pn.pane.HTML(header_html))
@@ -459,24 +469,23 @@ class CompactRLPanel(param.Parameterized):
                 sizing_mode="stretch_width"
             ),
             self.progress_bar,
-            styles=dict(background='#f9fafb', border_radius='8px', padding='15px'),
+            styles=dict(background='#F8F9FA', border_radius='8px', padding='15px'),
             margin=(0, 0, 15, 0)
         )
 
         # Disclaimer at bottom (moved from top)
         disclaimer_html = """
-        <div style='background: #fef3c7; border: 1px solid #fbbf24; padding: 15px; border-radius: 8px; margin-top: 20px;'>
-            <h4 style='margin: 0 0 10px 0; color: #92400e;'>⚠️ Educational Disclaimer</h4>
-            <ul style='margin: 0; padding-left: 20px; font-size: 12px; color: #78350f; line-height: 1.6;'>
-                <li><strong>Educational purpose only.</strong> Not financial advice.</li>
-                <li><strong>Training:</strong> AI agents learn from historical data (5-10 min for 50k steps)</li>
-                <li><strong>Backtesting:</strong> Past performance doesn't guarantee future results</li>
-                <li><strong>PPO:</strong> Stable, sample-efficient (recommended) • <strong>A2C:</strong> Faster, experimental</li>
-                <li><strong>LSTM Features:</strong> Hybrid architecture extracts temporal patterns (may increase training time)</li>
-            </ul>
-            <div style='margin-top: 8px; padding-top: 8px; border-top: 1px solid #fbbf24; font-size: 11px; color: #78350f;'>
-                Always consult qualified financial professionals before making investment decisions.
-            </div>
+        <div style='background: #F8F9FA;
+                    border-top: 1px solid #DEE2E6;
+                    padding: 12px 20px;
+                    text-align: center;
+                    font-size: 11px;
+                    color: #6C757D;
+                    margin-top: 40px;
+                    position: relative;
+                    bottom: 0;
+                    width: 100%;'>
+            ⚠️ <strong>Educational Disclaimer:</strong> For educational purposes only. Not financial advice. RL training typically takes 5-10 minutes for 50k steps. Past performance does not guarantee future results. Always consult qualified financial professionals before making investment decisions.
         </div>
         """
 

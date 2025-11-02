@@ -278,6 +278,9 @@ class StockAnalysisApp(param.Parameterized):
 
     def _display_stock_analysis(self, result: Dict[str, Any]):
         """Display comprehensive stock analysis results - compact version"""
+        # Import design system
+        from src.ui.design_system import Colors, HTMLComponents
+
         symbol = result.get('symbol', 'Unknown')
         stock_info = result.get('stock_info', {})
         current_data = result.get('current_data', {})
@@ -287,21 +290,26 @@ class StockAnalysisApp(param.Parameterized):
         prev_close = current_data.get('previous_close', 0)
         change = price - prev_close if price and prev_close else 0
         change_pct = (change / prev_close * 100) if prev_close else 0
-        change_color = '#10b981' if change >= 0 else '#ef4444'
+        change_color = Colors.SUCCESS_GREEN if change >= 0 else Colors.DANGER_RED
         change_symbol = '▲' if change >= 0 else '▼'
 
         header_html = f"""
-        <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;'>
+        <div style='background: {Colors.BG_SECONDARY};
+                    border: 1px solid {Colors.BORDER_SUBTLE};
+                    border-left: 4px solid {Colors.ACCENT_PURPLE};
+                    padding: 12px 15px;
+                    border-radius: 8px;
+                    margin-bottom: 12px;
+                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);'>
             <div style='display: flex; justify-content: space-between; align-items: center;'>
                 <div>
-                    <h2 style='margin: 0; font-size: 24px;'>{html.escape(symbol)}</h2>
-                    <p style='margin: 5px 0 0 0; opacity: 0.9; font-size: 14px;'>{html.escape(stock_info.get('name', symbol))}</p>
+                    <h2 style='margin: 0; font-size: 1.5rem; color: {Colors.TEXT_PRIMARY};'>{html.escape(symbol)}</h2>
+                    <p style='margin: 3px 0 0 0; color: {Colors.TEXT_SECONDARY}; font-size: 0.8rem;'>{html.escape(stock_info.get('name', symbol))}</p>
                 </div>
                 <div style='text-align: right;'>
-                    <div style='font-size: 28px; font-weight: bold;'>${price:.2f}</div>
-                    <div style='font-size: 14px; color: {change_color};'>
-                        {change_symbol} ${abs(change):.2f} ({change_pct:+.2f}%)
+                    <div style='font-size: 1.75rem; font-weight: bold; color: {Colors.TEXT_PRIMARY}; font-family: monospace;'>${price:.2f}</div>
+                    <div style='font-size: 0.85rem; color: {change_color}; font-weight: 600;'>
+                        {change_symbol} {change_pct:+.2f}%
                     </div>
                 </div>
             </div>
@@ -309,7 +317,11 @@ class StockAnalysisApp(param.Parameterized):
         """
         self.results_column.append(pn.pane.HTML(header_html))
 
-        # Main chart
+        # Create side-by-side layout: Chart (left 60%) + Info cards (right 40%)
+        left_column = pn.Column(sizing_mode="stretch_width")
+        right_column = pn.Column(sizing_mode="stretch_width", max_width=450)
+
+        # Main chart on left
         if 'chart_data' in result:
             try:
                 chart = self.visualizer.create_price_chart(
@@ -318,37 +330,43 @@ class StockAnalysisApp(param.Parameterized):
                     predictions=result.get('predictions'),
                     technical_indicators=result.get('technical_analysis', {}).get('indicators', {})
                 )
-                self.results_column.append(pn.pane.Plotly(chart, sizing_mode="stretch_width", height=400))
+                left_column.append(pn.pane.Plotly(chart, sizing_mode="stretch_width", height=500))
             except Exception as e:
                 logger.error(f"Chart creation failed: {e}")
 
-        # Compact cards row
-        cards_row = pn.Row(sizing_mode="stretch_width")
-
+        # Info cards on right (stacked vertically)
         # Trading signals card (compact)
         if 'trading_signals' in result:
-            cards_row.append(self._create_compact_signals_card(result['trading_signals']))
+            right_column.append(self._create_compact_signals_card(result['trading_signals']))
 
         # Predictions card (compact)
         if result.get('predictions'):
-            cards_row.append(self._create_compact_predictions_card(result['predictions']))
+            right_column.append(self._create_compact_predictions_card(result['predictions']))
 
-        if len(cards_row) > 0:
-            self.results_column.append(cards_row)
+        # Add side-by-side row
+        self.results_column.append(
+            pn.Row(
+                left_column,
+                right_column,
+                sizing_mode="stretch_width"
+            )
+        )
 
-        # AI Analysis (collapsible)
+        # AI Analysis (collapsible) - full width at bottom
         if 'analysis' in result:
             analysis_text = html.escape(str(result['analysis'])).replace('\n', '<br>')
             analysis_html = f"""
-            <details style='background: #f3f4f6; padding: 15px; border-radius: 8px; margin-top: 10px;'>
-                <summary style='cursor: pointer; font-weight: bold; font-size: 16px;'>🤖 AI Analysis</summary>
-                <div style='margin-top: 10px; line-height: 1.6;'>{analysis_text}</div>
+            <details style='background: {Colors.BG_SECONDARY}; padding: 12px; border-radius: 8px; margin-top: 10px; border: 1px solid {Colors.BORDER_SUBTLE};'>
+                <summary style='cursor: pointer; font-weight: 600; font-size: 0.95rem; color: {Colors.TEXT_PRIMARY};'>🤖 AI Analysis</summary>
+                <div style='margin-top: 10px; line-height: 1.6; font-size: 0.875rem; color: {Colors.TEXT_SECONDARY};'>{analysis_text}</div>
             </details>
             """
             self.results_column.append(pn.pane.HTML(analysis_html))
 
     def _display_prediction_results(self, result: Dict[str, Any]):
         """Display prediction results - compact"""
+        from src.ui.design_system import Colors, HTMLComponents
+
         symbol = result.get('symbol', 'Unknown')
         predictions = result.get('predictions', {})
 
@@ -359,12 +377,12 @@ class StockAnalysisApp(param.Parameterized):
         if pred_values:
             avg_pred = sum(pred_values) / len(pred_values)
             change_pct = ((avg_pred - last_price) / last_price * 100) if last_price else 0
-            change_color = '#10b981' if change_pct >= 0 else '#ef4444'
+            change_color = Colors.SUCCESS_GREEN if change_pct >= 0 else Colors.DANGER_RED
             change_symbol = '▲' if change_pct >= 0 else '▼'
         else:
             avg_pred = last_price
             change_pct = 0
-            change_color = '#9ca3af'
+            change_color = Colors.TEXT_MUTED
             change_symbol = '→'
 
         # Training history is only shown when training actually happens
@@ -373,12 +391,17 @@ class StockAnalysisApp(param.Parameterized):
 
         # Display prediction header and chart
         header_html = f"""
-        <div style='background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-                    color: white; padding: 12px; border-radius: 8px; margin: 20px 0 10px 0;'>
-            <h3 style='margin: 0;'>🔮 Price Prediction: {html.escape(symbol)}</h3>
-            <p style='margin: 5px 0 0 0; font-size: 0.9em; opacity: 0.9;'>
+        <div style='background: {Colors.BG_SECONDARY};
+                    border: 1px solid {Colors.BORDER_SUBTLE};
+                    border-left: 4px solid {Colors.INFO_BLUE};
+                    padding: 12px;
+                    border-radius: 8px;
+                    margin: 20px 0 10px 0;
+                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);'>
+            <h3 style='margin: 0; color: {Colors.TEXT_PRIMARY};'>🔮 Price Prediction: {html.escape(symbol)}</h3>
+            <p style='margin: 5px 0 0 0; font-size: 0.9em; color: {Colors.TEXT_SECONDARY};'>
                 30-Day: ${avg_pred:.2f} |
-                Change: <span style='color: {change_color};'>{change_symbol} {abs(change_pct):.1f}%</span> |
+                Change: <span style='color: {change_color}; font-weight: 600;'>{change_symbol} {abs(change_pct):.1f}%</span> |
                 Current: ${last_price:.2f}
             </p>
         </div>
@@ -397,13 +420,20 @@ class StockAnalysisApp(param.Parameterized):
 
     def _display_comparison_results(self, result: Dict[str, Any]):
         """Display stock comparison"""
+        from src.ui.design_system import Colors, HTMLComponents
+
         symbols = result.get('symbols', [])
         comparison_data = result.get('comparison_data', {})
 
         header_html = f"""
-        <div style='background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-                    color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;'>
-            <h2 style='margin: 0;'>⚖️ Comparison: {' vs '.join([html.escape(s) for s in symbols])}</h2>
+        <div style='background: {Colors.BG_SECONDARY};
+                    border: 1px solid {Colors.BORDER_SUBTLE};
+                    border-left: 4px solid {Colors.ACCENT_CYAN};
+                    padding: 15px;
+                    border-radius: 8px;
+                    margin-bottom: 15px;
+                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);'>
+            <h2 style='margin: 0; color: {Colors.TEXT_PRIMARY};'>⚖️ Comparison: {' vs '.join([html.escape(s) for s in symbols])}</h2>
         </div>
         """
         self.results_column.append(pn.pane.HTML(header_html))
@@ -417,6 +447,8 @@ class StockAnalysisApp(param.Parameterized):
 
     def _display_price_info(self, result: Dict[str, Any]):
         """Display current price"""
+        from src.ui.design_system import Colors, HTMLComponents
+
         symbol = result.get('symbol', 'Unknown')
         current_data = result.get('current_data', {})
         stock_info = result.get('stock_info', {})
@@ -426,14 +458,15 @@ class StockAnalysisApp(param.Parameterized):
         change = price - prev_close if price and prev_close else 0
         change_pct = (change / prev_close * 100) if prev_close else 0
 
+        price_color = Colors.SUCCESS_GREEN if change >= 0 else Colors.DANGER_RED
         price_html = f"""
-        <div style='background: #f9fafb; padding: 20px; border-radius: 8px; border-left: 4px solid #667eea;'>
-            <h2 style='margin: 0 0 10px 0;'>💰 {html.escape(symbol)} - {html.escape(stock_info.get('name', ''))}</h2>
-            <div style='font-size: 32px; font-weight: bold; margin: 10px 0;'>${price:.2f}</div>
-            <div style='color: {"#10b981" if change >= 0 else "#ef4444"}; font-size: 18px;'>
+        <div style='background: {Colors.BG_SECONDARY}; padding: 20px; border-radius: 8px; border-left: 4px solid {Colors.ACCENT_PURPLE};'>
+            <h2 style='margin: 0 0 10px 0; color: {Colors.TEXT_PRIMARY};'>💰 {html.escape(symbol)} - {html.escape(stock_info.get('name', ''))}</h2>
+            <div style='font-size: 32px; font-weight: bold; margin: 10px 0; color: {Colors.TEXT_PRIMARY};'>${price:.2f}</div>
+            <div style='color: {price_color}; font-size: 18px;'>
                 {"▲" if change >= 0 else "▼"} ${abs(change):.2f} ({change_pct:+.2f}%)
             </div>
-            <div style='margin-top: 15px; color: #6b7280;'>
+            <div style='margin-top: 15px; color: {Colors.TEXT_SECONDARY};'>
                 <div>Previous Close: ${prev_close:.2f}</div>
                 <div>Volume: {current_data.get('volume', 0):,}</div>
             </div>
@@ -443,11 +476,13 @@ class StockAnalysisApp(param.Parameterized):
 
     def _display_error_result(self, result: Dict[str, Any]):
         """Display error"""
+        from src.ui.design_system import Colors, HTMLComponents
+
         error_html = f"""
-        <div style='background: #fee2e2; padding: 20px; border-radius: 8px; border-left: 4px solid #ef4444;'>
-            <h3 style='margin: 0 0 10px 0; color: #991b1b;'>❌ Error</h3>
-            <p style='color: #7f1d1d;'>{html.escape(str(result.get('message', 'Unknown error')))}</p>
-            <div style='margin-top: 15px; font-size: 14px; color: #6b7280;'>
+        <div style='background: {Colors.DANGER_BG}; padding: 20px; border-radius: 8px; border-left: 4px solid {Colors.DANGER_RED};'>
+            <h3 style='margin: 0 0 10px 0; color: {Colors.DANGER_RED};'>❌ Error</h3>
+            <p style='color: {Colors.TEXT_PRIMARY};'>{html.escape(str(result.get('message', 'Unknown error')))}</p>
+            <div style='margin-top: 15px; font-size: 14px; color: {Colors.TEXT_SECONDARY};'>
                 <strong>Try:</strong> "Analyze AAPL" • "Predict GOOGL" • "Compare MSFT vs AAPL"
             </div>
         </div>
@@ -456,63 +491,69 @@ class StockAnalysisApp(param.Parameterized):
 
     def _display_general_response(self, result: Dict[str, Any]):
         """Display general response"""
+        from src.ui.design_system import Colors, HTMLComponents
+
         message = html.escape(str(result.get('message', 'How can I help?')))
         response_html = f"""
-        <div style='background: #f3f4f6; padding: 20px; border-radius: 8px;'>
-            <h3 style='margin: 0 0 10px 0;'>💡 {message}</h3>
-            <p style='color: #6b7280;'>Try: "Analyze AAPL" • "Predict GOOGL" • "Compare stocks"</p>
+        <div style='background: {Colors.BG_SECONDARY}; padding: 20px; border-radius: 8px;'>
+            <h3 style='margin: 0 0 10px 0; color: {Colors.TEXT_PRIMARY};'>💡 {message}</h3>
+            <p style='color: {Colors.TEXT_SECONDARY};'>Try: "Analyze AAPL" • "Predict GOOGL" • "Compare stocks"</p>
         </div>
         """
         self.results_column.append(pn.pane.HTML(response_html))
 
     def _create_compact_signals_card(self, trading_signals: Dict[str, Any]) -> pn.pane.HTML:
         """Create compact trading signals card"""
+        from src.ui.design_system import Colors, HTMLComponents
+
         signal = trading_signals.get('primary_signal', 'HOLD')
         confidence = trading_signals.get('confidence', 0)
         recommendations = trading_signals.get('recommendations', [])[:2]
 
-        signal_colors = {'BUY': '#10b981', 'SELL': '#ef4444', 'HOLD': '#f59e0b'}
-        color = signal_colors.get(signal, '#6b7280')
+        signal_colors = {'BUY': Colors.SUCCESS_GREEN, 'SELL': Colors.DANGER_RED, 'HOLD': Colors.WARNING_YELLOW}
+        color = signal_colors.get(signal, Colors.TEXT_MUTED)
 
         recs_html = ''.join([f"<li style='font-size: 13px;'>{html.escape(str(r))}</li>" for r in recommendations])
 
         html_content = f"""
-        <div style='background: white; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; flex: 1;'>
-            <div style='font-size: 13px; color: #6b7280; margin-bottom: 5px;'>Trading Signal</div>
+        <div style='background: {Colors.BG_PRIMARY}; padding: 15px; border-radius: 8px; border: 1px solid {Colors.BORDER_SUBTLE}; flex: 1;'>
+            <div style='font-size: 13px; color: {Colors.TEXT_SECONDARY}; margin-bottom: 5px;'>Trading Signal</div>
             <div style='font-size: 24px; font-weight: bold; color: {color};'>{signal}</div>
-            <div style='font-size: 12px; color: #9ca3af; margin: 5px 0;'>{confidence:.0f}% confidence</div>
-            <ul style='margin: 10px 0 0 0; padding-left: 20px; color: #4b5563;'>{recs_html}</ul>
+            <div style='font-size: 12px; color: {Colors.TEXT_MUTED}; margin: 5px 0;'>{confidence:.0f}% confidence</div>
+            <ul style='margin: 10px 0 0 0; padding-left: 20px; color: {Colors.TEXT_SECONDARY};'>{recs_html}</ul>
         </div>
         """
         return pn.pane.HTML(html_content)
 
     def _create_compact_predictions_card(self, predictions: Dict[str, Any]) -> pn.pane.HTML:
         """Create compact predictions card"""
+        from src.ui.design_system import Colors, HTMLComponents
+
         pred_values = predictions.get('predictions', [])
         last_price = predictions.get('last_price', 0)
 
         if pred_values:
             avg_pred = sum(pred_values) / len(pred_values)
             change_pct = ((avg_pred - last_price) / last_price * 100) if last_price else 0
-            color = '#10b981' if change_pct >= 0 else '#ef4444'
+            color = Colors.SUCCESS_GREEN if change_pct >= 0 else Colors.DANGER_RED
             symbol = '▲' if change_pct >= 0 else '▼'
         else:
             avg_pred = last_price
             change_pct = 0
-            color = '#6b7280'
+            color = Colors.TEXT_MUTED
             symbol = '→'
 
         html_content = f"""
-        <div style='background: white; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; flex: 1;'>
-            <div style='font-size: 13px; color: #6b7280; margin-bottom: 5px;'>30-Day Prediction</div>
-            <div style='font-size: 24px; font-weight: bold;'>${avg_pred:.2f}</div>
+        <div style='background: {Colors.BG_PRIMARY}; padding: 15px; border-radius: 8px; border: 1px solid {Colors.BORDER_SUBTLE}; flex: 1;'>
+            <div style='font-size: 13px; color: {Colors.TEXT_SECONDARY}; margin-bottom: 5px;'>30-Day Prediction</div>
+            <div style='font-size: 24px; font-weight: bold; color: {Colors.TEXT_PRIMARY};'>${avg_pred:.2f}</div>
             <div style='font-size: 14px; color: {color}; margin: 5px 0;'>
                 {symbol} {change_pct:+.1f}%
             </div>
-            <div style='font-size: 12px; color: #9ca3af;'>
+            <div style='font-size: 12px; color: {Colors.TEXT_MUTED};'>
                 Current: ${last_price:.2f}
             </div>
-            <div style='font-size: 11px; color: #9ca3af; margin-top: 8px; font-style: italic;'>
+            <div style='font-size: 11px; color: {Colors.TEXT_MUTED}; margin-top: 8px; font-style: italic;'>
                 ⚠️ Not financial advice
             </div>
         </div>
@@ -520,24 +561,30 @@ class StockAnalysisApp(param.Parameterized):
         return pn.pane.HTML(html_content)
 
     def _show_welcome(self):
-        """Show compact welcome message"""
-        welcome_html = """
-        <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white; padding: 25px; border-radius: 10px; text-align: center;'>
-            <h2 style='margin: 0 0 10px 0;'>📈 Stock Analysis and Trading AI</h2>
-            <p style='margin: 0 0 20px 0; opacity: 0.9;'>AI-powered stock analysis, predictions, and RL trading strategies</p>
+        """Show professional welcome message"""
+        from src.ui.design_system import Colors
+
+        welcome_html = f"""
+        <div style='background: {Colors.BG_SECONDARY};
+                    border: 1px solid {Colors.BORDER_SUBTLE};
+                    padding: 25px;
+                    border-radius: 8px;
+                    text-align: center;
+                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);'>
+            <h2 style='margin: 0 0 10px 0; color: {Colors.TEXT_PRIMARY};'>📈 Stock Analysis and Trading AI</h2>
+            <p style='margin: 0 0 20px 0; color: {Colors.TEXT_SECONDARY};'>AI-powered stock analysis, predictions, and RL trading strategies</p>
             <div style='display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; text-align: left;'>
-                <div style='background: rgba(255,255,255,0.1); padding: 12px; border-radius: 6px;'>
-                    <div style='font-weight: bold; margin-bottom: 5px;'>📊 Analysis</div>
-                    <div style='font-size: 13px; opacity: 0.9;'>Technical analysis & signals</div>
+                <div style='background: {Colors.BG_PRIMARY}; border: 1px solid {Colors.BORDER_SUBTLE}; padding: 12px; border-radius: 6px;'>
+                    <div style='font-weight: bold; margin-bottom: 5px; color: {Colors.TEXT_PRIMARY};'>📊 Analysis</div>
+                    <div style='font-size: 13px; color: {Colors.TEXT_SECONDARY};'>Technical analysis & signals</div>
                 </div>
-                <div style='background: rgba(255,255,255,0.1); padding: 12px; border-radius: 6px;'>
-                    <div style='font-weight: bold; margin-bottom: 5px;'>🔮 Predictions</div>
-                    <div style='font-size: 13px; opacity: 0.9;'>LSTM price forecasting</div>
+                <div style='background: {Colors.BG_PRIMARY}; border: 1px solid {Colors.BORDER_SUBTLE}; padding: 12px; border-radius: 6px;'>
+                    <div style='font-weight: bold; margin-bottom: 5px; color: {Colors.TEXT_PRIMARY};'>🔮 Predictions</div>
+                    <div style='font-size: 13px; color: {Colors.TEXT_SECONDARY};'>LSTM price forecasting</div>
                 </div>
-                <div style='background: rgba(255,255,255,0.1); padding: 12px; border-radius: 6px;'>
-                    <div style='font-weight: bold; margin-bottom: 5px;'>🤖 RL Trading</div>
-                    <div style='font-size: 13px; opacity: 0.9;'>Train AI trading agents</div>
+                <div style='background: {Colors.BG_PRIMARY}; border: 1px solid {Colors.BORDER_SUBTLE}; padding: 12px; border-radius: 6px;'>
+                    <div style='font-weight: bold; margin-bottom: 5px; color: {Colors.TEXT_PRIMARY};'>🤖 RL Trading</div>
+                    <div style='font-size: 13px; color: {Colors.TEXT_SECONDARY};'>Train AI trading agents</div>
                 </div>
             </div>
         </div>
@@ -552,6 +599,8 @@ class StockAnalysisApp(param.Parameterized):
     def get_analysis_tab(self):
         """Get the analysis tab layout"""
         # Input controls section with similar style to RL Trading
+        from src.ui.design_system import Colors
+
         input_section = pn.Column(
             pn.Row(
                 self.query_input,
@@ -561,7 +610,7 @@ class StockAnalysisApp(param.Parameterized):
             ),
             self.force_retrain_checkbox,
             self.quick_buttons,
-            styles=dict(background='#f9fafb', border_radius='8px', padding='15px'),
+            styles=dict(background=Colors.BG_SECONDARY, border_radius='8px', padding='15px'),
             margin=(0, 0, 15, 0)
         )
 
@@ -573,20 +622,8 @@ class StockAnalysisApp(param.Parameterized):
         ])
 
         # Disclaimer at bottom
-        disclaimer_html = """
-        <div style='background: #fef3c7; border: 1px solid #fbbf24; padding: 15px; border-radius: 8px; margin-top: 20px;'>
-            <h4 style='margin: 0 0 10px 0; color: #92400e;'>⚠️ Educational Disclaimer</h4>
-            <ul style='margin: 0; padding-left: 20px; font-size: 12px; color: #78350f; line-height: 1.6;'>
-                <li><strong>Educational purpose only.</strong> Not financial advice.</li>
-                <li><strong>AI Analysis:</strong> Powered by Ollama and LSTM models for learning purposes</li>
-                <li><strong>Technical Indicators:</strong> Past performance doesn't guarantee future results</li>
-                <li><strong>Predictions:</strong> 30-day forecasts are experimental and for educational use only</li>
-            </ul>
-            <div style='margin-top: 8px; padding-top: 8px; border-top: 1px solid #fbbf24; font-size: 11px; color: #78350f;'>
-                Always consult qualified financial professionals before making investment decisions.
-            </div>
-        </div>
-        """
+        from src.ui.design_system import HTMLComponents
+        disclaimer_html = HTMLComponents.disclaimer()
 
         return pn.Column(
             input_section,
@@ -598,40 +635,49 @@ class StockAnalysisApp(param.Parameterized):
 
 
 def create_app():
-    """Create and configure the Panel application with tabs"""
+    """Create and configure the Panel application with professional navigation"""
     from src.ui.rl_components import CompactRLPanel
+    from src.ui.pages.dashboard import DashboardPage
+    from src.ui.pages.portfolio import PortfolioPage
+    from src.ui.pages.models import ModelsPage
+    from src.ui.design_system import Colors
 
-    # Create main app
-    main_app = StockAnalysisApp()
-
-    # Create RL panel
+    # Create all pages
+    dashboard_page = DashboardPage()
+    analysis_app = StockAnalysisApp()
     rl_panel = CompactRLPanel()
+    portfolio_page = PortfolioPage()
+    models_page = ModelsPage()
 
-    # Create tabs
+    # Create professional navigation tabs
     tabs = pn.Tabs(
-        ('📊 Analysis', main_app.get_analysis_tab()),
-        ('🤖 RL Trading', rl_panel.get_panel()),
+        ('📊 Dashboard', dashboard_page.get_view()),
+        ('📈 Analysis', analysis_app.get_analysis_tab()),
+        ('🤖 Trading', rl_panel.get_panel()),
+        ('💼 Portfolio', portfolio_page.get_view()),
+        ('🧠 Models', models_page.get_view()),
         dynamic=True,
         sizing_mode="stretch_width",
         tabs_location='above',
         active=0
     )
 
-    # Main layout (no header)
+    # Main layout with professional styling
     layout = pn.Column(
         tabs,
         sizing_mode="stretch_width",
-        max_width=1400,
-        margin=(10, 20)
+        max_width=1600,
+        margin=(0, 0)
     )
 
-    # Create template
+    # Create template with light theme
     template = pn.template.FastListTemplate(
-        title="Stock Analysis and Trading AI",
+        title="Stock Agent Pro",
         sidebar=[],
-        header_background='#1f2937',
+        header_background=Colors.ACCENT_PURPLE,  # Use purple for better visibility
         theme='default',
-        main_max_width='1400px',
+        main_max_width='1600px',
+        theme_toggle=False,  # Disable theme toggle
     )
     template.main.append(layout)
 
