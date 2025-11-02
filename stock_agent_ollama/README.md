@@ -12,22 +12,19 @@ An intelligent financial platform combining **AI-powered analysis**, **LSTM neur
 ## 🎯 What It Does
 
 ### 📊 Stock Analysis & Prediction
-- **Natural Language Queries** with Ollama AI (gemma3:latest)
+- **Natural Language Queries** with Ollama AI
 - **30-Day LSTM Predictions** using ensemble neural networks
-- **17+ Technical Indicators** (RSI, MACD, Bollinger Bands, etc.)
-- **AI Educational Explanations** for beginners and experts
+- **Technical Indicators** (RSI, MACD, Bollinger Bands, etc.)
 - **Interactive Visualizations** with real-time charts
 
 ![Stock Analysis Screenshot](docs/screenshots/analysis.png)
 *Natural language stock analysis with AI-powered insights and LSTM predictions*
 
 ### 🎮 Reinforcement Learning Trading
-- **Train RL Agents** using PPO and A2C algorithms (Stable-Baselines3)
-- **LSTM Hybrid Architecture** for temporal pattern extraction (optional)
-- **Comprehensive Backtesting** with 15+ risk metrics
-- **Action Visualization** - see agent decisions (SELL/HOLD/BUY_SMALL/BUY_LARGE) with buy/sell markers on performance charts
+- **Train RL Agents** using PPO and A2C algorithms
+- **LSTM Hybrid Architecture** for temporal pattern extraction
+- **Comprehensive Backtesting** with performance metrics
 - **Strategy Comparison** against Buy & Hold and Momentum baselines
-- **Auto-Load Models** for seamless backtesting workflow
 
 ![RL Trading Screenshot](docs/screenshots/rl_trading.png)
 *Train and backtest RL agents with comprehensive performance metrics*
@@ -146,27 +143,6 @@ stock_agent_ollama/
 
 ---
 
-## 💡 Key Features
-
-### Hybrid Intelligence
-- AI-first with Ollama for natural language understanding
-- Reliable regex fallback ensures consistent functionality
-- Educational explanations adapted to user knowledge level
-
-### Advanced Analytics
-- Ensemble LSTM models for robust predictions
-- Professional-grade technical indicators
-- Automated trading signals with confidence scores
-
-### Reinforcement Learning
-- State-of-the-art PPO and A2C algorithms
-- Optional LSTM feature extractor (hybrid architecture)
-- Realistic environments with transaction costs and slippage
-- 15+ performance metrics (Sharpe, Sortino, Calmar, Win Rate, etc.)
-- Action distribution analysis and visualization
-
----
-
 ## ⚙️ Configuration
 
 **Environment Variables:**
@@ -203,31 +179,6 @@ curl http://localhost:11434/api/tags
 | RL training slow | Reduce timesteps or lookback window |
 
 **More Help**: See [QUICK_START.md](docs/QUICK_START.md#troubleshooting)
-
----
-
-## ⚖️ Educational License & Disclaimer
-
-### Purpose
-This platform is designed for **educational and research purposes** to demonstrate:
-- Modern AI techniques in financial analysis
-- LSTM neural networks for time series forecasting
-- Reinforcement learning for algorithmic trading
-- Professional software development practices
-
-### Important Disclaimers
-- 📚 **Educational Use Only** - Not for actual trading decisions
-- ⚠️ **No Financial Advice** - AI and RL predictions are for learning
-- 🔬 **Research Tool** - Academic and educational exploration
-- 📊 **Past Performance** - Does not guarantee future results
-- 🎮 **Simulated Trading** - RL agents trained on historical data
-
-### Risk Acknowledgment
-- AI and RL predictions are experimental and educational
-- Markets are unpredictable and can change rapidly
-- Always consult qualified financial professionals
-- Use paper trading to test strategies safely
-- RL agents may not perform well in live markets
 
 ---
 
