@@ -177,7 +177,7 @@ class RLVisualizer:
         title: str = "Strategy Comparison"
     ) -> go.Figure:
         """
-        Plot comparison of multiple strategies.
+        Plot comparison of multiple strategies with buy/sell indicators.
 
         Args:
             results: Dictionary mapping strategy names to results
@@ -188,7 +188,7 @@ class RLVisualizer:
         """
         fig = go.Figure()
 
-        colors = ['blue', 'green', 'red', 'purple', 'orange', 'brown']
+        colors = ['blue', 'purple', 'orange', 'brown', 'darkgray', 'navy']
 
         for idx, (name, result) in enumerate(results.items()):
             color = colors[idx % len(colors)]
@@ -197,13 +197,80 @@ class RLVisualizer:
             initial_value = result.portfolio_values[0]
             normalized_values = ((result.portfolio_values / initial_value) - 1) * 100
 
+            # Plot equity curve
             fig.add_trace(go.Scatter(
                 x=result.dates,
                 y=normalized_values[1:],
                 mode='lines',
                 name=name,
-                line=dict(color=color, width=2)
+                line=dict(color=color, width=2),
+                showlegend=True
             ))
+
+            # Add buy/sell markers for RL agents (first strategy only to avoid clutter)
+            if idx == 0 and hasattr(result, 'trades') and len(result.trades) > 0:
+                # Extract buy and sell trades
+                buy_dates = []
+                buy_values = []
+                buy_prices = []
+                sell_dates = []
+                sell_values = []
+                sell_prices = []
+
+                for trade in result.trades:
+                    # Find the index of the trade date in the dates array
+                    trade_date = trade.get('date')
+                    if trade_date in result.dates:
+                        trade_step = result.dates.index(trade_date)
+                        trade_value = normalized_values[trade_step + 1]  # +1 because normalized_values[1:] (excludes initial value)
+                        trade_price = trade.get('price')
+
+                        if trade.get('action') == 'BUY':
+                            buy_dates.append(trade_date)
+                            buy_values.append(trade_value)
+                            buy_prices.append(trade_price)
+                        elif trade.get('action') == 'SELL':
+                            sell_dates.append(trade_date)
+                            sell_values.append(trade_value)
+                            sell_prices.append(trade_price)
+
+                # Add buy markers - made larger and more visible
+                if buy_dates:
+                    fig.add_trace(go.Scatter(
+                        x=buy_dates,
+                        y=buy_values,
+                        mode='markers',
+                        name='Buy',
+                        marker=dict(
+                            symbol='triangle-up',
+                            size=16,
+                            color='#10b981',
+                            line=dict(color='#059669', width=2),
+                            opacity=0.9
+                        ),
+                        customdata=buy_prices,
+                        hovertemplate='<b>BUY</b><br>Price: $%{customdata:.2f}<extra></extra>',
+                        showlegend=False
+                    ))
+
+                # Add sell markers - made larger and more visible
+                if sell_dates:
+                    fig.add_trace(go.Scatter(
+                        x=sell_dates,
+                        y=sell_values,
+                        mode='markers',
+                        name='Sell',
+                        marker=dict(
+                            symbol='triangle-down',
+                            size=16,
+                            color='#ef4444',
+                            line=dict(color='#dc2626', width=2),
+                            opacity=0.9
+                        ),
+                        customdata=sell_prices,
+                        hovertemplate='<b>SELL</b><br>Price: $%{customdata:.2f}<extra></extra>',
+                        showlegend=False
+                    ))
 
         fig.update_layout(
             title=title,
@@ -212,11 +279,12 @@ class RLVisualizer:
             template="plotly_white",
             hovermode='x unified',
             height=500,
+            margin=dict(r=150),  # Add right margin for legend
             legend=dict(
                 yanchor="top",
                 y=0.99,
                 xanchor="left",
-                x=0.01
+                x=1.02  # Position legend outside plot area
             )
         )
 
