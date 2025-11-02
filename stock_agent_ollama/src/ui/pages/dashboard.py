@@ -128,6 +128,14 @@ class DashboardPage(param.Parameterized):
             self.quick_actions_panel,
             sizing_mode="stretch_width",
         )
+
+        content_row = pn.Row(
+            left_column,
+            right_column,
+            sizing_mode="stretch_width",
+            min_height=350
+        )
+
         return pn.Column(
             pn.Row(
                 pn.pane.HTML(f"<h1 style='margin: 0; color: {Colors.TEXT_PRIMARY}; font-size: 1.75rem;'>📊 Dashboard</h1>"),
@@ -137,11 +145,7 @@ class DashboardPage(param.Parameterized):
                 styles=dict(background=Colors.BG_SECONDARY, border_radius='8px', padding='15px'),
                 margin=(0, 0, 15, 0)
             ),
-            pn.Row(
-                left_column,
-                right_column,
-                sizing_mode="stretch_width"
-            ),
+            content_row,
             HTMLComponents.disclaimer(),
             sizing_mode="stretch_width"
         )
