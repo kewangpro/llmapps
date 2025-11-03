@@ -28,9 +28,9 @@ class StockFetcher:
         # Convert to string and strip whitespace
         symbol = str(symbol).strip().upper()
         
-        # Allow only alphanumeric characters, dots, and hyphens (common in stock symbols)
+        # Allow alphanumeric characters, dots, hyphens, and ^ (for indices)
         # This prevents path traversal and other injection attacks
-        if not re.match(r'^[A-Z0-9.-]+$', symbol):
+        if not re.match(r'^[\^A-Z0-9.-]+$', symbol):
             raise ValueError(f"Invalid stock symbol format: {symbol}")
         
         # Limit length to reasonable stock symbol length
@@ -143,16 +143,16 @@ class StockFetcher:
         try:
             # Validate and sanitize the symbol
             validated_symbol = self._validate_symbol(symbol)
-            
+
             ticker = yf.Ticker(validated_symbol)
             info = ticker.info
-            
+
             current_price = info.get('currentPrice') or info.get('regularMarketPrice')
             if current_price is None:
                 # Fallback to latest close from history
                 data = self.fetch_stock_data(validated_symbol, period="5d", interval="1d")
                 current_price = data['Close'].iloc[-1] if not data.empty else None
-            
+
             return {
                 'symbol': validated_symbol,
                 'current_price': current_price,
@@ -161,9 +161,9 @@ class StockFetcher:
                 'previous_close': info.get('previousClose'),
                 'timestamp': datetime.now().isoformat()
             }
-            
+
         except Exception as e:
-            logger.error(f"Failed to get real-time price for {validated_symbol}: {e}")
+            logger.error(f"Failed to get real-time price for {symbol}: {e}")
             raise
     
     def get_multiple_stocks(self, symbols: List[str], period: str = "1y") -> Dict[str, pd.DataFrame]:
