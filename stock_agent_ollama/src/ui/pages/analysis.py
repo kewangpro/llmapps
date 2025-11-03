@@ -667,9 +667,87 @@ def create_app():
     from src.ui.pages.portfolio import PortfolioPage
     from src.ui.pages.models import ModelsPage
     from src.ui.design_system import Colors
+    from src.tools.stock_fetcher import StockFetcher
+    from datetime import datetime
+
+    # Create watchlist panel class
+    class WatchlistPanel:
+        """Watchlist panel that can be refreshed"""
+        def __init__(self):
+            self.stock_fetcher = StockFetcher()
+            self.watchlist_symbols = ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META", "TEAM"]
+            self.pane = pn.pane.HTML("", sizing_mode="stretch_width")
+            self.refresh()
+
+        def refresh(self):
+            """Refresh watchlist data"""
+            watchlist_html = f"""
+            <div style='background: {Colors.BG_SECONDARY}; border: 1px solid {Colors.BORDER_SUBTLE}; border-radius: 8px; padding: 10px;'>
+                <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 2px solid {Colors.BORDER_SUBTLE}; padding-bottom: 8px;'>
+                    <h3 style='margin: 0; font-size: 1rem; color: {Colors.TEXT_PRIMARY};'>⭐ Watchlist</h3>
+                    <span style='font-size: 0.7rem; color: {Colors.TEXT_SECONDARY};'>{datetime.now().strftime('%I:%M %p')}</span>
+                </div>
+                <div style='max-height: 650px; overflow-y: auto;'>
+            """
+
+            for symbol in self.watchlist_symbols:
+                try:
+                    real_time_data = self.stock_fetcher.get_real_time_price(symbol)
+                    price = real_time_data.get('current_price', 0) or 0
+                    prev_close = real_time_data.get('previous_close', 0) or 0
+                    change = price - prev_close
+                    change_pct = (change / prev_close * 100) if prev_close else 0
+                    color = Colors.SUCCESS_GREEN if change >= 0 else Colors.DANGER_RED
+                    symbol_icon = '▲' if change >= 0 else '▼'
+
+                    watchlist_html += f"""
+                    <div style='background: {Colors.BG_PRIMARY};
+                                border: 1px solid {Colors.BORDER_SUBTLE};
+                                border-radius: 6px;
+                                padding: 10px;
+                                margin-bottom: 8px;
+                                cursor: pointer;
+                                transition: all 0.2s;'
+                         onmouseover='this.style.background="{Colors.BG_HOVER}"'
+                         onmouseout='this.style.background="{Colors.BG_PRIMARY}"'>
+                        <div style='display: flex; justify-content: space-between; align-items: center;'>
+                            <div style='font-weight: 600; color: {Colors.TEXT_PRIMARY}; font-size: 0.9rem;'>{symbol}</div>
+                            <div style='text-align: right;'>
+                                <div style='font-family: monospace; font-size: 0.85rem; color: {Colors.TEXT_PRIMARY};'>${price:.2f}</div>
+                                <div style='font-size: 0.75rem; color: {color}; font-weight: 600;'>{symbol_icon} {change_pct:+.2f}%</div>
+                            </div>
+                        </div>
+                    </div>
+                    """
+                except Exception as e:
+                    logger.warning(f"Failed to fetch {symbol} for watchlist: {e}")
+                    watchlist_html += f"""
+                    <div style='background: {Colors.BG_PRIMARY}; border: 1px solid {Colors.BORDER_SUBTLE}; border-radius: 6px; padding: 10px; margin-bottom: 8px; opacity: 0.5;'>
+                        <div style='font-weight: 600; color: {Colors.TEXT_SECONDARY}; font-size: 0.9rem;'>{symbol}</div>
+                        <div style='font-size: 0.75rem; color: {Colors.TEXT_MUTED};'>Loading...</div>
+                    </div>
+                    """
+
+            watchlist_html += """
+                </div>
+            </div>
+            """
+
+            self.pane.object = watchlist_html
+
+        def get_panel(self):
+            """Get the panel component"""
+            return self.pane
+
+    # Create watchlist instance
+    watchlist_panel = WatchlistPanel()
+    watchlist_sidebar = pn.Column(
+        watchlist_panel.get_panel(),
+        sizing_mode="stretch_width"
+    )
 
     # Create all pages
-    dashboard_page = DashboardPage()
+    dashboard_page = DashboardPage(watchlist_panel=watchlist_panel)
     analysis_app = StockAnalysisApp()
     rl_panel = CompactRLPanel()
     portfolio_page = PortfolioPage()
@@ -696,82 +774,14 @@ def create_app():
         margin=(0, 0)
     )
 
-    # Create the global watchlist in the sidebar
-    from src.tools.stock_fetcher import StockFetcher
-    stock_fetcher = StockFetcher()
-
-    def create_watchlist_sidebar():
-        """Create interactive watchlist for sidebar"""
-        from src.ui.design_system import Colors
-
-        watchlist_symbols = ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META", "TEAM"]
-
-        watchlist_html = f"""
-        <div style='background: {Colors.BG_SECONDARY}; border: 1px solid {Colors.BORDER_SUBTLE}; border-radius: 8px; padding: 10px;'>
-            <h3 style='margin: 0 0 10px 0; font-size: 1rem; color: {Colors.TEXT_PRIMARY}; border-bottom: 2px solid {Colors.BORDER_SUBTLE}; padding-bottom: 8px;'>
-                ⭐ Watchlist
-            </h3>
-            <div style='max-height: 650px; overflow-y: auto;'>
-        """
-
-        for symbol in watchlist_symbols:
-            try:
-                real_time_data = stock_fetcher.get_real_time_price(symbol)
-                price = real_time_data.get('current_price', 0) or 0
-                prev_close = real_time_data.get('previous_close', 0) or 0
-                change = price - prev_close
-                change_pct = (change / prev_close * 100) if prev_close else 0
-                color = Colors.SUCCESS_GREEN if change >= 0 else Colors.DANGER_RED
-                symbol_icon = '▲' if change >= 0 else '▼'
-
-                watchlist_html += f"""
-                <div style='background: {Colors.BG_PRIMARY};
-                            border: 1px solid {Colors.BORDER_SUBTLE};
-                            border-radius: 6px;
-                            padding: 10px;
-                            margin-bottom: 8px;
-                            cursor: pointer;
-                            transition: all 0.2s;'
-                     onmouseover='this.style.background="{Colors.BG_HOVER}"'
-                     onmouseout='this.style.background="{Colors.BG_PRIMARY}"'>
-                    <div style='display: flex; justify-content: space-between; align-items: center;'>
-                        <div style='font-weight: 600; color: {Colors.TEXT_PRIMARY}; font-size: 0.9rem;'>{symbol}</div>
-                        <div style='text-align: right;'>
-                            <div style='font-family: monospace; font-size: 0.85rem; color: {Colors.TEXT_PRIMARY};'>${price:.2f}</div>
-                            <div style='font-size: 0.75rem; color: {color}; font-weight: 600;'>{symbol_icon} {change_pct:+.2f}%</div>
-                        </div>
-                    </div>
-                </div>
-                """
-            except Exception as e:
-                logger.warning(f"Failed to fetch {symbol} for watchlist: {e}")
-                watchlist_html += f"""
-                <div style='background: {Colors.BG_PRIMARY}; border: 1px solid {Colors.BORDER_SUBTLE}; border-radius: 6px; padding: 10px; margin-bottom: 8px; opacity: 0.5;'>
-                    <div style='font-weight: 600; color: {Colors.TEXT_SECONDARY}; font-size: 0.9rem;'>{symbol}</div>
-                    <div style='font-size: 0.75rem; color: {Colors.TEXT_MUTED};'>Loading...</div>
-                </div>
-                """
-
-        watchlist_html += """
-            </div>
-        </div>
-        """
-
-        return pn.pane.HTML(watchlist_html, sizing_mode="stretch_width")
-
-    watchlist_sidebar = pn.Column(
-        create_watchlist_sidebar(),
-        sizing_mode="stretch_width"
-    )
-
     # Create template with light theme
     template = pn.template.FastListTemplate(
         title="Stock Agent Pro",
         sidebar=[watchlist_sidebar],
-        header_background=Colors.ACCENT_PURPLE,  # Use accent purple for better visibility
+        header_background=Colors.ACCENT_PURPLE,
         theme='default',
         main_max_width='1600px',
-        theme_toggle=False,  # Disable theme toggle
+        theme_toggle=False,
     )
     template.main.append(layout)
 

@@ -16,9 +16,10 @@ logger = logging.getLogger(__name__)
 class DashboardPage(param.Parameterized):
     """Professional dashboard with market overview and quick actions"""
 
-    def __init__(self, **params):
+    def __init__(self, watchlist_panel=None, **params):
         super().__init__(**params)
         self.stock_fetcher = StockFetcher()
+        self.watchlist_panel = watchlist_panel
         self._create_ui()
 
     def _create_ui(self):
@@ -38,6 +39,10 @@ class DashboardPage(param.Parameterized):
         try:
             self._load_market_overview()
             self._load_quick_actions()
+            # Also refresh watchlist if available
+            if self.watchlist_panel:
+                self.watchlist_panel.refresh()
+            pn.state.notifications.success("Dashboard and watchlist refreshed", duration=2000)
         except Exception as e:
             logger.error(f"Dashboard refresh failed: {e}")
             pn.state.notifications.error(f"Failed to refresh dashboard: {str(e)}", duration=5000)
@@ -45,7 +50,7 @@ class DashboardPage(param.Parameterized):
     def _load_market_overview(self):
         """Load market overview with major indices"""
         indices = {
-            "SPY": "S&P 500", "QQQ": "NASDAQ", "DIA": "Dow Jones", "IWM": "Russell 2000"
+            "^GSPC": "S&P 500", "^IXIC": "NASDAQ", "^DJI": "Dow Jones", "^RUT": "Russell 2000"
         }
         overview_html = f"""
         <div style='background: {Colors.BG_SECONDARY}; border: 1px solid {Colors.BORDER_SUBTLE}; border-left: 4px solid {Colors.ACCENT_PURPLE}; padding: 15px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);'>
