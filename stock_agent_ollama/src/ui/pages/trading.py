@@ -18,9 +18,6 @@ logger = logging.getLogger(__name__)
 class CompactRLPanel(param.Parameterized):
     """Compact integrated RL panel for training and backtesting."""
 
-    # Common parameters
-    symbol = param.Selector(default="AAPL", objects=["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA", "ORCL"])
-
     def __init__(self, **params):
         super().__init__(**params)
         self.trainer = None
@@ -29,6 +26,19 @@ class CompactRLPanel(param.Parameterized):
 
     def _create_ui(self):
         """Create compact UI components."""
+        # Symbol input with autocomplete
+        self.symbol_input = pn.widgets.AutocompleteInput(
+            name='',
+            value='AAPL',
+            options=['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'ORCL',
+                     'TEAM', 'NFLX', 'AMD', 'INTC', 'QCOM', 'CRM', 'ADBE', 'PYPL'],
+            placeholder='Enter symbol...',
+            case_sensitive=False,
+            width=120,
+            height=35,
+            min_characters=1
+        )
+
         # Training configuration (compact)
         self.agent_type = pn.widgets.RadioButtonGroup(
             name='Agent',
@@ -108,7 +118,14 @@ class CompactRLPanel(param.Parameterized):
         self.progress_bar.value = 0
         self.results_panel.clear()
 
-        pn.state.notifications.info(f"Starting {self.agent_type.value} training on {self.symbol}...", duration=3000)
+        symbol = self.symbol_input.value.strip().upper()
+        if not symbol:
+            pn.state.notifications.error("Please enter a stock symbol", duration=3000)
+            self.is_training = False
+            self.train_button.disabled = False
+            return
+
+        pn.state.notifications.info(f"Starting {self.agent_type.value} training on {symbol}...", duration=3000)
 
         def train_thread():
             try:
@@ -120,7 +137,7 @@ class CompactRLPanel(param.Parameterized):
 
                 # Create config
                 config = TrainingConfig(
-                    symbol=self.symbol,
+                    symbol=symbol,
                     start_date=start_date,
                     end_date=end_date,
                     agent_type=self.agent_type.value.lower(),
@@ -134,7 +151,7 @@ class CompactRLPanel(param.Parameterized):
                 results = self.trainer.train()
 
                 # Display results
-                pn.state.execute(lambda: self._display_training_results(results))
+                pn.state.execute(lambda: self._display_training_results(results, symbol))
                 pn.state.execute(lambda: pn.state.notifications.success("Training complete!", duration=5000))
 
             except Exception as e:
@@ -160,7 +177,7 @@ class CompactRLPanel(param.Parameterized):
             progress = int((progress_data['timestep'] / self.timesteps.value) * 100)
             pn.state.execute(lambda: setattr(self.progress_bar, 'value', min(progress, 100)))
 
-    def _display_training_results(self, results: Dict):
+    def _display_training_results(self, results: Dict, symbol: str):
         """Display training results - compact version."""
         self.results_panel.clear()
 
@@ -180,7 +197,7 @@ class CompactRLPanel(param.Parameterized):
             <h3 style='margin: 0; color: #212529;'>✅ Training Complete</h3>
             <p style='margin: 5px 0 0 0; font-size: 0.9em; color: #495057;'>
                 Agent: {agent_name} |
-                Stock: {self.symbol} |
+                Stock: {symbol} |
                 Episodes: {results.get('total_episodes', 0)} |
                 Time: {results.get('training_time', 0):.1f}s |
                 Model: {Path(results.get('final_model_path', '')).name}
@@ -195,7 +212,7 @@ class CompactRLPanel(param.Parameterized):
                 from src.rl import RLVisualizer
                 fig = RLVisualizer.plot_training_progress(
                     results['training_stats'],
-                    title=f"{agent_name} Training Progress - {self.symbol}"
+                    title=f"{agent_name} Training Progress - {symbol}"
                 )
                 self.results_panel.append(pn.pane.Plotly(fig, sizing_mode="stretch_width", height=350))
             except Exception as e:
@@ -245,7 +262,12 @@ class CompactRLPanel(param.Parameterized):
         self.results_panel.clear()
         self.results_panel.append(pn.indicators.LoadingSpinner(value=True, size=50))
 
-        pn.state.notifications.info(f"Running backtest on {self.symbol}...", duration=3000)
+        symbol = self.symbol_input.value.strip().upper()
+        if not symbol:
+            pn.state.notifications.error("Please enter a stock symbol", duration=3000)
+            return
+
+        pn.state.notifications.info(f"Running backtest on {symbol}...", duration=3000)
 
         def backtest_thread():
             try:
@@ -257,7 +279,7 @@ class CompactRLPanel(param.Parameterized):
                 start_date = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
 
                 config = BacktestConfig(
-                    symbol=self.symbol,
+                    symbol=symbol,
                     start_date=start_date,
                     end_date=end_date
                 )
@@ -269,7 +291,7 @@ class CompactRLPanel(param.Parameterized):
                 results = {}
 
                 # Check if there's a trained RL model for this symbol
-                model_info = self._find_latest_model(self.symbol)
+                model_info = self._find_latest_model(symbol)
                 if model_info:
                     try:
                         # Load the trained agent
@@ -302,7 +324,7 @@ class CompactRLPanel(param.Parameterized):
                 results['Momentum'] = engine.run_strategy_backtest(momentum.get_action)
 
                 # Display results
-                pn.state.execute(lambda: self._display_backtest_results(results))
+                pn.state.execute(lambda: self._display_backtest_results(results, symbol))
                 pn.state.execute(lambda: pn.state.notifications.success("Backtest complete!", duration=3000))
 
             except Exception as e:
@@ -314,7 +336,7 @@ class CompactRLPanel(param.Parameterized):
         thread.daemon = True
         thread.start()
 
-    def _display_backtest_results(self, results: Dict):
+    def _display_backtest_results(self, results: Dict, symbol: str):
         """Display backtest results - compact."""
         self.results_panel.clear()
 
@@ -327,7 +349,7 @@ class CompactRLPanel(param.Parameterized):
                     border-radius: 8px;
                     margin-bottom: 15px;
                     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);'>
-            <h3 style='margin: 0; color: #212529;'>📊 Backtest Results: {self.symbol}</h3>
+            <h3 style='margin: 0; color: #212529;'>📊 Backtest Results: {symbol}</h3>
             <p style='margin: 5px 0 0 0; color: #495057; font-size: 13px;'>Last 6 months performance comparison</p>
         </div>
         """
@@ -402,7 +424,7 @@ class CompactRLPanel(param.Parameterized):
 
             # Strategy comparison chart
             try:
-                fig = RLVisualizer.plot_strategy_comparison(results, title=f"Performance Comparison - {self.symbol}")
+                fig = RLVisualizer.plot_strategy_comparison(results, title=f"Performance Comparison - {symbol}")
                 self.results_panel.append(pn.pane.Plotly(fig, sizing_mode="stretch_width", height=350))
             except Exception as e:
                 logger.error(f"Error plotting strategy comparison: {e}", exc_info=True)
@@ -447,7 +469,7 @@ class CompactRLPanel(param.Parameterized):
             pn.Row(
                 pn.Column(
                     pn.pane.HTML("<div style='font-size: 12px; color: #6b7280; margin-bottom: 5px; font-weight: 500;'>Symbol</div>"),
-                    pn.widgets.Select.from_param(self.param.symbol, name='', width=120, height=35),
+                    self.symbol_input,
                     width=150
                 ),
                 pn.Column(

@@ -87,7 +87,7 @@ class StockAnalysisApp(param.Parameterized):
         self.lstm_status_text = pn.pane.HTML("")
 
         # Quick action buttons - more compact
-        quick_stocks = ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META"]
+        quick_stocks = ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META", "TEAM"]
         self.quick_buttons = pn.Row(
             *[pn.widgets.Button(name=sym, button_type="light", width=70, height=30)
               for sym in quick_stocks],
@@ -704,14 +704,14 @@ def create_app():
         """Create interactive watchlist for sidebar"""
         from src.ui.design_system import Colors
 
-        watchlist_symbols = ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA"]
+        watchlist_symbols = ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META", "TEAM"]
 
         watchlist_html = f"""
         <div style='background: {Colors.BG_SECONDARY}; border: 1px solid {Colors.BORDER_SUBTLE}; border-radius: 8px; padding: 10px;'>
             <h3 style='margin: 0 0 10px 0; font-size: 1rem; color: {Colors.TEXT_PRIMARY}; border-bottom: 2px solid {Colors.BORDER_SUBTLE}; padding-bottom: 8px;'>
                 ⭐ Watchlist
             </h3>
-            <div style='max-height: 500px; overflow-y: auto;'>
+            <div style='max-height: 650px; overflow-y: auto;'>
         """
 
         for symbol in watchlist_symbols:
