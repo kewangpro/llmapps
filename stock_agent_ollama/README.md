@@ -149,11 +149,11 @@ stock_agent_ollama/
 │   │   ├── networks.py            # LSTM feature extractor
 │   │   └── visualizer.py          # RL visualizations
 │   └── ui/                        # Web interface
-│       ├── components.py          # Main app & sidebar
 │       ├── design_system.py       # Colors, styles, tables
-│       ├── rl_components.py       # RL training UI
 │       └── pages/                 # Page implementations
+│           ├── analysis.py        # Main app & analysis page
 │           ├── dashboard.py       # Market overview
+│           ├── trading.py         # RL training UI
 │           ├── portfolio.py       # Holdings & P&L
 │           └── models.py          # Model registry
 ├── data/
