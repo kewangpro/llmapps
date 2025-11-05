@@ -142,8 +142,11 @@ The platform features a professional light-theme interface with 6 main pages:
 
 ## 🔴 Live Trading
 
-### Starting a Live Trading Session
+### Starting & Resuming a Live Trading Session
 
+The live trading session is **persistent**. You can stop the application and restart it, and your session will be automatically saved and reloaded.
+
+**Starting a New Session:**
 1. Click **Live Trade** tab
 2. **Configure Settings**:
    - **Symbol**: Select stock (AAPL, MSFT, GOOGL, etc.)
@@ -153,6 +156,11 @@ The platform features a professional light-theme interface with 6 main pages:
    - **Stop Loss**: Automatic stop-loss percentage (5% default)
 3. Click **"▶ Start Trading"**
 4. Monitor real-time updates
+
+**Resuming a Session:**
+1.  Start the application.
+2.  The previous session will be loaded automatically.
+3.  Navigate to the **Live Trade** tab to view your session.
 
 **Live Trading Dashboard:**
 - **Trading Status**: Session status, runtime, last update

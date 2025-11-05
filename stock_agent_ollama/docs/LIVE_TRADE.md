@@ -214,6 +214,21 @@ class Position:
 
 **Purpose:** Protect capital with automated safety controls
 
+### 6. Session Persistence
+
+**Purpose:** To save and load the state of a live trading session, allowing it to be resumed across application restarts.
+
+**Mechanism:**
+- The state of the `TradingSession` object, including the `Portfolio`, `Position`, and `Trade` objects, is serialized to a JSON file.
+- The session state is saved automatically:
+    - Periodically (e.g., every 5 minutes) while the session is running.
+    - When the "Stop Trading" button is clicked.
+- When the application starts, it checks for a saved session file and loads it if found.
+
+**State File:**
+- Location: `data/live_sessions/live_session.json`
+- Format: JSON
+
 **Risk Controls:**
 
 **A. Stop-Loss Mechanisms:**
@@ -273,6 +288,9 @@ class TradingHours:
 
 ```
 1. INITIALIZATION
+   ├─ Check for saved session file
+   ├─ If found, load session state (RESUME)
+   ├─ If not found, start new session (NEW)
    ├─ Load trained RL agent
    ├─ Initialize portfolio (starting cash)
    ├─ Configure risk parameters
@@ -293,8 +311,8 @@ class TradingHours:
    └─ Update dashboard
 
 3. SHUTDOWN
+   ├─ Save session state
    ├─ Close all positions (optional)
-   ├─ Save session data
    ├─ Generate performance report
    └─ Archive logs
 ```
