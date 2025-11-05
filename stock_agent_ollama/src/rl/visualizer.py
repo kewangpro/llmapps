@@ -534,7 +534,12 @@ class RLVisualizer:
             action_counts = {action_name: 0 for action_name in action_names.values()}
 
             for action in result.actions:
-                action_name = action_names.get(action, f'Action {action}')
+                # Convert numpy array to scalar if needed
+                if isinstance(action, (np.ndarray, np.generic)):
+                    action_scalar = int(action.item())
+                else:
+                    action_scalar = int(action)
+                action_name = action_names.get(action_scalar, f'Action {action_scalar}')
                 action_counts[action_name] += 1
 
             # Convert to percentages

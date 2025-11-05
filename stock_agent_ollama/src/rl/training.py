@@ -900,36 +900,33 @@ class RLTrainer:
         model_path: Path,
         agent_type: str,
         env: Optional["SingleStockTradingEnv"] = None
-    ) -> BaseRLAgent:
+    ):
         """
         Load a trained agent from disk.
 
         Args:
             model_path: Path to saved model
-            agent_type: Type of agent
-            env: Optional environment (for creating agent)
+            agent_type: Type of agent (e.g., 'ppo', 'a2c')
+            env: Optional environment (not used, kept for compatibility)
 
         Returns:
-            Loaded agent
+            Loaded agent (stable-baselines3 model)
         """
-        from .environments import SingleStockTradingEnv
+        from stable_baselines3 import PPO, A2C
 
-        # Create dummy environment if not provided
-        if env is None:
-            from datetime import datetime, timedelta
-            end_date = datetime.now().strftime("%Y-%m-%d")
-            start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+        model_path = Path(model_path)
+        if not model_path.exists():
+            raise FileNotFoundError(f"Model not found: {model_path}")
 
-            env = SingleStockTradingEnv(
-                symbol="AAPL",
-                start_date=start_date,
-                end_date=end_date
-            )
+        # Load using stable-baselines3 directly
+        if agent_type.lower() == 'ppo':
+            agent = PPO.load(str(model_path))
+        elif agent_type.lower() == 'a2c':
+            agent = A2C.load(str(model_path))
+        else:
+            raise ValueError(f"Unsupported agent type: {agent_type}")
 
-        # Create agent
-        agent = create_agent(agent_type, env)
-
-        # Load weights
-        agent.load(Path(model_path))
+        # Add is_trained attribute for compatibility with backtest code
+        agent.is_trained = True
 
         return agent
