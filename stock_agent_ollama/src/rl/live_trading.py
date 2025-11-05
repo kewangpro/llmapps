@@ -5,15 +5,16 @@ Educational paper trading system that uses trained RL models with real-time mark
 This is for SIMULATION ONLY - no real money is involved.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 import numpy as np
 import pandas as pd
 import yfinance as yf
 from pathlib import Path
 import logging
+import json
 
 
 
@@ -77,6 +78,13 @@ class Position:
         self.current_price = new_price
         self.unrealized_pnl = (new_price - self.avg_entry_price) * self.shares
 
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Position":
+        return cls(**data)
+
 
 @dataclass
 class Order:
@@ -88,6 +96,20 @@ class Order:
     timestamp: datetime
     status: OrderStatus = OrderStatus.PENDING
     order_id: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        data = asdict(self)
+        data['action'] = self.action.value
+        data['timestamp'] = self.timestamp.isoformat()
+        data['status'] = self.status.value
+        return data
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Order":
+        data['action'] = TradingAction(data['action'])
+        data['timestamp'] = datetime.fromisoformat(data['timestamp'])
+        data['status'] = OrderStatus(data['status'])
+        return cls(**data)
 
 
 @dataclass
@@ -101,6 +123,18 @@ class Trade:
     pnl: float = 0.0
     commission: float = 0.0
     trade_id: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        data = asdict(self)
+        data['action'] = self.action.value
+        data['timestamp'] = self.timestamp.isoformat()
+        return data
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Trade":
+        data['action'] = TradingAction(data['action'])
+        data['timestamp'] = datetime.fromisoformat(data['timestamp'])
+        return cls(**data)
 
 
 @dataclass
@@ -132,6 +166,25 @@ class Portfolio:
         if tick.symbol in self.positions:
             self.positions[tick.symbol].update_price(tick.price)
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "initial_cash": self.initial_cash,
+            "cash": self.cash,
+            "positions": {k: v.to_dict() for k, v in self.positions.items()},
+            "trades": [t.to_dict() for t in self.trades],
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Portfolio":
+        positions = {k: Position.from_dict(v) for k, v in data.get("positions", {}).items()}
+        trades = [Trade.from_dict(t) for t in data.get("trades", [])]
+        return cls(
+            initial_cash=data["initial_cash"],
+            cash=data["cash"],
+            positions=positions,
+            trades=trades,
+        )
+
 
 @dataclass
 class LiveTradingConfig:
@@ -146,6 +199,13 @@ class LiveTradingConfig:
     update_interval: int = 60  # Seconds between updates
     trading_hours_only: bool = True
     commission_per_trade: float = 0.0  # Commission per trade
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "LiveTradingConfig":
+        return cls(**data)
 
 
 @dataclass
@@ -162,10 +222,33 @@ class TradingSession:
     def add_event(self, event_type: str, message: str):
         """Add event to session log"""
         self.events.append({
-            'timestamp': datetime.now(),
+            'timestamp': datetime.now().isoformat(),
             'type': event_type,
             'message': message
         })
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "session_id": self.session_id,
+            "config": self.config.to_dict(),
+            "portfolio": self.portfolio.to_dict(),
+            "status": self.status.value,
+            "start_time": self.start_time.isoformat() if self.start_time else None,
+            "end_time": self.end_time.isoformat() if self.end_time else None,
+            "events": self.events, # events are already dicts
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "TradingSession":
+        return cls(
+            session_id=data["session_id"],
+            config=LiveTradingConfig.from_dict(data["config"]),
+            portfolio=Portfolio.from_dict(data["portfolio"]),
+            status=TradingStatus(data["status"]),
+            start_time=datetime.fromisoformat(data["start_time"]) if data["start_time"] else None,
+            end_time=datetime.fromisoformat(data["end_time"]) if data["end_time"] else None,
+            events=data.get("events", []),
+        )
 
 
 # ============================================================================
@@ -494,6 +577,80 @@ class LiveTradingEngine:
         self.agent = None  # Will be loaded
         self.session: Optional[TradingSession] = None
         self._is_running = False
+
+    def save_state(self, file_path: Path):
+        """Save the current trading session state to a file"""
+        if not self.session:
+            logger.warning("No active session to save.")
+            return
+
+        try:
+            state = self.session.to_dict()
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(file_path, 'w') as f:
+                json.dump(state, f, indent=2)
+            logger.info(f"Successfully saved trading session to {file_path}")
+        except Exception as e:
+            logger.error(f"Failed to save trading session: {e}")
+
+    @classmethod
+    def load_from_state(cls, file_path: Path) -> "LiveTradingEngine":
+        """Load a trading session state from a file"""
+        try:
+            with open(file_path, 'r') as f:
+                state = json.load(f)
+            
+            session = TradingSession.from_dict(state)
+            
+            # Recreate the engine from the loaded session
+            engine = cls(session.config)
+            engine.session = session
+            engine.portfolio = session.portfolio
+            
+            # Set running status
+            engine._is_running = session.status == TradingStatus.RUNNING
+            
+            logger.info(f"Successfully loaded trading session from {file_path}")
+            return engine
+        except Exception as e:
+            logger.error(f"Failed to load trading session: {e}")
+            raise
+
+    def save_state(self, file_path: Path):
+        """Save the current trading session state to a file"""
+        if not self.session:
+            logger.warning("No active session to save.")
+            return
+
+        try:
+            state = self.session.to_dict()
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(file_path, 'w') as f:
+                json.dump(state, f, indent=2)
+            logger.info(f"Successfully saved trading session to {file_path}")
+        except Exception as e:
+            logger.error(f"Failed to save trading session: {e}")
+
+    @classmethod
+    def load_state(cls, file_path: Path, config: LiveTradingConfig) -> "LiveTradingEngine":
+        """Load a trading session state from a file"""
+        try:
+            with open(file_path, 'r') as f:
+                state = json.load(f)
+            
+            session = TradingSession.from_dict(state)
+            
+            # Recreate the engine from the loaded session
+            engine = cls(session.config)
+            engine.session = session
+            engine.portfolio = session.portfolio
+            engine._is_running = session.status == TradingStatus.RUNNING
+            
+            logger.info(f"Successfully loaded trading session from {file_path}")
+            return engine
+        except Exception as e:
+            logger.error(f"Failed to load trading session: {e}")
+            raise
 
     def load_agent(self, agent_path: str):
         """Load trained RL agent"""
