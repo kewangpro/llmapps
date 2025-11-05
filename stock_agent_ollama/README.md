@@ -143,87 +143,16 @@ python src/main.py
 
 ```
 stock_agent_ollama/
-├── src/
-│   ├── main.py                         # Application entry point
-│   ├── config.py                       # Configuration settings
-│   ├── __init__.py                     # Package initializer
-│   │
-│   ├── agents/                         # AI query processing
-│   │   ├── __init__.py                 # Module exports
-│   │   ├── query_processor.py          # Main query handler
-│   │   ├── ollama_enhancer.py          # Ollama AI integration
-│   │   └── hybrid_query_processor.py   # Hybrid query processing
-│   │
-│   ├── tools/                          # Stock data & analysis
-│   │   ├── __init__.py                 # Module exports
-│   │   ├── stock_fetcher.py            # Yahoo Finance API
-│   │   ├── visualizer.py               # Chart generation
-│   │   ├── technical_analysis.py       # Technical indicators
-│   │   ├── lstm_predictor.py           # LSTM predictor wrapper
-│   │   ├── conversation_manager.py     # Conversation handling
-│   │   └── lstm/                       # Neural network system
-│   │       ├── __init__.py             # LSTM module exports
-│   │       ├── prediction_service.py   # Main prediction service
-│   │       ├── model_manager.py        # Save/load operations
-│   │       ├── model_architecture.py   # Model creation
-│   │       ├── data_pipeline.py        # Data preparation
-│   │       ├── custom_scalers.py       # Financial data scalers
-│   │       ├── prediction_utils.py     # Prediction helpers
-│   │       └── validation_utils.py     # Validation functions
-│   │
-│   ├── rl/                             # Reinforcement Learning
-│   │   ├── __init__.py                 # RL module exports
-│   │   ├── agents/                     # RL agent implementations
-│   │   │   ├── __init__.py             # Agent exports
-│   │   │   ├── base_agent.py           # Base agent class
-│   │   │   ├── ppo_agent.py            # PPO implementation
-│   │   │   └── a2c_agent.py            # A2C implementation
-│   │   ├── environments.py             # Trading environments
-│   │   ├── training.py                 # Training pipeline
-│   │   ├── backtesting.py              # Backtest engine
-│   │   ├── baselines.py                # Buy&Hold, Momentum strategies
-│   │   ├── networks.py                 # LSTM feature extractor
-│   │   ├── live_trading.py             # Live trading simulation engine
-│   │   └── visualizer.py               # RL visualizations
-│   │
-│   ├── ui/                             # Web interface
-│   │   ├── __init__.py                 # UI module exports
-│   │   ├── design_system.py            # Colors, styles, tables
-│   │   └── pages/                      # Page implementations
-│   │       ├── __init__.py             # Page exports
-│   │       ├── analysis.py             # Main app & analysis page
-│   │       ├── dashboard.py            # Market overview
-│   │       ├── trading.py              # RL training UI
-│   │       ├── live_trading.py         # Live trading simulation
-│   │       ├── portfolio.py            # Holdings & P&L
-│   │       └── models.py               # Model registry
-│   │
-│   └── utils/                          # Utility functions
-│       ├── __init__.py                 # Utils module exports
-│       └── cache_utils.py              # File-based caching
-│
-├── data/
-│   ├── models/                         # Trained models
-│   │   ├── lstm/                       # LSTM ensemble models
-│   │   │   ├── *_metadata.json         # Training metrics
-│   │   │   └── *_model_*.keras         # Model files (3 per symbol)
-│   │   └── rl/                         # RL agents
-│   │       └── {algo}_{symbol}_*/      # Model directories
-│   ├── cache/                          # Stock data cache
-│   │   └── stock_data/                 # Cached price data
-│   └── logs/                           # Application logs
-│       └── app.log                     # Main log file
-│
-├── docs/
-│   ├── QUICK_START.md                  # Step-by-step user guide
-│   ├── UX.md                           # Interface design & philosophy
-│   ├── RL_DESIGN.md                    # RL architecture & design
-│   ├── LIVE_TRADE.md                   # Live trading design & implementation
-│   ├── INPUT_CONTROLS_DESIGN.md        # Input controls pattern
-│   └── screenshots/                    # Documentation images
-│
-├── requirements.txt                    # Python dependencies
-└── .venv/                              # Virtual environment
+├── src/                # Core application source code
+│   ├── agents/         # AI and query processing (Ollama)
+│   ├── rl/             # Reinforcement Learning (training, backtesting)
+│   ├── tools/          # Data fetching, analysis, and prediction tools (LSTM)
+│   ├── ui/             # Web interface and user-facing pages
+│   └── utils/          # Utility functions (e.g., caching)
+├── data/               # Cached data, logs, and trained models
+├── docs/               # Project documentation and screenshots
+├── requirements.txt    # Python dependencies
+└── README.md           # This file
 ```
 
 ---
