@@ -42,6 +42,7 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 ### 🔴 Live Trading Simulation
 - **Paper Trading** with real-time market data (Yahoo Finance)
 - **Trained Agent Execution** using PPO/A2C models in live markets
+- **Persistent Sessions** that can be resumed across application restarts, preserving your portfolio and trade history.
 - **Real-time Portfolio Tracking** with live P&L updates
 - **Risk Management** (stop-loss, position limits, circuit breakers)
 - **Live Monitoring** with trading status, positions, and event log
