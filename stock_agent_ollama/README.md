@@ -38,6 +38,14 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 ![RL Trading Screenshot](docs/screenshots/rl_trading.png)
 *Train and backtest RL agents with comprehensive performance metrics and strategy comparison*
 
+### 🔴 Live Trading Simulation
+- **Paper Trading** with real-time market data (Yahoo Finance)
+- **Trained Agent Execution** using PPO/A2C models in live markets
+- **Real-time Portfolio Tracking** with live P&L updates
+- **Risk Management** (stop-loss, position limits, circuit breakers)
+- **Live Monitoring** with trading status, positions, and event log
+- **Educational Platform** for safe strategy testing with virtual capital
+
 ### 🗂️ Model Registry
 - **LSTM Models** with performance metrics (Final Loss, Val Loss)
 - **RL Agents** with training dates and algorithm types
@@ -77,6 +85,10 @@ python src/main.py
 **RL Training:**
 - Click Trading → Configure agent → Start Training (5-10 min)
 - Run Backtest → Compare strategies and metrics
+
+**Live Trading:**
+- Click Live Trade → Configure settings → Start Trading
+- Monitor real-time portfolio, positions, and trades with virtual capital
 
 **Model Management:**
 - Click Models → View all trained LSTM and RL models
@@ -171,6 +183,7 @@ stock_agent_ollama/
 │   │   ├── backtesting.py              # Backtest engine
 │   │   ├── baselines.py                # Buy&Hold, Momentum strategies
 │   │   ├── networks.py                 # LSTM feature extractor
+│   │   ├── live_trading.py             # Live trading simulation engine
 │   │   └── visualizer.py               # RL visualizations
 │   │
 │   ├── ui/                             # Web interface
@@ -181,6 +194,7 @@ stock_agent_ollama/
 │   │       ├── analysis.py             # Main app & analysis page
 │   │       ├── dashboard.py            # Market overview
 │   │       ├── trading.py              # RL training UI
+│   │       ├── live_trading.py         # Live trading simulation
 │   │       ├── portfolio.py            # Holdings & P&L
 │   │       └── models.py               # Model registry
 │   │
@@ -204,6 +218,7 @@ stock_agent_ollama/
 │   ├── QUICK_START.md                  # Step-by-step user guide
 │   ├── UX.md                           # Interface design & philosophy
 │   ├── RL_DESIGN.md                    # RL architecture & design
+│   ├── LIVE_TRADE.md                   # Live trading design & implementation
 │   ├── INPUT_CONTROLS_DESIGN.md        # Input controls pattern
 │   └── screenshots/                    # Documentation images
 │
@@ -221,6 +236,7 @@ stock_agent_ollama/
 
 ### Technical Documentation
 - **[RL_DESIGN.md](docs/RL_DESIGN.md)** - RL architecture, algorithms, and design decisions
+- **[LIVE_TRADE.md](docs/LIVE_TRADE.md)** - Live trading simulation system architecture
 
 ---
 
