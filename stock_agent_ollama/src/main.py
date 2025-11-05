@@ -6,7 +6,13 @@ Stock Analysis and Trading AI Platform - Main Entry Point
 import sys
 import os
 import logging
+import warnings
 from pathlib import Path
+
+# Suppress known warnings
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+warnings.filterwarnings('ignore', message='urllib3 v2 only supports OpenSSL')
+warnings.filterwarnings('ignore', message='Dropping a patch because it contains a previously known reference')
 
 # Add src to Python path
 current_dir = Path(__file__).parent
@@ -18,10 +24,15 @@ from src.config import Config
 from src.ui.pages.analysis import create_app
 from src.ui.design_system import Colors
 
+class DropPatchFilter(logging.Filter):
+    """Filter to suppress 'Dropping a patch' warnings from Panel"""
+    def filter(self, record):
+        return 'Dropping a patch' not in record.getMessage()
+
 def setup_logging():
     """Setup basic logging configuration"""
     Config.ensure_directories()
-    
+
     logging.basicConfig(
         level=getattr(logging, Config.LOG_LEVEL.upper()),
         format=Config.LOG_FORMAT,
@@ -30,13 +41,17 @@ def setup_logging():
             logging.FileHandler(Config.LOG_DIR / "app.log")
         ]
     )
-    
+
     # Suppress noisy third-party loggers
-    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.ERROR)
     logging.getLogger("tensorflow").setLevel(logging.WARNING)
     logging.getLogger("matplotlib").setLevel(logging.WARNING)
     logging.getLogger("bokeh").setLevel(logging.WARNING)
-    
+
+    # Add filter to suppress Panel "Dropping a patch" warnings
+    root_logger = logging.getLogger()
+    root_logger.addFilter(DropPatchFilter())
+
     return logging.getLogger(__name__)
 
 def main():
