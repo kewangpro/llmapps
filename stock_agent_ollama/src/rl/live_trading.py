@@ -179,29 +179,47 @@ class MarketDataStream:
         self._last_tick: Optional[MarketTick] = None
 
     def get_latest_tick(self) -> MarketTick:
-        """Get latest market tick"""
+        """Get latest market tick with real-time updates"""
         try:
-            # Get real-time quote
-            info = self.ticker.info
-            current_price = info.get('currentPrice') or info.get('regularMarketPrice')
+            # Use history with 1-minute interval for most recent data
+            # This is more reliable than .info which caches heavily
+            hist = self.ticker.history(period='1d', interval='1m')
 
-            if current_price is None:
-                # Fallback to fast_info
-                current_price = self.ticker.fast_info.get('lastPrice')
+            if hist.empty:
+                # Fallback to daily data
+                hist = self.ticker.history(period='1d', interval='1d')
 
-            if current_price is None:
-                raise ValueError(f"Unable to get price for {self.symbol}")
+            if hist.empty:
+                raise ValueError(f"Unable to get price data for {self.symbol}")
+
+            # Get the most recent row
+            latest = hist.iloc[-1]
+            current_price = float(latest['Close'])
+            volume = int(latest['Volume']) if 'Volume' in latest else 0
+
+            # Try to get bid/ask from fast_info
+            bid = None
+            ask = None
+            try:
+                fast_info = self.ticker.fast_info
+                if hasattr(fast_info, 'last_price'):
+                    # Update price if fast_info has newer data
+                    if fast_info.last_price and fast_info.last_price > 0:
+                        current_price = float(fast_info.last_price)
+            except:
+                pass
 
             tick = MarketTick(
                 symbol=self.symbol,
                 timestamp=datetime.now(),
-                price=float(current_price),
-                volume=info.get('volume', 0),
-                bid=info.get('bid'),
-                ask=info.get('ask')
+                price=current_price,
+                volume=volume,
+                bid=bid,
+                ask=ask
             )
 
             self._last_tick = tick
+            logger.debug(f"Fetched tick: {self.symbol} @ ${current_price:.2f}")
             return tick
 
         except Exception as e:
@@ -602,24 +620,113 @@ class LiveTradingEngine:
             return {"status": "error", "message": str(e)}
 
     def _build_observation(self, tick: MarketTick) -> np.ndarray:
-        """Build observation for agent (simplified)"""
-        # This is a simplified version - real implementation would need:
-        # - Historical price data
-        # - Technical indicators
-        # - Position information
-        # - Risk metrics
-        # For now, return a simple observation
+        """Build observation matching training environment format (60, 10)"""
+        from ..tools.stock_fetcher import StockFetcher
+        from ..tools.technical_analysis import TechnicalAnalysis
+        from datetime import datetime, timedelta
 
-        position = self.portfolio.positions.get(self.config.symbol)
-        position_shares = position.shares if position else 0
-        position_value = position.shares * position.current_price if position else 0
+        try:
+            # Fetch 90 days of historical data to ensure we have enough after calculating indicators
+            end_date = datetime.now().strftime("%Y-%m-%d")
+            start_date = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
 
-        obs = np.array([
-            tick.price / 100.0,  # Normalized price
-            position_shares / self.config.max_position_size,  # Normalized position
-            self.portfolio.cash / self.config.initial_capital,  # Cash ratio
-            position_value / self.config.initial_capital if position else 0,  # Position value ratio
-            self.portfolio.total_pnl_pct / 100.0,  # P&L percentage
-        ], dtype=np.float32)
+            fetcher = StockFetcher()
+            hist_data = fetcher.fetch_stock_data(
+                symbol=self.config.symbol,
+                start_date=start_date,
+                end_date=end_date,
+                interval='1d'
+            )
 
-        return obs
+            if hist_data is None or len(hist_data) < 60:
+                logger.warning(f"Insufficient historical data for observation, using zeros")
+                return np.zeros((60, 10), dtype=np.float32)
+
+            # Calculate technical indicators
+            close = hist_data['Close']
+            high = hist_data['High']
+            low = hist_data['Low']
+
+            # RSI
+            rsi = TechnicalAnalysis.calculate_rsi(close)
+
+            # MACD
+            macd_indicators = TechnicalAnalysis.calculate_macd(close)
+            macd = macd_indicators['macd']
+            macd_signal = macd_indicators['macd_signal']
+
+            # Bollinger Bands
+            bb_indicators = TechnicalAnalysis.calculate_bollinger_bands(close)
+            bb_upper = bb_indicators['bb_upper']
+            bb_lower = bb_indicators['bb_lower']
+
+            # Stochastic
+            stoch_indicators = TechnicalAnalysis.calculate_stochastic(high, low, close)
+            stochastic = stoch_indicators['stoch_k']
+
+            # Fill NaN values
+            hist_data = hist_data.bfill().ffill()
+            rsi = rsi.bfill().ffill()
+            macd = macd.bfill().ffill()
+            macd_signal = macd_signal.bfill().ffill()
+            bb_upper = bb_upper.bfill().ffill()
+            bb_lower = bb_lower.bfill().ffill()
+            stochastic = stochastic.bfill().ffill()
+
+            # Get last 60 days
+            close_last_60 = close.iloc[-60:].values
+            volume_last_60 = hist_data['Volume'].iloc[-60:].values
+            rsi_last_60 = rsi.iloc[-60:].values
+            macd_last_60 = macd.iloc[-60:].values
+            macd_signal_last_60 = macd_signal.iloc[-60:].values
+            bb_upper_last_60 = bb_upper.iloc[-60:].values
+            bb_lower_last_60 = bb_lower.iloc[-60:].values
+            stochastic_last_60 = stochastic.iloc[-60:].values
+
+            # Normalize features
+            first_price = close_last_60[0]
+            close_norm = (close_last_60 - first_price) / first_price
+
+            max_volume = volume_last_60.max()
+            volume_norm = volume_last_60 / (max_volume + 1e-8)
+
+            rsi_norm = rsi_last_60 / 100.0
+            macd_norm = macd_last_60 / (close_last_60 + 1e-8)
+            macd_signal_norm = macd_signal_last_60 / (close_last_60 + 1e-8)
+            bb_position = (close_last_60 - bb_lower_last_60) / (bb_upper_last_60 - bb_lower_last_60 + 1e-8)
+            stochastic_norm = stochastic_last_60 / 100.0
+
+            # Portfolio state (repeated for all timesteps)
+            position = self.portfolio.positions.get(self.config.symbol)
+            position_shares = position.shares if position else 0
+            current_price = tick.price
+            portfolio_value = self.portfolio.total_value
+
+            cash_ratio = np.full(60, self.portfolio.cash / portfolio_value if portfolio_value > 0 else 1.0)
+            position_ratio = np.full(60, (position_shares * current_price) / portfolio_value if portfolio_value > 0 else 0.0)
+
+            # Portfolio value change
+            prev_value = getattr(self, '_prev_portfolio_value', self.config.initial_capital)
+            value_change = np.full(60, (portfolio_value - prev_value) / prev_value if prev_value > 0 else 0.0)
+            self._prev_portfolio_value = portfolio_value
+
+            # Stack all features (shape: 60 x 10)
+            observation = np.column_stack([
+                close_norm,
+                volume_norm,
+                cash_ratio,
+                position_ratio,
+                value_change,
+                rsi_norm,
+                macd_norm,
+                macd_signal_norm,
+                bb_position,
+                stochastic_norm
+            ]).astype(np.float32)
+
+            return observation
+
+        except Exception as e:
+            logger.error(f"Error building observation: {e}")
+            # Return zeros as fallback
+            return np.zeros((60, 10), dtype=np.float32)
