@@ -100,15 +100,15 @@ python src/main.py
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│              Web Interface (Panel Dashboard)                 │
-│  Light Theme • Wide Layouts • Responsive Design              │
-├────────────┬────────────┬────────────┬────────────┬─────────┤
-│ Dashboard  │ Analysis   │ Trading    │ Portfolio  │ Models  │
-│ • Markets  │ • Charts   │ • RL Train │ • Holdings │ • LSTM  │
-│ • Watchlist│ • Signals  │ • Backtest │ • P&L      │ • RL    │
-│ • Actions  │ • Predict  │ • Compare  │ • Metrics  │ • Perf  │
-└────────────┴────────────┴────────────┴────────────┴─────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│              Web Interface (Panel Dashboard)                          │
+│  Light Theme • Wide Layouts • Responsive Design                       │
+├──────────┬──────────┬──────────┬────────────┬──────────┬────────────┤
+│Dashboard │ Analysis │ Training │ Live Trade │Portfolio │   Models   │
+│• Markets │ • Charts │• RL Train│• Paper     │• Holdings│ • LSTM     │
+│•Watchlist│ • Signals│• Backtest│• Real-time │• P&L     │ • RL       │
+│• Actions │ • Predict│• Compare │• Risk Mgmt │• Metrics │ • Perf     │
+└──────────┴──────────┴──────────┴────────────┴──────────┴────────────┘
               │                          │
               ▼                          ▼
 ┌──────────────────────────┐  ┌──────────────────────────────┐
