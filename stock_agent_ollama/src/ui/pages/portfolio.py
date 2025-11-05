@@ -99,23 +99,35 @@ class PortfolioPage(param.Parameterized):
             price_info = data.get('price_info', {})
             financial_metrics = data.get('financial_metrics', {})
 
-            price = price_info.get('current_price', 0)
-            prev_close = price_info.get('previous_close', 0)
-            change = price - prev_close if price and prev_close else 0
-            change_pct = (change / prev_close * 100) if prev_close else 0
+            price = price_info.get('current_price')
+            prev_close = price_info.get('previous_close')
+
+            if price is not None and prev_close is not None:
+                change = price - prev_close
+                change_pct = (change / prev_close * 100) if prev_close != 0 else 0
+            else:
+                change = 0
+                change_pct = 0
+
             change_color = Colors.SUCCESS_GREEN if change >= 0 else Colors.DANGER_RED
             change_symbol = '▲' if change >= 0 else '▼'
 
             market_cap = format_market_cap(data.get('market_cap'))
-            pe_ratio = f"{financial_metrics.get('pe_ratio'):.2f}" if financial_metrics.get('pe_ratio') else "N/A"
-            volume = f"{price_info.get('volume', 0):,}" if price_info.get('volume') else "N/A"
-            wk52_low = f"{price_info.get('fifty_two_week_low'):.2f}" if price_info.get('fifty_two_week_low') else "N/A"
-            wk52_high = f"{price_info.get('fifty_two_week_high'):.2f}" if price_info.get('fifty_two_week_high') else "N/A"
+            pe_ratio_val = financial_metrics.get('pe_ratio')
+            pe_ratio = f"{pe_ratio_val:.2f}" if pe_ratio_val is not None else "N/A"
+            volume_val = price_info.get('volume')
+            volume = f"{volume_val:,}" if volume_val is not None else "N/A"
+            wk52_low_val = price_info.get('fifty_two_week_low')
+            wk52_low = f"{wk52_low_val:.2f}" if wk52_low_val is not None else "N/A"
+            wk52_high_val = price_info.get('fifty_two_week_high')
+            wk52_high = f"{wk52_high_val:.2f}" if wk52_high_val is not None else "N/A"
+
+            price_str = f"${price:,.2f}" if price is not None else "N/A"
 
             html = f"""
             <div style='display: flex; flex-direction: column; width: 100%;'>
                 <div style='display: flex; justify-content: space-between; align-items: center;'>
-                    <div style='font-family: monospace; font-size: 1.2em; font-weight: 600;'>${price:,.2f}</div>
+                    <div style='font-family: monospace; font-size: 1.2em; font-weight: 600;'>{price_str}</div>
                     <div style='color: {change_color}; font-weight: 600;'>{change_symbol} {change_pct:+.2f}%</div>
                 </div>
                 <div style='display: flex; justify-content: space-between; font-size: 0.8em; color: {Colors.TEXT_SECONDARY}; margin-top: 5px;'>
