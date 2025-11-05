@@ -15,6 +15,8 @@ import yfinance as yf
 from pathlib import Path
 import logging
 
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -175,19 +177,21 @@ class MarketDataStream:
 
     def __init__(self, symbol: str):
         self.symbol = symbol
-        self.ticker = yf.Ticker(symbol)
         self._last_tick: Optional[MarketTick] = None
 
     def get_latest_tick(self) -> MarketTick:
         """Get latest market tick with real-time updates"""
         try:
+            # Create a fresh ticker instance to bypass yfinance caching
+            ticker = yf.Ticker(self.symbol)
+
             # Use history with 1-minute interval for most recent data
             # This is more reliable than .info which caches heavily
-            hist = self.ticker.history(period='1d', interval='1m')
+            hist = ticker.history(period='1d', interval='1m')
 
             if hist.empty:
                 # Fallback to daily data
-                hist = self.ticker.history(period='1d', interval='1d')
+                hist = ticker.history(period='1d', interval='1d')
 
             if hist.empty:
                 raise ValueError(f"Unable to get price data for {self.symbol}")
@@ -196,12 +200,13 @@ class MarketDataStream:
             latest = hist.iloc[-1]
             current_price = float(latest['Close'])
             volume = int(latest['Volume']) if 'Volume' in latest else 0
+            timestamp = latest.name  # Get the timestamp from the index
 
             # Try to get bid/ask from fast_info
             bid = None
             ask = None
             try:
-                fast_info = self.ticker.fast_info
+                fast_info = ticker.fast_info
                 if hasattr(fast_info, 'last_price'):
                     # Update price if fast_info has newer data
                     if fast_info.last_price and fast_info.last_price > 0:
@@ -219,7 +224,7 @@ class MarketDataStream:
             )
 
             self._last_tick = tick
-            logger.debug(f"Fetched tick: {self.symbol} @ ${current_price:.2f}")
+            logger.debug(f"Fetched tick: {self.symbol} @ ${current_price:.2f} (data from {timestamp})")
             return tick
 
         except Exception as e:
@@ -233,16 +238,45 @@ class MarketDataStream:
     def is_market_open(self) -> bool:
         """Check if market is currently open"""
         try:
-            info = self.ticker.info
-            market_state = info.get('marketState', 'CLOSED')
-            return market_state in ['REGULAR', 'PRE', 'POST']
-        except:
-            # Default to checking trading hours (9:30 AM - 4:00 PM ET)
-            now = datetime.now()
-            if now.weekday() >= 5:  # Weekend
-                return False
-            hour = now.hour
-            return 9 <= hour < 16  # Simplified check
+            # Create a fresh ticker to get the most up-to-date info
+            ticker = yf.Ticker(self.symbol)
+            info = ticker.info
+            market_state = info.get('marketState', 'CLOSED').upper()
+            # Valid states: PREPRE, PRE, REGULAR, POST, POSTPOST, CLOSED
+            return market_state in ['REGULAR', 'PRE', 'POST', 'PREPRE', 'POSTPOST']
+        except Exception as e:
+            logger.warning(f"Could not fetch market state from yfinance: {e}. Falling back to time-based check.")
+            # Default to checking trading hours (e.g., 9:30 AM - 4:00 PM ET)
+            try:
+                from zoneinfo import ZoneInfo
+                from datetime import datetime, time
+
+                et_zone = ZoneInfo('US/Eastern')
+                now_et = datetime.now(et_zone)
+
+                if now_et.weekday() >= 5:  # Weekend
+                    return False
+
+                # Regular market hours: 9:30 AM to 4:00 PM ET
+                market_open = time(9, 30) <= now_et.time() < time(16, 0)
+
+                # Extended hours (pre-market and post-market)
+                # Pre-market: 4:00 AM to 9:30 AM ET
+                pre_market = time(4, 0) <= now_et.time() < time(9, 30)
+                # Post-market: 4:00 PM to 8:00 PM ET
+                post_market = time(16, 0) <= now_et.time() < time(20, 0)
+
+                return market_open or pre_market or post_market
+
+            except ImportError:
+                logger.warning("zoneinfo not available (requires Python 3.9+). Falling back to simplified time check.")
+                # Fallback for older Python
+                now = datetime.now()
+                if now.weekday() >= 5:  # Weekend
+                    return False
+                hour = now.hour
+                # This is a rough approximation and assumes server time is close to ET.
+                return 9 <= hour < 16
 
 
 # ============================================================================
@@ -510,6 +544,8 @@ class LiveTradingEngine:
             self.session.end_time = datetime.now()
             self.session.add_event("SESSION_END", f"Ended session. Final P&L: ${self.portfolio.total_pnl:.2f}")
 
+
+
             self._is_running = False
             logger.info(f"Stopped trading session: {self.session.session_id}")
 
@@ -635,7 +671,8 @@ class LiveTradingEngine:
                 symbol=self.config.symbol,
                 start_date=start_date,
                 end_date=end_date,
-                interval='1d'
+                interval='1d',
+                force_refresh=True  # Always fetch fresh data for live trading
             )
 
             if hist_data is None or len(hist_data) < 60:
