@@ -4,6 +4,7 @@ Compact Panel UI components for RL trading features.
 
 import panel as pn
 import param
+import numpy as np
 from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
@@ -98,6 +99,12 @@ class CompactRLPanel(param.Parameterized):
             width=300,
             bar_color='success',
             visible=False
+        )
+
+        # Model status display
+        self.model_status_pane = pn.pane.HTML(
+            "",
+            sizing_mode="stretch_width"
         )
 
         # Results panel
@@ -262,6 +269,9 @@ class CompactRLPanel(param.Parameterized):
         self.results_panel.clear()
         self.results_panel.append(pn.indicators.LoadingSpinner(value=True, size=50))
 
+        # Clear model status
+        self.model_status_pane.object = ""
+
         symbol = self.symbol_input.value.strip().upper()
         if not symbol:
             pn.state.notifications.error("Please enter a stock symbol", duration=3000)
@@ -304,6 +314,16 @@ class CompactRLPanel(param.Parameterized):
                         # Run backtest with the RL agent (deterministic mode)
                         agent_name = f"{model_info['agent_type'].upper()} Agent"
                         results[agent_name] = engine.run_agent_backtest(agent, deterministic=True)
+
+                        # Update model status display
+                        model_name = model_info['directory'].name
+                        pn.state.execute(lambda: setattr(
+                            self.model_status_pane,
+                            'object',
+                            f"""<div style='padding: 10px; background: #D1FAE5; border-radius: 4px; font-size: 12px; color: #065F46; border: 1px solid #A7F3D0;'>
+                                ✅ Using model: <strong>{model_info['agent_type'].upper()}</strong> - {model_name}
+                            </div>"""
+                        ))
 
                         pn.state.execute(lambda: pn.state.notifications.info(
                             f"Loaded trained {model_info['agent_type'].upper()} model",
@@ -379,7 +399,12 @@ class CompactRLPanel(param.Parameterized):
             # Count actions
             action_counts = {action_name: 0 for action_name in action_names.values()}
             for action in result.actions:
-                action_name = action_names.get(action, f'Action {action}')
+                # Convert numpy array to scalar if needed
+                if isinstance(action, (np.ndarray, np.generic)):
+                    action_scalar = int(action.item())
+                else:
+                    action_scalar = int(action)
+                action_name = action_names.get(action_scalar, f'Action {action_scalar}')
                 action_counts[action_name] += 1
 
             total_actions = sum(action_counts.values())
@@ -496,6 +521,7 @@ class CompactRLPanel(param.Parameterized):
                 sizing_mode="stretch_width"
             ),
             self.progress_bar,
+            self.model_status_pane,
             styles=dict(background='#F8F9FA', border_radius='8px', padding='15px'),
             margin=(0, 0, 15, 0)
         )

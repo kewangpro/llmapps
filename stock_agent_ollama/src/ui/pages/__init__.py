@@ -7,6 +7,7 @@ from src.ui.pages.dashboard import DashboardPage
 from src.ui.pages.trading import CompactRLPanel, create_compact_rl_panel
 from src.ui.pages.models import ModelsPage
 from src.ui.pages.portfolio import PortfolioPage
+from src.ui.pages.live_trading import LiveTradingPage, create_live_trading_page
 
 __all__ = [
     'StockAnalysisApp',
@@ -16,4 +17,6 @@ __all__ = [
     'create_compact_rl_panel',
     'ModelsPage',
     'PortfolioPage',
+    'LiveTradingPage',
+    'create_live_trading_page',
 ]

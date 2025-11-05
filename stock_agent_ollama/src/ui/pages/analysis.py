@@ -666,6 +666,7 @@ def create_app():
     from src.ui.pages.dashboard import DashboardPage
     from src.ui.pages.portfolio import PortfolioPage
     from src.ui.pages.models import ModelsPage
+    from src.ui.pages.live_trading import create_live_trading_page
     from src.ui.design_system import Colors
     from src.tools.stock_fetcher import StockFetcher
     from datetime import datetime
@@ -752,12 +753,14 @@ def create_app():
     rl_panel = CompactRLPanel()
     portfolio_page = PortfolioPage()
     models_page = ModelsPage()
+    live_trading_page = create_live_trading_page()
 
     # Create professional navigation tabs
     tabs = pn.Tabs(
         ('📊 Dashboard', dashboard_page.get_view()),
         ('📈 Analysis', analysis_app.get_analysis_tab()),
-        ('🤖 Trading', rl_panel.get_panel()),
+        ('🤖 Training', rl_panel.get_panel()),
+        ('🔴 Live Trade', live_trading_page),
         ('💼 Portfolio', portfolio_page.get_view()),
         ('🧠 Models', models_page.get_view()),
         dynamic=True,
