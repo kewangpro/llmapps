@@ -23,20 +23,21 @@ The application will open at: **http://localhost:5006**
 
 ### Main Navigation
 
-The platform features a professional light-theme interface with 5 main pages:
+The platform features a professional light-theme interface with 6 main pages:
 
 ```
-┌──────────────────────────────────────────────────────┐
-│ 📊 Stock Agent Pro                                   │
-├──────────────────────────────────────────────────────┤
-│ Dashboard | Analysis | Trading | Portfolio | Models  │
-└──────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│ 📊 Stock Agent Pro                                              │
+├─────────────────────────────────────────────────────────────────┤
+│ Dashboard | Analysis | Trading | Live Trade | Portfolio | Models│
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 **Page Overview:**
 - **Dashboard** - Market overview and quick actions
 - **Analysis** - Stock charts, technical analysis, LSTM predictions
 - **Trading** - RL agent training and backtesting
+- **Live Trade** - Real-time paper trading with trained agents
 - **Portfolio** - Holdings and performance tracking
 - **Models** - LSTM and RL model registry
 
@@ -136,6 +137,46 @@ The platform features a professional light-theme interface with 5 main pages:
   - Portfolio value over time (strategy comparison)
   - Action distribution comparison
   - Key metrics bar chart
+
+---
+
+## 🔴 Live Trading
+
+### Starting a Live Trading Session
+
+1. Click **Live Trade** tab
+2. **Configure Settings**:
+   - **Symbol**: Select stock (AAPL, MSFT, GOOGL, etc.)
+   - **Algorithm**: Choose PPO or A2C (auto-loads trained model)
+   - **Initial Capital**: Starting balance ($10,000 default)
+   - **Max Position Size**: Maximum shares per position
+   - **Stop Loss**: Automatic stop-loss percentage (5% default)
+3. Click **"▶ Start Trading"**
+4. Monitor real-time updates
+
+**Live Trading Dashboard:**
+- **Trading Status**: Session status, runtime, last update
+- **Portfolio Summary**: Total value, cash, invested, P&L
+- **Current Positions**: Holdings with unrealized P&L
+- **Recent Trades**: Trade history with agent decisions
+- **Event Log**: System events and notifications
+
+**Controls:**
+- **Pause**: Suspend trading (keep positions open)
+- **Stop**: End session and clear positions
+
+**Risk Management:**
+- Automatic stop-loss on positions
+- Position size limits
+- Circuit breakers for large losses
+- Market hours enforcement (optional)
+
+**Important Notes:**
+- ⚠️ **Paper trading only** - No real money involved
+- Uses real-time Yahoo Finance data (1-minute delayed)
+- Trading cycle runs every 60 seconds
+- Requires trained RL model for the selected symbol
+- Educational purpose only
 
 ---
 
@@ -245,7 +286,18 @@ View simulated portfolio with:
 6. Analyze action distribution
 ```
 
-### Workflow 5: Model Management (5 seconds)
+### Workflow 5: Live Trading Session (Real-time)
+```
+1. Click Live Trade tab
+2. Select symbol: AAPL
+3. Choose algorithm: PPO
+4. Set initial capital: $10,000
+5. Click "▶ Start Trading"
+6. Monitor portfolio, positions, trades in real-time
+7. Click "■ Stop Trading" when done
+```
+
+### Workflow 6: Model Management (5 seconds)
 ```
 1. Click Models tab
 2. Review all trained LSTM models
@@ -407,6 +459,7 @@ View simulated portfolio with:
 **For Advanced Users:**
 - [ ] Train first RL agent (PPO, 365 days, 50k steps)
 - [ ] Run backtest to compare strategies
+- [ ] Start live trading session with trained agent
 - [ ] Experiment with LSTM features enabled
 - [ ] Compare different symbols and algorithms
 - [ ] Analyze action distributions and metrics

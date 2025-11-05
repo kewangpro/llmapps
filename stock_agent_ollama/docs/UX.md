@@ -60,8 +60,9 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 1. **Dashboard** - Market overview, watchlist, quick actions
 2. **Analysis** - Stock charts, technical analysis, LSTM predictions
 3. **Trading** - RL agent training and backtesting
-4. **Portfolio** - Holdings and performance (placeholder)
-5. **Models** - LSTM and RL model registry
+4. **Live Trade** - Real-time paper trading simulation
+5. **Portfolio** - Holdings and performance (placeholder)
+6. **Models** - LSTM and RL model registry
 
 ### Sidebar (Left Panel)
 
@@ -219,7 +220,73 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 
 ---
 
-### 4. Portfolio Page
+### 4. Live Trade Page
+
+**Layout: Configuration + Real-time Dashboard**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ Configuration Panel                                     │
+│ Symbol: [AAPL ▼] Algorithm: [PPO ▼]                   │
+│ Initial Capital: [$10,000] Max Position: [100]         │
+│ Stop Loss: [5%]                                        │
+│ [▶ Start Trading] [⏸ Pause] [■ Stop]                  │
+└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│ Trading Status           Portfolio Summary              │
+│ Status: ACTIVE           Total: $10,523.45  +5.23%     │
+│ Runtime: 2h 34m          Cash: $4,200.00    39.9%      │
+│ Last Update: 10:45:23    Invested: $6,323.45  60.1%    │
+└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│ Current Positions                                       │
+│ AAPL: 25 shares @ $252.94 avg | Current: $254.12       │
+│ Unrealized P&L: +$29.50 (+1.18%)                       │
+└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│ Recent Trades                    Event Log              │
+│ 10:43 BUY 5 @ $253.45           SESSION_START           │
+│ 10:15 SELL 3 @ $251.20          TRADE: BUY 5            │
+│ 09:52 BUY 10 @ $249.80          HOLD - No action       │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Features:**
+
+**A. Configuration Panel**
+- Symbol selection with autocomplete
+- Algorithm dropdown (PPO/A2C) - auto-loads trained model
+- Initial capital input ($10,000 default)
+- Max position size (shares limit)
+- Stop-loss percentage
+
+**B. Trading Dashboard** (shown when active)
+- Trading Status: Status, runtime, last update
+- Portfolio Summary: Total value, cash, invested, P&L
+- Current Positions: Holdings with unrealized P&L
+- Recent Trades: Trade history with agent decisions
+- Event Log: System events and notifications
+
+**C. Controls**
+- Start Trading: Begin live session
+- Pause: Suspend trading (keep positions)
+- Stop: End session and clear results
+
+**D. Risk Management**
+- Auto stop-loss on positions
+- Position size limits
+- Circuit breakers
+- Market hours enforcement
+
+**Important:**
+- Paper trading only (no real money)
+- Real-time Yahoo Finance data
+- 60-second trading cycles
+- Educational purpose only
+
+---
+
+### 5. Portfolio Page
 
 **Status: Placeholder Implementation**
 
@@ -233,7 +300,7 @@ Basic layout with:
 
 ---
 
-### 5. Models Page
+### 6. Models Page
 
 **Layout: Two sections**
 
@@ -366,6 +433,13 @@ All cards follow consistent styling:
 - Live training progress
 - Comprehensive backtesting
 - Strategy comparison (RL vs Buy&Hold vs Momentum)
+
+### ✅ Live Trading Simulation
+- Paper trading with real-time data
+- Trained agent execution (PPO/A2C)
+- Real-time portfolio tracking
+- Risk management controls
+- Live monitoring dashboard
 
 ### ✅ Technical Analysis
 - Multiple indicators (RSI, MACD, Bollinger Bands)
