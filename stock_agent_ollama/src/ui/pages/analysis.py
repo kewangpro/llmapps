@@ -9,6 +9,7 @@ import pandas as pd
 
 from src.agents.query_processor import QueryProcessor
 from src.tools.visualizer import Visualizer
+from src.tools.portfolio_manager import portfolio_manager # Import portfolio_manager
 
 logger = logging.getLogger(__name__)
 
@@ -399,6 +400,8 @@ class StockAnalysisApp(param.Parameterized):
                 <div style='line-height: 1.6; font-size: 0.875rem; color: {Colors.TEXT_SECONDARY};'>{analysis_html}</div>
             </div>
         """)
+        # The following line seems to be a duplicate or misplaced return statement. Removing it.
+        # return pn.pane.HTML(html_content)
 
     def _create_technical_analysis_tabs(self, tech_analysis: Dict) -> pn.Tabs:
         tabs = []
@@ -432,13 +435,13 @@ class StockAnalysisApp(param.Parameterized):
         if pred_values:
             avg_pred = sum(pred_values) / len(pred_values)
             change_pct = ((avg_pred - last_price) / last_price * 100) if last_price else 0
-            change_color = Colors.SUCCESS_GREEN if change_pct >= 0 else Colors.DANGER_RED
-            change_symbol = '▲' if change_pct >= 0 else '▼'
+            color = Colors.SUCCESS_GREEN if change_pct >= 0 else Colors.DANGER_RED
+            symbol = '▲' if change_pct >= 0 else '▼'
         else:
             avg_pred = last_price
             change_pct = 0
-            change_color = Colors.TEXT_MUTED
-            change_symbol = '→'
+            color = Colors.TEXT_MUTED
+            symbol = '→'
 
         # Training history is only shown when training actually happens
         # It's displayed immediately via training_complete_callback
@@ -448,7 +451,7 @@ class StockAnalysisApp(param.Parameterized):
         header_html = f"""
         <div style='background: {Colors.BG_SECONDARY};
                     border: 1px solid {Colors.BORDER_SUBTLE};
-                    border-left: 4px solid {Colors.INFO_BLUE};
+                    border-left: 44px solid {Colors.INFO_BLUE};
                     padding: 12px;
                     border-radius: 8px;
                     margin: 20px 0 10px 0;
@@ -456,7 +459,7 @@ class StockAnalysisApp(param.Parameterized):
             <h3 style='margin: 0; color: {Colors.TEXT_PRIMARY};'>🔮 Price Prediction: {html.escape(symbol)}</h3>
             <p style='margin: 5px 0 0 0; font-size: 0.9em; color: {Colors.TEXT_SECONDARY};'>
                 30-Day: ${avg_pred:.2f} |
-                Change: <span style='color: {change_color}; font-weight: 600;'>{change_symbol} {abs(change_pct):.1f}%</span> |
+                Change: <span style='color: {color}; font-weight: 600;'>{symbol} {abs(change_pct):.1f}%</span> |
                 Current: ${last_price:.2f}
             </p>
         </div>
@@ -521,7 +524,7 @@ class StockAnalysisApp(param.Parameterized):
             <div style='color: {price_color}; font-size: 18px;'>
                 {"▲" if change >= 0 else "▼"} ${abs(change):.2f} ({change_pct:+.2f}%)
             </div>
-            <div style='margin-top: 15px; color: {Colors.TEXT_SECONDARY};'>
+            <div style='margin-top: 15px; color: {Colors.TEXT_SECONDARY};
                 <div>Previous Close: ${prev_close:.2f}</div>
                 <div>Volume: {current_data.get('volume', 0):,}</div>
             </div>
@@ -534,10 +537,10 @@ class StockAnalysisApp(param.Parameterized):
         from src.ui.design_system import Colors, HTMLComponents
 
         error_html = f"""
-        <div style='background: {Colors.DANGER_BG}; padding: 20px; border-radius: 8px; border-left: 4px solid {Colors.DANGER_RED};'>
+        <div style='background: {Colors.DANGER_BG}; padding: 20px; border-radius: 8px; border-left: 4px solid {Colors.DANGER_RED};
             <h3 style='margin: 0 0 10px 0; color: {Colors.DANGER_RED};'>❌ Error</h3>
             <p style='color: {Colors.TEXT_PRIMARY};'>{html.escape(str(result.get('message', 'Unknown error')))}</p>
-            <div style='margin-top: 15px; font-size: 14px; color: {Colors.TEXT_SECONDARY};'>
+            <div style='margin-top: 15px; font-size: 14px; color: {Colors.TEXT_SECONDARY};
                 <strong>Try:</strong> "Analyze AAPL" • "Predict GOOGL" • "Compare MSFT vs AAPL"
             </div>
         </div>
@@ -676,12 +679,13 @@ def create_app():
         """Watchlist panel that can be refreshed"""
         def __init__(self):
             self.stock_fetcher = StockFetcher()
-            self.watchlist_symbols = ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META", "TEAM"]
+            self.watchlist_symbols = portfolio_manager.load_portfolio("default") # Load from portfolio_manager
             self.pane = pn.pane.HTML("", sizing_mode="stretch_width")
-            self.refresh()
+            # Initial refresh is now called after WatchlistPanel is instantiated
 
         def refresh(self):
             """Refresh watchlist data"""
+            self.watchlist_symbols = portfolio_manager.load_portfolio("default") # Reload portfolio
             watchlist_html = f"""
             <div style='background: {Colors.BG_SECONDARY}; border: 1px solid {Colors.BORDER_SUBTLE}; border-radius: 8px; padding: 10px;'>
                 <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 2px solid {Colors.BORDER_SUBTLE}; padding-bottom: 8px;'>
@@ -709,7 +713,7 @@ def create_app():
                                 margin-bottom: 8px;
                                 cursor: pointer;
                                 transition: all 0.2s;'
-                         onmouseover='this.style.background="{Colors.BG_HOVER}"'
+                         onmouseover='this.style.background="{Colors.BG_HOVER}"' 
                          onmouseout='this.style.background="{Colors.BG_PRIMARY}"'>
                         <div style='display: flex; justify-content: space-between; align-items: center;'>
                             <div style='font-weight: 600; color: {Colors.TEXT_PRIMARY}; font-size: 0.9rem;'>{symbol}</div>
@@ -742,6 +746,7 @@ def create_app():
 
     # Create watchlist instance
     watchlist_panel = WatchlistPanel()
+    watchlist_panel.refresh() # Initial refresh
     watchlist_sidebar = pn.Column(
         watchlist_panel.get_panel(),
         sizing_mode="stretch_width"
@@ -751,7 +756,7 @@ def create_app():
     dashboard_page = DashboardPage(watchlist_panel=watchlist_panel)
     analysis_app = StockAnalysisApp()
     rl_panel = CompactRLPanel()
-    portfolio_page = PortfolioPage()
+    portfolio_page = PortfolioPage(watchlist_panel=watchlist_panel) # Pass watchlist_panel
     models_page = ModelsPage()
     live_trading_page = create_live_trading_page()
 

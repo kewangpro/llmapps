@@ -17,6 +17,7 @@ from src.rl.live_trading import (
     TradingStatus,
     TradingAction
 )
+
 from src.ui.design_system import Colors, HTMLComponents
 
 logger = logging.getLogger(__name__)
@@ -281,6 +282,7 @@ class LiveTradingPage(pn.viewable.Viewer):
         """Stop live trading session"""
         if self.engine:
             self.engine.stop_session()
+
 
         # Stop updates
         if self.update_callback:
