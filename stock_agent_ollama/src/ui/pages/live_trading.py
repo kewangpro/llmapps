@@ -32,7 +32,10 @@ class LiveTradingPage(pn.viewable.Viewer):
         super().__init__(**params)
         self.engine: Optional[LiveTradingEngine] = None
         self.update_callback = None
+        self.save_callback = None
+        self.state_file = Path("data/live_sessions/live_session.json")
         self._create_ui()
+        self._load_session()
 
     def _find_latest_model(self, symbol: str, agent_type: str = None) -> Optional[Dict[str, Any]]:
         """Find the most recently trained model for a symbol and agent type."""
@@ -169,11 +172,57 @@ class LiveTradingPage(pn.viewable.Viewer):
         self.trades_pane = pn.pane.HTML("", sizing_mode="stretch_width")
         self.events_pane = pn.pane.HTML("", sizing_mode="stretch_width")
 
-        # Initial display
         self._update_display()
+
+    def _load_session(self):
+        """Load a saved trading session if it exists."""
+        if self.state_file.exists():
+            try:
+                self.engine = LiveTradingEngine.load_from_state(self.state_file)
+                
+                if self.engine:
+                    pn.state.notifications.info("Loaded saved trading session.", duration=3000)
+                    self._update_ui_for_session()
+            except Exception as e:
+                logger.error(f"Failed to load saved session: {e}")
+                # If file is corrupted, remove it
+                self.state_file.unlink()
+
+    def _update_ui_for_session(self):
+        """Update the UI to reflect the state of a loaded session."""
+        if not self.engine or not self.engine.session:
+            return
+
+        # Update config inputs
+        config = self.engine.config
+        self.symbol_input.value = config.symbol
+        self.capital_input.value = config.initial_capital
+        self.max_position_input.value = config.max_position_size
+        self.stop_loss_input.value = config.stop_loss_pct
+
+        # Update UI buttons and display
+        self.start_button.disabled = True
+        self.stop_button.disabled = False
+        self.pause_button.disabled = False
+        self._update_display()
+
+        # Start periodic updates if session is running
+        if self.engine.session.status == TradingStatus.RUNNING:
+            self.update_callback = pn.state.add_periodic_callback(
+                self._trading_update,
+                period=config.update_interval * 1000
+            )
+            self.save_callback = pn.state.add_periodic_callback(
+                self._save_session_state,
+                period=300000 # Save every 5 minutes
+            )
 
     def _start_trading(self, event):
         """Start live trading session"""
+        if self.engine and self.engine.session:
+            pn.state.notifications.warning("A trading session is already active.", duration=3000)
+            return
+
         try:
             # Validate inputs
             symbol = self.symbol_input.value.strip().upper()
@@ -271,6 +320,10 @@ class LiveTradingPage(pn.viewable.Viewer):
                 self._trading_update,
                 period=config.update_interval * 1000  # Convert to milliseconds
             )
+            self.save_callback = pn.state.add_periodic_callback(
+                self._save_session_state,
+                period=300000 # Save every 5 minutes
+            )
 
             pn.state.notifications.success(f"Started live trading for {symbol}", duration=3000)
 
@@ -282,12 +335,16 @@ class LiveTradingPage(pn.viewable.Viewer):
         """Stop live trading session"""
         if self.engine:
             self.engine.stop_session()
-
+            self._save_session_state() # Save final state
 
         # Stop updates
         if self.update_callback:
             self.update_callback.stop()
             self.update_callback = None
+        
+        if self.save_callback:
+            self.save_callback.stop()
+            self.save_callback = None
 
         # Update UI
         self.start_button.disabled = False
@@ -300,6 +357,11 @@ class LiveTradingPage(pn.viewable.Viewer):
         self._update_display()
 
         pn.state.notifications.info("Trading session stopped", duration=3000)
+
+    def _save_session_state(self, *events):
+        """Save the current session state."""
+        if self.engine:
+            self.engine.save_state(self.state_file)
 
     def _trading_update(self):
         """Periodic trading cycle update"""
@@ -563,7 +625,10 @@ class LiveTradingPage(pn.viewable.Viewer):
             rows = ""
             # Show last 20 events
             for event in reversed(self.engine.session.events[-20:]):
-                time_str = event['timestamp'].strftime('%H:%M:%S')
+                timestamp = event['timestamp']
+                if isinstance(timestamp, str):
+                    timestamp = datetime.fromisoformat(timestamp)
+                time_str = timestamp.strftime('%H:%M:%S')
                 event_type = event['type']
 
                 type_color = {
