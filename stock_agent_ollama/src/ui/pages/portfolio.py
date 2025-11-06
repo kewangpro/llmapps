@@ -51,7 +51,11 @@ class PortfolioPage(param.Parameterized):
         portfolio_manager.save_portfolio(self.portfolio_name, self.portfolio)
         pn.state.notifications.success(f"Portfolio '{self.portfolio_name}' saved!", duration=2000)
         if self.watchlist_panel:
-            self.watchlist_panel.refresh()
+            # `watchlist_panel.refresh` is an async coroutine; executing it
+            # directly returns a coroutine that would be left un-awaited by
+            # `pn.state.execute`. Create a background task so the coroutine
+            # is properly scheduled on the event loop.
+            pn.state.execute(lambda: asyncio.create_task(self.watchlist_panel.refresh()))
 
     def _create_ui(self):
         """Create the portfolio management UI."""

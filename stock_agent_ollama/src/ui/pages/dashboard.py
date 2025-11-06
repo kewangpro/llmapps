@@ -5,6 +5,7 @@ Dashboard Page - Market Overview
 import panel as pn
 import param
 import logging
+import asyncio
 from datetime import datetime
 
 from src.ui.design_system import Colors, HTMLComponents
@@ -32,7 +33,7 @@ class DashboardPage(param.Parameterized):
         )
         self.refresh_button.on_click(self._refresh_dashboard)
 
-        self._refresh_dashboard()
+        pn.state.onload(self._refresh_dashboard)
 
     def _refresh_dashboard(self, event=None):
         """Refresh dashboard data"""
@@ -41,7 +42,11 @@ class DashboardPage(param.Parameterized):
             self._load_quick_actions()
             # Also refresh watchlist if available
             if self.watchlist_panel:
-                self.watchlist_panel.refresh()
+                # `watchlist_panel.refresh` may be an async coroutine. Use
+                # asyncio.create_task inside pn.state.execute so the coroutine
+                # is scheduled on the server event loop and not left
+                # un-awaited.
+                pn.state.execute(lambda: asyncio.create_task(self.watchlist_panel.refresh()))
             pn.state.notifications.success("Dashboard and watchlist refreshed", duration=2000)
         except Exception as e:
             logger.error(f"Dashboard refresh failed: {e}")

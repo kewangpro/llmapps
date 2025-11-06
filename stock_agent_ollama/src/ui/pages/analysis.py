@@ -680,12 +680,17 @@ def create_app():
         def __init__(self):
             self.stock_fetcher = StockFetcher()
             self.watchlist_symbols = portfolio_manager.load_portfolio("default") # Load from portfolio_manager
-            self.pane = pn.pane.HTML("", sizing_mode="stretch_width")
+            self.pane = pn.pane.HTML("Loading watchlist...", sizing_mode="stretch_width")
             # Initial refresh is now called after WatchlistPanel is instantiated
+            pn.state.onload(self.refresh)
 
-        def refresh(self):
+        async def refresh(self):
             """Refresh watchlist data"""
             self.watchlist_symbols = portfolio_manager.load_portfolio("default") # Reload portfolio
+            
+            tasks = [asyncio.to_thread(self.stock_fetcher.get_real_time_price, symbol) for symbol in self.watchlist_symbols]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
             watchlist_html = f"""
             <div style='background: {Colors.BG_SECONDARY}; border: 1px solid {Colors.BORDER_SUBTLE}; border-radius: 8px; padding: 10px;'>
                 <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 2px solid {Colors.BORDER_SUBTLE}; padding-bottom: 8px;'>
@@ -695,9 +700,18 @@ def create_app():
                 <div style='max-height: 650px; overflow-y: auto;'>
             """
 
-            for symbol in self.watchlist_symbols:
-                try:
-                    real_time_data = self.stock_fetcher.get_real_time_price(symbol)
+            for i, result in enumerate(results):
+                symbol = self.watchlist_symbols[i]
+                if isinstance(result, Exception):
+                    logger.warning(f"Failed to fetch {symbol} for watchlist: {result}")
+                    watchlist_html += f"""
+                    <div style='background: {Colors.BG_PRIMARY}; border: 1px solid {Colors.BORDER_SUBTLE}; border-radius: 6px; padding: 10px; margin-bottom: 8px; opacity: 0.5;'>
+                        <div style='font-weight: 600; color: {Colors.TEXT_SECONDARY}; font-size: 0.9rem;'>{symbol}</div>
+                        <div style='font-size: 0.75rem; color: {Colors.TEXT_MUTED};'>Error</div>
+                    </div>
+                    """
+                else:
+                    real_time_data = result
                     price = real_time_data.get('current_price', 0) or 0
                     prev_close = real_time_data.get('previous_close', 0) or 0
                     change = price - prev_close
@@ -724,14 +738,6 @@ def create_app():
                         </div>
                     </div>
                     """
-                except Exception as e:
-                    logger.warning(f"Failed to fetch {symbol} for watchlist: {e}")
-                    watchlist_html += f"""
-                    <div style='background: {Colors.BG_PRIMARY}; border: 1px solid {Colors.BORDER_SUBTLE}; border-radius: 6px; padding: 10px; margin-bottom: 8px; opacity: 0.5;'>
-                        <div style='font-weight: 600; color: {Colors.TEXT_SECONDARY}; font-size: 0.9rem;'>{symbol}</div>
-                        <div style='font-size: 0.75rem; color: {Colors.TEXT_MUTED};'>Loading...</div>
-                    </div>
-                    """
 
             watchlist_html += """
                 </div>
@@ -746,7 +752,6 @@ def create_app():
 
     # Create watchlist instance
     watchlist_panel = WatchlistPanel()
-    watchlist_panel.refresh() # Initial refresh
     watchlist_sidebar = pn.Column(
         watchlist_panel.get_panel(),
         sizing_mode="stretch_width"

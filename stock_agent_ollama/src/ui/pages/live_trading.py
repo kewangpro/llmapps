@@ -9,6 +9,7 @@ import param
 from datetime import datetime
 from pathlib import Path
 import logging
+import json
 from typing import Optional, Dict, Any
 
 from src.rl.live_trading import (
@@ -35,7 +36,7 @@ class LiveTradingPage(pn.viewable.Viewer):
         self.save_callback = None
         self.state_file = Path("data/live_sessions/live_session.json")
         self._create_ui()
-        self._load_session()
+        self._populate_saved_sessions()
 
     def _find_latest_model(self, symbol: str, agent_type: str = None) -> Optional[Dict[str, Any]]:
         """Find the most recently trained model for a symbol and agent type."""
@@ -139,6 +140,22 @@ class LiveTradingPage(pn.viewable.Viewer):
             width=180
         )
 
+        self.allow_extended_hours_input = pn.widgets.Checkbox(
+            name='Allow Extended Hours Trading',
+            value=False,
+            align='center'
+        )
+
+        # Session management
+        self.session_selector = pn.widgets.AutocompleteInput(
+            name="",
+            options=[],
+            placeholder="Start new or load session...",
+            width=250,
+            case_sensitive=False,
+            min_characters=0 # Allow empty to create new session
+        )
+
         # Control buttons
         self.start_button = pn.widgets.Button(
             name='▶ Start Trading',
@@ -157,14 +174,6 @@ class LiveTradingPage(pn.viewable.Viewer):
         )
         self.stop_button.on_click(self._stop_trading)
 
-        self.pause_button = pn.widgets.Button(
-            name='⏸ Pause',
-            button_type='warning',
-            width=150,
-            height=40,
-            disabled=True
-        )
-
         # Status indicators
         self.status_pane = pn.pane.HTML("", sizing_mode="stretch_width")
         self.portfolio_pane = pn.pane.HTML("", sizing_mode="stretch_width")
@@ -174,19 +183,16 @@ class LiveTradingPage(pn.viewable.Viewer):
 
         self._update_display()
 
-    def _load_session(self):
-        """Load a saved trading session if it exists."""
-        if self.state_file.exists():
-            try:
-                self.engine = LiveTradingEngine.load_from_state(self.state_file)
-                
-                if self.engine:
-                    pn.state.notifications.info("Loaded saved trading session.", duration=3000)
-                    self._update_ui_for_session()
-            except Exception as e:
-                logger.error(f"Failed to load saved session: {e}")
-                # If file is corrupted, remove it
-                self.state_file.unlink()
+    def _populate_saved_sessions(self):
+        """Populate the session selector with saved session files."""
+        sessions_dir = Path("data/live_sessions")
+        if not sessions_dir.exists():
+            sessions_dir.mkdir(parents=True)
+
+        sessions = sorted([f.stem for f in sessions_dir.glob("*.json")], reverse=True)
+        # Add an empty string option to allow users to start a new session by clearing the input
+        self.session_selector.options = [""] + sessions
+        self.session_selector.value = "" # Set initial value to empty to indicate new session
 
     def _update_ui_for_session(self):
         """Update the UI to reflect the state of a loaded session."""
@@ -199,18 +205,50 @@ class LiveTradingPage(pn.viewable.Viewer):
         self.capital_input.value = config.initial_capital
         self.max_position_input.value = config.max_position_size
         self.stop_loss_input.value = config.stop_loss_pct
+        self.allow_extended_hours_input.value = getattr(config, 'allow_extended_hours', False)
+        self.session_selector.value = config.session_id # Update session selector with loaded session ID
 
         # Update UI buttons and display
-        self.start_button.disabled = True
-        self.stop_button.disabled = False
-        self.pause_button.disabled = False
+        if self.engine.session.status == TradingStatus.RUNNING:
+            self.start_button.disabled = True
+            self.stop_button.disabled = False
+            self.start_button.name = '▶ Start Trading' # Reset to default
+        elif self.engine.session.status == TradingStatus.PAUSED:
+            self.start_button.disabled = False
+            self.stop_button.disabled = False
+            self.start_button.name = '▶ Resume Trading'
+        elif self.engine.session.status == TradingStatus.STOPPED:
+            self.start_button.disabled = False
+            self.stop_button.disabled = True
+            self.start_button.name = '▶ Start Trading'
+        else: # IDLE or HALTED
+            self.start_button.disabled = False
+            self.stop_button.disabled = True
+            self.start_button.name = '▶ Start Trading'
+
+        # Populate results container
+        self.results_container.clear()
+        self.results_container.extend([
+            pn.Row(
+                pn.Column(self.status_pane, sizing_mode="stretch_width"),
+                pn.Column(self.portfolio_pane, sizing_mode="stretch_width"),
+                sizing_mode="stretch_width"
+            ),
+            self.positions_pane,
+            pn.Row(
+                pn.Column(self.trades_pane, sizing_mode="stretch_width"),
+                pn.Column(self.events_pane, sizing_mode="stretch_width"),
+                sizing_mode="stretch_width"
+            )
+        ])
+
         self._update_display()
 
         # Start periodic updates if session is running
         if self.engine.session.status == TradingStatus.RUNNING:
             self.update_callback = pn.state.add_periodic_callback(
                 self._trading_update,
-                period=config.update_interval * 1000
+                period=self.engine.config.update_interval * 1000
             )
             self.save_callback = pn.state.add_periodic_callback(
                 self._save_session_state,
@@ -218,118 +256,146 @@ class LiveTradingPage(pn.viewable.Viewer):
             )
 
     def _start_trading(self, event):
-        """Start live trading session"""
-        if self.engine and self.engine.session:
-            pn.state.notifications.warning("A trading session is already active.", duration=3000)
+        """Start or resume live trading session based on selection or create new."""
+        symbol = self.symbol_input.value.strip().upper()
+        agent_type = self.agent_type.value
+
+        if not symbol:
+            pn.state.notifications.error("Please enter a stock symbol", duration=3000)
             return
 
-        try:
-            # Validate inputs
-            symbol = self.symbol_input.value.strip().upper()
-            if not symbol:
-                pn.state.notifications.error("Please enter a stock symbol", duration=3000)
-                return
+        session_input_value = self.session_selector.value.strip()
+        session_to_load_stem = None
+        session_loaded = False
 
-            # Get selected agent type
-            agent_type = self.agent_type.value
+        # Determine if we are loading an existing session or starting a new one
+        if session_input_value:
+            # Check if the input matches an existing session file
+            sessions_dir = Path("data/live_sessions")
+            possible_file = sessions_dir / f"{session_input_value}.json"
+            if possible_file.exists():
+                session_to_load_stem = session_input_value
+            else:
+                # If it doesn't match an existing file, treat it as a new session name
+                # and proceed to create a new session with this name
+                pn.state.notifications.info(f"Preparing to create new session: {session_input_value}", duration=3000)
+                session_to_load_stem = None # Ensure we don't try to load it
 
-            # Find latest model for this symbol and agent type
-            model_info = self._find_latest_model(symbol, agent_type)
-            if not model_info:
-                pn.state.notifications.error(
-                    f"No trained {agent_type} model found for {symbol}. Please train a model first.",
-                    duration=5000
+        if session_to_load_stem:
+            # Attempt to load the selected session
+            state_file = Path(f"data/live_sessions/{session_to_load_stem}.json")
+            try:
+                self.engine = LiveTradingEngine.load_from_state(state_file)
+                if self.engine:
+                    try:
+                        self.engine.load_agent(self.engine.config.agent_path)
+                        pn.state.notifications.success(f"Loaded and resuming session: {session_to_load_stem}", duration=3000)
+                        session_loaded = True
+                    except Exception as e:
+                        pn.state.notifications.error(f"Failed to load agent for session {session_to_load_stem}: {e}", duration=5000)
+                        self.engine = None # Reset engine if agent loading fails
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to load session {session_to_load_stem} due to corrupted file: {e}")
+                pn.state.notifications.error(f"Session file {session_to_load_stem} is corrupted.", duration=5000)
+            except Exception as e:
+                logger.error(f"An unexpected error occurred while loading session {session_to_load_stem}: {e}")
+                pn.state.notifications.error(f"Could not load session: {e}", duration=5000)
+        
+        # If no session was loaded, or the user explicitly cleared the input, start a new one
+        if not session_loaded:
+            try:
+                model_info = self._find_latest_model(symbol, agent_type)
+                if not model_info:
+                    pn.state.notifications.error(
+                        f"No trained {agent_type} model found for {symbol}. Please train a model first.",
+                        duration=5000
+                    )
+                    return
+                
+                # If session_input_value is provided and not an existing file, use it as the new session ID
+                # Otherwise, generate a new one
+                new_session_id = session_input_value if session_input_value else f"SESSION_{symbol}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+                model_name = model_info['directory'].name
+
+                config = LiveTradingConfig(
+                    symbol=symbol,
+                    agent_path=str(model_info['path']),
+                    initial_capital=self.capital_input.value,
+                    max_position_size=self.max_position_input.value,
+                    stop_loss_pct=self.stop_loss_input.value,
+                    update_interval=60,
+                    allow_extended_hours=self.allow_extended_hours_input.value,
+                    session_id=new_session_id # Pass the new session ID
                 )
+
+                self.engine = LiveTradingEngine(config)
+                self.engine.load_agent(config.agent_path)
+                self.engine.start_session()
+                pn.state.notifications.success(f"Started new live trading session: {new_session_id} for {symbol}", duration=3000)
+                session_loaded = True # Mark as loaded since a new session was created
+
+            except Exception as e:
+                logger.error(f"Error starting new trading session: {e}")
+                pn.state.notifications.error(f"Failed to start new trading session: {str(e)}", duration=5000)
                 return
+        
+        # Ensure engine is running if a session was successfully loaded/started
+        if self.engine and self.engine.session.status != TradingStatus.RUNNING:
+            self.engine.session.status = TradingStatus.RUNNING
+            self.engine._is_running = True
 
-            # Update model status display
-            model_name = model_info['directory'].name
-            self.model_status_pane.object = f"""
-            <div style='padding: 10px; background: #D1FAE5; border-radius: 4px; font-size: 12px; color: #065F46; border: 1px solid #A7F3D0;'>
-                ✅ Using model: <strong>{model_info['agent_type'].upper()}</strong> - {model_name}
-            </div>
-            """
+        # Common UI updates after starting/resuming
+        self.start_button.disabled = True
+        self.stop_button.disabled = False
 
-            # Create configuration
-            config = LiveTradingConfig(
-                symbol=symbol,
-                agent_path=str(model_info['path']),
-                initial_capital=self.capital_input.value,
-                max_position_size=self.max_position_input.value,
-                stop_loss_pct=self.stop_loss_input.value,
-                update_interval=60
+        # Display model info
+        if self.engine and self.engine.session:
+            model_name = self.engine.config.agent_path.split('/')[-2]
+            agent_type = model_name.split('_')[0].upper()
+            message = f"✅ Using model: {agent_type} - {model_name} - {self.engine.session.session_id}"
+            self.model_status_pane.object = f"<div style='background-color: #d4edda; color: #155724; border-radius: 5px; padding: 10px;'>{message}</div>"
+
+        self.results_container.clear()
+        self.results_container.extend([
+            pn.Row(
+                pn.Column(self.status_pane, sizing_mode="stretch_width"),
+                pn.Column(self.portfolio_pane, sizing_mode="stretch_width"),
+                sizing_mode="stretch_width"
+            ),
+            self.positions_pane,
+            pn.Row(
+                pn.Column(self.trades_pane, sizing_mode="stretch_width"),
+                pn.Column(self.events_pane, sizing_mode="stretch_width"),
+                sizing_mode="stretch_width"
+            )
+        ])
+
+        self._update_display()
+
+        # Start periodic updates
+        if self.engine and self.engine.session.status == TradingStatus.RUNNING:
+            self.update_callback = pn.state.add_periodic_callback(
+                self._trading_update,
+                period=self.engine.config.update_interval * 1000
+            )
+            self.save_callback = pn.state.add_periodic_callback(
+                self._save_session_state,
+                period=300000
             )
 
-            # Create engine
-            self.engine = LiveTradingEngine(config)
-
-            # Load agent
-            try:
-                self.engine.load_agent(config.agent_path)
-                pn.state.notifications.success(
-                    f"Loaded {model_info['agent_type'].upper()} model for {symbol}",
-                    duration=3000
-                )
-            except Exception as e:
-                pn.state.notifications.error(f"Failed to load agent: {str(e)}", duration=5000)
-                return
-
-            # Start session
-            self.engine.start_session()
-
-            # Update UI
-            self.start_button.disabled = True
-            self.stop_button.disabled = False
-            self.pause_button.disabled = False
-
-            # Populate results container
-            self.results_container.clear()
-            self.results_container.extend([
-                pn.Row(
-                    pn.Column(self.status_pane, sizing_mode="stretch_width"),
-                    pn.Column(self.portfolio_pane, sizing_mode="stretch_width"),
-                    sizing_mode="stretch_width"
-                ),
-                self.positions_pane,
-                pn.Row(
-                    pn.Column(self.trades_pane, sizing_mode="stretch_width"),
-                    pn.Column(self.events_pane, sizing_mode="stretch_width"),
-                    sizing_mode="stretch_width"
-                )
-            ])
-
-            # Update display to show session data
-            self._update_display()
-
-            # Execute first trading cycle immediately
+            # Execute first trading cycle immediately if it's a new session or just resumed
             try:
                 result = self.engine.trading_cycle()
                 self._update_display()
-
                 if result.get('status') == 'trade_executed':
                     trade = result['trade']
-                    pn.state.notifications.success(
+                    pn.state.notifications.info(
                         f"First trade: {trade.action.name} {trade.shares} shares @ ${trade.price:.2f}",
                         duration=4000
                     )
             except Exception as e:
                 logger.error(f"Error in first trading cycle: {e}")
-
-            # Start periodic updates
-            self.update_callback = pn.state.add_periodic_callback(
-                self._trading_update,
-                period=config.update_interval * 1000  # Convert to milliseconds
-            )
-            self.save_callback = pn.state.add_periodic_callback(
-                self._save_session_state,
-                period=300000 # Save every 5 minutes
-            )
-
-            pn.state.notifications.success(f"Started live trading for {symbol}", duration=3000)
-
-        except Exception as e:
-            logger.error(f"Error starting trading: {e}")
-            pn.state.notifications.error(f"Failed to start trading: {str(e)}", duration=5000)
 
     def _stop_trading(self, event):
         """Stop live trading session"""
@@ -349,10 +415,10 @@ class LiveTradingPage(pn.viewable.Viewer):
         # Update UI
         self.start_button.disabled = False
         self.stop_button.disabled = True
-        self.pause_button.disabled = True
 
-        # Clear results container
+        # Clear results container and model status pane
         self.results_container.clear()
+        self.model_status_pane.object = "" # Clear the model status message
 
         self._update_display()
 
@@ -360,8 +426,10 @@ class LiveTradingPage(pn.viewable.Viewer):
 
     def _save_session_state(self, *events):
         """Save the current session state."""
-        if self.engine:
-            self.engine.save_state(self.state_file)
+        if self.engine and self.engine.session:
+            session_id = self.engine.session.session_id
+            state_file = Path(f"data/live_sessions/{session_id}.json")
+            self.engine.save_state(state_file)
 
     def _trading_update(self):
         """Periodic trading cycle update"""
@@ -651,7 +719,7 @@ class LiveTradingPage(pn.viewable.Viewer):
             html = f"""
             <div style='background: {Colors.BG_SECONDARY}; padding: 20px; border-radius: 8px;'>
                 <h3 style='margin-top: 0; color: {Colors.TEXT_PRIMARY};'>Event Log</h3>
-                <div style='max-height: 300px; overflow-y: auto; font-family: monospace;'>
+                <div style='max-height: 400px; overflow-y: auto; font-family: monospace;'>
                     {rows}
                 </div>
             </div>
@@ -697,8 +765,12 @@ class LiveTradingPage(pn.viewable.Viewer):
                 align='start'
             ),
             pn.Row(
+                self.session_selector,
                 self.start_button,
-                self.stop_button
+                self.stop_button,
+                self.allow_extended_hours_input,
+                align='start',
+                margin=(10, 0, 0, 0)
             ),
             self.model_status_pane,
             styles=dict(background='#F8F9FA', border_radius='8px', padding='15px'),
