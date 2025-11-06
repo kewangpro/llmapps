@@ -32,6 +32,7 @@ class PortfolioManager:
             with open(portfolio_file, "w") as f:
                 json.dump(symbols, f, indent=4)
             logger.info(f"Successfully saved portfolio: {portfolio_name}")
+            logger.debug(f"Saved symbols for {portfolio_name}: {symbols}")
         except Exception as e:
             logger.error(f"Failed to save portfolio {portfolio_name}: {e}")
 
@@ -45,6 +46,7 @@ class PortfolioManager:
         try:
             with open(portfolio_file, "r") as f:
                 symbols = json.load(f)
+            logger.debug(f"Loaded symbols for {portfolio_name}: {symbols}")
             return symbols
         except Exception as e:
             logger.error(f"Failed to load portfolio {portfolio_name}: {e}")
