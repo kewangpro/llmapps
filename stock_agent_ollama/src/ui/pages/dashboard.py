@@ -113,10 +113,10 @@ class DashboardPage(param.Parameterized):
                 <div style='font-weight: 600; color: {Colors.TEXT_PRIMARY}; font-size: 0.875rem; margin-bottom: 3px;'>Backtest</div>
                 <div style='font-size: 0.7rem; color: {Colors.TEXT_SECONDARY};'>Test strategies</div>
             </div>
-            <div style='background: {Colors.BG_SECONDARY}; border: 1px solid {Colors.BORDER_SUBTLE}; border-radius: 8px; padding: 15px; text-align: center; cursor: pointer; transition: all 0.2s;' onmouseover='this.style.background="{Colors.BG_HOVER}"' onmouseout='this.style.background="{Colors.BG_SECONDARY}"'>
-                <div style='font-size: 1.5rem; margin-bottom: 8px;'>🔍</div>
-                <div style='font-weight: 600; color: {Colors.TEXT_PRIMARY}; font-size: 0.875rem; margin-bottom: 3px;'>Compare</div>
-                <div style='font-size: 0.7rem; color: {Colors.TEXT_SECONDARY};'>Side-by-side</div>
+                <div style='background: {Colors.BG_SECONDARY}; border: 1px solid {Colors.BORDER_SUBTLE}; border-radius: 8px; padding: 15px; text-align: center; cursor: pointer; transition: all 0.2s;' onmouseover='this.style.background="{Colors.BG_HOVER}"' onmouseout='this.style.background="{Colors.BG_SECONDARY}"'>
+                    <div style='font-size: 1.5rem; margin-bottom: 8px;'>🔴</div>
+                <div style='font-weight: 600; color: {Colors.TEXT_PRIMARY}; font-size: 0.875rem; margin-bottom: 3px;'>Live Trading</div>
+                <div style='font-size: 0.7rem; color: {Colors.TEXT_SECONDARY};'>Real-time</div>
             </div>
             <div style='background: {Colors.BG_SECONDARY}; border: 1px solid {Colors.BORDER_SUBTLE}; border-radius: 8px; padding: 15px; text-align: center; cursor: pointer; transition: all 0.2s;' onmouseover='this.style.background="{Colors.BG_HOVER}"' onmouseout='this.style.background="{Colors.BG_SECONDARY}"'>
                 <div style='font-size: 1.5rem; margin-bottom: 8px;'>📈</div>
