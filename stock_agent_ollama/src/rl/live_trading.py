@@ -5,7 +5,7 @@ Educational paper trading system that uses trained RL models with real-time mark
 This is for SIMULATION ONLY - no real money is involved.
 """
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, fields
 from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Tuple, Any
@@ -197,15 +197,21 @@ class LiveTradingConfig:
     stop_loss_pct: float = 5.0  # 5% stop loss
     max_daily_loss_pct: float = 10.0  # 10% max daily loss (circuit breaker)
     update_interval: int = 60  # Seconds between updates
-    trading_hours_only: bool = True
+    enforce_trading_hours: bool = True
+    allow_extended_hours: bool = False  # Default to False as requested
     commission_per_trade: float = 0.0  # Commission per trade
+    session_id: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "LiveTradingConfig":
-        return cls(**data)
+        # Get all field names from the dataclass
+        known_fields = {f.name for f in fields(cls)}
+        # Filter data to only include known fields
+        filtered_data = {k: v for k, v in data.items() if k in known_fields}
+        return cls(**filtered_data)
 
 
 @dataclass
@@ -258,8 +264,9 @@ class TradingSession:
 class MarketDataStream:
     """Real-time market data stream using Yahoo Finance"""
 
-    def __init__(self, symbol: str):
-        self.symbol = symbol
+    def __init__(self, config: LiveTradingConfig):
+        self.symbol = config.symbol
+        self.config = config
         self._last_tick: Optional[MarketTick] = None
 
     def get_latest_tick(self) -> MarketTick:
@@ -325,8 +332,14 @@ class MarketDataStream:
             ticker = yf.Ticker(self.symbol)
             info = ticker.info
             market_state = info.get('marketState', 'CLOSED').upper()
-            # Valid states: PREPRE, PRE, REGULAR, POST, POSTPOST, CLOSED
-            return market_state in ['REGULAR', 'PRE', 'POST', 'PREPRE', 'POSTPOST']
+            
+            if self.config.allow_extended_hours:
+                # Valid states for extended hours trading
+                return market_state in ['REGULAR', 'PRE', 'POST', 'PREPRE', 'POSTPOST']
+            else:
+                # Regular hours only
+                return market_state == 'REGULAR'
+
         except Exception as e:
             logger.warning(f"Could not fetch market state from yfinance: {e}. Falling back to time-based check.")
             # Default to checking trading hours (e.g., 9:30 AM - 4:00 PM ET)
@@ -342,6 +355,9 @@ class MarketDataStream:
 
                 # Regular market hours: 9:30 AM to 4:00 PM ET
                 market_open = time(9, 30) <= now_et.time() < time(16, 0)
+
+                if not self.config.allow_extended_hours:
+                    return market_open
 
                 # Extended hours (pre-market and post-market)
                 # Pre-market: 4:00 AM to 9:30 AM ET
@@ -571,7 +587,7 @@ class LiveTradingEngine:
             initial_cash=config.initial_capital,
             cash=config.initial_capital
         )
-        self.market_stream = MarketDataStream(config.symbol)
+        self.market_stream = MarketDataStream(self.config)
         self.risk_manager = RiskManager(config)
         self.order_executor = OrderExecutor(config)
         self.agent = None  # Will be loaded
@@ -616,41 +632,7 @@ class LiveTradingEngine:
             logger.error(f"Failed to load trading session: {e}")
             raise
 
-    def save_state(self, file_path: Path):
-        """Save the current trading session state to a file"""
-        if not self.session:
-            logger.warning("No active session to save.")
-            return
 
-        try:
-            state = self.session.to_dict()
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(file_path, 'w') as f:
-                json.dump(state, f, indent=2)
-            logger.info(f"Successfully saved trading session to {file_path}")
-        except Exception as e:
-            logger.error(f"Failed to save trading session: {e}")
-
-    @classmethod
-    def load_state(cls, file_path: Path, config: LiveTradingConfig) -> "LiveTradingEngine":
-        """Load a trading session state from a file"""
-        try:
-            with open(file_path, 'r') as f:
-                state = json.load(f)
-            
-            session = TradingSession.from_dict(state)
-            
-            # Recreate the engine from the loaded session
-            engine = cls(session.config)
-            engine.session = session
-            engine.portfolio = session.portfolio
-            engine._is_running = session.status == TradingStatus.RUNNING
-            
-            logger.info(f"Successfully loaded trading session from {file_path}")
-            return engine
-        except Exception as e:
-            logger.error(f"Failed to load trading session: {e}")
-            raise
 
     def load_agent(self, agent_path: str):
         """Load trained RL agent"""
@@ -678,7 +660,7 @@ class LiveTradingEngine:
 
     def start_session(self) -> TradingSession:
         """Start new trading session"""
-        session_id = f"SESSION_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        session_id = f"SESSION_{self.config.symbol}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
         self.session = TradingSession(
             session_id=session_id,
@@ -720,7 +702,7 @@ class LiveTradingEngine:
             self.portfolio.update_valuations(tick)
 
             # Check trading hours if required
-            if self.config.trading_hours_only and not self.market_stream.is_market_open():
+            if self.config.enforce_trading_hours and not self.market_stream.is_market_open():
                 logger.info("Market closed - skipping trading cycle")
                 return {
                     "status": "market_closed",
