@@ -238,13 +238,64 @@ class StockFetcher:
                     current_price = data['Close'].iloc[-1] if not data.empty else None
                 except Exception:
                     current_price = None
+
+            # Attempt to compute fallback financial metrics when missing
+            # Compute P/E if trailingPE is missing but trailingEps and price exist
+            trailing_eps = info.get('trailingEps')
+            trailing_pe = info.get('trailingPE')
+            try:
+                if trailing_pe is None and trailing_eps not in (None, 0) and current_price not in (None, 0):
+                    trailing_pe = float(current_price) / float(trailing_eps)
+            except Exception:
+                trailing_pe = info.get('trailingPE')
+
+            # Compute market cap from sharesOutstanding * current_price if missing
+            market_cap = info.get('marketCap')
+            try:
+                if market_cap is None and current_price not in (None, 0):
+                    shares_outstanding = info.get('sharesOutstanding')
+                    if shares_outstanding not in (None, 0):
+                        market_cap = float(shares_outstanding) * float(current_price)
+            except Exception:
+                market_cap = info.get('marketCap')
+
+            # For 52-week high/low and average volume, try to derive from 1y history when missing
+            fifty_two_week_high = info.get('fiftyTwoWeekHigh')
+            fifty_two_week_low = info.get('fiftyTwoWeekLow')
+            average_volume = info.get('averageVolume')
+            try:
+                need_history = any(v is None for v in (fifty_two_week_high, fifty_two_week_low, average_volume))
+                if need_history:
+                    hist = self.fetch_stock_data(validated_symbol, period='1y', interval='1d')
+                    if not hist.empty:
+                        if fifty_two_week_high is None:
+                            fifty_two_week_high = float(hist['High'].max())
+                        if fifty_two_week_low is None:
+                            fifty_two_week_low = float(hist['Low'].min())
+                        if average_volume is None:
+                            average_volume = float(hist['Volume'].mean())
+            except Exception:
+                # If history fetch fails, leave values as-is (may be None)
+                pass
             
-            return {
+            # Also provide legacy-style top-level keys that the UI expects
+            legacy = {
+                'trailingPE': trailing_pe,
+                'trailingEps': trailing_eps,
+                'fiftyTwoWeekHigh': fifty_two_week_high,
+                'fiftyTwoWeekLow': fifty_two_week_low,
+                'averageVolume': average_volume,
+                'marketCap': market_cap,
+                'volume': info.get('volume'),
+                'previousClose': info.get('previousClose')
+            }
+
+            result = {
                 'symbol': validated_symbol,
                 'name': info.get('longName', info.get('shortName', validated_symbol)),
                 'sector': info.get('sector'),
                 'industry': info.get('industry'),
-                'market_cap': info.get('marketCap'),
+                'market_cap': market_cap,
                 'employees': info.get('fullTimeEmployees'),
                 'website': info.get('website'),
                 'business_summary': info.get('longBusinessSummary', '')[:500] + '...' if info.get('longBusinessSummary') else '',
@@ -253,21 +304,25 @@ class StockFetcher:
                     'previous_close': info.get('previousClose'),
                     'day_high': info.get('dayHigh'),
                     'day_low': info.get('dayLow'),
-                    'fifty_two_week_high': info.get('fiftyTwoWeekHigh'),
-                    'fifty_two_week_low': info.get('fiftyTwoWeekLow'),
+                    'fifty_two_week_high': fifty_two_week_high,
+                    'fifty_two_week_low': fifty_two_week_low,
                     'volume': info.get('volume'),
-                    'avg_volume': info.get('averageVolume')
+                    'avg_volume': average_volume
                 },
                 'financial_metrics': {
-                    'pe_ratio': info.get('trailingPE'),
+                    'pe_ratio': trailing_pe,
                     'forward_pe': info.get('forwardPE'),
                     'price_to_book': info.get('priceToBook'),
                     'dividend_yield': info.get('dividendYield'),
                     'beta': info.get('beta'),
-                    'eps': info.get('trailingEps'),
+                    'eps': trailing_eps,
                     'revenue': info.get('totalRevenue')
                 }
             }
+
+            # Merge legacy keys into the top-level result for backward compatibility
+            result.update(legacy)
+            return result
             
         except Exception as e:
             logger.error(f"Failed to get stock info for {symbol}: {e}")
