@@ -224,12 +224,24 @@ class StockFetcher:
     def get_stock_info(self, symbol: str) -> Dict[str, Any]:
         """Get comprehensive stock information"""
         try:
-            ticker = yf.Ticker(symbol)
+            # Validate symbol to ensure consistent formatting and safety
+            validated_symbol = self._validate_symbol(symbol)
+            ticker = yf.Ticker(validated_symbol)
             info = ticker.info
+
+            # Ensure we have a current price; fall back to latest close if needed
+            current_price = info.get('currentPrice') or info.get('regularMarketPrice')
+            if current_price is None:
+                # Fallback: use recent history close
+                try:
+                    data = self.fetch_stock_data(validated_symbol, period="5d", interval="1d")
+                    current_price = data['Close'].iloc[-1] if not data.empty else None
+                except Exception:
+                    current_price = None
             
             return {
-                'symbol': symbol,
-                'name': info.get('longName', info.get('shortName', symbol)),
+                'symbol': validated_symbol,
+                'name': info.get('longName', info.get('shortName', validated_symbol)),
                 'sector': info.get('sector'),
                 'industry': info.get('industry'),
                 'market_cap': info.get('marketCap'),
@@ -237,7 +249,7 @@ class StockFetcher:
                 'website': info.get('website'),
                 'business_summary': info.get('longBusinessSummary', '')[:500] + '...' if info.get('longBusinessSummary') else '',
                 'price_info': {
-                    'current_price': info.get('currentPrice'),
+                    'current_price': current_price,
                     'previous_close': info.get('previousClose'),
                     'day_high': info.get('dayHigh'),
                     'day_low': info.get('dayLow'),
