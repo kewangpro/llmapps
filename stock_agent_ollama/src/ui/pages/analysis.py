@@ -333,20 +333,25 @@ class StockAnalysisApp(param.Parameterized):
             "Avg Volume": format_value(stock_info.get('averageVolume'), "", "", 0, True)
         }
 
-        stats_html = "".join([f"<div style='text-align: right;'><div style='font-size: 0.7rem; color: {Colors.TEXT_SECONDARY};'>{k}</div><div style='font-size: 0.9rem; font-weight: 600; font-family: monospace;'>{v}</div></div>" for k, v in stats.items()])
+        # Reduce numeric font further and mute color for better hierarchy
+        stats_html = "".join([
+            f"<div style='text-align: right;'><div style='font-size: 0.7rem; color: {Colors.TEXT_SECONDARY};'>{k}</div>"
+            f"<div style='font-size: 0.8rem; font-weight: 400; font-family: monospace; color: {Colors.TEXT_SECONDARY};'>{v}</div></div>"
+            for k, v in stats.items()
+        ])
 
         header_html = f"""
         <div style='background: {Colors.BG_SECONDARY}; border: 1px solid {Colors.BORDER_SUBTLE}; border-left: 4px solid {Colors.ACCENT_PURPLE}; padding: 12px 15px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);'>
             <div style='display: flex; justify-content: space-between; align-items: center;'>
-                <div style='flex: 1;'>
+                <div style='flex: 1; min-width: 140px;'>
                     <h2 style='margin: 0; font-size: 1.5rem; color: {Colors.TEXT_PRIMARY};'>{html.escape(symbol)}</h2>
                     <p style='margin: 3px 0 0 0; color: {Colors.TEXT_SECONDARY}; font-size: 0.8rem;'>{html.escape(stock_info.get('name', symbol))}</p>
                 </div>
-                <div style='flex: 1; text-align: right;'>
+                <div style='flex: 1; text-align: right; min-width: 180px;'>
                     <div style='font-size: 1.75rem; font-weight: bold; color: {Colors.TEXT_PRIMARY}; font-family: monospace;'>${price:.2f}</div>
                     <div style='font-size: 0.85rem; color: {change_color}; font-weight: 600;'>{change_symbol} {change_pct:+.2f}%</div>
                 </div>
-                <div style='flex: 3; display: flex; justify-content: space-around; align-items: center; margin-left: 20px;'>
+                <div style='flex: 4; display: flex; justify-content: space-around; align-items: center; margin-left: 20px; min-width: 640px; gap: 18px;'>
                     {stats_html}
                 </div>
             </div>
