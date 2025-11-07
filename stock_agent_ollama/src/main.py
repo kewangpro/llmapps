@@ -77,24 +77,23 @@ def main():
         """)
         pn.extension('plotly')
 
-        # Create the application
-        logger.info("Creating Panel application with professional light theme")
-        app = create_app()
-        
-        # Serve the application
-        logger.info(f"Starting server on {Config.PANEL_HOST}:{Config.PANEL_PORT}")
+        # Defer creating the Panel application to the server (callable).
+        # Passing the `create_app` callable to `pn.serve` makes Panel call it
+        # per-session/document which prevents reusing the same models across
+        # multiple documents (avoids ImportedStyleSheet already-in-doc errors).
+        logger.info("Serving Panel application (create_app will be called per-session)")
         print(f"\n🚀 Stock Analysis and Trading AI Platform")
         print(f"📊 Server starting at: http://{Config.PANEL_HOST}:{Config.PANEL_PORT}")
         print("🔍 Ready to analyze stocks with AI!")
         print("💡 Try queries like: 'Analyze AAPL' or 'Predict GOOGL'\n")
-        
+
         pn.serve(
-            app,
+            create_app,
             port=Config.PANEL_PORT,
             allow_websocket_origin=Config.PANEL_ALLOW_WEBSOCKET_ORIGIN,
             show=True,
             autoreload=False,  # Disable for stability
-            threaded=True
+            threaded=False
         )
         
     except KeyboardInterrupt:
