@@ -802,5 +802,7 @@ def create_app():
         theme_toggle=False,
     )
     template.main.append(layout)
-
-    return template.servable()
+    # Return the template instance (do NOT call .servable() here).
+    # The caller (pn.serve) should invoke `create_app` per-session so a
+    # fresh document and models are created for each connection.
+    return template

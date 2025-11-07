@@ -638,7 +638,7 @@ class LiveTradingPage(pn.viewable.Viewer):
             rows = ""
             # Show last 10 trades
             for trade in reversed(self.engine.portfolio.trades[-10:]):
-                action_color = Colors.SUCCESS_GREEN if trade.action == TradingAction.BUY else Colors.DANGER_RED
+                action_color = Colors.SUCCESS_GREEN if trade.action in (TradingAction.BUY_SMALL, TradingAction.BUY_LARGE) else Colors.DANGER_RED
                 pnl_color = Colors.SUCCESS_GREEN if trade.pnl >= 0 else Colors.DANGER_RED
                 time_str = trade.timestamp.strftime('%H:%M:%S')
 
