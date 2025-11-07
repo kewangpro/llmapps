@@ -9,6 +9,7 @@ from dataclasses import dataclass, field, asdict, fields
 from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Tuple, Any
+from src.rl.environments import TradingAction as EnvTradingAction
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -25,11 +26,19 @@ logger = logging.getLogger(__name__)
 # Enums and Constants
 # ============================================================================
 
+# Use the environment's TradingAction IntEnum for consistency with training
+# EnvTradingAction values: SELL=0, HOLD=1, BUY_SMALL=2, BUY_LARGE=3
 class TradingAction(Enum):
-    """Trading actions"""
-    BUY = 1
-    SELL = 2
-    HOLD = 0
+    """Compatibility wrapper mapping to environment TradingAction values.
+
+    Keep a small Enum here for typing and backwards compatibility in other
+    parts of the code (UI expects BUY/SELL/HOLD labels). Internally we map
+    to the environment's action integers.
+    """
+    SELL = int(EnvTradingAction.SELL)
+    HOLD = int(EnvTradingAction.HOLD)
+    BUY_SMALL = int(EnvTradingAction.BUY_SMALL)
+    BUY_LARGE = int(EnvTradingAction.BUY_LARGE)
 
 
 class TradingStatus(Enum):
@@ -437,9 +446,8 @@ class RiskManager:
 
     def validate_order(self, order: Order, portfolio: Portfolio) -> RiskStatus:
         """Validate order against risk limits"""
-
         # Check position size limit
-        if order.action == TradingAction.BUY:
+        if order.action in (TradingAction.BUY_SMALL, TradingAction.BUY_LARGE):
             if order.shares > self.config.max_position_size:
                 return RiskStatus(
                     approved=False,
@@ -484,7 +492,7 @@ class OrderExecutor:
 
     def validate(self, order: Order, portfolio: Portfolio) -> bool:
         """Validate order can be executed"""
-        if order.action == TradingAction.BUY:
+        if order.action in (TradingAction.BUY_SMALL, TradingAction.BUY_LARGE):
             cost = order.shares * order.price + self.config.commission_per_trade
             return cost <= portfolio.cash
 
@@ -500,8 +508,8 @@ class OrderExecutor:
         self._trade_counter += 1
         trade_id = f"T{self._trade_counter:06d}"
 
-        if order.action == TradingAction.BUY:
-            # Execute buy
+        if order.action in (TradingAction.BUY_SMALL, TradingAction.BUY_LARGE):
+            # Execute buy (support small/large buys)
             cost = order.shares * order.price
             total_cost = cost + self.config.commission_per_trade
 
@@ -525,7 +533,7 @@ class OrderExecutor:
 
             trade = Trade(
                 symbol=order.symbol,
-                action=TradingAction.BUY,
+                action=order.action,
                 shares=order.shares,
                 price=order.price,
                 timestamp=order.timestamp,
@@ -554,7 +562,7 @@ class OrderExecutor:
 
             trade = Trade(
                 symbol=order.symbol,
-                action=TradingAction.SELL,
+                action=order.action,
                 shares=order.shares,
                 price=order.price,
                 timestamp=order.timestamp,
@@ -605,9 +613,9 @@ class LiveTradingEngine:
             file_path.parent.mkdir(parents=True, exist_ok=True)
             with open(file_path, 'w') as f:
                 json.dump(state, f, indent=2)
-            logger.info(f"Successfully saved trading session to {file_path}")
+            logger.info(f"{self.session.session_id} - Successfully saved trading session to {file_path}")
         except Exception as e:
-            logger.error(f"Failed to save trading session: {e}")
+            logger.error(f"{self.session.session_id} - Failed to save trading session: {e}")
 
     @classmethod
     def load_from_state(cls, file_path: Path) -> "LiveTradingEngine":
@@ -673,7 +681,7 @@ class LiveTradingEngine:
         self._is_running = True
         self.session.add_event("SESSION_START", f"Started live trading session with ${self.config.initial_capital:.2f}")
 
-        logger.info(f"Started trading session: {session_id}")
+        logger.info(f"{session_id} - Started trading session")
         return self.session
 
     def stop_session(self):
@@ -686,7 +694,7 @@ class LiveTradingEngine:
 
 
             self._is_running = False
-            logger.info(f"Stopped trading session: {self.session.session_id}")
+            logger.info(f"{self.session.session_id} - Stopped trading session")
 
     def trading_cycle(self) -> Dict:
         """Single iteration of trading logic"""
@@ -696,17 +704,17 @@ class LiveTradingEngine:
         try:
             # Get latest market data
             tick = self.market_stream.get_latest_tick()
-            logger.info(f"Trading cycle: {self.config.symbol} @ ${tick.price:.2f}, Portfolio: ${self.portfolio.total_value:,.2f}")
+            logger.info(f"{self.session.session_id} - Trading cycle: {self.config.symbol} @ ${tick.price:.2f}, Portfolio: ${self.portfolio.total_value:,.2f}")
 
             # Update portfolio valuations
             self.portfolio.update_valuations(tick)
 
             # Check trading hours if required
             if self.config.enforce_trading_hours and not self.market_stream.is_market_open():
-                logger.info("Market closed - skipping trading cycle")
+                logger.info(f"{self.session.session_id} - Market closed - skipping trading cycle")
                 return {
                     "status": "market_closed",
-                    "timestamp": tick.timestamp,
+                    "timestamp": tick.timestamp.isoformat(),
                     "portfolio_value": self.portfolio.total_value
                 }
 
@@ -717,6 +725,7 @@ class LiveTradingEngine:
                 self.session.status = TradingStatus.HALTED
                 self.session.add_event("HALT", risk_status.reason)
                 self._is_running = False
+                logger.error(f"{self.session.session_id} - {risk_status.reason}")
                 return {
                     "status": "halted",
                     "reason": risk_status.reason,
@@ -733,20 +742,26 @@ class LiveTradingEngine:
             # Get action from agent
             action, _states = self.agent.predict(observation, deterministic=True)
 
-            # Map action to trading decision
-            if action == 0:  # SELL
+            # Map action (int) to trading decision using environment-aligned enum values
+            if action == TradingAction.SELL.value:
                 trading_action = TradingAction.SELL
-            elif action == 2:  # BUY
-                trading_action = TradingAction.BUY
-            else:  # HOLD
+            elif action == TradingAction.BUY_SMALL.value:
+                trading_action = TradingAction.BUY_SMALL
+            elif action == TradingAction.BUY_LARGE.value:
+                trading_action = TradingAction.BUY_LARGE
+            else:
                 trading_action = TradingAction.HOLD
 
-            logger.info(f"Agent decision: {trading_action.name} (action={action})")
+            logger.info(f"{self.session.session_id} - Agent decision: {trading_action.name} (action={action})")
 
             # Execute trade if not HOLD
             if trading_action != TradingAction.HOLD:
                 # Determine shares (simplified - could use position sizing logic)
-                shares = min(10, self.config.max_position_size)
+                if trading_action == TradingAction.BUY_LARGE:
+                    shares = min(50, self.config.max_position_size)
+                else:
+                    # default to BUY_SMALL sizing
+                    shares = min(10, self.config.max_position_size)
 
                 order = Order(
                     symbol=self.config.symbol,
@@ -762,18 +777,18 @@ class LiveTradingEngine:
                 if order_risk_status.approved and self.order_executor.validate(order, self.portfolio):
                     trade = self.order_executor.execute(order, self.portfolio)
                     self.session.add_event("TRADE", f"{trade.action.name} {trade.shares} @ ${trade.price:.2f}")
-                    logger.info(f"✅ Trade executed: {trade.action.name} {trade.shares} shares @ ${trade.price:.2f}, P&L: ${trade.pnl:+.2f}")
+                    logger.info(f"{self.session.session_id} - ✅ Trade executed: {trade.action.name} {trade.shares} shares @ ${trade.price:.2f}, P&L: ${trade.pnl:+.2f}")
 
                     return {
                         "status": "trade_executed",
                         "trade": trade,
                         "portfolio_value": self.portfolio.total_value,
-                        "timestamp": tick.timestamp
+                        "timestamp": tick.timestamp.isoformat()
                     }
                 else:
                     reason = order_risk_status.reason or "Order validation failed"
                     self.session.add_event("ORDER_REJECTED", reason)
-                    logger.warning(f"❌ Order rejected: {reason}")
+                    logger.warning(f"{self.session.session_id} - ❌ Order rejected: {reason}")
                     return {
                         "status": "order_rejected",
                         "reason": reason,
@@ -781,16 +796,16 @@ class LiveTradingEngine:
                     }
 
             # No action taken
-            logger.info("⏸️  HOLD - No trade executed")
+            logger.info(f"{self.session.session_id} - ⏸️  HOLD - No trade executed")
             return {
                 "status": "hold",
                 "portfolio_value": self.portfolio.total_value,
-                "timestamp": tick.timestamp,
+                "timestamp": tick.timestamp.isoformat(),
                 "price": tick.price
             }
 
         except Exception as e:
-            logger.error(f"Error in trading cycle: {e}")
+            logger.error(f"{self.session.session_id} - Error in trading cycle: {e}")
             self.session.add_event("ERROR", str(e))
             return {"status": "error", "message": str(e)}
 
@@ -815,7 +830,7 @@ class LiveTradingEngine:
             )
 
             if hist_data is None or len(hist_data) < 60:
-                logger.warning(f"Insufficient historical data for observation, using zeros")
+                logger.warning(f"{self.session.session_id} - Insufficient historical data for observation, using zeros")
                 return np.zeros((60, 10), dtype=np.float32)
 
             # Calculate technical indicators
@@ -903,6 +918,6 @@ class LiveTradingEngine:
             return observation
 
         except Exception as e:
-            logger.error(f"Error building observation: {e}")
+            logger.error(f"{self.session.session_id} - Error building observation: {e}")
             # Return zeros as fallback
             return np.zeros((60, 10), dtype=np.float32)
