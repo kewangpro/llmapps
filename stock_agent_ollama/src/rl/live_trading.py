@@ -233,6 +233,12 @@ class TradingSession:
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     events: List[Dict] = field(default_factory=list)
+    # New fields for multi-session support
+    strategy_name: str = ""
+    description: str = ""
+    tags: List[str] = field(default_factory=list)
+    color: str = "#7C3AED"
+    display_order: int = 0
 
     def add_event(self, event_type: str, message: str):
         """Add event to session log"""
@@ -251,6 +257,11 @@ class TradingSession:
             "start_time": self.start_time.isoformat() if self.start_time else None,
             "end_time": self.end_time.isoformat() if self.end_time else None,
             "events": self.events, # events are already dicts
+            "strategy_name": self.strategy_name,
+            "description": self.description,
+            "tags": self.tags,
+            "color": self.color,
+            "display_order": self.display_order
         }
 
     @classmethod
@@ -263,6 +274,11 @@ class TradingSession:
             start_time=datetime.fromisoformat(data["start_time"]) if data["start_time"] else None,
             end_time=datetime.fromisoformat(data["end_time"]) if data["end_time"] else None,
             events=data.get("events", []),
+            strategy_name=data.get("strategy_name", ""),
+            description=data.get("description", ""),
+            tags=data.get("tags", []),
+            color=data.get("color", "#7C3AED"),
+            display_order=data.get("display_order", 0)
         )
 
 
@@ -666,22 +682,20 @@ class LiveTradingEngine:
             logger.error(f"Failed to load agent: {e}")
             raise
 
-    def start_session(self) -> TradingSession:
-        """Start new trading session"""
-        session_id = f"SESSION_{self.config.symbol}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    def initialize_session_state(self, session_id: Optional[str] = None) -> TradingSession:
+        """Initialize new trading session state"""
+        if session_id is None:
+            session_id = f"SESSION_{self.config.symbol}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
         self.session = TradingSession(
             session_id=session_id,
             config=self.config,
             portfolio=self.portfolio,
-            status=TradingStatus.RUNNING,
-            start_time=datetime.now()
+            status=TradingStatus.IDLE, # Start as IDLE
+            start_time=None # Set start_time when actually started
         )
 
-        self._is_running = True
-        self.session.add_event("SESSION_START", f"Started live trading session with ${self.config.initial_capital:.2f}")
-
-        logger.info(f"{session_id} - Started trading session")
+        logger.info(f"{session_id} - Initialized trading session state")
         return self.session
 
     def stop_session(self):
