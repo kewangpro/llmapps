@@ -397,7 +397,8 @@ class LiveSessionManager:
                 "color": getattr(session, 'color', '#7C3AED'),
                 "num_trades": len(portfolio.trades),
                 "start_time": session.start_time.isoformat() if session.start_time else None,
-                "display_order": getattr(session, 'display_order', 0)
+                "display_order": getattr(session, 'display_order', 0),
+                "agent_path": engine.config.agent_path
             })
 
         # Sort by display order
