@@ -23,6 +23,7 @@ import panel as pn
 from src.config import Config
 from src.ui.pages.analysis import create_app
 from src.ui.design_system import Colors
+from src.rl.session_manager import get_session_manager
 
 class DropPatchFilter(logging.Filter):
     """Filter to suppress 'Dropping a patch' warnings from Panel"""
@@ -87,18 +88,23 @@ def main():
         print("🔍 Ready to analyze stocks with AI!")
         print("💡 Try queries like: 'Analyze AAPL' or 'Predict GOOGL'\n")
 
-        pn.serve(
+        server_thread = pn.serve(
             create_app,
             port=Config.PANEL_PORT,
             allow_websocket_origin=Config.PANEL_ALLOW_WEBSOCKET_ORIGIN,
             show=True,
             autoreload=False,  # Disable for stability
-            threaded=False
+            threaded=True
         )
+        while server_thread.is_alive():
+            server_thread.join(timeout=1)
         
     except KeyboardInterrupt:
         logger.info("Application stopped by user")
+        session_manager = get_session_manager()
+        session_manager.shutdown_all()
         print("\n👋 Stock Analysis and Trading AI Platform stopped")
+        os._exit(0)
     except Exception as e:
         logger.error(f"Application failed to start: {e}", exc_info=True)
         print(f"\n❌ Failed to start application: {e}")
