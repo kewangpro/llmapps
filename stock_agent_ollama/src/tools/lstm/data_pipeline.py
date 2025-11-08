@@ -13,7 +13,7 @@ def _cap_outliers(series: pd.Series, lower_percentile: float = 2, upper_percenti
     """Cap outliers using aggressive percentile-based limits"""
     lower_bound = np.percentile(series.dropna(), lower_percentile)
     upper_bound = np.percentile(series.dropna(), upper_percentile)
-    return series.clip(lower=lower_bound, upper=upper_bound)
+    return series.clip(lower=lower_bound, upper=upper_bound).infer_objects(copy=False)
 
 def _winsorize_outliers(series: pd.Series, limits: tuple = (0.01, 0.01)) -> pd.Series:
     """Apply aggressive Winsorization to extreme outliers before scaling"""
