@@ -36,17 +36,24 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 - **Performance Metrics** (Returns, Sharpe Ratio, Max Drawdown, Win Rate)
 - **Action Analysis** (SELL, HOLD, BUY_SMALL, BUY_LARGE distribution)
 
-![RL Trading Screenshot](docs/screenshots/rl_trading.png)
+![RL Training Screenshot](docs/screenshots/training.png)
 *Train and backtest RL agents with comprehensive performance metrics and strategy comparison*
 
 ### 🔴 Live Trading Simulation
 - **Paper Trading** with real-time market data (Yahoo Finance)
 - **Trained Agent Execution** using PPO/A2C models in live markets
-- **Persistent Sessions** that can be resumed across application restarts, preserving your portfolio and trade history.
+- **Persistent Sessions** that automatically save and resume across restarts
+  - Portfolio state preserved
+  - Trade history maintained
+  - Configuration retained
 - **Real-time Portfolio Tracking** with live P&L updates
 - **Risk Management** (stop-loss, position limits, circuit breakers)
 - **Live Monitoring** with trading status, positions, and event log
+- **Session Management** via `session_manager.py`
 - **Educational Platform** for safe strategy testing with virtual capital
+
+![Live Trading Screenshot](docs/screenshots/live_trade.png)
+*Real-time paper trading with persistent sessions, portfolio tracking, and risk management*
 
 ### 🗂️ Model Registry
 - **LSTM Models** with performance metrics (Final Loss, Val Loss)
@@ -146,13 +153,25 @@ python src/main.py
 ```
 stock_agent_ollama/
 ├── src/                # Core application source code
-│   ├── agents/         # AI and query processing (Ollama)
-│   ├── rl/             # Reinforcement Learning (training, backtesting)
-│   ├── tools/          # Data fetching, analysis, and prediction tools (LSTM)
-│   ├── ui/             # Web interface and user-facing pages
-│   └── utils/          # Utility functions (e.g., caching)
-├── data/               # Cached data, logs, and trained models
-├── docs/               # Project documentation and screenshots
+│   ├── agents/         # AI and query processing (Ollama + hybrid)
+│   ├── rl/             # Reinforcement Learning (training, backtesting, live trading)
+│   ├── tools/          # Data fetching, analysis, prediction (LSTM, indicators)
+│   ├── ui/             # Web interface, design system, pages
+│   │   ├── design_system.py  # Professional light theme
+│   │   └── pages/      # All page implementations
+│   ├── utils/          # Utility functions (caching, helpers)
+│   ├── config.py       # Configuration and environment settings
+│   └── main.py         # Application entry point
+├── data/               # Cached data, logs, trained models, sessions
+│   ├── cache/          # Stock data cache
+│   ├── models/         # LSTM and RL trained models
+│   ├── logs/           # Application logs
+│   └── live_sessions/  # Live trading session state
+├── docs/               # Project documentation
+│   ├── QUICK_START.md  # User guide and workflows
+│   ├── UX.md           # Interface design documentation
+│   ├── RL_DESIGN.md    # RL system architecture
+│   └── LIVE_TRADE.md   # Live trading design
 ├── requirements.txt    # Python dependencies
 └── README.md           # This file
 ```
@@ -163,11 +182,11 @@ stock_agent_ollama/
 
 ### User Guides
 - **[QUICK_START.md](docs/QUICK_START.md)** - Complete user guide with workflows and troubleshooting
-- **[UX.md](docs/UX.md)** - Interface design, layouts, and component specifications
+- **[UX.md](docs/UX.md)** - Interface design, layouts, and component specifications (Updated Nov 2025)
 
 ### Technical Documentation
-- **[RL_DESIGN.md](docs/RL_DESIGN.md)** - RL architecture, algorithms, and design decisions
-- **[LIVE_TRADE.md](docs/LIVE_TRADE.md)** - Live trading simulation system architecture
+- **[RL_DESIGN.md](docs/RL_DESIGN.md)** - RL architecture, algorithms, and design decisions (Updated Nov 2025)
+- **[LIVE_TRADE.md](docs/LIVE_TRADE.md)** - Live trading simulation with session persistence (Updated Nov 2025)
 
 ---
 
