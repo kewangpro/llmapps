@@ -51,7 +51,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 ┌────────────────────────────────────────────────────────┐
 │ 📊 Stock Agent Pro                                     │
 │                                                        │
-│ Dashboard | Analysis | Trading | Portfolio | Models   │
+│ Dashboard | Analysis | Trading | Watchlist | Models   │
 │                                                        │
 └────────────────────────────────────────────────────────┘
 ```
@@ -61,7 +61,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 2. **Analysis** - Stock charts, technical analysis, LSTM predictions
 3. **Trading** - RL agent training and backtesting
 4. **Live Trade** - Real-time paper trading simulation
-5. **Portfolio** - Holdings and performance (placeholder)
+5. **Watchlist** - Stock tracking with multiple views
 6. **Models** - LSTM and RL model registry
 
 ### Sidebar (Left Panel)
@@ -215,7 +215,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 - Performance comparison table (RL Agent vs Buy&Hold vs Momentum)
 - Metrics: Return %, Sharpe Ratio, Max Drawdown, Win Rate
 - Action distribution (SELL, HOLD, BUY_SMALL, BUY_LARGE)
-- Portfolio value chart over time
+- Portfolio value chart over time (for live trading sessions)
 - Action comparison visualizations
 
 ---
@@ -233,7 +233,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 │ [▶ Start Trading] [⏸ Pause] [■ Stop]                  │
 └─────────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────────┐
-│ Trading Status           Portfolio Summary              │
+│ Trading Status           Live Trading Portfolio         │
 │ Status: ACTIVE           Total: $10,523.45  +5.23%     │
 │ Runtime: 2h 34m          Cash: $4,200.00    39.9%      │
 │ Last Update: 10:45:23    Invested: $6,323.45  60.1%    │
@@ -262,7 +262,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 
 **B. Trading Dashboard** (shown when active)
 - Trading Status: Status, runtime, last update
-- Portfolio Summary: Total value, cash, invested, P&L
+- Live Trading Portfolio: Total value, cash, invested, P&L
 - Current Positions: Holdings with unrealized P&L
 - Recent Trades: Trade history with agent decisions
 - Event Log: System events and notifications
@@ -286,33 +286,38 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 
 ---
 
-### 5. Portfolio Page
+### 5. Watchlist Page
 
-**Status: Placeholder Implementation**
+**Purpose: Simple stock price tracker**
 
-Basic layout with:
-- Total value and P&L metrics
-- Holdings table (symbol, quantity, value, P&L)
-- Allocation chart
-- Risk metrics
+**Single Table View:**
+- Compact table: Symbol, Price, Change, Volume, Market Cap
+- Add symbols using input field
+- Remove symbols with "×" button
+- Real-time price updates
 
-*Note: Full implementation pending*
+**Columns:**
+- Symbol
+- Current Price
+- Daily Change ($ and %)
+- Volume
+- Market Cap
+
+*Note: This is a price tracker only, not a portfolio manager. No position tracking (shares, cost basis, P&L). For portfolio management, use the Live Trade page.*
 
 ---
 
 ### 6. Models Page
 
-**Layout: Two sections**
+**Layout: Tabbed interface with dynamic header**
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ Models - LSTM and RL model registry                     │
-│ [🔄 Refresh]                                           │
-└─────────────────────────────────────────────────────────┘
-┌─────────────────────────────────────────────────────────┐
-│ 🧠 LSTM Models                                          │
+│ LSTM Models                                             │
 │ Trained prediction models                               │
-│                                                         │
+├─────────────────────────────────────────────────────────┤
+│ 🧠 LSTM Models │ 🤖 RL Agents                           │
+├─────────────────────────────────────────────────────────┤
 │ ┌─────────────────────────────────────────────────────┐ │
 │ │ Model   Symbol  Trained     Final   Val    Size    │ │
 │ │                             Loss    Loss            │ │
@@ -321,26 +326,23 @@ Basic layout with:
 │ │ GOOGL   GOOGL   2025-01-01  0.0198  0.0223  3 models││
 │ └─────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────┘
-┌─────────────────────────────────────────────────────────┐
-│ 🤖 RL Trading Agents                                    │
-│ Reinforcement learning models                           │
-│                                                         │
-│ ┌─────────────────────────────────────────────────────┐ │
-│ │ Agent     Symbol  Algorithm  Trained     Performance││
-│ ├─────────────────────────────────────────────────────┤ │
-│ │ ppo_AAPL  AAPL    PPO        2025-01-01  Run backtest→││
-│ │ a2c_TSLA  TSLA    A2C        2025-01-01  Run backtest→││
-│ └─────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────┘
+
+(Header changes to "RL Trading Agents / Reinforcement learning models"
+ when switching to RL Agents tab)
 ```
 
-**LSTM Models Section:**
+**Dynamic Header:**
+- Header updates based on selected tab
+- LSTM tab: "LSTM Models / Trained prediction models"
+- RL Agents tab: "RL Trading Agents / Reinforcement learning models"
+
+**LSTM Models Tab:**
 - Lists all trained LSTM ensemble models
 - Shows training performance (Final Loss, Validation Loss)
 - Displays number of models in ensemble
 - Training date for each model
 
-**RL Models Section:**
+**RL Agents Tab:**
 - Lists all trained RL agents (PPO, A2C)
 - Shows agent type and symbol
 - Training date
@@ -504,7 +506,7 @@ src/
 │       ├── dashboard.py       # Market overview
 │       ├── trading.py         # RL training UI
 │       ├── live_trading.py    # Live paper trading simulation
-│       ├── portfolio.py       # Portfolio tracking
+│       ├── portfolio.py       # Watchlist (stock tracker)
 │       └── models.py          # Model registry
 ├── tools/
 │   ├── stock_fetcher.py       # Yahoo Finance API
@@ -565,9 +567,11 @@ src/
    - Must run backtest to see performance data
    - Could be improved by saving backtest results with models
 
-2. **Portfolio Page**
-   - Currently placeholder implementation
-   - Full holdings and P&L tracking pending
+2. **Watchlist Page**
+   - Simple table-based stock price tracker
+   - Shows real-time prices, changes, volume, market cap
+   - Note: Not a portfolio manager - no position/P&L tracking
+   - For actual portfolio tracking, see Live Trading page
 
 3. **Real-time Updates**
    - Uses polling (5-second intervals)

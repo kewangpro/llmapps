@@ -29,7 +29,7 @@ The platform features a professional light-theme interface with 6 main pages:
 ┌─────────────────────────────────────────────────────────────────┐
 │ 📊 Stock Agent Pro                                              │
 ├─────────────────────────────────────────────────────────────────┤
-│ Dashboard | Analysis | Trading | Live Trade | Portfolio | Models│
+│ Dashboard | Analysis | Trading | Live Trade | Watchlist | Models│
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -38,7 +38,7 @@ The platform features a professional light-theme interface with 6 main pages:
 - **Analysis** - Stock charts, technical analysis, LSTM predictions
 - **Trading** - RL agent training and backtesting
 - **Live Trade** - Real-time paper trading with trained agents
-- **Portfolio** - Holdings and performance tracking
+- **Watchlist** - Track stocks with multiple view options
 - **Models** - LSTM and RL model registry
 
 **Sidebar:**
@@ -134,7 +134,7 @@ The platform features a professional light-theme interface with 6 main pages:
   - Metrics: Total Return %, Sharpe Ratio, Max Drawdown, Win Rate
   - Action distribution (SELL, HOLD, BUY_SMALL, BUY_LARGE)
 - **Charts**:
-  - Portfolio value over time (strategy comparison)
+  - Portfolio value over time for live trading sessions
   - Action distribution comparison
   - Key metrics bar chart
 
@@ -196,15 +196,17 @@ The live trading session is **persistent**. You can stop the application and res
 ### Viewing Trained Models
 
 1. Click **Models** tab
-2. View all trained models in two sections
+2. View models organized in two tabs with dynamic header
 
-**LSTM Models:**
+**Tab 1: LSTM Models**
+- Header: "LSTM Models / Trained prediction models"
 - Lists all LSTM ensemble models (3 models per symbol)
 - Shows performance metrics: Final Loss, Validation Loss
 - Training date and model size
 - Click "View" to see details (if enabled)
 
-**RL Trading Agents:**
+**Tab 2: RL Agents**
+- Header: "RL Trading Agents / Reinforcement learning models"
 - Lists all trained PPO and A2C agents
 - Shows algorithm type, symbol, training date
 - Performance column shows "Run backtest →" hint
@@ -212,19 +214,36 @@ The live trading session is **persistent**. You can stop the application and res
   - Not stored with models
 - Click "Load" to use in backtesting (if enabled)
 
+**Features:**
+- Header dynamically updates when switching between tabs
+- Clean tabbed interface for better organization
+- Auto-loads models on page visit
+
 ---
 
-## 💼 Portfolio Page
+## 📋 Watchlist Page
 
-**Status**: Basic implementation
+**Purpose**: Simple stock price tracker
 
-View simulated portfolio with:
-- Total value and P&L metrics
-- Holdings table
-- Asset allocation chart
-- Risk metrics
+**Single Table View:**
+- Compact table with Symbol, Price, Change, Volume, Market Cap
+- Add symbols using the input field at the top
+- Remove symbols with the "×" button
+- Real-time price updates
 
-*Note: Full implementation in progress*
+**What it shows:**
+- Current stock prices
+- Daily price changes ($ and %)
+- Trading volume
+- Market capitalization
+
+**Important:** This is a price tracker/watchlist only. It does NOT track:
+- ❌ Shares owned
+- ❌ Cost basis / entry price
+- ❌ Position P&L
+- ❌ Portfolio value
+
+For actual portfolio tracking with positions and P&L, use the **Live Trade** page.
 
 ---
 
