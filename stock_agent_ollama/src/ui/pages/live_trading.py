@@ -2,6 +2,7 @@
 Live Trading Dashboard Page
 
 Real-time paper trading interface using trained RL models.
+Enhanced with multi-session support.
 """
 
 import panel as pn
@@ -10,8 +11,9 @@ from datetime import datetime
 from pathlib import Path
 import logging
 import json
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
+from src.rl.session_manager import LiveSessionManager
 from src.rl.live_trading import (
     LiveTradingEngine,
     LiveTradingConfig,
@@ -19,7 +21,7 @@ from src.rl.live_trading import (
     TradingAction
 )
 
-from src.ui.design_system import Colors, HTMLComponents
+from src.ui.design_system import Colors, HTMLComponents, Typography
 
 logger = logging.getLogger(__name__)
 
@@ -27,16 +29,34 @@ pn.extension(notifications=True)
 
 
 class LiveTradingPage(pn.viewable.Viewer):
-    """Live trading dashboard page"""
+    """Live trading dashboard page with multi-session support"""
 
-    def __init__(self, **params):
+    def __init__(self, session_manager: Optional[LiveSessionManager] = None, **params):
         super().__init__(**params)
-        self.engine: Optional[LiveTradingEngine] = None
+        self.session_manager = session_manager or LiveSessionManager()
         self.update_callback = None
-        self.save_callback = None
-        self.state_file = Path("data/live_sessions/live_session.json")
+
         self._create_ui()
-        self._populate_saved_sessions()
+        # Defer initial render to avoid loading during construction
+        pn.state.onload(lambda: self._refresh_view())
+        pn.state.location.param.watch(self._on_location_change, 'search')
+
+    def _on_location_change(self, *events):
+        """Handle URL query parameter changes."""
+        session_id = pn.state.location.query_params.get('session_id')
+        if session_id and self.session_manager.active_session_id != session_id:
+            if self.session_manager.get_session(session_id):
+                self._select_session(session_id)
+            else:
+                logger.warning(f"Session ID from URL not found: {session_id}")
+
+    def _on_session_row_click(self, event):
+        """Handle row click event from the session table."""
+        if event.new:
+            selected_index = event.new[0]
+            if selected_index < len(self.session_manager.get_session_summary()):
+                session_id = self.session_manager.get_session_summary()[selected_index]['session_id']
+                self._select_session(session_id)
 
     def _find_latest_model(self, symbol: str, agent_type: str = None) -> Optional[Dict[str, Any]]:
         """Find the most recently trained model for a symbol and agent type."""
@@ -84,509 +104,377 @@ class LiveTradingPage(pn.viewable.Viewer):
 
     def _create_ui(self):
         """Create the dashboard UI"""
+        # New session form (collapsible)
+        self._create_new_session_form()
 
-        # Configuration panel
+        # Content area (will be populated based on view mode)
+        self.content_area = pn.Column(sizing_mode="stretch_width")
+
+        # Start periodic refresh for real-time updates (but don't clear and rebuild everything)
+        self.update_callback = pn.state.add_periodic_callback(
+            self._update_session_data,
+            period=5000  # Refresh every 5 seconds
+        )
+
+    def _create_new_session_form(self):
+        """Create form for new session creation"""
+        # Session configuration inputs
         self.symbol_input = pn.widgets.AutocompleteInput(
-            name='',
             value='AAPL',
             options=['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'AMZN', 'NVDA', 'META', 'TEAM',
                      'NFLX', 'AMD', 'INTC', 'QCOM', 'CRM', 'ADBE', 'PYPL'],
             placeholder='Enter symbol...',
             case_sensitive=False,
-            width=120,
-            height=35,
+            width=100,
             min_characters=1
         )
 
-        # Algorithm selection (same as training page)
         self.agent_type = pn.widgets.RadioButtonGroup(
-            name='',
             options=['PPO', 'A2C'],
             value='PPO',
             button_type='primary',
             button_style='outline'
         )
 
-        # Model status display (will show auto-discovered model)
-        self.model_status_pane = pn.pane.HTML(
-            "",
-            sizing_mode="stretch_width"
-        )
-
         self.capital_input = pn.widgets.FloatInput(
-            name='',
             value=10000.0,
             start=1000,
             end=1000000,
             step=1000,
-            width=180
+            width=120
         )
 
         self.max_position_input = pn.widgets.IntInput(
-            name='',
             value=100,
             start=1,
             end=1000,
             step=10,
-            width=180
+            width=120
         )
 
         self.stop_loss_input = pn.widgets.FloatInput(
-            name='',
             value=5.0,
             start=1.0,
             end=20.0,
             step=0.5,
-            width=180
+            width=120
         )
 
         self.allow_extended_hours_input = pn.widgets.Checkbox(
-            name='Allow Extended Hours Trading',
-            value=False,
-            align='center'
+            name='Allow Extended Hours',
+            value=False
         )
 
-        # Session management
-        self.session_selector = pn.widgets.AutocompleteInput(
-            name="",
-            options=[],
-            placeholder="Start new or load session...",
-            width=250,
-            case_sensitive=False,
-            min_characters=0 # Allow empty to create new session
-        )
-
-        # Control buttons
-        self.start_button = pn.widgets.Button(
-            name='▶ Start Trading',
+        # Create button
+        self.create_session_btn = pn.widgets.Button(
+            name='Create & Start Session',
             button_type='success',
-            width=150,
-            height=40
+            icon='plus',
+            width=200
         )
-        self.start_button.on_click(self._start_trading)
+        self.create_session_btn.on_click(self._create_new_session)
 
-        self.stop_button = pn.widgets.Button(
-            name='⏹ Stop Trading',
-            button_type='danger',
-            width=150,
-            height=40,
-            disabled=True
-        )
-        self.stop_button.on_click(self._stop_trading)
-
-        # Status indicators
-        self.status_pane = pn.pane.HTML("", sizing_mode="stretch_width")
-        self.portfolio_pane = pn.pane.HTML("", sizing_mode="stretch_width")
-        self.positions_pane = pn.pane.HTML("", sizing_mode="stretch_width")
-        self.trades_pane = pn.pane.HTML("", sizing_mode="stretch_width")
-        self.events_pane = pn.pane.HTML("", sizing_mode="stretch_width")
-
-        self._update_display()
-
-    def _populate_saved_sessions(self):
-        """Populate the session selector with saved session files."""
-        sessions_dir = Path("data/live_sessions")
-        if not sessions_dir.exists():
-            sessions_dir.mkdir(parents=True)
-
-        sessions = sorted([f.stem for f in sessions_dir.glob("*.json")], reverse=True)
-        # Add an empty string option to allow users to start a new session by clearing the input
-        self.session_selector.options = [""] + sessions
-        self.session_selector.value = "" # Set initial value to empty to indicate new session
-
-    def _update_ui_for_session(self):
-        """Update the UI to reflect the state of a loaded session."""
-        if not self.engine or not self.engine.session:
-            return
-
-        # Update config inputs
-        config = self.engine.config
-        self.symbol_input.value = config.symbol
-        self.capital_input.value = config.initial_capital
-        self.max_position_input.value = config.max_position_size
-        self.stop_loss_input.value = config.stop_loss_pct
-        self.allow_extended_hours_input.value = getattr(config, 'allow_extended_hours', False)
-        self.session_selector.value = config.session_id # Update session selector with loaded session ID
-
-        # Update UI buttons and display
-        if self.engine.session.status == TradingStatus.RUNNING:
-            self.start_button.disabled = True
-            self.stop_button.disabled = False
-            self.start_button.name = '▶ Start Trading' # Reset to default
-        elif self.engine.session.status == TradingStatus.PAUSED:
-            self.start_button.disabled = False
-            self.stop_button.disabled = False
-            self.start_button.name = '▶ Resume Trading'
-        elif self.engine.session.status == TradingStatus.STOPPED:
-            self.start_button.disabled = False
-            self.stop_button.disabled = True
-            self.start_button.name = '▶ Start Trading'
-        else: # IDLE or HALTED
-            self.start_button.disabled = False
-            self.stop_button.disabled = True
-            self.start_button.name = '▶ Start Trading'
-
-        # Populate results container
-        self.results_container.clear()
-        self.results_container.extend([
+        # Form layout
+        self.new_session_form = pn.Column(
+            pn.pane.HTML(f"""
+                <h3 style="margin: 0 0 16px 0; color: {Colors.TEXT_PRIMARY}; font-family: {Typography.FONT_PRIMARY};">
+                    Create New Session
+                </h3>
+            """),
             pn.Row(
-                pn.Column(self.status_pane, sizing_mode="stretch_width"),
-                pn.Column(self.portfolio_pane, sizing_mode="stretch_width"),
-                sizing_mode="stretch_width"
+                pn.Column(
+                    pn.pane.HTML("<div style='font-size: 12px; color: #6b7280; margin-bottom: 5px; font-weight: 500;'>Symbol</div>"),
+                    self.symbol_input,
+                ),
+                pn.Column(
+                    pn.pane.HTML("<div style='font-size: 12px; color: #6b7280; margin-bottom: 5px; font-weight: 500;'>Algorithm</div>"),
+                    self.agent_type,
+                ),
+                pn.Column(
+                    pn.pane.HTML("<div style='font-size: 12px; color: #6b7280; margin-bottom: 5px; font-weight: 500;'>Capital ($)</div>"),
+                    self.capital_input,
+                ),
+                pn.Column(
+                    pn.pane.HTML("<div style='font-size: 12px; color: #6b7280; margin-bottom: 5px; font-weight: 500;'>Max Position</div>"),
+                    self.max_position_input,
+                ),
+                pn.Column(
+                    pn.pane.HTML("<div style='font-size: 12px; color: #6b7280; margin-bottom: 5px; font-weight: 500;'>Stop Loss (%)</div>"),
+                    self.stop_loss_input,
+                ),
+                pn.Column(
+                    self.allow_extended_hours_input,
+                    margin=(20, 10, 0, 10)
+                ),
+                align='end',
+                sizing_mode='stretch_width'
             ),
-            self.positions_pane,
             pn.Row(
-                pn.Column(self.trades_pane, sizing_mode="stretch_width"),
-                pn.Column(self.events_pane, sizing_mode="stretch_width"),
-                sizing_mode="stretch_width"
+                self.create_session_btn,
+                margin=(10, 0, 0, 0)
+            ),
+            styles=dict(
+                background=Colors.BG_SECONDARY,
+                border_radius='8px',
+                padding='20px',
+                margin='0 0 20px 0'
             )
-        ])
+        )
 
-        self._update_display()
-
-        # Start periodic updates if session is running
-        if self.engine.session.status == TradingStatus.RUNNING:
-            self.update_callback = pn.state.add_periodic_callback(
-                self._trading_update,
-                period=self.engine.config.update_interval * 1000
-            )
-            self.save_callback = pn.state.add_periodic_callback(
-                self._save_session_state,
-                period=300000 # Save every 5 minutes
-            )
-
-    def _start_trading(self, event):
-        """Start or resume live trading session based on selection or create new."""
+    def _create_new_session(self, event):
+        """Create and start new trading session"""
         symbol = self.symbol_input.value.strip().upper()
         agent_type = self.agent_type.value
 
         if not symbol:
-            pn.state.notifications.error("Please enter a stock symbol", duration=3000)
+            pn.state.notifications.error("Please enter a symbol", duration=3000)
             return
 
-        session_input_value = self.session_selector.value.strip()
-        session_to_load_stem = None
-        session_loaded = False
-
-        # Determine if we are loading an existing session or starting a new one
-        if session_input_value:
-            # Check if the input matches an existing session file
-            sessions_dir = Path("data/live_sessions")
-            possible_file = sessions_dir / f"{session_input_value}.json"
-            if possible_file.exists():
-                session_to_load_stem = session_input_value
-            else:
-                # If it doesn't match an existing file, treat it as a new session name
-                # and proceed to create a new session with this name
-                pn.state.notifications.info(f"Preparing to create new session: {session_input_value}", duration=3000)
-                session_to_load_stem = None # Ensure we don't try to load it
-
-        if session_to_load_stem:
-            # Attempt to load the selected session
-            state_file = Path(f"data/live_sessions/{session_to_load_stem}.json")
-            try:
-                self.engine = LiveTradingEngine.load_from_state(state_file)
-                if self.engine:
-                    try:
-                        self.engine.load_agent(self.engine.config.agent_path)
-                        pn.state.notifications.success(f"Loaded and resuming session: {session_to_load_stem}", duration=3000)
-                        session_loaded = True
-                    except Exception as e:
-                        pn.state.notifications.error(f"Failed to load agent for session {session_to_load_stem}: {e}", duration=5000)
-                        self.engine = None # Reset engine if agent loading fails
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to load session {session_to_load_stem} due to corrupted file: {e}")
-                pn.state.notifications.error(f"Session file {session_to_load_stem} is corrupted.", duration=5000)
-            except Exception as e:
-                logger.error(f"An unexpected error occurred while loading session {session_to_load_stem}: {e}")
-                pn.state.notifications.error(f"Could not load session: {e}", duration=5000)
-        
-        # If no session was loaded, or the user explicitly cleared the input, start a new one
-        if not session_loaded:
-            try:
-                model_info = self._find_latest_model(symbol, agent_type)
-                if not model_info:
-                    pn.state.notifications.error(
-                        f"No trained {agent_type} model found for {symbol}. Please train a model first.",
-                        duration=5000
-                    )
-                    return
-                
-                # If session_input_value is provided and not an existing file, use it as the new session ID
-                # Otherwise, generate a new one
-                new_session_id = session_input_value if session_input_value else f"SESSION_{symbol}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-
-                model_name = model_info['directory'].name
-
-                config = LiveTradingConfig(
-                    symbol=symbol,
-                    agent_path=str(model_info['path']),
-                    initial_capital=self.capital_input.value,
-                    max_position_size=self.max_position_input.value,
-                    stop_loss_pct=self.stop_loss_input.value,
-                    update_interval=60,
-                    allow_extended_hours=self.allow_extended_hours_input.value,
-                    session_id=new_session_id # Pass the new session ID
-                )
-
-                self.engine = LiveTradingEngine(config)
-                self.engine.load_agent(config.agent_path)
-                self.engine.start_session()
-                pn.state.notifications.success(f"Started new live trading session: {new_session_id} for {symbol}", duration=3000)
-                session_loaded = True # Mark as loaded since a new session was created
-
-            except Exception as e:
-                logger.error(f"Error starting new trading session: {e}")
-                pn.state.notifications.error(f"Failed to start new trading session: {str(e)}", duration=5000)
-                return
-        
-        # Ensure engine is running if a session was successfully loaded/started
-        if self.engine and self.engine.session.status != TradingStatus.RUNNING:
-            self.engine.session.status = TradingStatus.RUNNING
-            self.engine._is_running = True
-
-        # Common UI updates after starting/resuming
-        self.start_button.disabled = True
-        self.stop_button.disabled = False
-
-        # Display model info
-        if self.engine and self.engine.session:
-            model_name = self.engine.config.agent_path.split('/')[-2]
-            agent_type = model_name.split('_')[0].upper()
-            message = f"✅ Using model: {agent_type} - {model_name} - {self.engine.session.session_id}"
-            self.model_status_pane.object = f"<div style='background-color: #d4edda; color: #155724; border-radius: 5px; padding: 10px;'>{message}</div>"
-
-        self.results_container.clear()
-        self.results_container.extend([
-            pn.Row(
-                pn.Column(self.status_pane, sizing_mode="stretch_width"),
-                pn.Column(self.portfolio_pane, sizing_mode="stretch_width"),
-                sizing_mode="stretch_width"
-            ),
-            self.positions_pane,
-            pn.Row(
-                pn.Column(self.trades_pane, sizing_mode="stretch_width"),
-                pn.Column(self.events_pane, sizing_mode="stretch_width"),
-                sizing_mode="stretch_width"
+        # Find model
+        model_info = self._find_latest_model(symbol, agent_type)
+        if not model_info:
+            pn.state.notifications.error(
+                f"No trained {agent_type} model found for {symbol}",
+                duration=5000
             )
+            return
+
+        try:
+            # Create config
+            config = LiveTradingConfig(
+                symbol=symbol,
+                agent_path=str(model_info['path']),
+                initial_capital=self.capital_input.value,
+                max_position_size=self.max_position_input.value,
+                stop_loss_pct=self.stop_loss_input.value,
+                update_interval=60,
+                allow_extended_hours=self.allow_extended_hours_input.value
+            )
+
+            # Create session via manager (session_id is auto-generated)
+            session_id = self.session_manager.create_session(
+                config=config,
+                strategy_name=f"{symbol} {agent_type}",  # Auto-generated name
+            )
+
+            # Start the newly created session
+            self.session_manager.start_session(session_id)
+
+            pn.state.notifications.success(
+                f"Created and started session: {session_id}",
+                duration=3000
+            )
+
+            # Set as active
+            self.session_manager.set_active_session(session_id)
+
+            # Refresh view
+            pn.state.execute(self._refresh_view)
+
+        except Exception as e:
+            logger.error(f"Error creating session: {e}")
+            pn.state.notifications.error(f"Failed to create session: {str(e)}", duration=5000)
+
+    def _select_session(self, session_id: str):
+        """Select a session to view its details"""
+        self.session_manager.set_active_session(session_id)
+        self._refresh_view()
+
+    def _start_session(self, session_id: str):
+        """Handle start session"""
+        try:
+            success = self.session_manager.start_session(session_id)
+            if success:
+                pn.state.notifications.success(f"Started session", duration=2000)
+                self.session_manager.set_active_session(session_id)
+            else:
+                pn.state.notifications.error(f"Failed to start session", duration=3000)
+        except Exception as e:
+            logger.error(f"Error in start session {session_id}: {e}")
+            pn.state.notifications.error(f"Error: {str(e)}", duration=3000)
+
+        self._refresh_view()
+
+    def _stop_session(self, session_id: str):
+        """Handle stop session"""
+        self.session_manager.stop_session(session_id)
+        pn.state.notifications.warning(f"Stopped session", duration=2000)
+        self._refresh_view()
+
+    def _refresh_view(self, *events):
+        """Update view to show dashboard and single session view"""
+        # Clear and refresh content
+        self.content_area.clear()
+
+        # Render dashboard view first
+        self._render_dashboard_view()
+
+        # Add a divider
+        self.content_area.append(pn.layout.Divider(margin=(24, 0)))
+
+        # Render single session view below
+        self._render_single_session_view()
+
+    def _update_session_data(self, *events):
+        """Update session data without full re-render to prevent flickering"""
+        # Only update if we have content to update
+        if not self.content_area.objects:
+            return
+
+        # For now, just update the view (we can optimize this later to update specific components)
+        # But don't trigger it on every callback - that causes the reload issue
+        pass
+
+    # ========================================================================
+    # Single Session View
+    # ========================================================================
+
+    def _render_single_session_view(self):
+        """Render detailed view of active session"""
+        active_session = self.session_manager.get_active_session()
+
+        if not active_session:
+            # No active session
+            self.content_area.append(
+                pn.Column(
+                    HTMLComponents.info_message(
+                        "No Active Session",
+                        "Create a new session or select one from the table above"
+                    ),
+                    sizing_mode="stretch_width"
+                )
+            )
+            return
+
+        # Active session exists - show details
+        session = active_session.session
+        portfolio = active_session.portfolio
+
+        # Status card
+        status_card = self._create_status_card(active_session)
+
+        # Portfolio summary card
+        portfolio_card = self._create_portfolio_card(active_session)
+
+        # Positions table
+        positions_card = self._create_positions_card(active_session)
+
+        # Trades history
+        trades_card = self._create_trades_card(active_session)
+
+        # Event log
+        events_card = self._create_events_card(active_session)
+
+        self.content_area.extend([
+            pn.Row(status_card, portfolio_card, sizing_mode="stretch_width"),
+            positions_card,
+            pn.Row(trades_card, events_card, sizing_mode="stretch_width")
         ])
 
-        self._update_display()
+    def _create_status_card(self, engine: LiveTradingEngine) -> pn.pane.HTML:
+        """Create status card for session"""
+        session = engine.session
+        status_color = {
+            TradingStatus.RUNNING: Colors.SUCCESS_GREEN,
+            TradingStatus.PAUSED: "#F59E0B",
+            TradingStatus.STOPPED: Colors.TEXT_MUTED,
+            TradingStatus.HALTED: Colors.DANGER_RED,
+            TradingStatus.IDLE: Colors.TEXT_SECONDARY
+        }.get(session.status, Colors.TEXT_MUTED)
 
-        # Start periodic updates
-        if self.engine and self.engine.session.status == TradingStatus.RUNNING:
-            self.update_callback = pn.state.add_periodic_callback(
-                self._trading_update,
-                period=self.engine.config.update_interval * 1000
-            )
-            self.save_callback = pn.state.add_periodic_callback(
-                self._save_session_state,
-                period=300000
-            )
+        elapsed = ""
+        if session.start_time:
+            duration = datetime.now() - session.start_time
+            hours, remainder = divmod(duration.seconds, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            elapsed = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
-            # Execute first trading cycle immediately if it's a new session or just resumed
-            try:
-                result = self.engine.trading_cycle()
-                self._update_display()
-                if result.get('status') == 'trade_executed':
-                    trade = result['trade']
-                    pn.state.notifications.info(
-                        f"First trade: {trade.action.name} {trade.shares} shares @ ${trade.price:.2f}",
-                        duration=4000
-                    )
-            except Exception as e:
-                logger.error(f"Error in first trading cycle: {e}")
-
-    def _stop_trading(self, event):
-        """Stop live trading session"""
-        if self.engine:
-            self.engine.stop_session()
-            self._save_session_state() # Save final state
-
-        # Stop updates
-        if self.update_callback:
-            self.update_callback.stop()
-            self.update_callback = None
-        
-        if self.save_callback:
-            self.save_callback.stop()
-            self.save_callback = None
-
-        # Update UI
-        self.start_button.disabled = False
-        self.stop_button.disabled = True
-
-        # Clear results container and model status pane
-        self.results_container.clear()
-        self.model_status_pane.object = "" # Clear the model status message
-
-        self._update_display()
-
-        pn.state.notifications.info("Trading session stopped", duration=3000)
-
-    def _save_session_state(self, *events):
-        """Save the current session state."""
-        if self.engine and self.engine.session:
-            session_id = self.engine.session.session_id
-            state_file = Path(f"data/live_sessions/{session_id}.json")
-            self.engine.save_state(state_file)
-
-    def _trading_update(self):
-        """Periodic trading cycle update"""
-        if self.engine and self.engine._is_running:
-            try:
-                result = self.engine.trading_cycle()
-                self._update_display()
-
-                # Handle different result statuses
-                if result.get('status') == 'trade_executed':
-                    trade = result['trade']
-                    pn.state.notifications.info(
-                        f"{trade.action.name}: {trade.shares} shares @ ${trade.price:.2f}",
-                        duration=3000
-                    )
-                elif result.get('status') == 'halted':
-                    pn.state.notifications.error(
-                        f"Trading halted: {result.get('reason')}",
-                        duration=5000
-                    )
-                    self._stop_trading(None)
-
-            except Exception as e:
-                logger.error(f"Error in trading update: {e}")
-
-    def _update_display(self):
-        """Update all display panels"""
-        self._update_status()
-        self._update_portfolio()
-        self._update_positions()
-        self._update_trades()
-        self._update_events()
-
-    def _update_status(self):
-        """Update status panel"""
-        if not self.engine or not self.engine.session:
-            html = f"""
-            <div style='background: {Colors.BG_SECONDARY}; padding: 20px; border-radius: 8px; border-left: 4px solid {Colors.BORDER_SUBTLE};'>
-                <h3 style='margin-top: 0; color: {Colors.TEXT_PRIMARY};'>Trading Status</h3>
-                <p style='color: {Colors.TEXT_SECONDARY}; font-size: 16px;'>
-                    <span style='color: {Colors.TEXT_MUTED};'>●</span> Not Running
-                </p>
-                <p style='color: {Colors.TEXT_MUTED}; font-size: 14px; margin-bottom: 0;'>
-                    Configure settings and click "Start Trading" to begin.
-                </p>
-            </div>
-            """
-        else:
-            session = self.engine.session
-            status_color = {
-                TradingStatus.RUNNING: Colors.SUCCESS_GREEN,
-                TradingStatus.PAUSED: Colors.WARNING_YELLOW,
-                TradingStatus.STOPPED: Colors.TEXT_MUTED,
-                TradingStatus.HALTED: Colors.DANGER_RED
-            }.get(session.status, Colors.TEXT_MUTED)
-
-            elapsed = ""
-            if session.start_time:
-                duration = datetime.now() - session.start_time
-                hours, remainder = divmod(duration.seconds, 3600)
-                minutes, seconds = divmod(remainder, 60)
-                elapsed = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-
-            html = f"""
-            <div style='background: {Colors.BG_SECONDARY}; padding: 20px; border-radius: 8px; border-left: 4px solid {status_color};'>
-                <h3 style='margin-top: 0; color: {Colors.TEXT_PRIMARY};'>Trading Status</h3>
-                <div style='display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;'>
-                    <div>
-                        <p style='color: {Colors.TEXT_MUTED}; font-size: 12px; margin-bottom: 5px;'>Status</p>
-                        <p style='color: {status_color}; font-size: 18px; font-weight: 600; margin: 0;'>
-                            ● {session.status.value.upper()}
-                        </p>
-                    </div>
-                    <div>
-                        <p style='color: {Colors.TEXT_MUTED}; font-size: 12px; margin-bottom: 5px;'>Symbol</p>
-                        <p style='color: {Colors.TEXT_PRIMARY}; font-size: 18px; font-weight: 600; margin: 0;'>
-                            {self.engine.config.symbol}
-                        </p>
-                    </div>
-                    <div>
-                        <p style='color: {Colors.TEXT_MUTED}; font-size: 12px; margin-bottom: 5px;'>Session ID</p>
-                        <p style='color: {Colors.TEXT_SECONDARY}; font-size: 14px; margin: 0;'>
-                            {session.session_id}
-                        </p>
-                    </div>
-                    <div>
-                        <p style='color: {Colors.TEXT_MUTED}; font-size: 12px; margin-bottom: 5px;'>Running Time</p>
-                        <p style='color: {Colors.TEXT_SECONDARY}; font-size: 14px; margin: 0;'>
-                            {elapsed}
-                        </p>
-                    </div>
+        html = f"""
+        <div style='background: {Colors.BG_SECONDARY}; padding: 20px; border-radius: 8px; border-left: 4px solid {status_color}; flex: 1;'>
+            <h3 style='margin-top: 0; color: {Colors.TEXT_PRIMARY}; font-family: {Typography.FONT_PRIMARY};'>Session Status</h3>
+            <div style='display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;'>
+                <div>
+                    <p style='color: {Colors.TEXT_MUTED}; font-size: 12px; margin-bottom: 5px;'>Status</p>
+                    <p style='color: {status_color}; font-size: 18px; font-weight: 600; margin: 0; font-family: {Typography.FONT_PRIMARY};'>
+                        ● {session.status.value.upper()}
+                    </p>
+                </div>
+                <div>
+                    <p style='color: {Colors.TEXT_MUTED}; font-size: 12px; margin-bottom: 5px;'>Symbol</p>
+                    <p style='color: {Colors.TEXT_PRIMARY}; font-size: 18px; font-weight: 600; margin: 0; font-family: {Typography.FONT_PRIMARY};'>
+                        {engine.config.symbol}
+                    </p>
+                </div>
+                <div>
+                    <p style='color: {Colors.TEXT_MUTED}; font-size: 12px; margin-bottom: 5px;'>Session ID</p>
+                    <p style='color: {Colors.TEXT_SECONDARY}; font-size: 14px; margin: 0; font-family: {Typography.FONT_PRIMARY};'>
+                        {session.session_id or 'N/A'}
+                    </p>
+                </div>
+                <div>
+                    <p style='color: {Colors.TEXT_MUTED}; font-size: 12px; margin-bottom: 5px;'>Running Time</p>
+                    <p style='color: {Colors.TEXT_SECONDARY}; font-size: 14px; margin: 0; font-family: {Typography.FONT_MONO};'>
+                        {elapsed}
+                    </p>
                 </div>
             </div>
-            """
+        </div>
+        """
 
-        self.status_pane.object = html
+        return pn.pane.HTML(html, sizing_mode="stretch_width")
 
-    def _update_portfolio(self):
-        """Update portfolio summary"""
-        if not self.engine:
-            html = f"""
-            <div style='background: {Colors.BG_SECONDARY}; padding: 20px; border-radius: 8px;'>
-                <h3 style='margin-top: 0; color: {Colors.TEXT_PRIMARY};'>Portfolio Summary</h3>
-                <p style='color: {Colors.TEXT_MUTED};'>No active session</p>
-            </div>
-            """
-        else:
-            portfolio = self.engine.portfolio
-            pnl_color = Colors.SUCCESS_GREEN if portfolio.total_pnl >= 0 else Colors.DANGER_RED
-            pnl_symbol = "▲" if portfolio.total_pnl >= 0 else "▼"
+    def _create_portfolio_card(self, engine: LiveTradingEngine) -> pn.pane.HTML:
+        """Create portfolio summary card"""
+        portfolio = engine.portfolio
+        pnl_color = Colors.SUCCESS_GREEN if portfolio.total_pnl >= 0 else Colors.DANGER_RED
+        pnl_symbol = "▲" if portfolio.total_pnl >= 0 else "▼"
 
-            html = f"""
-            <div style='background: {Colors.BG_SECONDARY}; padding: 20px; border-radius: 8px;'>
-                <h3 style='margin-top: 0; color: {Colors.TEXT_PRIMARY};'>Portfolio Summary</h3>
-                <div style='display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;'>
-                    <div>
-                        <p style='color: {Colors.TEXT_MUTED}; font-size: 12px; margin-bottom: 5px;'>Total Value</p>
-                        <p style='color: {Colors.TEXT_PRIMARY}; font-size: 24px; font-weight: 600; margin: 0;'>
-                            ${portfolio.total_value:,.2f}
-                        </p>
-                    </div>
-                    <div>
-                        <p style='color: {Colors.TEXT_MUTED}; font-size: 12px; margin-bottom: 5px;'>Total P&L</p>
-                        <p style='color: {pnl_color}; font-size: 24px; font-weight: 600; margin: 0;'>
-                            {pnl_symbol} ${abs(portfolio.total_pnl):,.2f} ({portfolio.total_pnl_pct:+.2f}%)
-                        </p>
-                    </div>
-                    <div>
-                        <p style='color: {Colors.TEXT_MUTED}; font-size: 12px; margin-bottom: 5px;'>Cash</p>
-                        <p style='color: {Colors.TEXT_SECONDARY}; font-size: 18px; margin: 0;'>
-                            ${portfolio.cash:,.2f}
-                        </p>
-                    </div>
-                    <div>
-                        <p style='color: {Colors.TEXT_MUTED}; font-size: 12px; margin-bottom: 5px;'>Initial Capital</p>
-                        <p style='color: {Colors.TEXT_SECONDARY}; font-size: 18px; margin: 0;'>
-                            ${portfolio.initial_cash:,.2f}
-                        </p>
-                    </div>
+        html = f"""
+        <div style='background: {Colors.BG_SECONDARY}; padding: 20px; border-radius: 8px; flex: 1;'>
+            <h3 style='margin-top: 0; color: {Colors.TEXT_PRIMARY}; font-family: {Typography.FONT_PRIMARY};'>Portfolio</h3>
+            <div style='display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;'>
+                <div>
+                    <p style='color: {Colors.TEXT_MUTED}; font-size: 12px; margin-bottom: 5px;'>Total Value</p>
+                    <p style='color: {Colors.TEXT_PRIMARY}; font-size: 24px; font-weight: 600; margin: 0; font-family: {Typography.FONT_MONO};'>
+                        ${portfolio.total_value:,.2f}
+                    </p>
+                </div>
+                <div>
+                    <p style='color: {Colors.TEXT_MUTED}; font-size: 12px; margin-bottom: 5px;'>Total P&L</p>
+                    <p style='color: {pnl_color}; font-size: 24px; font-weight: 600; margin: 0; font-family: {Typography.FONT_MONO};'>
+                        {pnl_symbol} ${abs(portfolio.total_pnl):,.2f} ({portfolio.total_pnl_pct:+.2f}%)
+                    </p>
+                </div>
+                <div>
+                    <p style='color: {Colors.TEXT_MUTED}; font-size: 12px; margin-bottom: 5px;'>Cash</p>
+                    <p style='color: {Colors.TEXT_SECONDARY}; font-size: 18px; margin: 0; font-family: {Typography.FONT_MONO};'>
+                        ${portfolio.cash:,.2f}
+                    </p>
+                </div>
+                <div>
+                    <p style='color: {Colors.TEXT_MUTED}; font-size: 12px; margin-bottom: 5px;'>Trades</p>
+                    <p style='color: {Colors.TEXT_SECONDARY}; font-size: 18px; margin: 0; font-family: {Typography.FONT_PRIMARY};'>
+                        {len(portfolio.trades)}
+                    </p>
                 </div>
             </div>
-            """
+        </div>
+        """
 
-        self.portfolio_pane.object = html
+        return pn.pane.HTML(html, sizing_mode="stretch_width")
 
-    def _update_positions(self):
-        """Update current positions"""
-        if not self.engine or not self.engine.portfolio.positions:
+    def _create_positions_card(self, engine: LiveTradingEngine) -> pn.pane.HTML:
+        """Create positions table card"""
+        if not engine.portfolio.positions:
             html = f"""
             <div style='background: {Colors.BG_SECONDARY}; padding: 20px; border-radius: 8px;'>
-                <h3 style='margin-top: 0; color: {Colors.TEXT_PRIMARY};'>Current Positions</h3>
+                <h3 style='margin-top: 0; color: {Colors.TEXT_PRIMARY}; font-family: {Typography.FONT_PRIMARY};'>Positions</h3>
                 <p style='color: {Colors.TEXT_MUTED}; text-align: center; padding: 20px;'>No open positions</p>
             </div>
             """
         else:
             rows = ""
-            for symbol, pos in self.engine.portfolio.positions.items():
+            for symbol, pos in engine.portfolio.positions.items():
                 pnl_color = Colors.SUCCESS_GREEN if pos.unrealized_pnl >= 0 else Colors.DANGER_RED
                 pnl_symbol = "▲" if pos.unrealized_pnl >= 0 else "▼"
                 pnl_pct = (pos.current_price - pos.avg_entry_price) / pos.avg_entry_price * 100
@@ -595,9 +483,9 @@ class LiveTradingPage(pn.viewable.Viewer):
                 <tr style='border-bottom: 1px solid {Colors.BORDER_SUBTLE};'>
                     <td style='padding: 12px; color: {Colors.TEXT_PRIMARY}; font-weight: 600;'>{symbol}</td>
                     <td style='padding: 12px; color: {Colors.TEXT_SECONDARY}; text-align: right;'>{pos.shares}</td>
-                    <td style='padding: 12px; color: {Colors.TEXT_SECONDARY}; text-align: right;'>${pos.avg_entry_price:.2f}</td>
-                    <td style='padding: 12px; color: {Colors.TEXT_SECONDARY}; text-align: right;'>${pos.current_price:.2f}</td>
-                    <td style='padding: 12px; color: {pnl_color}; text-align: right; font-weight: 600;'>
+                    <td style='padding: 12px; color: {Colors.TEXT_SECONDARY}; text-align: right; font-family: {Typography.FONT_MONO};'>${pos.avg_entry_price:.2f}</td>
+                    <td style='padding: 12px; color: {Colors.TEXT_SECONDARY}; text-align: right; font-family: {Typography.FONT_MONO};'>${pos.current_price:.2f}</td>
+                    <td style='padding: 12px; color: {pnl_color}; text-align: right; font-weight: 600; font-family: {Typography.FONT_MONO};'>
                         {pnl_symbol} ${abs(pos.unrealized_pnl):.2f} ({pnl_pct:+.2f}%)
                     </td>
                 </tr>
@@ -605,7 +493,7 @@ class LiveTradingPage(pn.viewable.Viewer):
 
             html = f"""
             <div style='background: {Colors.BG_SECONDARY}; padding: 20px; border-radius: 8px;'>
-                <h3 style='margin-top: 0; color: {Colors.TEXT_PRIMARY};'>Current Positions</h3>
+                <h3 style='margin-top: 0; color: {Colors.TEXT_PRIMARY}; font-family: {Typography.FONT_PRIMARY};'>Positions</h3>
                 <table style='width: 100%; border-collapse: collapse;'>
                     <thead>
                         <tr style='border-bottom: 2px solid {Colors.BORDER_SUBTLE};'>
@@ -623,48 +511,45 @@ class LiveTradingPage(pn.viewable.Viewer):
             </div>
             """
 
-        self.positions_pane.object = html
+        return pn.pane.HTML(html, sizing_mode="stretch_width")
 
-    def _update_trades(self):
-        """Update recent trades"""
-        if not self.engine or not self.engine.portfolio.trades:
+    def _create_trades_card(self, engine: LiveTradingEngine) -> pn.pane.HTML:
+        """Create trades history card"""
+        if not engine.portfolio.trades:
             html = f"""
-            <div style='background: {Colors.BG_SECONDARY}; padding: 20px; border-radius: 8px;'>
-                <h3 style='margin-top: 0; color: {Colors.TEXT_PRIMARY};'>Recent Trades</h3>
+            <div style='background: {Colors.BG_SECONDARY}; padding: 20px; border-radius: 8px; flex: 1;'>
+                <h3 style='margin-top: 0; color: {Colors.TEXT_PRIMARY}; font-family: {Typography.FONT_PRIMARY};'>Trades</h3>
                 <p style='color: {Colors.TEXT_MUTED}; text-align: center; padding: 20px;'>No trades yet</p>
             </div>
             """
         else:
             rows = ""
-            # Show last 10 trades
-            for trade in reversed(self.engine.portfolio.trades[-10:]):
+            for trade in reversed(engine.portfolio.trades[-10:]):
                 action_color = Colors.SUCCESS_GREEN if trade.action in (TradingAction.BUY_SMALL, TradingAction.BUY_LARGE) else Colors.DANGER_RED
                 pnl_color = Colors.SUCCESS_GREEN if trade.pnl >= 0 else Colors.DANGER_RED
                 time_str = trade.timestamp.strftime('%H:%M:%S')
 
                 rows += f"""
                 <tr style='border-bottom: 1px solid {Colors.BORDER_SUBTLE};'>
-                    <td style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 12px;'>{time_str}</td>
+                    <td style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 12px; font-family: {Typography.FONT_MONO};'>{time_str}</td>
                     <td style='padding: 10px; color: {action_color}; font-weight: 600;'>{trade.action.name}</td>
-                    <td style='padding: 10px; color: {Colors.TEXT_PRIMARY};'>{trade.symbol}</td>
                     <td style='padding: 10px; color: {Colors.TEXT_SECONDARY}; text-align: right;'>{trade.shares}</td>
-                    <td style='padding: 10px; color: {Colors.TEXT_SECONDARY}; text-align: right;'>${trade.price:.2f}</td>
-                    <td style='padding: 10px; color: {pnl_color}; text-align: right; font-weight: 600;'>
+                    <td style='padding: 10px; color: {Colors.TEXT_SECONDARY}; text-align: right; font-family: {Typography.FONT_MONO};'>${trade.price:.2f}</td>
+                    <td style='padding: 10px; color: {pnl_color}; text-align: right; font-weight: 600; font-family: {Typography.FONT_MONO};'>
                         ${trade.pnl:.2f}
                     </td>
                 </tr>
                 """
 
             html = f"""
-            <div style='background: {Colors.BG_SECONDARY}; padding: 20px; border-radius: 8px;'>
-                <h3 style='margin-top: 0; color: {Colors.TEXT_PRIMARY};'>Recent Trades</h3>
+            <div style='background: {Colors.BG_SECONDARY}; padding: 20px; border-radius: 8px; flex: 1;'>
+                <h3 style='margin-top: 0; color: {Colors.TEXT_PRIMARY}; font-family: {Typography.FONT_PRIMARY};'>Recent Trades</h3>
                 <div style='max-height: 400px; overflow-y: auto;'>
                     <table style='width: 100%; border-collapse: collapse;'>
                         <thead style='position: sticky; top: 0; background: {Colors.BG_SECONDARY};'>
                             <tr style='border-bottom: 2px solid {Colors.BORDER_SUBTLE};'>
                                 <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: left;'>TIME</th>
                                 <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: left;'>ACTION</th>
-                                <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: left;'>SYMBOL</th>
                                 <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: right;'>SHARES</th>
                                 <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: right;'>PRICE</th>
                                 <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: right;'>P&L</th>
@@ -678,21 +563,20 @@ class LiveTradingPage(pn.viewable.Viewer):
             </div>
             """
 
-        self.trades_pane.object = html
+        return pn.pane.HTML(html, sizing_mode="stretch_width")
 
-    def _update_events(self):
-        """Update event log"""
-        if not self.engine or not self.engine.session or not self.engine.session.events:
+    def _create_events_card(self, engine: LiveTradingEngine) -> pn.pane.HTML:
+        """Create event log card"""
+        if not engine.session.events:
             html = f"""
-            <div style='background: {Colors.BG_SECONDARY}; padding: 20px; border-radius: 8px;'>
-                <h3 style='margin-top: 0; color: {Colors.TEXT_PRIMARY};'>Event Log</h3>
+            <div style='background: {Colors.BG_SECONDARY}; padding: 20px; border-radius: 8px; flex: 1;'>
+                <h3 style='margin-top: 0; color: {Colors.TEXT_PRIMARY}; font-family: {Typography.FONT_PRIMARY};'>Events</h3>
                 <p style='color: {Colors.TEXT_MUTED}; text-align: center; padding: 20px;'>No events</p>
             </div>
             """
         else:
             rows = ""
-            # Show last 20 events
-            for event in reversed(self.engine.session.events[-20:]):
+            for event in reversed(engine.session.events[-15:]):
                 timestamp = event['timestamp']
                 if isinstance(timestamp, str):
                     timestamp = datetime.fromisoformat(timestamp)
@@ -702,96 +586,151 @@ class LiveTradingPage(pn.viewable.Viewer):
                 type_color = {
                     'SESSION_START': Colors.SUCCESS_GREEN,
                     'SESSION_END': Colors.TEXT_MUTED,
-                    'TRADE': Colors.INFO_BLUE,
-                    'ORDER_REJECTED': Colors.WARNING_YELLOW,
+                    'SESSION_PAUSED': "#F59E0B",
+                    'SESSION_RESUMED': Colors.SUCCESS_GREEN,
+                    'TRADE': Colors.ACCENT_CYAN,
+                    'ORDER_REJECTED': "#F59E0B",
                     'HALT': Colors.DANGER_RED,
                     'ERROR': Colors.DANGER_RED
                 }.get(event_type, Colors.TEXT_SECONDARY)
 
                 rows += f"""
                 <div style='padding: 8px; border-bottom: 1px solid {Colors.BORDER_SUBTLE};'>
-                    <span style='color: {Colors.TEXT_MUTED}; font-size: 11px;'>{time_str}</span>
+                    <span style='color: {Colors.TEXT_MUTED}; font-size: 11px; font-family: {Typography.FONT_MONO};'>{time_str}</span>
                     <span style='color: {type_color}; font-weight: 600; margin: 0 10px;'>[{event_type}]</span>
                     <span style='color: {Colors.TEXT_SECONDARY}; font-size: 13px;'>{event['message']}</span>
                 </div>
                 """
 
             html = f"""
-            <div style='background: {Colors.BG_SECONDARY}; padding: 20px; border-radius: 8px;'>
-                <h3 style='margin-top: 0; color: {Colors.TEXT_PRIMARY};'>Event Log</h3>
+            <div style='background: {Colors.BG_SECONDARY}; padding: 20px; border-radius: 8px; flex: 1;'>
+                <h3 style='margin-top: 0; color: {Colors.TEXT_PRIMARY}; font-family: {Typography.FONT_PRIMARY};'>Event Log</h3>
                 <div style='max-height: 400px; overflow-y: auto; font-family: monospace;'>
                     {rows}
                 </div>
             </div>
             """
 
-        self.events_pane.object = html
+        return pn.pane.HTML(html, sizing_mode="stretch_width")
+
+    # ========================================================================
+    # Dashboard View
+    # ========================================================================
+
+    def _render_dashboard_view(self):
+        """Render multi-session comparison dashboard"""
+        # Aggregate metrics
+        metrics = self.session_manager.get_aggregate_metrics()
+        summaries = self.session_manager.get_session_summary()
+
+        # Create the combined dashboard card
+        dashboard_card = self._create_dashboard_card(metrics, summaries)
+
+        self.content_area.extend([
+            dashboard_card
+        ])
+
+    def _create_dashboard_card(self, metrics: Dict, summaries: List[Dict]) -> pn.Column:
+        """Create a single card containing aggregate metrics and the sessions table."""
+        # Aggregate metrics header
+        total_pnl = metrics['total_pnl']
+        pnl_color = Colors.SUCCESS_GREEN if total_pnl >= 0 else Colors.DANGER_RED
+        header_html = f"""
+        <div style='padding: 16px; background: linear-gradient(135deg, {Colors.ACCENT_PURPLE} 0%, {Colors.ACCENT_CYAN} 100%); border-radius: 12px 12px 0 0; color: white; font-family: {Typography.FONT_PRIMARY};'>
+            <div style='display: grid; grid-template-columns: 0.5fr 0.5fr 1.5fr 1.5fr; gap: 10px;'>
+                <div>
+                    <div style='opacity: 0.9; font-size: {Typography.TEXT_SM};'>Total Sessions</div>
+                    <div style='font-size: {Typography.TEXT_2XL}; font-weight: 600; margin-top: 4px;'>{metrics['total_sessions']}</div>
+                </div>
+                <div>
+                    <div style='opacity: 0.9; font-size: {Typography.TEXT_SM};'>Running</div>
+                    <div style='font-size: {Typography.TEXT_2XL}; font-weight: 600; margin-top: 4px;'>{metrics['running_sessions']}</div>
+                </div>
+                <div>
+                    <div style='opacity: 0.9; font-size: {Typography.TEXT_SM};'>Total Portfolio Value</div>
+                    <div style='font-size: {Typography.TEXT_2XL}; font-weight: 600; margin-top: 4px; font-family: {Typography.FONT_MONO};'>${metrics['total_portfolio_value']:,.2f}</div>
+                </div>
+                <div>
+                    <div style='opacity: 0.9; font-size: {Typography.TEXT_SM};'>Aggregate P&L</div>
+                    <div style='font-size: {Typography.TEXT_2XL}; font-weight: 600; margin-top: 4px; font-family: {Typography.FONT_MONO};'>${total_pnl:+,.2f} ({metrics['total_pnl_pct']:+.2f}%)</div>
+                </div>
+            </div>
+        </div>
+        """
+
+        # Sessions table content
+        if not summaries:
+            table_content = pn.pane.HTML(f"""
+                <div style='padding: 40px; text-align: center; background: {Colors.BG_SECONDARY}; border-radius: 0 0 8px 8px;'>
+                    <p style='color: {Colors.TEXT_MUTED}; font-size: {Typography.TEXT_BASE};'>No sessions to display</p>
+                </div>
+            """, sizing_mode="stretch_width")
+        else:
+            rows = []
+            for summary in summaries:
+                session_id = summary['session_id']
+                status = summary['status']
+                
+                view_btn = pn.widgets.Button(name='View', button_type='primary', width=60)
+                view_btn.on_click(lambda e, sid=session_id: self._select_session(sid))
+
+                if status == 'running':
+                    action_btn = pn.widgets.Button(name='Stop', button_type='danger', width=80)
+                    action_btn.on_click(lambda e, sid=session_id: self._stop_session(sid))
+                else:
+                    action_btn = pn.widgets.Button(name='Start', button_type='success', width=80)
+                    action_btn.on_click(lambda e, sid=session_id: self._start_session(sid))
+
+                button_row = pn.Row(view_btn, action_btn, sizing_mode='fixed')
+
+                rows.append(pn.Row(
+                    pn.pane.HTML(f"<div>{summary['session_id']}</div>", width=300),
+                    pn.pane.HTML(f"<div>{summary['symbol']}</div>", width=100),
+                    pn.pane.HTML(f"<div>{summary['status']}</div>", width=100),
+                    button_row,
+                    sizing_mode='stretch_width',
+                    align='center'
+                ))
+
+            header = pn.Row(
+                pn.pane.HTML("<b>Session ID</b>", width=300),
+                pn.pane.HTML("<b>Symbol</b>", width=100),
+                pn.pane.HTML("<b>Status</b>", width=100),
+                pn.pane.HTML("<b>Actions</b>", width=180, align='center'),
+                sizing_mode='stretch_width'
+            )
+            
+            table_content = pn.Column(header, *rows, sizing_mode="stretch_width")
+
+        return pn.Column(
+            pn.pane.HTML(header_html, sizing_mode="stretch_width"),
+            table_content,
+            styles=dict(background=Colors.BG_SECONDARY, padding='0', border_radius='12px'),
+            sizing_mode="stretch_width"
+        )
+
+    # ========================================================================
+    # Public API for External Integration
+    # ========================================================================
+
+    def set_active_session(self, session_id: str):
+        """Called when session is selected externally (deprecated - use _select_session)"""
+        self._select_session(session_id)
+
+    # ========================================================================
+    # Main View
+    # ========================================================================
 
     def __panel__(self):
         """Return the Panel layout"""
-
-        # Configuration section (matching training page style)
-        config_section = pn.Column(
-            pn.Row(
-                pn.Column(
-                    pn.pane.HTML("<div style='font-size: 12px; color: #6b7280; margin-bottom: 5px; font-weight: 500;'>Symbol</div>"),
-                    self.symbol_input,
-                    width=120,
-                    margin=(0, 5, 0, 0)
-                ),
-                pn.Column(
-                    pn.pane.HTML("<div style='font-size: 12px; color: #6b7280; margin-bottom: 5px; font-weight: 500;'>Algorithm</div>"),
-                    self.agent_type,
-                    width=200,
-                    margin=(0, 5, 0, 0)
-                ),
-                pn.Column(
-                    pn.pane.HTML("<div style='font-size: 12px; color: #6b7280; margin-bottom: 5px; font-weight: 500;'>Initial Capital ($)</div>"),
-                    self.capital_input,
-                    width=180,
-                    margin=(0, 5, 0, 0)
-                ),
-                pn.Column(
-                    pn.pane.HTML("<div style='font-size: 12px; color: #6b7280; margin-bottom: 5px; font-weight: 500;'>Max Position Size</div>"),
-                    self.max_position_input,
-                    width=180,
-                    margin=(0, 5, 0, 0)
-                ),
-                pn.Column(
-                    pn.pane.HTML("<div style='font-size: 12px; color: #6b7280; margin-bottom: 5px; font-weight: 500;'>Stop Loss (%)</div>"),
-                    self.stop_loss_input,
-                    width=180
-                ),
-                align='start'
-            ),
-            pn.Row(
-                self.session_selector,
-                self.start_button,
-                self.stop_button,
-                self.allow_extended_hours_input,
-                align='start',
-                margin=(10, 0, 0, 0)
-            ),
-            self.model_status_pane,
-            styles=dict(background='#F8F9FA', border_radius='8px', padding='15px'),
-            margin=(0, 0, 15, 0)
-        )
-
-        # Results panel (always visible, just empty initially like other pages)
-        self.results_container = pn.Column(
-            sizing_mode="stretch_width",
-            min_height=250
-        )
-
-        # Main layout - disclaimer at bottom just like training page
         return pn.Column(
-            config_section,
-            self.results_container,
-            pn.pane.HTML(HTMLComponents.disclaimer()),
+            self.new_session_form,
+            self.content_area,
+            HTMLComponents.disclaimer(),
             sizing_mode="stretch_width"
         )
 
 
-def create_live_trading_page():
+def create_live_trading_page(session_manager: Optional[LiveSessionManager] = None):
     """Factory function to create live trading page"""
-    return LiveTradingPage()
+    return LiveTradingPage(session_manager=session_manager)

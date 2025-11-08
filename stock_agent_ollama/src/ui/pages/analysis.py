@@ -676,23 +676,30 @@ def create_app():
     from src.ui.pages.models import ModelsPage
     from src.ui.pages.live_trading import create_live_trading_page
     from src.ui.design_system import Colors
+    from src.rl.session_manager import LiveSessionManager
     from src.tools.stock_fetcher import StockFetcher
     from datetime import datetime
 
-    # Create watchlist panel class
+    # Create session manager
+    session_manager = LiveSessionManager()
+
+    # Create watchlist panel for sidebar
     class WatchlistPanel:
         """Watchlist panel that can be refreshed"""
         def __init__(self):
             self.stock_fetcher = StockFetcher()
-            self.watchlist_symbols = portfolio_manager.load_portfolio("default") # Load from portfolio_manager
+            self.watchlist_symbols = portfolio_manager.load_portfolio("default")
             self.pane = pn.pane.HTML("Loading watchlist...", sizing_mode="stretch_width")
-            # Initial refresh is now called after WatchlistPanel is instantiated
-            pn.state.onload(self.refresh)
+            pn.state.onload(self.schedule_refresh)
+
+        def schedule_refresh(self):
+            """Schedule the refresh to run in the background."""
+            pn.state.execute(self.refresh)
 
         async def refresh(self):
             """Refresh watchlist data"""
-            self.watchlist_symbols = portfolio_manager.load_portfolio("default") # Reload portfolio
-            
+            self.watchlist_symbols = portfolio_manager.load_portfolio("default")
+
             tasks = [asyncio.to_thread(self.stock_fetcher.get_real_time_price, symbol) for symbol in self.watchlist_symbols]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -732,7 +739,7 @@ def create_app():
                                 margin-bottom: 8px;
                                 cursor: pointer;
                                 transition: all 0.2s;'
-                         onmouseover='this.style.background="{Colors.BG_HOVER}"' 
+                         onmouseover='this.style.background="{Colors.BG_HOVER}"'
                          onmouseout='this.style.background="{Colors.BG_PRIMARY}"'>
                         <div style='display: flex; justify-content: space-between; align-items: center;'>
                             <div style='font-weight: 600; color: {Colors.TEXT_PRIMARY}; font-size: 0.9rem;'>{symbol}</div>
@@ -762,13 +769,16 @@ def create_app():
         sizing_mode="stretch_width"
     )
 
+    # Get watchlist symbols from portfolio (for portfolio page)
+    watchlist_symbols = portfolio_manager.load_portfolio("default")
+
     # Create all pages
-    dashboard_page = DashboardPage(watchlist_panel=watchlist_panel)
+    dashboard_page = DashboardPage()
     analysis_app = StockAnalysisApp()
     rl_panel = CompactRLPanel()
-    portfolio_page = PortfolioPage(watchlist_panel=watchlist_panel) # Pass watchlist_panel
+    portfolio_page = PortfolioPage(watchlist_symbols=watchlist_symbols)
     models_page = ModelsPage()
-    live_trading_page = create_live_trading_page()
+    live_trading_page = create_live_trading_page(session_manager=session_manager)
 
     # Create professional navigation tabs
     tabs = pn.Tabs(
