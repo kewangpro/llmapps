@@ -23,25 +23,67 @@ class ModelsPage(param.Parameterized):
 
     def _create_ui(self):
         """Create models UI"""
-        self.models_panel = pn.Column(sizing_mode="stretch_width")
-        self.refresh_button = pn.widgets.Button(
-            name="🔄 Refresh",
-            button_type="primary",
-            width=120
+        # Create separate panels for each tab
+        self.lstm_panel = pn.Column(sizing_mode="stretch_width")
+        self.rl_panel = pn.Column(sizing_mode="stretch_width")
+
+        # Create dynamic header that changes with tab selection
+        self.header_pane = pn.pane.HTML("", sizing_mode="stretch_width")
+        self._update_header(0)  # Set initial header for LSTM tab
+
+        # Create tabs
+        self.tabs = pn.Tabs(
+            ("🧠 LSTM Models", self._create_lstm_tab()),
+            ("🤖 RL Agents", self._create_rl_tab()),
+            dynamic=True,
+            sizing_mode="stretch_width"
         )
-        self.refresh_button.on_click(self._load_models)
+
+        # Watch for tab changes to update header
+        self.tabs.param.watch(self._on_tab_change, 'active')
 
         # Auto-load on init
         self._load_models()
 
+    def _create_lstm_tab(self) -> pn.Column:
+        """Create LSTM models tab"""
+        return pn.Column(
+            self.lstm_panel,
+            sizing_mode="stretch_width"
+        )
+
+    def _create_rl_tab(self) -> pn.Column:
+        """Create RL agents tab"""
+        return pn.Column(
+            self.rl_panel,
+            sizing_mode="stretch_width"
+        )
+
+    def _update_header(self, tab_index):
+        """Update header based on active tab"""
+        if tab_index == 0:
+            self.header_pane.object = HTMLComponents.page_header(
+                "LSTM Models",
+                "Trained prediction models"
+            )
+        else:
+            self.header_pane.object = HTMLComponents.page_header(
+                "RL Trading Agents",
+                "Reinforcement learning models"
+            )
+
+    def _on_tab_change(self, event):
+        """Handle tab change event"""
+        self._update_header(event.new)
+
     def _load_models(self, event=None):
         """Load model registry"""
-        self.models_panel.clear()
+        self._load_lstm_models()
+        self._load_rl_models()
 
-        # LSTM Models Section
-        self.models_panel.append(pn.pane.HTML(
-            HTMLComponents.section_header("🧠 LSTM Models", "Trained prediction models")
-        ))
+    def _load_lstm_models(self):
+        """Load LSTM models into tab"""
+        self.lstm_panel.clear()
 
         lstm_models = self._get_lstm_models()
 
@@ -61,9 +103,9 @@ class ModelsPage(param.Parameterized):
                 ])
 
             table_html = TableStyles.generate_table(headers, rows)
-            self.models_panel.append(pn.pane.HTML(table_html))
+            self.lstm_panel.append(pn.pane.HTML(table_html))
         else:
-            self.models_panel.append(pn.pane.HTML(f"""
+            self.lstm_panel.append(pn.pane.HTML(f"""
                 <div style='background: {Colors.BG_SECONDARY};
                             border: 1px solid {Colors.BORDER_SUBTLE};
                             border-radius: 8px;
@@ -75,10 +117,9 @@ class ModelsPage(param.Parameterized):
                 </div>
             """))
 
-        # RL Models Section
-        self.models_panel.append(pn.pane.HTML(
-            HTMLComponents.section_header("🤖 RL Trading Agents", "Reinforcement learning models")
-        ))
+    def _load_rl_models(self):
+        """Load RL models into tab"""
+        self.rl_panel.clear()
 
         rl_models = self._get_rl_models()
 
@@ -106,9 +147,9 @@ class ModelsPage(param.Parameterized):
                 ])
 
             table_html = TableStyles.generate_table(headers, rows)
-            self.models_panel.append(pn.pane.HTML(table_html))
+            self.rl_panel.append(pn.pane.HTML(table_html))
         else:
-            self.models_panel.append(pn.pane.HTML(f"""
+            self.rl_panel.append(pn.pane.HTML(f"""
                 <div style='background: {Colors.BG_SECONDARY};
                             border: 1px solid {Colors.BORDER_SUBTLE};
                             border-radius: 8px;
@@ -226,16 +267,8 @@ class ModelsPage(param.Parameterized):
     def get_view(self):
         """Get the models view"""
         return pn.Column(
-            HTMLComponents.page_header(
-                "Models",
-                "LSTM and RL model registry"
-            ),
-            pn.Row(
-                self.refresh_button,
-                sizing_mode="stretch_width",
-                margin=(0, 0, 15, 0)
-            ),
-            self.models_panel,
+            self.header_pane,
+            self.tabs,
             HTMLComponents.disclaimer(),
             sizing_mode="stretch_width"
         )

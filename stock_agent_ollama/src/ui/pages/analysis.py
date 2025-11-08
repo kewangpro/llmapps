@@ -776,7 +776,7 @@ def create_app():
     dashboard_page = DashboardPage()
     analysis_app = StockAnalysisApp()
     rl_panel = CompactRLPanel()
-    portfolio_page = PortfolioPage(watchlist_symbols=watchlist_symbols)
+    portfolio_page = PortfolioPage(watchlist_symbols=watchlist_symbols, watchlist_panel=watchlist_panel)
     models_page = ModelsPage()
     live_trading_page = create_live_trading_page(session_manager=session_manager)
 
@@ -786,7 +786,7 @@ def create_app():
         ('📈 Analysis', analysis_app.get_analysis_tab()),
         ('🤖 Training', rl_panel.get_panel()),
         ('🔴 Live Trade', live_trading_page),
-        ('💼 Portfolio', portfolio_page.get_view()),
+        ('📋 Watchlist', portfolio_page.get_view()),
         ('🧠 Models', models_page.get_view()),
         dynamic=True,
         sizing_mode="stretch_width",
