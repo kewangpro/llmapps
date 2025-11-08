@@ -626,6 +626,8 @@ class TradingEvent:
 
 #### 1. LiveTradingEngine
 
+**Implementation**: `src/rl/live_trading.py`
+
 ```python
 class LiveTradingEngine:
     """Main orchestrator for live trading simulation"""
@@ -713,6 +715,8 @@ class LiveTradingEngine:
 
 #### 2. MarketDataStream
 
+**Implementation**: `src/rl/live_trading.py`
+
 ```python
 class MarketDataStream:
     """Real-time market data provider"""
@@ -753,6 +757,8 @@ class MarketDataStream:
 ```
 
 #### 3. RiskManager
+
+**Implementation**: `src/rl/live_trading.py`
 
 ```python
 class RiskManager:
@@ -917,51 +923,39 @@ educational purposes. No real trades are executed.
 
 ## Deployment
 
-### Configuration Files
+### Configuration
 
-**`config/live_trading.yaml`:**
-```yaml
-session:
-  name: "AAPL Live Trading"
-  symbol: "AAPL"
-  initial_capital: 10000.0
+**Via Web UI:**
+All configuration is done through the Live Trade page interface:
+- Symbol selection
+- Algorithm selection (PPO/A2C)
+- Initial capital
+- Max position size
+- Stop loss percentage
 
-agent:
-  path: "data/models/rl/ppo_AAPL_20250103_104523/final_model.zip"
-  type: "ppo"
-  use_lstm: true
+**Persistence:**
+Configuration is saved with the session state in:
+- `data/live_sessions/live_session.json`
 
-execution:
-  poll_interval: 60  # seconds
-  market_hours_only: true
-  transaction_cost: 0.001
-  slippage: 0.0005
-
-risk:
-  position_stop_loss: -0.05
-  portfolio_stop_loss: -0.10
-  max_position_size: 0.40
-  max_exposure: 0.80
-  daily_loss_limit: -0.05
-
-monitoring:
-  enable_alerts: true
-  alert_email: null
-  log_level: "INFO"
-```
+**Default Settings:**
+- Initial capital: $10,000
+- Transaction cost: 0.1%
+- Stop loss: 5%
+- Poll interval: 60 seconds
 
 ### Running a Session
 
-```bash
-# Start live trading simulation
-python src/live_trade.py --config config/live_trading.yaml
+**Via Web UI (Recommended):**
+1. Launch the application: `python src/main.py`
+2. Navigate to **Live Trade** tab
+3. Configure settings and click "Start Trading"
+4. Sessions are automatically saved and can be resumed on restart
 
-# Resume a paused session
-python src/live_trade.py --resume session_20250103_104512
-
-# Analyze past session
-python src/live_trade.py --analyze session_20250103_104512
-```
+**Session State:**
+- Saved to: `data/live_sessions/live_session.json`
+- Auto-saved every 5 minutes while active
+- Automatically loaded on application start
+- Contains portfolio, positions, trades, and configuration
 
 ---
 
@@ -1004,6 +998,6 @@ This system is designed for learning, research, and algorithm validation. It is 
 ---
 
 **Version:** 1.0
-**Last Updated:** January 2025
+**Last Updated:** November 2025
 **Status:** Implemented
-**Implementation:** Core live trading system with real-time paper trading is fully operational
+**Implementation:** Core live trading system with real-time paper trading is fully operational. Session persistence enables resuming sessions across application restarts.

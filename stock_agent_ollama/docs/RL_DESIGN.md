@@ -1,7 +1,7 @@
 # Reinforcement Learning Trading System - Design & Implementation
 
 **Version:** 1.0.0
-**Date:** 2025-11-01
+**Date:** 2025-11-07
 **Author:** Claude Code
 
 ---
@@ -60,30 +60,28 @@ This RL trading system adds advanced reinforcement learning capabilities to the 
 ```
 src/rl/
 ├── __init__.py                 # Main RL module exports
-├── agents/                     # RL algorithms
-│   ├── base_agent.py          # Agent interface
-│   ├── ppo_agent.py           # PPO implementation
-│   ├── a2c_agent.py           # A2C implementation
-│   └── __init__.py
 ├── environments.py             # Trading environments (Base + SingleStock)
 ├── training.py                 # Training pipeline (Trainer + Callbacks + Rewards)
 ├── backtesting.py              # Backtesting (Engine + Metrics Calculator)
 ├── baselines.py                # Baseline strategies (Buy&Hold, Momentum)
-├── networks.py                 # Neural networks (LSTM feature extractor)
+├── live_trading.py             # Live paper trading engine
+├── session_manager.py          # Session persistence for live trading
 └── visualizer.py               # RL-specific visualizations
 
-src/ui/
-└── rl_components.py           # Panel UI for RL features
+src/ui/pages/
+├── trading.py                  # RL training UI
+└── live_trading.py             # Live trading UI
 
-src/config.py                  # RL configuration added
+src/config.py                   # RL configuration added
 ```
 
-**Note**: The module structure has been simplified by merging related files:
+**Note**: The module structure has been simplified:
 - **environments.py**: Contains `BaseTradingEnv` and `SingleStockTradingEnv`
-- **training.py**: Contains `RLTrainer`, training callbacks, and reward functions
+- **training.py**: Contains `RLTrainer`, training callbacks, and reward functions using Stable-Baselines3 (PPO, A2C)
 - **backtesting.py**: Contains `BacktestEngine` and `MetricsCalculator`
 - **baselines.py**: Contains `BuyHoldStrategy` and `MomentumStrategy`
-- **networks.py**: Contains LSTM feature extractor for hybrid architecture
+- **live_trading.py**: Contains live paper trading engine for real-time strategy execution
+- **session_manager.py**: Handles session persistence for resuming live trading sessions
 
 ### Data Flow
 
@@ -191,7 +189,7 @@ reward = (
 
 #### PPO (Proximal Policy Optimization)
 
-**File**: `src/rl/agents/ppo_agent.py`
+**Implementation**: Stable-Baselines3 PPO in `src/rl/training.py`
 
 **Advantages**:
 - Stable training with clipped objective
@@ -213,7 +211,7 @@ reward = (
 
 #### A2C (Advantage Actor-Critic)
 
-**File**: `src/rl/agents/a2c_agent.py`
+**Implementation**: Stable-Baselines3 A2C in `src/rl/training.py`
 
 **Advantages**:
 - Faster training than PPO

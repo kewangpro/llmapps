@@ -158,9 +158,10 @@ The live trading session is **persistent**. You can stop the application and res
 4. Monitor real-time updates
 
 **Resuming a Session:**
-1.  Start the application.
-2.  The previous session will be loaded automatically.
-3.  Navigate to the **Live Trade** tab to view your session.
+1. Start the application: `python src/main.py`
+2. The previous session will be loaded automatically from `data/live_sessions/live_session.json`
+3. Navigate to the **Live Trade** tab to view and manage your session
+4. You can continue trading or stop the session
 
 **Live Trading Dashboard:**
 - **Trading Status**: Session status, runtime, last update
@@ -184,6 +185,8 @@ The live trading session is **persistent**. You can stop the application and res
 - Uses real-time Yahoo Finance data (1-minute delayed)
 - Trading cycle runs every 60 seconds
 - Requires trained RL model for the selected symbol
+- Sessions auto-save every 5 minutes and on stop
+- Session state persists across application restarts
 - Educational purpose only
 
 ---
@@ -432,6 +435,7 @@ View simulated portfolio with:
 - **Models**: `data/models/lstm/` and `data/models/rl/`
 - **Cache**: `data/cache/stock_data/`
 - **Logs**: `data/logs/app.log`
+- **Live Sessions**: `data/live_sessions/live_session.json`
 
 ### Debugging
 1. Check logs: `tail -f data/logs/app.log`

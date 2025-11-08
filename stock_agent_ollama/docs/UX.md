@@ -1,5 +1,5 @@
 # Stock Agent Pro - UX Documentation
-**Current Implementation | Last Updated: January 2025**
+**Current Implementation | Last Updated: November 2025**
 
 ---
 
@@ -498,24 +498,32 @@ Select symbol → Load trained RL agent → Run backtest
 src/
 ├── ui/
 │   ├── design_system.py       # Colors, HTML components, table styles
+│   ├── __init__.py            # Module exports
 │   └── pages/
 │       ├── analysis.py        # Main app, watchlist sidebar, analysis page
 │       ├── dashboard.py       # Market overview
 │       ├── trading.py         # RL training UI
-│       ├── portfolio.py       # Portfolio placeholder
+│       ├── live_trading.py    # Live paper trading simulation
+│       ├── portfolio.py       # Portfolio tracking
 │       └── models.py          # Model registry
 ├── tools/
 │   ├── stock_fetcher.py       # Yahoo Finance API
 │   ├── visualizer.py          # Chart generation
+│   ├── technical_analysis.py  # Indicators (RSI, MACD, BB)
 │   └── lstm/
-│       └── prediction_service.py  # LSTM predictions
+│       ├── prediction_service.py  # LSTM predictions
+│       ├── model_architecture.py  # Neural network models
+│       └── data_pipeline.py       # Data preprocessing
 ├── rl/
 │   ├── training.py            # RL training logic
 │   ├── backtesting.py         # Backtest engine
 │   ├── environments.py        # Trading environment
+│   ├── live_trading.py        # Live trading engine
+│   ├── session_manager.py     # Session persistence
 │   └── visualizer.py          # RL charts
 └── agents/
-    └── query_processor.py     # AI analysis (Ollama)
+    ├── query_processor.py     # AI analysis (Ollama)
+    └── hybrid_query_processor.py  # Ollama + regex fallback
 ```
 
 ---
@@ -612,4 +620,4 @@ For questions or suggestions about the UX implementation, see:
 - Main app: `src/ui/pages/analysis.py`
 - Page implementations: `src/ui/pages/`
 
-Last updated: January 2025
+Last updated: November 2025
