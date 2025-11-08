@@ -14,7 +14,7 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 ### 📊 Professional Dashboard
 - **Market Overview** with live major indices (S&P 500, NASDAQ, Dow Jones, Russell 2000)
 - **Dynamic Watchlist** that automatically syncs with your portfolio, displaying real-time prices, daily changes, and key performance metrics for each stock.
-- **Comprehensive Portfolio View** showing detailed metrics like Market Cap, P/E Ratio, Volume, and 52-Week Range for each holding in a compact, easy-to-read format.
+- **Simple Watchlist** with table view showing real-time prices, daily changes, volume, and market cap for tracked stocks.
 - **Quick Actions** for common tasks (Train LSTM, Backtest, Compare, Report)
 - **Light Theme** professional interface optimized for wide screens
 
@@ -113,10 +113,10 @@ python src/main.py
 │              Web Interface (Panel Dashboard)                          │
 │  Light Theme • Wide Layouts • Responsive Design                       │
 ├──────────┬──────────┬──────────┬────────────┬──────────┬────────────┤
-│Dashboard │ Analysis │ Training │ Live Trade │Portfolio │   Models   │
-│• Markets │ • Charts │• RL Train│• Paper     │• Holdings│ • LSTM     │
-│•Watchlist│ • Signals│• Backtest│• Real-time │• P&L     │ • RL       │
-│• Actions │ • Predict│• Compare │• Risk Mgmt │• Metrics │ • Perf     │
+│Dashboard │ Analysis │ Training │ Live Trade │Watchlist │   Models   │
+│• Markets │ • Charts │• RL Train│• Paper     │• Prices  │ • LSTM     │
+│•Watchlist│ • Signals│• Backtest│• Real-time │• Symbols │ • RL       │
+│• Actions │ • Predict│• Compare │• Risk Mgmt │• Simple  │ • Tabs     │
 └──────────┴──────────┴──────────┴────────────┴──────────┴────────────┘
               │                          │
               ▼                          ▼
@@ -280,7 +280,7 @@ curl http://localhost:11434/api/tags
 - Compares against Buy & Hold and Momentum baselines
 - Comprehensive metrics: Returns, Sharpe, Sortino, Calmar ratios
 - Action distribution analysis
-- Portfolio value visualization over time
+- Watchlist summary with aggregate price metrics
 
 ---
 
