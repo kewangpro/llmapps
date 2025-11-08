@@ -94,7 +94,10 @@ def main():
             allow_websocket_origin=Config.PANEL_ALLOW_WEBSOCKET_ORIGIN,
             show=True,
             autoreload=False,  # Disable for stability
-            threaded=True
+            threaded=True,
+            websocket_max_message_size=100*1024*1024,  # 100MB for large messages
+            check_unused_sessions_milliseconds=3600000,  # Check every hour
+            unused_session_lifetime_milliseconds=86400000  # 24 hours session lifetime
         )
         while server_thread.is_alive():
             server_thread.join(timeout=1)
