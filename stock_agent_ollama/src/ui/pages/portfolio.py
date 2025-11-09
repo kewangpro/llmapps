@@ -121,7 +121,7 @@ class PortfolioPage(param.Parameterized):
         header_html = f"""
         <div style="
             display: grid;
-            grid-template-columns: 1fr 150px 120px 120px 150px 100px;
+            grid-template-columns: 140px 130px 130px 200px 150px 1fr;
             gap: 12px;
             padding: 12px;
             background: {Colors.BG_TERTIARY};
@@ -135,9 +135,9 @@ class PortfolioPage(param.Parameterized):
             <div>Symbol</div>
             <div>Price</div>
             <div>Change</div>
+            <div>52W Range</div>
             <div>Volume</div>
             <div>Market Cap</div>
-            <div>Remove</div>
         </div>
         """
         self.quick_view_container.append(pn.pane.HTML(header_html, sizing_mode="stretch_width"))
@@ -163,6 +163,8 @@ class PortfolioPage(param.Parameterized):
             prev_close = price_info.get('previous_close')
             volume = price_info.get('volume')
             market_cap = data.get('market_cap')
+            week_52_low = price_info.get('fifty_two_week_low')
+            week_52_high = price_info.get('fifty_two_week_high')
 
             if price and prev_close:
                 change = price - prev_close
@@ -178,11 +180,17 @@ class PortfolioPage(param.Parameterized):
             volume_str = f"{volume:,.0f}" if volume else "N/A"
             mc_str = format_market_cap(market_cap)
 
+            # Format 52-week range
+            if week_52_low and week_52_high:
+                range_52w = f"${week_52_low:.2f} - ${week_52_high:.2f}"
+            else:
+                range_52w = "N/A"
+
             # Row HTML
             row_html = f"""
             <div style="
                 display: grid;
-                grid-template-columns: 1fr 150px 120px 120px 150px 100px;
+                grid-template-columns: 140px 130px 130px 200px 150px 1fr;
                 gap: 12px;
                 padding: 12px;
                 background: {Colors.BG_PRIMARY};
@@ -201,14 +209,14 @@ class PortfolioPage(param.Parameterized):
                 <div style="font-family: {Typography.FONT_MONO}; font-size: {Typography.TEXT_SM}; color: {change_color}; font-weight: 600;">
                     {change_symbol} {change_pct:+.2f}%
                 </div>
+                <div style="font-family: {Typography.FONT_MONO}; font-size: {Typography.TEXT_SM}; color: {Colors.TEXT_SECONDARY};">
+                    {range_52w}
+                </div>
                 <div style="font-size: {Typography.TEXT_SM}; color: {Colors.TEXT_SECONDARY};">
                     {volume_str}
                 </div>
                 <div style="font-size: {Typography.TEXT_SM}; color: {Colors.TEXT_SECONDARY};">
                     {mc_str}
-                </div>
-                <div style="display: flex; gap: 4px;">
-                    <!-- Actions handled by buttons below -->
                 </div>
             </div>
             """
