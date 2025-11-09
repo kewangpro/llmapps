@@ -43,26 +43,34 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 
 ---
 
-## Navigation Structure
+## Application Architecture
 
-### Top Navigation (Fixed Header)
+### Overall Layout Structure
 
 ```
-┌────────────────────────────────────────────────────────┐
-│ 📊 Stock Agent Pro                                     │
-│                                                        │
-│ Dashboard | Analysis | Trading | Watchlist | Models   │
-│                                                        │
-└────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│ 📊 Stock Agent Pro                        [Header]          │
+├──────────────┬──────────────────────────────────────────────┤
+│              │  Tab Navigation                              │
+│   Sidebar    │  Dashboard | Analysis | Training |           │
+│  (Watchlist) │  Live Trade | Watchlist | Models             │
+│              ├──────────────────────────────────────────────┤
+│   240px      │                                              │
+│   width      │          Main Content Area                   │
+│              │        (Active Page Content)                 │
+│              │                                              │
+└──────────────┴──────────────────────────────────────────────┘
 ```
+
+### Top Navigation (Tab Bar)
 
 **Pages:**
-1. **Dashboard** - Market overview, watchlist, quick actions
-2. **Analysis** - Stock charts, technical analysis, LSTM predictions
-3. **Trading** - RL agent training and backtesting
-4. **Live Trade** - Real-time paper trading simulation
-5. **Watchlist** - Stock tracking with multiple views
-6. **Models** - LSTM and RL model registry
+1. **📊 Dashboard** - Market overview with indices and quick actions
+2. **📈 Analysis** - Stock charts, technical analysis, LSTM predictions
+3. **🤖 Training** - RL agent training and backtesting
+4. **🔴 Live Trade** - Real-time paper trading simulation
+5. **📋 Watchlist** - Stock tracking table with real-time prices
+6. **🧠 Models** - LSTM and RL model registry
 
 ### Sidebar (Left Panel)
 
@@ -291,17 +299,32 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 **Purpose: Simple stock price tracker**
 
 **Single Table View:**
-- Compact table: Symbol, Price, Change, Volume, Market Cap
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ [Enter symbol...                    ] [+ Add to Watchlist]      │
+├──────┬──────┬────────┬────────────────┬─────────┬──────┬────────┤
+│Symbol│Price │ Change │    52W Range   │ Volume  │Market│ Remove │
+│      │      │        │                │         │ Cap  │        │
+├──────┼──────┼────────┼────────────────┼─────────┼──────┼────────┤
+│ AAPL │$268  │▲+0.48% │$150.12-$199.62 │48,227K  │$3.97T│   ×    │
+│GOOGL │$278  │▼-2.08% │$130.45-$180.25 │34,479K  │$3.37T│   ×    │
+└──────┴──────┴────────┴────────────────┴─────────┴──────┴────────┘
+```
+
+**Features:**
 - Add symbols using input field
 - Remove symbols with "×" button
 - Real-time price updates
+- Grid-based layout for perfect column alignment
 
 **Columns:**
-- Symbol
-- Current Price
-- Daily Change ($ and %)
-- Volume
-- Market Cap
+- Symbol (140px) - Stock ticker
+- Price (130px) - Current price
+- Change (130px) - Daily change ($ and %)
+- 52W Range (200px) - 52-week high/low range
+- Volume (150px) - Trading volume
+- Market Cap (flexible) - Market capitalization
+- Remove (button) - Delete from watchlist
 
 *Note: This is a price tracker only, not a portfolio manager. No position tracking (shares, cost basis, P&L). For portfolio management, use the Live Trade page.*
 
@@ -494,69 +517,27 @@ Select symbol → Load trained RL agent → Run backtest
 
 ---
 
-## File Structure
+## UI File Structure
 
 ```
-src/
-├── ui/
-│   ├── design_system.py       # Colors, HTML components, table styles
-│   ├── __init__.py            # Module exports
-│   └── pages/
-│       ├── analysis.py        # Main app, watchlist sidebar, analysis page
-│       ├── dashboard.py       # Market overview
-│       ├── trading.py         # RL training UI
-│       ├── live_trading.py    # Live paper trading simulation
-│       ├── portfolio.py       # Watchlist (stock tracker)
-│       └── models.py          # Model registry
-├── tools/
-│   ├── stock_fetcher.py       # Yahoo Finance API
-│   ├── visualizer.py          # Chart generation
-│   ├── technical_analysis.py  # Indicators (RSI, MACD, BB)
-│   └── lstm/
-│       ├── prediction_service.py  # LSTM predictions
-│       ├── model_architecture.py  # Neural network models
-│       └── data_pipeline.py       # Data preprocessing
-├── rl/
-│   ├── training.py            # RL training logic
-│   ├── backtesting.py         # Backtest engine
-│   ├── environments.py        # Trading environment
-│   ├── live_trading.py        # Live trading engine
-│   ├── session_manager.py     # Session persistence
-│   └── visualizer.py          # RL charts
-└── agents/
-    ├── query_processor.py     # AI analysis (Ollama)
-    └── hybrid_query_processor.py  # Ollama + regex fallback
+src/ui/
+├── app.py                 # Main app factory (create_app, WatchlistPanel)
+├── design_system.py       # Colors, HTML components, table styles
+├── __init__.py            # Module exports
+└── pages/
+    ├── __init__.py        # Page module exports
+    ├── analysis.py        # Analysis page (StockAnalysisApp)
+    ├── dashboard.py       # Market overview page
+    ├── trading.py         # RL training page
+    ├── live_trading.py    # Live paper trading page
+    ├── portfolio.py       # Watchlist page (stock tracker)
+    └── models.py          # Model registry page
 ```
 
----
-
-## Recent Changes
-
-### January 2025
-
-1. **Watchlist Implementation**
-   - Added live watchlist to sidebar
-   - Real-time price updates with color-coded changes
-   - 6 major stocks: AAPL, GOOGL, MSFT, TSLA, AMZN, NVDA
-
-2. **Dashboard Cleanup**
-   - Removed Featured Stocks section
-   - Simplified to Markets + Quick Actions layout
-
-3. **Analysis Page Fixes**
-   - Removed Indicators data table
-   - Fixed card layout: Trading Signal and Prediction cards now stack vertically
-   - Changed from side-by-side to full-width stacked cards
-
-4. **Models Page Enhancements**
-   - Fixed LSTM model discovery (changed from subdirectories to metadata file pattern)
-   - Added performance metrics: Final Loss, Val Loss
-   - Updated RL models to show "Run backtest →" hint instead of N/A
-
-5. **Code Organization**
-   - Consolidated UI components into pages directory
-   - All page implementations now in `src/ui/pages/`
-   - Improved project structure consistency
+**Key Files:**
+- **app.py**: Application factory that creates the main layout, tabs, sidebar
+- **design_system.py**: Shared design tokens (colors, styles, components)
+- **pages/**: Individual page implementations for each tab
 
 ---
 
@@ -621,7 +602,6 @@ src/
 
 For questions or suggestions about the UX implementation, see:
 - Design system: `src/ui/design_system.py`
-- Main app: `src/ui/pages/analysis.py`
+- Main app factory: `src/ui/app.py`
+- Analysis page: `src/ui/pages/analysis.py`
 - Page implementations: `src/ui/pages/`
-
-Last updated: November 2025

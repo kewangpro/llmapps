@@ -226,7 +226,7 @@ The live trading session is **persistent**. You can stop the application and res
 **Purpose**: Simple stock price tracker
 
 **Single Table View:**
-- Compact table with Symbol, Price, Change, Volume, Market Cap
+- Compact table with Symbol, Price, Change, 52W Range, Volume, Market Cap
 - Add symbols using the input field at the top
 - Remove symbols with the "×" button
 - Real-time price updates
@@ -234,6 +234,7 @@ The live trading session is **persistent**. You can stop the application and res
 **What it shows:**
 - Current stock prices
 - Daily price changes ($ and %)
+- 52-week high/low range
 - Trading volume
 - Market capitalization
 
