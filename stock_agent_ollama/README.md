@@ -14,7 +14,7 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 ### 📊 Professional Dashboard
 - **Market Overview** with live major indices (S&P 500, NASDAQ, Dow Jones, Russell 2000)
 - **Dynamic Watchlist** that automatically syncs with your portfolio, displaying real-time prices, daily changes, and key performance metrics for each stock.
-- **Simple Watchlist** with table view showing real-time prices, daily changes, volume, and market cap for tracked stocks.
+- **Simple Watchlist** with table view showing real-time prices, daily changes, 52-week range, volume, and market cap for tracked stocks.
 - **Quick Actions** for common tasks (Train LSTM, Backtest, Compare, Report)
 - **Light Theme** professional interface optimized for wide screens
 
@@ -157,6 +157,7 @@ stock_agent_ollama/
 │   ├── rl/             # Reinforcement Learning (training, backtesting, live trading)
 │   ├── tools/          # Data fetching, analysis, prediction (LSTM, indicators)
 │   ├── ui/             # Web interface, design system, pages
+│   │   ├── app.py      # Main application factory and layout
 │   │   ├── design_system.py  # Professional light theme
 │   │   └── pages/      # All page implementations
 │   ├── utils/          # Utility functions (caching, helpers)
@@ -182,11 +183,11 @@ stock_agent_ollama/
 
 ### User Guides
 - **[QUICK_START.md](docs/QUICK_START.md)** - Complete user guide with workflows and troubleshooting
-- **[UX.md](docs/UX.md)** - Interface design, layouts, and component specifications (Updated Nov 2025)
+- **[UX.md](docs/UX.md)** - Interface design, layouts, and component specifications
 
 ### Technical Documentation
-- **[RL_DESIGN.md](docs/RL_DESIGN.md)** - RL architecture, algorithms, and design decisions (Updated Nov 2025)
-- **[LIVE_TRADE.md](docs/LIVE_TRADE.md)** - Live trading simulation with session persistence (Updated Nov 2025)
+- **[RL_DESIGN.md](docs/RL_DESIGN.md)** - RL architecture, algorithms, and design decisions
+- **[LIVE_TRADE.md](docs/LIVE_TRADE.md)** - Live trading simulation with session persistence
 
 ---
 
