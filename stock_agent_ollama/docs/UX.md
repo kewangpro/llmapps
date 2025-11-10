@@ -279,7 +279,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 - Symbol autocomplete (AAPL, GOOGL, MSFT, TSLA, AMZN, NVDA, etc.)
 - Algorithm selection (PPO/A2C) - auto-finds latest trained model
 - Initial capital input ($10,000-$1,000,000)
-- Max position size (shares limit per trade)
+- Max position % (percentage of portfolio, 5-100%, default 40%)
 - Stop-loss percentage (1-20%)
 - Extended hours trading toggle
 - Creates timestamped session (SESSION_SYMBOL_YYYYMMDD_HHMMSS)

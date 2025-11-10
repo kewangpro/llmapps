@@ -152,7 +152,7 @@ The live trading session is **persistent**. You can stop the application and res
    - **Symbol**: Select stock (AAPL, MSFT, GOOGL, etc.)
    - **Algorithm**: Choose PPO or A2C (auto-loads trained model)
    - **Initial Capital**: Starting balance ($10,000 default)
-   - **Max Position Size**: Maximum shares per position
+   - **Max Position %**: Maximum position as % of portfolio (40% default)
    - **Stop Loss**: Automatic stop-loss percentage (5% default)
 3. Click **"▶ Start Trading"**
 4. Monitor real-time updates
