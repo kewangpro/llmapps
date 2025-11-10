@@ -770,12 +770,37 @@ class LiveTradingEngine:
 
             # Execute trade if not HOLD
             if trading_action != TradingAction.HOLD:
-                # Determine shares (simplified - could use position sizing logic)
-                if trading_action == TradingAction.BUY_LARGE:
-                    shares = min(50, self.config.max_position_size)
+                # Determine shares using same logic as training environment
+                if trading_action == TradingAction.BUY_SMALL:
+                    # Buy 10% of available cash
+                    affordable_shares = int((self.portfolio.cash * 0.1) / tick.price)
+                    current_position = self.portfolio.positions.get(self.config.symbol)
+                    current_shares = current_position.shares if current_position else 0
+                    shares = min(affordable_shares, self.config.max_position_size - current_shares)
+                elif trading_action == TradingAction.BUY_LARGE:
+                    # Buy 30% of available cash
+                    affordable_shares = int((self.portfolio.cash * 0.3) / tick.price)
+                    current_position = self.portfolio.positions.get(self.config.symbol)
+                    current_shares = current_position.shares if current_position else 0
+                    shares = min(affordable_shares, self.config.max_position_size - current_shares)
+                elif trading_action == TradingAction.SELL:
+                    # Sell all holdings
+                    current_position = self.portfolio.positions.get(self.config.symbol)
+                    shares = current_position.shares if current_position else 0
                 else:
-                    # default to BUY_SMALL sizing
-                    shares = min(10, self.config.max_position_size)
+                    shares = 0
+
+                # Skip if no shares to trade (insufficient cash or position)
+                if shares <= 0:
+                    reason = f"Insufficient cash or position for {trading_action.name}"
+                    self.session.add_event("ORDER_SKIPPED", reason)
+                    logger.info(f"{self.session.session_id} - ⚠️ Order skipped: {reason}")
+                    return {
+                        "status": "no_trade",
+                        "reason": reason,
+                        "portfolio_value": self.portfolio.total_value,
+                        "timestamp": tick.timestamp.isoformat()
+                    }
 
                 order = Order(
                     symbol=self.config.symbol,
