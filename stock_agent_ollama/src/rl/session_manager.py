@@ -137,6 +137,14 @@ class LiveSessionManager:
             engine.session.status = TradingStatus.RUNNING
             engine._is_running = True
 
+            # Add event to session log
+            if engine.session.start_time:
+                # Session was previously started, so this is a resume
+                engine.session.add_event("SESSION_RESUMED", f"Resumed trading session")
+            else:
+                # First time starting this session
+                engine.session.add_event("SESSION_START", f"Started trading session for {engine.config.symbol}")
+
             # Create shutdown event
             self._shutdown_events[session_id] = threading.Event()
 
