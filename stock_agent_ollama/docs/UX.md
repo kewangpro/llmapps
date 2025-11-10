@@ -230,66 +230,109 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 
 ### 4. Live Trade Page
 
-**Layout: Configuration + Real-time Dashboard**
+**Layout: Multi-Session Dashboard + Active Session Details**
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│ Configuration Panel                                     │
-│ Symbol: [AAPL ▼] Algorithm: [PPO ▼]                   │
-│ Initial Capital: [$10,000] Max Position: [100]         │
-│ Stop Loss: [5%]                                        │
-│ [▶ Start Trading] [⏸ Pause] [■ Stop]                  │
-└─────────────────────────────────────────────────────────┘
-┌─────────────────────────────────────────────────────────┐
-│ Trading Status           Live Trading Portfolio         │
-│ Status: ACTIVE           Total: $10,523.45  +5.23%     │
-│ Runtime: 2h 34m          Cash: $4,200.00    39.9%      │
-│ Last Update: 10:45:23    Invested: $6,323.45  60.1%    │
-└─────────────────────────────────────────────────────────┘
-┌─────────────────────────────────────────────────────────┐
-│ Current Positions                                       │
-│ AAPL: 25 shares @ $252.94 avg | Current: $254.12       │
-│ Unrealized P&L: +$29.50 (+1.18%)                       │
-└─────────────────────────────────────────────────────────┘
-┌─────────────────────────────────────────────────────────┐
-│ Recent Trades                    Event Log              │
-│ 10:43 BUY 5 @ $253.45           SESSION_START           │
-│ 10:15 SELL 3 @ $251.20          TRADE: BUY 5            │
-│ 09:52 BUY 10 @ $249.80          HOLD - No action       │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│ Create New Session                                              │
+│ Symbol: [AAPL ▼] Algorithm: [◉ PPO ○ A2C]                     │
+│ Capital: [$10,000] Max Pos: [100] Stop Loss: [5%]             │
+│ [☐ Allow Extended Hours]  [Create & Start Session]            │
+└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│ Dashboard Card (Purple Gradient Header)                         │
+│ Total Sessions: 3    Running: 1                                │
+│ Total Portfolio Value: $350,278.57                             │
+│ Aggregate P&L: $+278.57 (+0.08%)                               │
+├─────────────────────────────────────────────────────────────────┤
+│ Sessions Table                                                  │
+│ Session ID         Symbol  Model Name      Status   Actions    │
+│ SESSION_AAPL_...   AAPL    ppo_AAPL_...    running  [View][Stop]│
+│ SESSION_GOOGL_...  GOOGL   ppo_GOOGL_...   stopped  [View][Start]│
+│ SESSION_TEAM_...   TEAM    ppo_TEAM_...    stopped  [View][Start]│
+└─────────────────────────────────────────────────────────────────┘
+─────────────────────────────────────────────────────────────────
+┌─────────────────────────────────────────────────────────────────┐
+│ Active Session Details (Selected from table above)             │
+├──────────────────────────┬──────────────────────────────────────┤
+│ Session Status           │ Portfolio                            │
+│ ● RUNNING                │ Total: $100,523.45  ▲ $523.45       │
+│ Symbol: AAPL             │ Cash: $50,200.00                     │
+│ Session ID: SESSION_...  │ Trades: 12                           │
+│ Running Time: 02:34:15   │ P&L: +5.23% ($523.45)                │
+├──────────────────────────┴──────────────────────────────────────┤
+│ Positions                                                       │
+│ SYMBOL   SHARES   AVG ENTRY   CURRENT   UNREALIZED P&L         │
+│ AAPL     100      $268.49     $270.68   ▲ $218.61 (+0.81%)     │
+├─────────────────────────────────────────────────────────────────┤
+│ Recent Trades                 │ Event Log                       │
+│ TIME     ACTION   SHARES PRICE│ 09:43:42 [SESSION_START]       │
+│ 09:43:42 BUY_LARGE  50  $268  │ 09:43:42 [TRADE] BUY 50        │
+│ 09:42:42 BUY_LARGE  50  $269  │ 09:42:42 [TRADE] BUY 50        │
+│                               │ 09:44:42 [HOLD] No action      │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 **Features:**
 
-**A. Configuration Panel**
-- Symbol selection with autocomplete
-- Algorithm dropdown (PPO/A2C) - auto-loads trained model
-- Initial capital input ($10,000 default)
-- Max position size (shares limit)
-- Stop-loss percentage
+**A. Session Creation Panel**
+- Symbol autocomplete (AAPL, GOOGL, MSFT, TSLA, AMZN, NVDA, etc.)
+- Algorithm selection (PPO/A2C) - auto-finds latest trained model
+- Initial capital input ($10,000-$1,000,000)
+- Max position size (shares limit per trade)
+- Stop-loss percentage (1-20%)
+- Extended hours trading toggle
+- Creates timestamped session (SESSION_SYMBOL_YYYYMMDD_HHMMSS)
 
-**B. Trading Dashboard** (shown when active)
-- Trading Status: Status, runtime, last update
-- Live Trading Portfolio: Total value, cash, invested, P&L
-- Current Positions: Holdings with unrealized P&L
-- Recent Trades: Trade history with agent decisions
-- Event Log: System events and notifications
+**B. Dashboard Card** (Multi-Session Overview)
+- **Aggregate Metrics** (purple gradient header):
+  - Total Sessions count
+  - Running Sessions count
+  - Combined portfolio value across all sessions
+  - Aggregate P&L (sum of all sessions)
+- **Sessions Table**:
+  - Session ID, Symbol, Model name
+  - Status (running/stopped/paused)
+  - View/Start/Stop buttons per session
+- **Updates every 5 seconds** with live prices
+- **Smart updates** on button clicks (no page refresh/scroll)
 
-**C. Controls**
-- Start Trading: Begin live session
-- Pause: Suspend trading (keep positions)
-- Stop: End session and clear results
+**C. Active Session Details** (Below Dashboard)
+- **Session Status Card**: Status, symbol, runtime, session ID
+- **Portfolio Card**: Total value, cash, trades count, P&L with live updates
+- **Positions Table**: Current holdings with real-time prices and unrealized P&L
+- **Recent Trades**: Last 10 trades with timestamps, actions, prices, P&L
+- **Event Log**: Last 15 events (SESSION_START, TRADE, HOLD, ORDER_REJECTED, SESSION_END)
 
-**D. Risk Management**
+**D. Real-Time Updates**
+- Position prices update every 5 seconds with current market data
+- Portfolio value recalculates automatically
+- Dashboard metrics refresh across all sessions
+- No page flickering or scroll jumps on updates
+- Smooth in-place card updates
+
+**E. Session Management**
+- **Create**: New sessions with timestamped IDs
+- **View**: Switch between sessions (updates details section only)
+- **Start**: Resume stopped sessions (adds SESSION_RESUMED event)
+- **Stop**: Halt active sessions (adds SESSION_END event)
+- **Persistence**: Sessions auto-save every 60 seconds to JSON files
+- **Resume**: Reload sessions after app restart
+
+**F. Risk Management**
 - Auto stop-loss on positions
-- Position size limits
-- Circuit breakers
-- Market hours enforcement
+- Max position size enforcement
+- Daily loss circuit breaker (10% max)
+- Max portfolio risk per trade (2%)
+- Market hours enforcement (optional)
+- Order validation before execution
 
 **Important:**
 - Paper trading only (no real money)
 - Real-time Yahoo Finance data
 - 60-second trading cycles
+- Multi-session support (run multiple strategies)
+- Session persistence across app restarts
 - Educational purpose only
 
 ---
