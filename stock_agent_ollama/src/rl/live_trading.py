@@ -201,7 +201,7 @@ class LiveTradingConfig:
     symbol: str
     agent_path: str
     initial_capital: float = 10000.0
-    max_position_size: int = 100
+    max_position_size: float = 40.0  # Max position as % of portfolio value (e.g., 40 = 40%)
     max_portfolio_risk_pct: float = 2.0  # Max 2% portfolio risk per trade
     stop_loss_pct: float = 5.0  # 5% stop loss
     max_daily_loss_pct: float = 10.0  # 10% max daily loss (circuit breaker)
@@ -462,12 +462,25 @@ class RiskManager:
 
     def validate_order(self, order: Order, portfolio: Portfolio) -> RiskStatus:
         """Validate order against risk limits"""
-        # Check position size limit
+        # Check position size limit (as % of portfolio value)
         if order.action in (TradingAction.BUY_SMALL, TradingAction.BUY_LARGE):
-            if order.shares > self.config.max_position_size:
+            # Calculate max shares allowed based on portfolio value percentage
+            max_position_value = portfolio.total_value * (self.config.max_position_size / 100.0)
+            max_shares = int(max_position_value / order.price)
+
+            # Get current position
+            current_position = portfolio.positions.get(order.symbol)
+            current_shares = current_position.shares if current_position else 0
+
+            # Check if adding these shares would exceed limit
+            total_shares_after = current_shares + order.shares
+            total_value_after = total_shares_after * order.price
+            position_pct = (total_value_after / portfolio.total_value) * 100
+
+            if position_pct > self.config.max_position_size:
                 return RiskStatus(
                     approved=False,
-                    reason=f"Order size {order.shares} exceeds max position size {self.config.max_position_size}"
+                    reason=f"Position would be {position_pct:.1f}% of portfolio, max is {self.config.max_position_size:.1f}%"
                 )
 
             # Check if enough cash
@@ -771,18 +784,34 @@ class LiveTradingEngine:
             # Execute trade if not HOLD
             if trading_action != TradingAction.HOLD:
                 # Determine shares using same logic as training environment
+                affordable_shares = 0
+                current_shares = 0
+
                 if trading_action == TradingAction.BUY_SMALL:
                     # Buy 10% of available cash
                     affordable_shares = int((self.portfolio.cash * 0.1) / tick.price)
                     current_position = self.portfolio.positions.get(self.config.symbol)
                     current_shares = current_position.shares if current_position else 0
-                    shares = min(affordable_shares, self.config.max_position_size - current_shares)
+
+                    # Calculate max shares based on portfolio percentage limit
+                    max_position_value = self.portfolio.total_value * (self.config.max_position_size / 100.0)
+                    max_shares_by_limit = int(max_position_value / tick.price)
+                    remaining_shares = max(0, max_shares_by_limit - current_shares)
+
+                    shares = min(affordable_shares, remaining_shares)
+
                 elif trading_action == TradingAction.BUY_LARGE:
                     # Buy 30% of available cash
                     affordable_shares = int((self.portfolio.cash * 0.3) / tick.price)
                     current_position = self.portfolio.positions.get(self.config.symbol)
                     current_shares = current_position.shares if current_position else 0
-                    shares = min(affordable_shares, self.config.max_position_size - current_shares)
+
+                    # Calculate max shares based on portfolio percentage limit
+                    max_position_value = self.portfolio.total_value * (self.config.max_position_size / 100.0)
+                    max_shares_by_limit = int(max_position_value / tick.price)
+                    remaining_shares = max(0, max_shares_by_limit - current_shares)
+
+                    shares = min(affordable_shares, remaining_shares)
                 elif trading_action == TradingAction.SELL:
                     # Sell all holdings
                     current_position = self.portfolio.positions.get(self.config.symbol)
@@ -790,9 +819,23 @@ class LiveTradingEngine:
                 else:
                     shares = 0
 
-                # Skip if no shares to trade (insufficient cash or position)
+                # Skip if no shares to trade with specific reason
                 if shares <= 0:
-                    reason = f"Insufficient cash or position for {trading_action.name}"
+                    # Determine specific reason for skip
+                    if trading_action == TradingAction.SELL:
+                        reason = f"No position to sell (holdings: 0 shares)"
+                    elif trading_action in (TradingAction.BUY_SMALL, TradingAction.BUY_LARGE):
+                        if affordable_shares == 0:
+                            required_cash = tick.price if trading_action == TradingAction.BUY_SMALL else tick.price * 3
+                            reason = f"Insufficient cash: Need ${required_cash:.2f} for 1 share, have ${self.portfolio.cash:.2f}"
+                        else:
+                            # Calculate current position percentage
+                            current_position_value = current_shares * tick.price
+                            current_position_pct = (current_position_value / self.portfolio.total_value) * 100
+                            reason = f"Max position size reached: {current_position_pct:.1f}% of portfolio (limit: {self.config.max_position_size:.1f}%)"
+                    else:
+                        reason = f"No shares to trade for {trading_action.name}"
+
                     self.session.add_event("ORDER_SKIPPED", reason)
                     logger.info(f"{self.session.session_id} - ⚠️ Order skipped: {reason}")
                     return {
