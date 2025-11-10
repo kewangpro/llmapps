@@ -41,6 +41,18 @@ class LiveTradingPage(pn.viewable.Viewer):
         pn.state.onload(lambda: self._refresh_view())
         pn.state.location.param.watch(self._on_location_change, 'search')
 
+        # Register cleanup on session destroy
+        pn.state.on_session_destroyed(self._cleanup)
+
+    def _cleanup(self, session_context):
+        """Cleanup resources when the page is destroyed"""
+        if self.update_callback:
+            try:
+                pn.state.remove_periodic_callback(self.update_callback)
+                logger.info("Stopped periodic callback for live trading page")
+            except Exception as e:
+                logger.error(f"Error stopping periodic callback: {e}")
+
     def _on_location_change(self, *events):
         """Handle URL query parameter changes."""
         session_id = pn.state.location.query_params.get('session_id')
@@ -109,6 +121,14 @@ class LiveTradingPage(pn.viewable.Viewer):
 
         # Content area (will be populated based on view mode)
         self.content_area = pn.Column(sizing_mode="stretch_width")
+
+        # Store references to updateable components
+        self.status_card_pane = None
+        self.portfolio_card_pane = None
+        self.positions_card_pane = None
+        self.trades_card_pane = None
+        self.events_card_pane = None
+        self.dashboard_card_pane = None
 
         # Start periodic refresh for real-time updates (but don't clear and rebuild everything)
         self.update_callback = pn.state.add_periodic_callback(
@@ -278,7 +298,8 @@ class LiveTradingPage(pn.viewable.Viewer):
     def _select_session(self, session_id: str):
         """Select a session to view its details"""
         self.session_manager.set_active_session(session_id)
-        self._refresh_view()
+        # Only update session details, don't rebuild dashboard
+        self._update_session_details_only()
 
     def _start_session(self, session_id: str):
         """Handle start session"""
@@ -287,24 +308,88 @@ class LiveTradingPage(pn.viewable.Viewer):
             if success:
                 pn.state.notifications.success(f"Started session", duration=2000)
                 self.session_manager.set_active_session(session_id)
+                # Smart update: only refresh dashboard and session details
+                self._update_dashboard_and_session()
             else:
                 pn.state.notifications.error(f"Failed to start session", duration=3000)
         except Exception as e:
             logger.error(f"Error in start session {session_id}: {e}")
             pn.state.notifications.error(f"Error: {str(e)}", duration=3000)
 
-        self._refresh_view()
-
     def _stop_session(self, session_id: str):
         """Handle stop session"""
         self.session_manager.stop_session(session_id)
         pn.state.notifications.warning(f"Stopped session", duration=2000)
-        self._refresh_view()
+        # Smart update: only refresh dashboard and session details
+        self._update_dashboard_and_session()
+
+    def _update_dashboard_and_session(self):
+        """Update dashboard table and session details without full page refresh"""
+        # Update dashboard card (includes table with updated status/buttons)
+        if self.dashboard_card_pane:
+            metrics = self.session_manager.get_aggregate_metrics()
+            summaries = self.session_manager.get_session_summary()
+            new_dashboard = self._create_dashboard_card(metrics, summaries)
+
+            # Replace dashboard card in place
+            self.dashboard_card_pane.objects = new_dashboard.objects
+
+        # Update session details in place
+        self._update_session_details_only()
+
+    def _update_session_details_only(self):
+        """Update only the session details section, keeping dashboard unchanged"""
+        active_session = self.session_manager.get_active_session()
+
+        # If we don't have card references yet, need to do initial render
+        if not self.status_card_pane:
+            # Remove old session details if they exist
+            if len(self.content_area.objects) > 2:
+                self.content_area.objects = self.content_area.objects[:2]
+            # Render session details for first time
+            self._render_single_session_view()
+            return
+
+        # Update existing cards in place (no DOM removal/re-add, no scroll)
+        if not active_session:
+            # Clear card references
+            self.status_card_pane = None
+            self.portfolio_card_pane = None
+            self.positions_card_pane = None
+            self.trades_card_pane = None
+            self.events_card_pane = None
+            # Remove session details, show "No Active Session"
+            if len(self.content_area.objects) > 2:
+                self.content_area.objects = self.content_area.objects[:2]
+            self._render_single_session_view()
+            return
+
+        # Update each card in place without removing them from DOM
+        try:
+            self.status_card_pane.object = self._create_status_card(active_session).object
+            self.portfolio_card_pane.object = self._create_portfolio_card(active_session).object
+            self.positions_card_pane.object = self._create_positions_card(active_session).object
+            self.trades_card_pane.object = self._create_trades_card(active_session).object
+            self.events_card_pane.object = self._create_events_card(active_session).object
+        except Exception as e:
+            logger.error(f"Error updating session details: {e}")
+            # Fallback to full re-render if update fails
+            if len(self.content_area.objects) > 2:
+                self.content_area.objects = self.content_area.objects[:2]
+            self._render_single_session_view()
 
     def _refresh_view(self, *events):
         """Update view to show dashboard and single session view"""
         # Clear and refresh content
         self.content_area.clear()
+
+        # Clear all card references since we're doing a full rebuild
+        self.dashboard_card_pane = None
+        self.status_card_pane = None
+        self.portfolio_card_pane = None
+        self.positions_card_pane = None
+        self.trades_card_pane = None
+        self.events_card_pane = None
 
         # Render dashboard view first
         self._render_dashboard_view()
@@ -317,13 +402,61 @@ class LiveTradingPage(pn.viewable.Viewer):
 
     def _update_session_data(self, *events):
         """Update session data without full re-render to prevent flickering"""
-        # Only update if we have content to update
-        if not self.content_area.objects:
+        # Update dashboard metrics if dashboard is rendered
+        if self.dashboard_card_pane:
+            try:
+                metrics = self.session_manager.get_aggregate_metrics()
+                summaries = self.session_manager.get_session_summary()
+
+                # Update just the header HTML (aggregate metrics)
+                total_pnl = metrics['total_pnl']
+                header_html = f"""
+                <div style='padding: 16px; background: linear-gradient(135deg, {Colors.ACCENT_PURPLE} 0%, {Colors.ACCENT_CYAN} 100%); border-radius: 12px 12px 0 0; color: white; font-family: {Typography.FONT_PRIMARY};'>
+                    <div style='display: grid; grid-template-columns: 0.5fr 0.5fr 1.5fr 1.5fr; gap: 10px;'>
+                        <div>
+                            <div style='opacity: 0.9; font-size: {Typography.TEXT_SM};'>Total Sessions</div>
+                            <div style='font-size: {Typography.TEXT_2XL}; font-weight: 600; margin-top: 4px;'>{metrics['total_sessions']}</div>
+                        </div>
+                        <div>
+                            <div style='opacity: 0.9; font-size: {Typography.TEXT_SM};'>Running</div>
+                            <div style='font-size: {Typography.TEXT_2XL}; font-weight: 600; margin-top: 4px;'>{metrics['running_sessions']}</div>
+                        </div>
+                        <div>
+                            <div style='opacity: 0.9; font-size: {Typography.TEXT_SM};'>Total Portfolio Value</div>
+                            <div style='font-size: {Typography.TEXT_2XL}; font-weight: 600; margin-top: 4px; font-family: {Typography.FONT_MONO};'>${metrics['total_portfolio_value']:,.2f}</div>
+                        </div>
+                        <div>
+                            <div style='opacity: 0.9; font-size: {Typography.TEXT_SM};'>Aggregate P&L</div>
+                            <div style='font-size: {Typography.TEXT_2XL}; font-weight: 600; margin-top: 4px; font-family: {Typography.FONT_MONO};'>${total_pnl:+,.2f} ({metrics['total_pnl_pct']:+.2f}%)</div>
+                        </div>
+                    </div>
+                </div>
+                """
+
+                # Update the first object in the dashboard card (the header)
+                if hasattr(self.dashboard_card_pane, 'objects') and len(self.dashboard_card_pane.objects) > 0:
+                    self.dashboard_card_pane.objects[0].object = header_html
+            except Exception as e:
+                logger.error(f"Error updating dashboard metrics: {e}")
+
+        # Only update session details if we have an active session
+        active_session = self.session_manager.get_active_session()
+        if not active_session:
             return
 
-        # For now, just update the view (we can optimize this later to update specific components)
-        # But don't trigger it on every callback - that causes the reload issue
-        pass
+        # Only update if we have card references (meaning single session view is rendered)
+        if not self.status_card_pane:
+            return
+
+        # Update individual cards in place without rebuilding everything
+        try:
+            self.status_card_pane.object = self._create_status_card(active_session).object
+            self.portfolio_card_pane.object = self._create_portfolio_card(active_session).object
+            self.positions_card_pane.object = self._create_positions_card(active_session).object
+            self.trades_card_pane.object = self._create_trades_card(active_session).object
+            self.events_card_pane.object = self._create_events_card(active_session).object
+        except Exception as e:
+            logger.error(f"Error updating session data: {e}")
 
     # ========================================================================
     # Single Session View
@@ -334,7 +467,13 @@ class LiveTradingPage(pn.viewable.Viewer):
         active_session = self.session_manager.get_active_session()
 
         if not active_session:
-            # No active session
+            # No active session - clear card references (but keep dashboard reference)
+            self.status_card_pane = None
+            self.portfolio_card_pane = None
+            self.positions_card_pane = None
+            self.trades_card_pane = None
+            self.events_card_pane = None
+
             self.content_area.append(
                 pn.Column(
                     HTMLComponents.info_message(
@@ -350,25 +489,17 @@ class LiveTradingPage(pn.viewable.Viewer):
         session = active_session.session
         portfolio = active_session.portfolio
 
-        # Status card
-        status_card = self._create_status_card(active_session)
-
-        # Portfolio summary card
-        portfolio_card = self._create_portfolio_card(active_session)
-
-        # Positions table
-        positions_card = self._create_positions_card(active_session)
-
-        # Trades history
-        trades_card = self._create_trades_card(active_session)
-
-        # Event log
-        events_card = self._create_events_card(active_session)
+        # Create cards and store references for later updates
+        self.status_card_pane = self._create_status_card(active_session)
+        self.portfolio_card_pane = self._create_portfolio_card(active_session)
+        self.positions_card_pane = self._create_positions_card(active_session)
+        self.trades_card_pane = self._create_trades_card(active_session)
+        self.events_card_pane = self._create_events_card(active_session)
 
         self.content_area.extend([
-            pn.Row(status_card, portfolio_card, sizing_mode="stretch_width"),
-            positions_card,
-            pn.Row(trades_card, events_card, sizing_mode="stretch_width")
+            pn.Row(self.status_card_pane, self.portfolio_card_pane, sizing_mode="stretch_width"),
+            self.positions_card_pane,
+            pn.Row(self.trades_card_pane, self.events_card_pane, sizing_mode="stretch_width")
         ])
 
     def _create_status_card(self, engine: LiveTradingEngine) -> pn.pane.HTML:
@@ -425,6 +556,14 @@ class LiveTradingPage(pn.viewable.Viewer):
 
     def _create_portfolio_card(self, engine: LiveTradingEngine) -> pn.pane.HTML:
         """Create portfolio summary card"""
+        # Update position prices with latest market data before rendering
+        if engine.portfolio.positions:
+            try:
+                latest_tick = engine.market_stream.get_latest_tick()
+                engine.portfolio.update_valuations(latest_tick)
+            except Exception as e:
+                logger.warning(f"Failed to update portfolio valuations: {e}")
+
         portfolio = engine.portfolio
         pnl_color = Colors.SUCCESS_GREEN if portfolio.total_pnl >= 0 else Colors.DANGER_RED
         pnl_symbol = "▲" if portfolio.total_pnl >= 0 else "▼"
@@ -465,6 +604,14 @@ class LiveTradingPage(pn.viewable.Viewer):
 
     def _create_positions_card(self, engine: LiveTradingEngine) -> pn.pane.HTML:
         """Create positions table card"""
+        # Update position prices with latest market data before rendering
+        if engine.portfolio.positions:
+            try:
+                latest_tick = engine.market_stream.get_latest_tick()
+                engine.portfolio.update_valuations(latest_tick)
+            except Exception as e:
+                logger.warning(f"Failed to update position valuations: {e}")
+
         if not engine.portfolio.positions:
             html = f"""
             <div style='background: {Colors.BG_SECONDARY}; padding: 20px; border-radius: 8px;'>
@@ -623,11 +770,11 @@ class LiveTradingPage(pn.viewable.Viewer):
         metrics = self.session_manager.get_aggregate_metrics()
         summaries = self.session_manager.get_session_summary()
 
-        # Create the combined dashboard card
-        dashboard_card = self._create_dashboard_card(metrics, summaries)
+        # Create the combined dashboard card and store reference for updates
+        self.dashboard_card_pane = self._create_dashboard_card(metrics, summaries)
 
         self.content_area.extend([
-            dashboard_card
+            self.dashboard_card_pane
         ])
 
     def _create_dashboard_card(self, metrics: Dict, summaries: List[Dict]) -> pn.Column:
