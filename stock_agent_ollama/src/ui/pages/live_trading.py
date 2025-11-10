@@ -164,11 +164,11 @@ class LiveTradingPage(pn.viewable.Viewer):
             width=120
         )
 
-        self.max_position_input = pn.widgets.IntInput(
-            value=100,
-            start=1,
-            end=1000,
-            step=10,
+        self.max_position_input = pn.widgets.FloatInput(
+            value=40.0,
+            start=5.0,
+            end=100.0,
+            step=5.0,
             width=120
         )
 
@@ -215,7 +215,7 @@ class LiveTradingPage(pn.viewable.Viewer):
                     self.capital_input,
                 ),
                 pn.Column(
-                    pn.pane.HTML("<div style='font-size: 12px; color: #6b7280; margin-bottom: 5px; font-weight: 500;'>Max Position</div>"),
+                    pn.pane.HTML("<div style='font-size: 12px; color: #6b7280; margin-bottom: 5px; font-weight: 500;'>Max Position %</div>"),
                     self.max_position_input,
                 ),
                 pn.Column(
