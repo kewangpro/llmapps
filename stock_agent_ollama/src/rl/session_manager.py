@@ -142,7 +142,8 @@ class LiveSessionManager:
                 # Session was previously started, so this is a resume
                 engine.session.add_event("SESSION_RESUMED", f"Resumed trading session")
             else:
-                # First time starting this session
+                # First time starting this session - set start_time
+                engine.session.start_time = datetime.now()
                 engine.session.add_event("SESSION_START", f"Started trading session for {engine.config.symbol}")
 
             # Create shutdown event
