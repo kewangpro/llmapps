@@ -781,7 +781,6 @@ class LiveTradingPage(pn.viewable.Viewer):
         """Create a single card containing aggregate metrics and the sessions table."""
         # Aggregate metrics header
         total_pnl = metrics['total_pnl']
-        pnl_color = Colors.SUCCESS_GREEN if total_pnl >= 0 else Colors.DANGER_RED
         header_html = f"""
         <div style='padding: 16px; background: linear-gradient(135deg, {Colors.ACCENT_PURPLE} 0%, {Colors.ACCENT_CYAN} 100%); border-radius: 12px 12px 0 0; color: white; font-family: {Typography.FONT_PRIMARY};'>
             <div style='display: grid; grid-template-columns: 0.5fr 0.5fr 1.5fr 1.5fr; gap: 10px;'>
