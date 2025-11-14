@@ -386,10 +386,12 @@ class RLVisualizer:
             Plotly figure
         """
         action_names = {
-            0: 'SELL',
-            1: 'HOLD',
-            2: 'BUY_SMALL',
-            3: 'BUY_LARGE'
+            0: 'HOLD',
+            1: 'BUY_SMALL',
+            2: 'BUY_MEDIUM',
+            3: 'BUY_LARGE',
+            4: 'SELL_PARTIAL',
+            5: 'SELL_ALL'
         }
 
         # Count actions
@@ -430,17 +432,21 @@ class RLVisualizer:
             Plotly figure
         """
         action_names = {
-            0: 'SELL',
-            1: 'HOLD',
-            2: 'BUY_SMALL',
-            3: 'BUY_LARGE'
+            0: 'HOLD',
+            1: 'BUY_SMALL',
+            2: 'BUY_MEDIUM',
+            3: 'BUY_LARGE',
+            4: 'SELL_PARTIAL',
+            5: 'SELL_ALL'
         }
 
         action_colors = {
-            0: 'red',      # SELL
-            1: 'gray',     # HOLD
-            2: 'lightblue', # BUY_SMALL
-            3: 'blue'      # BUY_LARGE
+            0: '#9ca3af',    # HOLD - Gray
+            1: '#10b981',    # BUY_SMALL - Green
+            2: '#059669',    # BUY_MEDIUM - Darker green
+            3: '#047857',    # BUY_LARGE - Darkest green
+            4: '#f59e0b',    # SELL_PARTIAL - Orange
+            5: '#ef4444'     # SELL_ALL - Red
         }
 
         fig = go.Figure()
@@ -510,18 +516,23 @@ class RLVisualizer:
         Returns:
             Plotly figure
         """
+        # Support both 4-action and 6-action spaces
         action_names = {
-            0: 'SELL',
-            1: 'HOLD',
-            2: 'BUY_SMALL',
-            3: 'BUY_LARGE'
+            0: 'HOLD',
+            1: 'BUY_SMALL',
+            2: 'BUY_MEDIUM',
+            3: 'BUY_LARGE',
+            4: 'SELL_PARTIAL',
+            5: 'SELL_ALL'
         }
 
         action_colors = {
-            'SELL': '#ef4444',      # Red
-            'HOLD': '#9ca3af',      # Gray
-            'BUY_SMALL': '#10b981', # Green
-            'BUY_LARGE': '#059669'  # Darker green
+            'HOLD': '#9ca3af',       # Gray
+            'BUY_SMALL': '#10b981',  # Green
+            'BUY_MEDIUM': '#059669', # Darker green
+            'BUY_LARGE': '#047857',  # Darkest green
+            'SELL_PARTIAL': '#f59e0b', # Orange
+            'SELL_ALL': '#ef4444'    # Red
         }
 
         strategy_names = list(results.keys())
@@ -550,17 +561,18 @@ class RLVisualizer:
 
         fig = go.Figure()
 
-        # Add bars for each action type
-        for action_name in ['SELL', 'HOLD', 'BUY_SMALL', 'BUY_LARGE']:
-            fig.add_trace(go.Bar(
-                name=action_name,
-                x=strategy_names,
-                y=action_data[action_name],
-                marker_color=action_colors[action_name],
-                text=[f'{v:.1f}%' for v in action_data[action_name]],
-                textposition='inside',
-                hovertemplate=f'{action_name}: %{{y:.1f}}%<extra></extra>'
-            ))
+        # Add bars for each action type (in logical order)
+        for action_name in ['HOLD', 'BUY_SMALL', 'BUY_MEDIUM', 'BUY_LARGE', 'SELL_PARTIAL', 'SELL_ALL']:
+            if action_name in action_data and any(v > 0 for v in action_data[action_name]):
+                fig.add_trace(go.Bar(
+                    name=action_name,
+                    x=strategy_names,
+                    y=action_data[action_name],
+                    marker_color=action_colors[action_name],
+                    text=[f'{v:.1f}%' for v in action_data[action_name]],
+                    textposition='inside',
+                    hovertemplate=f'{action_name}: %{{y:.1f}}%<extra></extra>'
+                ))
 
         fig.update_layout(
             title=title,
@@ -630,7 +642,10 @@ class RLVisualizer:
         )
 
         # 2. Action Distribution
-        action_names = {0: 'SELL', 1: 'HOLD', 2: 'BUY_SMALL', 3: 'BUY_LARGE'}
+        action_names = {
+            0: 'HOLD', 1: 'BUY_SMALL', 2: 'BUY_MEDIUM',
+            3: 'BUY_LARGE', 4: 'SELL_PARTIAL', 5: 'SELL_ALL'
+        }
         action_counts = {}
         for action in result.actions:
             name = action_names.get(action, f'Action {action}')

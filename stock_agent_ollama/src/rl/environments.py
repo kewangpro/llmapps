@@ -1,7 +1,8 @@
 """
 Trading environments for reinforcement learning.
 
-This module contains base trading environment classes and single stock trading implementation.
+This module contains base trading environment classes, single stock trading implementation,
+and enhanced trading environment with action masking and improvements.
 """
 
 import gymnasium as gym
@@ -10,9 +11,12 @@ import pandas as pd
 from typing import Dict, Tuple, Optional, Any
 from abc import ABC, abstractmethod
 from enum import IntEnum
+import logging
 
 from ..tools.stock_fetcher import StockFetcher
 from ..tools.technical_analysis import TechnicalAnalysis
+
+logger = logging.getLogger(__name__)
 
 
 class TradingAction(IntEnum):
@@ -347,7 +351,7 @@ class SingleStockTradingEnv(BaseTradingEnv):
 
         # Reward function - import here to avoid circular dependency
         if reward_function is None:
-            from .training import get_reward_function
+            from .rewards import get_reward_function
             self.reward_function = get_reward_function("risk_adjusted")
         else:
             self.reward_function = reward_function
@@ -618,3 +622,380 @@ class SingleStockTradingEnv(BaseTradingEnv):
         self.reward_function.reset()
 
         return observation, info
+
+
+# ==============================================================================
+# ENHANCED TRADING ENVIRONMENT
+# ==============================================================================
+
+# Import improvements components (after other definitions to avoid circular imports)
+from .improvements import (
+    ActionMasker,
+    EnhancedRewardFunction,
+    EnhancedRewardConfig,
+    AdaptiveActionSizer,
+    CurriculumManager,
+    TrainingDiagnostics,
+    ImprovedTradingAction
+)
+
+
+class EnhancedTradingEnv(SingleStockTradingEnv):
+    """
+    Enhanced single stock trading environment with:
+    - Action masking to prevent invalid actions
+    - Enhanced reward shaping
+    - Adaptive action sizing
+    - Curriculum learning support
+    - Better observation space
+    """
+
+    def __init__(
+        self,
+        symbol: str,
+        start_date: str,
+        end_date: str,
+        initial_balance: float = 10000.0,
+        transaction_cost_rate: float = 0.001,
+        slippage_rate: float = 0.0,
+        max_position_size: int = 1000,
+        max_position_pct: float = 40.0,
+        lookback_window: int = 60,
+        include_technical_indicators: bool = True,
+        # Enhancement parameters
+        use_action_masking: bool = True,
+        use_enhanced_rewards: bool = True,
+        use_adaptive_sizing: bool = True,
+        use_improved_actions: bool = True,
+        reward_config: Optional[EnhancedRewardConfig] = None,
+        curriculum_manager: Optional[CurriculumManager] = None,
+        enable_diagnostics: bool = True,
+        **kwargs
+    ):
+        """
+        Initialize enhanced trading environment.
+
+        Args:
+            symbol: Stock ticker
+            start_date: Start date (YYYY-MM-DD)
+            end_date: End date (YYYY-MM-DD)
+            initial_balance: Starting cash
+            transaction_cost_rate: Transaction cost fraction
+            slippage_rate: Slippage fraction
+            max_position_size: Max shares to hold
+            max_position_pct: Max position as % of portfolio value
+            lookback_window: Historical window size
+            include_technical_indicators: Include technical indicators
+            use_action_masking: Enable action masking
+            use_enhanced_rewards: Use enhanced reward function
+            use_adaptive_sizing: Use adaptive position sizing
+            use_improved_actions: Use improved action space (6 actions)
+            reward_config: Custom reward configuration
+            curriculum_manager: Curriculum learning manager
+            enable_diagnostics: Enable training diagnostics
+        """
+        # Store enhancement flags
+        self.use_action_masking = use_action_masking
+        self.use_enhanced_rewards = use_enhanced_rewards
+        self.use_adaptive_sizing = use_adaptive_sizing
+        self.use_improved_actions = use_improved_actions
+        self.max_position_pct = max_position_pct
+        self.enable_diagnostics = enable_diagnostics
+
+        # Initialize components BEFORE super().__init__
+        self.action_masker = ActionMasker(use_improved_actions) if use_action_masking else None
+
+        if use_enhanced_rewards:
+            self.enhanced_reward_fn = EnhancedRewardFunction(
+                config=reward_config or EnhancedRewardConfig(),
+                action_masker=self.action_masker,
+                use_improved_actions=use_improved_actions
+            )
+        else:
+            self.enhanced_reward_fn = None
+
+        self.adaptive_sizer = AdaptiveActionSizer() if use_adaptive_sizing else None
+        self.curriculum_manager = curriculum_manager
+
+        # Diagnostics
+        n_actions = len(ImprovedTradingAction) if use_improved_actions else len(TradingAction)
+        self.diagnostics = TrainingDiagnostics(n_actions) if enable_diagnostics else None
+
+        # Initialize parent class WITHOUT reward_function
+        # We'll override _calculate_reward instead
+        super().__init__(
+            symbol=symbol,
+            start_date=start_date,
+            end_date=end_date,
+            initial_balance=initial_balance,
+            transaction_cost_rate=transaction_cost_rate,
+            slippage_rate=slippage_rate,
+            max_position_size=max_position_size,
+            reward_function=None,  # We'll handle this ourselves
+            lookback_window=lookback_window,
+            include_technical_indicators=include_technical_indicators
+        )
+
+        # Override action space if using improved actions
+        if use_improved_actions:
+            self.action_space = gym.spaces.Discrete(len(ImprovedTradingAction))
+
+        # Track volatility for adaptive sizing
+        self._recent_volatility = 0.02
+
+    def _execute_action(self, action: int, current_price: float) -> Dict[str, float]:
+        """
+        Execute trading action with enhancements.
+
+        Overrides parent to use adaptive sizing.
+        """
+        shares_to_trade = 0
+        trade_cost = 0.0
+        slippage_cost = 0.0
+
+        # Use adaptive sizing if enabled
+        if self.use_adaptive_sizing and self.adaptive_sizer:
+            if self.use_improved_actions:
+                # Improved action space
+                if action in [1, 2, 3]:  # BUY actions
+                    shares_to_trade = self.adaptive_sizer.get_buy_size(
+                        action=action,
+                        cash=self.cash,
+                        price=current_price,
+                        position=self.position,
+                        portfolio_value=self._calculate_portfolio_value(current_price),
+                        max_position_pct=self.max_position_pct,
+                        volatility=self._recent_volatility,
+                        use_improved_actions=True
+                    )
+                elif action in [4, 5]:  # SELL actions
+                    shares_to_trade = -self.adaptive_sizer.get_sell_size(
+                        action=action,
+                        position=self.position,
+                        use_improved_actions=True
+                    )
+                # action == 0 is HOLD, shares_to_trade = 0
+            else:
+                # Standard action space
+                if action == TradingAction.SELL:
+                    if self.position > 0:
+                        shares_to_trade = -self.position
+                elif action == TradingAction.BUY_SMALL:
+                    shares_to_trade = self.adaptive_sizer.get_buy_size(
+                        action=action,
+                        cash=self.cash,
+                        price=current_price,
+                        position=self.position,
+                        portfolio_value=self._calculate_portfolio_value(current_price),
+                        max_position_pct=self.max_position_pct,
+                        volatility=self._recent_volatility,
+                        use_improved_actions=False
+                    )
+                elif action == TradingAction.BUY_LARGE:
+                    shares_to_trade = self.adaptive_sizer.get_buy_size(
+                        action=action,
+                        cash=self.cash,
+                        price=current_price,
+                        position=self.position,
+                        portfolio_value=self._calculate_portfolio_value(current_price),
+                        max_position_pct=self.max_position_pct,
+                        volatility=self._recent_volatility,
+                        use_improved_actions=False
+                    )
+        else:
+            # Use parent class logic
+            return super()._execute_action(action, current_price)
+
+        # Execute trade (same as parent)
+        if shares_to_trade != 0:
+            trade_value = abs(shares_to_trade) * current_price
+            trade_cost = trade_value * self.transaction_cost_rate
+            slippage_cost = trade_value * self.slippage_rate
+            total_cost = trade_cost + slippage_cost
+
+            if shares_to_trade > 0:  # Buying
+                total_required = trade_value + total_cost
+                if total_required <= self.cash:
+                    self.cash -= total_required
+                    self.position += shares_to_trade
+                    self.trades.append({
+                        'step': self.current_step,
+                        'action': 'BUY',
+                        'shares': shares_to_trade,
+                        'price': current_price,
+                        'cost': total_cost
+                    })
+                else:
+                    shares_to_trade = 0  # Can't afford
+            else:  # Selling
+                proceeds = trade_value - total_cost
+                self.cash += proceeds
+                self.position += shares_to_trade  # negative
+                self.trades.append({
+                    'step': self.current_step,
+                    'action': 'SELL',
+                    'shares': abs(shares_to_trade),
+                    'price': current_price,
+                    'cost': total_cost
+                })
+
+        return {
+            'shares_traded': shares_to_trade,
+            'trade_cost': trade_cost,
+            'slippage_cost': slippage_cost,
+            'total_cost': trade_cost + slippage_cost
+        }
+
+    def _calculate_reward(
+        self,
+        action: int,
+        current_price: float,
+        prev_price: float,
+        trade_info: Dict[str, float]
+    ) -> float:
+        """
+        Calculate reward using enhanced function if enabled.
+
+        Overrides parent method.
+        """
+        current_portfolio_value = self._calculate_portfolio_value(current_price)
+
+        if self.use_enhanced_rewards and self.enhanced_reward_fn:
+            reward = self.enhanced_reward_fn.calculate(
+                portfolio_value=current_portfolio_value,
+                action=action,
+                prev_action=self.prev_action,
+                cash=self.cash,
+                position=self.position,
+                price=current_price,
+                prev_price=prev_price,
+                max_position_size=self.max_position_size,
+                max_position_pct=self.max_position_pct
+            )
+        else:
+            # Use parent's reward function
+            if self.reward_function:
+                reward = self.reward_function.calculate(
+                    portfolio_value=current_portfolio_value,
+                    action=action,
+                    prev_action=self.prev_action,
+                    cash=self.cash,
+                    position=self.position,
+                    price=current_price,
+                    prev_price=prev_price
+                )
+            else:
+                # Simple return-based reward
+                prev_portfolio_value = self.portfolio_values[-1] if self.portfolio_values else self.initial_balance
+                reward = (current_portfolio_value - prev_portfolio_value) / prev_portfolio_value
+
+        return reward
+
+    def get_action_mask(self) -> np.ndarray:
+        """
+        Get current action mask.
+
+        Returns:
+            Binary mask of valid actions
+        """
+        if not self.use_action_masking or not self.action_masker:
+            # All actions valid
+            n_actions = len(ImprovedTradingAction) if self.use_improved_actions else len(TradingAction)
+            return np.ones(n_actions, dtype=np.float32)
+
+        current_idx = self.current_step + self.lookback_window
+        current_price = self.original_close[current_idx]
+        portfolio_value = self._calculate_portfolio_value(current_price)
+
+        return self.action_masker.get_action_mask(
+            cash=self.cash,
+            position=self.position,
+            current_price=current_price,
+            max_position_size=self.max_position_size,
+            portfolio_value=portfolio_value,
+            max_position_pct=self.max_position_pct
+        )
+
+    def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+        """
+        Execute step with enhancements.
+
+        Adds action masking info to step info.
+        """
+        # Get action mask for diagnostics
+        action_mask = self.get_action_mask()
+        was_valid = bool(action_mask[action])
+
+        # Record for diagnostics
+        if self.diagnostics:
+            self.diagnostics.record_action(action, was_valid)
+
+        # Execute parent step
+        observation, reward, terminated, truncated, info = super().step(action)
+
+        # Add mask to info
+        info['action_mask'] = action_mask
+        info['action_was_valid'] = was_valid
+
+        # Update volatility estimate
+        if len(self.portfolio_values) >= 20:
+            returns = np.diff(self.portfolio_values[-20:]) / self.portfolio_values[-20:-1]
+            self._recent_volatility = np.std(returns)
+
+        # Record episode for diagnostics
+        if (terminated or truncated) and self.diagnostics:
+            portfolio_return = (self.portfolio_value - self.initial_balance) / self.initial_balance
+            self.diagnostics.record_episode(sum(self.portfolio_values), portfolio_return)
+
+        return observation, reward, terminated, truncated, info
+
+    def reset(
+        self,
+        seed: Optional[int] = None,
+        options: Optional[Dict[str, Any]] = None
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """
+        Reset environment with curriculum learning support.
+        """
+        # Reset parent
+        observation, info = super().reset(seed=seed, options=options)
+
+        # Reset enhanced reward function
+        if self.enhanced_reward_fn:
+            self.enhanced_reward_fn.reset()
+
+        # Apply curriculum learning if enabled
+        if self.curriculum_manager:
+            current_idx = self.lookback_window
+            current_price = self.original_close[current_idx]
+
+            # Get initial state from curriculum
+            initial_cash, initial_position = self.curriculum_manager.get_initial_state(
+                self.initial_balance,
+                current_price
+            )
+
+            # Override initial state
+            self.cash = initial_cash
+            self.position = initial_position
+            self.portfolio_value = self.cash + (self.position * current_price)
+
+            # Update observation with new state
+            observation = self._get_observation()
+            info['curriculum_stage'] = self.curriculum_manager.get_current_stage().name
+
+        # Add action mask to initial info
+        info['action_mask'] = self.get_action_mask()
+
+        return observation, info
+
+    def get_diagnostics_summary(self) -> Dict[str, Any]:
+        """Get training diagnostics summary."""
+        if self.diagnostics:
+            return self.diagnostics.get_summary()
+        return {}
+
+    def print_diagnostics(self):
+        """Print diagnostics summary."""
+        if self.diagnostics:
+            self.diagnostics.print_summary()

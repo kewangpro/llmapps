@@ -2,28 +2,40 @@
 Reinforcement Learning Trading System
 
 This module provides a complete RL trading framework including:
-- Trading environments (Gymnasium-based)
-- RL agents (PPO, A2C)
-- Training pipeline with callbacks
+- Enhanced trading environments with action masking
+- RL agents (PPO, A2C) with improved training
+- Enhanced training pipeline with curriculum learning
 - Backtesting engine with comprehensive metrics
 - Baseline strategies for comparison
 - Visualization tools
 """
 
-from .environments import SingleStockTradingEnv, BaseTradingEnv, TradingAction
+from .environments import SingleStockTradingEnv, BaseTradingEnv, TradingAction, EnhancedTradingEnv
 from .agents import PPOAgent, A2CAgent, create_agent
-from .training import RLTrainer, TrainingConfig, RewardConfig, get_reward_function
+from .training import EnhancedRLTrainer, EnhancedTrainingConfig
+from .improvements import (
+    ActionMasker,
+    EnhancedRewardFunction,
+    EnhancedRewardConfig,
+    AdaptiveActionSizer,
+    CurriculumManager,
+    ImprovedTradingAction
+)
 from .backtesting import BacktestEngine, BacktestConfig, PerformanceMetrics
 from .baselines import BuyHoldStrategy, MomentumStrategy
 from .visualizer import RLVisualizer
+from .callbacks import TrainingProgressCallback, EarlyStoppingCallback, PerformanceMonitorCallback
+from .rewards import RewardFunction, RewardConfig, get_reward_function
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 
 __all__ = [
     # Environments
     'SingleStockTradingEnv',
     'BaseTradingEnv',
+    'EnhancedTradingEnv',
     'TradingAction',
+    'ImprovedTradingAction',
 
     # Agents
     'PPOAgent',
@@ -31,9 +43,15 @@ __all__ = [
     'create_agent',
 
     # Training
-    'RLTrainer',
-    'TrainingConfig',
-    'RewardConfig',
+    'EnhancedRLTrainer',
+    'EnhancedTrainingConfig',
+
+    # Improvements
+    'ActionMasker',
+    'EnhancedRewardFunction',
+    'EnhancedRewardConfig',
+    'AdaptiveActionSizer',
+    'CurriculumManager',
 
     # Backtesting
     'BacktestEngine',
@@ -46,4 +64,14 @@ __all__ = [
 
     # Visualization
     'RLVisualizer',
+
+    # Callbacks
+    'TrainingProgressCallback',
+    'EarlyStoppingCallback',
+    'PerformanceMonitorCallback',
+
+    # Rewards
+    'RewardFunction',
+    'RewardConfig',
+    'get_reward_function',
 ]
