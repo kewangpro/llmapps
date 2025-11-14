@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 def create_app():
     """Create and configure the Panel application with professional navigation"""
-    from src.ui.pages.trading import CompactRLPanel
+    from src.ui.pages.rl_training import RLTrainingPanel
     from src.ui.pages.dashboard import DashboardPage
     from src.ui.pages.portfolio import PortfolioPage
     from src.ui.pages.models import ModelsPage
@@ -122,7 +122,7 @@ def create_app():
     # Create all pages
     dashboard_page = DashboardPage(watchlist_panel=watchlist_panel)
     analysis_app = StockAnalysisApp()
-    rl_panel = CompactRLPanel()
+    rl_panel = RLTrainingPanel()
     portfolio_page = PortfolioPage(watchlist_symbols=watchlist_symbols, watchlist_panel=watchlist_panel)
     models_page = ModelsPage()
     live_trading_page = create_live_trading_page(session_manager=session_manager)
