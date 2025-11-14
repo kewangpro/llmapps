@@ -245,7 +245,7 @@ class ModelsPage(param.Parameterized):
                 if model_dir.is_dir():
                     model_file = model_dir / "final_model.zip"
                     if model_file.exists():
-                        # Extract info from directory name (e.g., ppo_AAPL_20250102_123456)
+                        # Extract info from directory name (format: ppo_AAPL_20231114_120000)
                         parts = model_dir.name.split('_')
                         algorithm = parts[0].upper() if parts else "Unknown"
                         symbol = parts[1].upper() if len(parts) > 1 else "Unknown"

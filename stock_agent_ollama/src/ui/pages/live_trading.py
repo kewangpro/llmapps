@@ -104,7 +104,7 @@ class LiveTradingPage(pn.viewable.Viewer):
         if not model_path.exists():
             return None
 
-        # Extract agent type from directory name
+        # Extract agent type from directory name (format: ppo_AAPL_timestamp)
         dir_name = latest_dir.name
         found_agent_type = 'ppo' if dir_name.startswith('ppo_') else 'a2c'
 
