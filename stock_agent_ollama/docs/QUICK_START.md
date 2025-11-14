@@ -109,17 +109,30 @@ The platform features a professional light-theme interface with 6 main pages:
 2. **Configure Agent**:
    - **Symbol**: Select from dropdown (AAPL, MSFT, GOOGL, AMZN, TSLA, META, NVDA, ORCL)
    - **Algorithm**: Choose PPO (stable, recommended) or A2C (faster)
-   - **LSTM Features**: Check to enable temporal pattern extraction
+   - **Training Options**:
+     - Enhanced Rewards (default: ON)
+     - Adaptive Sizing (default: ON)
+     - Curriculum Learning (default: ON)
    - **Training Period**: 365 days (default, recommended)
    - **Training Steps**: 50,000 (balance of time vs. performance)
+   - **Entropy Coefficient**: 0.01 (exploration bonus)
 3. Click **"🚀 Start Training"**
 4. Monitor progress bar and real-time chart
 5. Review training results when complete
 
 **Training Results:**
 - Summary card with agent details, episodes, and training time
+- Training diagnostics: Invalid action rate, mean episode reward, portfolio return
+- Training metrics: Win rate, final/best episode reward, explained variance
 - Training progress chart showing reward improvement over episodes
-- Model automatically saved to `data/models/rl/`
+- Action distribution pie chart showing how agent used each action
+- Model automatically saved to `data/models/rl/ppo_SYMBOL_timestamp/`
+  - `best_model.zip`: Peak performance model (used for backtesting)
+  - `final_model.zip`: End-of-training model
+
+**Always Enabled:**
+- Action Masking: Prevents invalid trades (e.g., selling with no shares)
+- 6-Action Space: HOLD, BUY_SMALL, BUY_MEDIUM, BUY_LARGE, SELL_PARTIAL, SELL_ALL
 
 ### Running Backtests
 
@@ -132,10 +145,10 @@ The platform features a professional light-theme interface with 6 main pages:
 **Backtest Results:**
 - **Performance Table**: RL Agent vs Buy & Hold vs Momentum
   - Metrics: Total Return %, Sharpe Ratio, Max Drawdown, Win Rate
-  - Action distribution (SELL, HOLD, BUY_SMALL, BUY_LARGE)
+  - Action distribution (HOLD, BUY_SMALL, BUY_MEDIUM, BUY_LARGE, SELL_PARTIAL, SELL_ALL)
 - **Charts**:
-  - Portfolio value over time for live trading sessions
-  - Action distribution comparison
+  - Portfolio value over time comparison
+  - Action distribution visualization
   - Key metrics bar chart
 
 ---
@@ -260,11 +273,13 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 ### RL Trading
 - ✅ **PPO** recommended for stable, reliable strategies
 - ✅ **A2C** faster but more experimental
-- ✅ **LSTM Features** may improve performance (increases training time)
+- ✅ **Action Masking** always enabled - prevents invalid trades automatically
+- ✅ **6-Action Space** provides fine-grained control over position sizing
+- ✅ **Enhanced Rewards** include risk penalties and profitability bonuses
 - ✅ **365 days** balances learning vs. overfitting
 - ✅ **50,000 steps** is optimal default (5-10 min training time)
 - ✅ Training runs in background - UI stays responsive
-- ✅ Models saved automatically - reusable across sessions
+- ✅ Models saved automatically to `data/models/rl/`
 - ✅ Backtests auto-load most recent trained model
 
 ### Performance
@@ -300,7 +315,7 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 1. Click Trading tab
 2. Select symbol: NVDA
 3. Choose algorithm: PPO
-4. Enable LSTM Features checkbox
+4. Keep training options checked (Enhanced Rewards, Adaptive Sizing, Curriculum Learning)
 5. Keep defaults: 365 days, 50,000 steps
 6. Click "🚀 Start Training"
 7. Monitor progress (5-10 minutes)
@@ -345,7 +360,15 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 - **Val Loss**: Validation loss (measures overfitting, lower is better)
 - **Size**: Number of models in ensemble (typically 3)
 
-### RL Performance Metrics
+### RL Training Metrics
+- **Win Rate**: Percentage of profitable episodes during training (>50% is good)
+- **Final Episode Reward**: Last episode's reward (shows final performance)
+- **Best Episode Reward**: Peak reward achieved (shows learning potential)
+- **Explained Variance**: Model quality (0-1 scale, >0.7 excellent, measures how well value function predicts returns)
+- **Action Distribution**: Percentage breakdown of actions taken (shows strategy diversity)
+- **Invalid Action Rate**: Percentage of masked invalid actions (lower is better, <5% excellent)
+
+### RL Backtest Metrics
 - **Total Return**: Overall profit/loss percentage
 - **Sharpe Ratio**: Risk-adjusted return (>1 good, >2 excellent)
 - **Sortino Ratio**: Return per unit of downside risk
@@ -353,11 +376,13 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 - **Max Drawdown**: Worst peak-to-trough decline (risk measure)
 - **Win Rate**: Percentage of profitable trades
 
-### Trading Actions
-- **SELL**: Liquidate position
-- **HOLD**: Maintain current position
-- **BUY_SMALL**: Small position increase
-- **BUY_LARGE**: Large position increase
+### Trading Actions (6-Action Space)
+- **HOLD**: Do nothing (default, safe action)
+- **BUY_SMALL**: Buy with ~15% of available cash (conservative)
+- **BUY_MEDIUM**: Buy with ~30% of available cash (moderate)
+- **BUY_LARGE**: Buy with ~50% of available cash (aggressive)
+- **SELL_PARTIAL**: Sell 50% of current position (take partial profits)
+- **SELL_ALL**: Sell entire position (full exit)
 
 ---
 

@@ -1,7 +1,7 @@
 # Reinforcement Learning Trading System - Design & Implementation
 
-**Version:** 1.0.0
-**Author:** Claude Code
+**Version:** 2.0.0
+**Last Updated:** 2024
 
 ---
 
@@ -32,9 +32,12 @@ This RL trading system adds advanced reinforcement learning capabilities to the 
 ### Key Features
 
 ✅ **RL Agents**: PPO and A2C algorithms via Stable-Baselines3
-✅ **LSTM Features**: Optional LSTM feature extractor for temporal pattern extraction (hybrid architecture)
+✅ **Action Masking**: Prevents invalid trades (e.g., selling with no position)
+✅ **6-Action Space**: HOLD (default), BUY_SMALL/MEDIUM/LARGE, SELL_PARTIAL/ALL
+✅ **Adaptive Position Sizing**: Trade sizes adjust based on volatility and portfolio state
+✅ **Enhanced Rewards**: Multi-component rewards with risk penalties and bonuses
+✅ **Curriculum Learning**: Progressive training from simple to complex scenarios
 ✅ **Trading Environment**: Gymnasium-based single-stock trading simulation
-✅ **Reward Engineering**: Multiple reward functions (simple, risk-adjusted, customizable)
 ✅ **Backtesting**: Comprehensive performance evaluation with 15+ metrics
 ✅ **Action Analysis**: Visualize trading decisions with action distribution charts
 ✅ **Auto-Load Models**: Automatically loads trained models for backtesting
@@ -59,28 +62,35 @@ This RL trading system adds advanced reinforcement learning capabilities to the 
 ```
 src/rl/
 ├── __init__.py                 # Main RL module exports
-├── environments.py             # Trading environments (Base + SingleStock)
-├── training.py                 # Training pipeline (Trainer + Callbacks + Rewards)
+├── environments.py             # All trading environments (Base, SingleStock, Enhanced)
+├── training.py                 # Training pipeline (EnhancedRLTrainer)
+├── improvements.py             # Action masking, adaptive sizing, curriculum learning
+├── callbacks.py                # Training callbacks (progress, early stopping)
+├── rewards.py                  # Reward functions (simple, risk-adjusted, enhanced)
 ├── backtesting.py              # Backtesting (Engine + Metrics Calculator)
 ├── baselines.py                # Baseline strategies (Buy&Hold, Momentum)
 ├── live_trading.py             # Live paper trading engine
 ├── session_manager.py          # Session persistence for live trading
-└── visualizer.py               # RL-specific visualizations
+├── visualizer.py               # RL-specific visualizations
+└── agents/                     # RL agent implementations (PPO, A2C)
 
 src/ui/pages/
-├── trading.py                  # RL training UI
+├── rl_training.py              # RL training UI
 └── live_trading.py             # Live trading UI
 
-src/config.py                   # RL configuration added
+src/config.py                   # RL configuration
 ```
 
-**Note**: The module structure has been simplified:
-- **environments.py**: Contains `BaseTradingEnv` and `SingleStockTradingEnv`
-- **training.py**: Contains `RLTrainer`, training callbacks, and reward functions using Stable-Baselines3 (PPO, A2C)
-- **backtesting.py**: Contains `BacktestEngine` and `MetricsCalculator`
-- **baselines.py**: Contains `BuyHoldStrategy` and `MomentumStrategy`
-- **live_trading.py**: Contains live paper trading engine for real-time strategy execution
-- **session_manager.py**: Handles session persistence for resuming live trading sessions
+**Module Organization**:
+- **environments.py**: Contains `BaseTradingEnv`, `SingleStockTradingEnv`, and `EnhancedTradingEnv`
+- **training.py**: Contains `EnhancedRLTrainer` and `EnhancedTrainingConfig` using Stable-Baselines3
+- **improvements.py**: Action masking, enhanced rewards, adaptive sizing, curriculum learning
+- **callbacks.py**: Training progress tracking, early stopping, performance monitoring
+- **rewards.py**: Modular reward functions for flexible reward engineering
+- **backtesting.py**: `BacktestEngine` and `MetricsCalculator`
+- **baselines.py**: `BuyHoldStrategy` and `MomentumStrategy`
+- **live_trading.py**: Live paper trading engine for real-time strategy execution
+- **session_manager.py**: Session persistence for resuming live trading sessions
 
 ### Data Flow
 
@@ -145,14 +155,22 @@ Results Display (UI)
 
 #### Action Space
 
-**Type**: Discrete (4 actions)
+**Type**: Discrete (6 actions) - **Always Enabled**
 
 | Action | Value | Description | Position Change |
 |--------|-------|-------------|-----------------|
-| SELL | 0 | Sell all holdings | -100% |
-| HOLD | 1 | No action | 0% |
-| BUY_SMALL | 2 | Buy with 10% of cash | +10% |
-| BUY_LARGE | 3 | Buy with 30% of cash | +30% |
+| HOLD | 0 | No action (default, safe) | 0% |
+| BUY_SMALL | 1 | Buy with ~15% of cash | +15% (adaptive) |
+| BUY_MEDIUM | 2 | Buy with ~30% of cash | +30% (adaptive) |
+| BUY_LARGE | 3 | Buy with ~50% of cash | +50% (adaptive) |
+| SELL_PARTIAL | 4 | Sell 50% of position | -50% |
+| SELL_ALL | 5 | Sell entire position | -100% |
+
+**Key Improvements:**
+- **HOLD is action 0**: Safer default than SELL (prevents invalid sell attempts)
+- **Action Masking**: Invalid actions automatically masked (e.g., can't sell with no shares)
+- **Adaptive Sizing**: Buy amounts adjust based on market volatility and portfolio state
+- **Granular Control**: 3 buy sizes and 2 sell options for flexible position management
 
 #### Reward Function
 
@@ -188,7 +206,7 @@ reward = (
 
 #### PPO (Proximal Policy Optimization)
 
-**Implementation**: Stable-Baselines3 PPO in `src/rl/training.py`
+**Implementation**: Stable-Baselines3 PPO via `EnhancedRLTrainer` in `src/rl/training.py`
 
 **Advantages**:
 - Stable training with clipped objective
@@ -394,33 +412,45 @@ df = result.equity_curve
    - Confidence interval (±1 std)
    - Episode length
 
-2. **Equity Curve**
+2. **Action Distribution (Training)**
+   - Pie chart showing % of each action during training
+   - Color-coded: HOLD (gray), BUY_SMALL/MEDIUM/LARGE (green shades), SELL_PARTIAL (orange), SELL_ALL (red)
+   - Donut chart with percentages
+
+3. **Strategy Comparison (Backtesting)**
+   - Normalized returns (%) over time
+   - Multiple strategies: RL Agent, Buy & Hold, Momentum
+   - Buy/sell markers for RL agent trades
+   - Legend positioned outside plot area
+
+4. **Action Distribution Comparison (Backtesting)**
+   - Stacked bar chart comparing action usage across strategies
+   - Shows percentage breakdown for each strategy
+   - 6-action space: HOLD, BUY_SMALL, BUY_MEDIUM, BUY_LARGE, SELL_PARTIAL, SELL_ALL
+
+5. **Metrics Comparison (Backtesting)**
+   - Bar charts for key metrics side-by-side
+   - Metrics: Total Return, Sharpe Ratio, Max Drawdown, Win Rate
+   - Color-coded by strategy
+
+6. **Equity Curve**
    - Portfolio value over time
    - Initial balance reference line
    - Fill area
 
-3. **Drawdown Chart**
+7. **Drawdown Chart**
    - Drawdown % over time
    - Max drawdown annotation
    - Red fill area
 
-4. **Strategy Comparison**
-   - Normalized returns (%)
-   - Multiple strategies on same chart
-   - Legend
+8. **Action Timeline**
+   - Equity curve with action markers
+   - Each action type shown as different colored markers
+   - Hover details for each action
 
-5. **Metrics Comparison**
-   - Bar charts for key metrics
-   - Side-by-side comparison
-   - Subplots for different metrics
-
-6. **Action Distribution**
-   - Pie chart of action frequency
-   - SELL/HOLD/BUY_SMALL/BUY_LARGE
-
-7. **Comprehensive Report**
-   - 6-panel dashboard
-   - Equity, drawdown, actions, returns
+9. **Comprehensive Report**
+   - Multi-panel dashboard
+   - Equity, drawdown, actions, returns distribution
    - Metrics table
 
 ---
@@ -499,21 +529,27 @@ RL_GAMMA = 0.99
 #### Via Python API
 
 ```python
-from src.rl import RLTrainer, TrainingConfig
+from src.rl import EnhancedRLTrainer, EnhancedTrainingConfig
 from datetime import datetime, timedelta
 
 # Setup configuration
-config = TrainingConfig(
+config = EnhancedTrainingConfig(
     symbol="AAPL",
     start_date=(datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d"),
     end_date=datetime.now().strftime("%Y-%m-%d"),
     agent_type="ppo",
     total_timesteps=50000,
-    learning_rate=0.0003
+    learning_rate=0.0003,
+    # Action masking and 6-action space always enabled
+    use_action_masking=True,
+    use_improved_actions=True,
+    use_enhanced_rewards=True,
+    use_adaptive_sizing=True,
+    use_curriculum_learning=True
 )
 
 # Create trainer
-trainer = RLTrainer(config)
+trainer = EnhancedRLTrainer(config)
 
 # Train
 results = trainer.train()
@@ -537,12 +573,11 @@ print(f"Total episodes: {results['total_episodes']}")
 #### Via Python API
 
 ```python
-from src.rl import BacktestEngine, BacktestConfig
-from src.rl.training import RLTrainer
+from src.rl import BacktestEngine, BacktestConfig, EnhancedRLTrainer
 
 # Load trained agent
-agent = RLTrainer.load_agent(
-    model_path="data/models/rl/ppo_AAPL/final_model.zip",
+agent = EnhancedRLTrainer.load_agent(
+    model_path="data/models/rl/ppo_AAPL_20241114_120000/final_model.zip",
     agent_type="ppo"
 )
 
@@ -606,7 +641,7 @@ fig.show()
 ### 4. Custom Reward Functions
 
 ```python
-from src.rl.training import RewardFunction, RewardConfig
+from src.rl.rewards import RewardFunction, RewardConfig
 
 class MyCustomReward(RewardFunction):
     def calculate(self, portfolio_value, action, prev_action, **kwargs):
@@ -636,6 +671,23 @@ config = TrainingConfig(
 - A2C: 3-5 minutes
 
 **Convergence**: Usually 30-50k timesteps for decent performance
+
+**Training Metrics Tracked**:
+- **Win Rate**: Percentage of profitable episodes (>50% indicates learning)
+- **Final Episode Reward**: Last episode's reward (convergence indicator)
+- **Best Episode Reward**: Peak reward achieved (learning potential)
+- **Explained Variance**: Model quality metric (0-1 scale, >0.7 excellent)
+  - Measures how well the value function predicts actual returns
+  - High variance = good model fit, low = poor predictions
+- **Action Distribution**: Percentage breakdown of actions taken
+  - Shows strategy diversity vs. getting stuck on specific actions
+  - Balanced distribution suggests adaptive strategy
+- **Invalid Action Rate**: Percentage of masked actions (<5% excellent)
+  - Lower rate indicates agent learned valid trading rules
+
+**Model Saving**:
+- `best_model.zip`: Saved when new peak mean reward is achieved (used for backtesting)
+- `final_model.zip`: Saved at end of training
 
 ### Backtest Performance
 
