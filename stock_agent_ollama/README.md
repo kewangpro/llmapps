@@ -29,12 +29,15 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 *Stock analysis with interactive charts, technical indicators, and AI-powered insights*
 
 ### 🤖 Reinforcement Learning Trading
-- **Train RL Agents** using PPO and A2C algorithms
-- **LSTM Hybrid Architecture** for temporal pattern extraction
-- **Comprehensive Backtesting** with automated model loading
+- **Train RL Agents** using PPO and A2C algorithms with action masking
+- **6-Action Trading Space** (HOLD, BUY_SMALL, BUY_MEDIUM, BUY_LARGE, SELL_PARTIAL, SELL_ALL)
+- **Adaptive Position Sizing** that adjusts to market volatility
+- **Training Metrics** (Win Rate, Action Distribution, Episode Rewards, Explained Variance)
+- **Comprehensive Backtesting** with automated best model loading
 - **Strategy Comparison** against Buy & Hold and Momentum baselines
 - **Performance Metrics** (Returns, Sharpe Ratio, Max Drawdown, Win Rate)
-- **Action Analysis** (SELL, HOLD, BUY_SMALL, BUY_LARGE distribution)
+- **Visualization Charts** (Performance comparison, Action distribution, Key metrics)
+- **Curriculum Learning** for progressive training complexity
 
 ![RL Training Screenshot](docs/screenshots/training.png)
 *Train and backtest RL agents with comprehensive performance metrics and strategy comparison*
@@ -208,7 +211,7 @@ RL_TRANSACTION_COST_RATE=0.001      # 0.1% transaction cost
 python -c "from src.agents.query_processor import QueryProcessor; print('✅ Ready')"
 
 # Test RL engine
-python -c "from src.rl import RLTrainer, BacktestEngine; print('✅ Ready')"
+python -c "from src.rl import EnhancedRLTrainer, BacktestEngine; print('✅ Ready')"
 
 # Check Ollama (optional)
 curl http://localhost:11434/api/tags
@@ -272,16 +275,18 @@ curl http://localhost:11434/api/tags
 ### RL Trading Agents
 - **PPO**: Proximal Policy Optimization (stable, recommended)
 - **A2C**: Advantage Actor-Critic (faster, experimental)
-- LSTM feature extraction for temporal patterns (optional)
-- 4 action space: SELL, HOLD, BUY_SMALL, BUY_LARGE
+- **Action Masking**: Prevents invalid trades (e.g., selling with no position)
+- **6-Action Space**: HOLD (default), BUY_SMALL, BUY_MEDIUM, BUY_LARGE, SELL_PARTIAL, SELL_ALL
+- **Adaptive Sizing**: Trade sizes adjust based on market volatility and portfolio state
 - Realistic environment with transaction costs and slippage
 
 ### Backtesting System
-- Auto-loads most recent trained RL agent
+- Auto-loads best model (peak performance during training)
 - Compares against Buy & Hold and Momentum baselines
 - Comprehensive metrics: Returns, Sharpe, Sortino, Calmar ratios
-- Action distribution analysis
-- Watchlist summary with aggregate price metrics
+- Action distribution visualization across strategies
+- Performance comparison charts with buy/sell markers
+- Key metrics bar charts for quick comparison
 
 ---
 
