@@ -64,11 +64,11 @@ class EnhancedTrainingConfig:
     gamma: float = 0.99
     ent_coef: float = 0.01  # Exploration bonus
     n_steps: int = 2048  # PPO: steps per update
-    batch_size: int = 64
+    batch_size: int = 128  # Increased for better gradient estimates
     n_epochs: int = 10
 
     # Training settings
-    total_timesteps: int = 100000  # Increase for better results
+    total_timesteps: int = 300000  # Proven default for consistent outperformance
     eval_freq: int = 5000
     save_freq: int = 10000
 
