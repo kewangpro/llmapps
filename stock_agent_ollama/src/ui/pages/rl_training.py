@@ -455,9 +455,11 @@ class RLTrainingPanel(param.Parameterized):
                 from src.rl.training import EnhancedRLTrainer
                 from src.rl.baselines import BuyHoldStrategy, MomentumStrategy
 
-                # Setup dates (last 6 months)
+                # Setup dates (last 6 months + lookback buffer)
+                # Add 100 extra days to account for 60-day lookback window
+                # (60 trading days ≈ 85 calendar days + buffer)
                 end_date = datetime.now().strftime("%Y-%m-%d")
-                start_date = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
+                start_date = (datetime.now() - timedelta(days=280)).strftime("%Y-%m-%d")
 
                 config = BacktestConfig(
                     symbol=symbol,
