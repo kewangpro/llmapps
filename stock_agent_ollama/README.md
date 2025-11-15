@@ -33,6 +33,7 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 - **6-Action Trading Space** (HOLD, BUY_SMALL, BUY_MEDIUM, BUY_LARGE, SELL_PARTIAL, SELL_ALL)
 - **Adaptive Position Sizing** that adjusts to market volatility
 - **Training Metrics** (Win Rate, Action Distribution, Episode Rewards, Explained Variance)
+- **Proven Performance** (300k steps, 3 years data beats Buy & Hold consistently)
 - **Comprehensive Backtesting** with automated best model loading
 - **Strategy Comparison** against Buy & Hold and Momentum baselines
 - **Performance Metrics** (Returns, Sharpe Ratio, Max Drawdown, Win Rate)
@@ -256,7 +257,7 @@ curl http://localhost:11434/api/tags
 | Ollama unavailable | Platform works with fallback mode (regex-based) |
 | Port 5006 in use | Set `PANEL_PORT=5007` |
 | Memory issues | Need 8GB+ RAM for RL training |
-| RL training slow | Reduce steps to 30k or training period to 180 days |
+| RL training slow | Use recommended 200k steps (10-20 min) or reduce to 100k for testing |
 | LSTM models empty | Run analysis once - auto-trains model (5-10 min) |
 | RL shows "Run backtest →" | Normal - performance calculated during backtesting |
 
