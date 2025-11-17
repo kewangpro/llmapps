@@ -566,17 +566,36 @@ seaborn>=0.13.0
 
 ### Configuration
 
-**Added to `src/config.py`**:
+**Configuration System:**
+
+All default environment parameters are centralized in `src/rl/env_factory.py`:
 
 ```python
-# RL Trading settings
-RL_MODEL_DIR = MODEL_DIR / "rl"
-RL_DEFAULT_INITIAL_BALANCE = 100000.0
-RL_TRANSACTION_COST_RATE = 0.0005
-RL_SLIPPAGE_RATE = 0.0005
-RL_DEFAULT_TRAINING_TIMESTEPS = 100000
-RL_LOOKBACK_WINDOW = 60
+@dataclass
+class EnvConfig:
+    # Portfolio parameters
+    initial_balance: float = 100000.0
+    max_position_size: int = 1000  # Maximum shares
+    max_position_pct: float = 80.0  # Max position as % of portfolio
 
+    # Cost parameters
+    transaction_cost_rate: float = 0.0005  # 0.05% per trade
+    slippage_rate: float = 0.0005  # 0.05% slippage
+
+    # Observation parameters
+    lookback_window: int = 60
+    include_technical_indicators: bool = True
+
+    # Enhancement flags
+    use_action_masking: bool = True
+    use_enhanced_rewards: bool = True
+    use_adaptive_sizing: bool = True
+    use_improved_actions: bool = True
+```
+
+**Algorithm-Specific Settings in `src/config.py`:**
+
+```python
 # RL Agent hyperparameters
 RL_PPO_LEARNING_RATE = 0.0003
 RL_A2C_LEARNING_RATE = 0.0007

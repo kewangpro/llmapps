@@ -572,8 +572,8 @@ src/ui/
     ├── __init__.py        # Page module exports
     ├── analysis.py        # Analysis page (StockAnalysisApp)
     ├── dashboard.py       # Market overview page
-    ├── trading.py         # RL training page
-    ├── live_trading.py    # Live paper trading page
+    ├── rl_training.py     # RL training page (enhanced)
+    ├── live_trading.py    # Live paper trading page (multi-session support)
     ├── portfolio.py       # Watchlist page (stock tracker)
     └── models.py          # Model registry page
 ```
@@ -584,6 +584,25 @@ src/ui/
 - **pages/**: Individual page implementations for each tab
 
 ---
+
+## Recent Improvements
+
+### Live Trading Page
+- **Multi-Session Support**: Dashboard now displays all sessions with aggregate metrics
+- **Session Persistence**: Sessions auto-save every 60 seconds and resume on app restart
+- **Wider Model Column**: Model name column increased from 200px to 300px to accommodate LSTM PPO naming
+- **Smart Updates**: UI updates in-place without page refresh or scroll jumps
+- **Environment Matching**: Sessions load exact training configuration from saved models
+
+### Symbol Input
+- **Unrestricted Input**: Symbol inputs now accept any valid ticker, not just predefined lists
+- **Autocomplete Suggestions**: Predefined symbols shown as suggestions but don't restrict input
+- **Applied To**: Analysis page, Training page, and Live Trading page
+
+### Configuration System
+- **Consistent Defaults**: All pages reference EnvConfig for default values (80% max position)
+- **Single Source of Truth**: env_factory.py centralizes all environment parameters
+- **No Duplication**: Changing defaults requires editing only one place
 
 ## Known Limitations
 
@@ -599,7 +618,7 @@ src/ui/
    - For actual portfolio tracking, see Live Trading page
 
 3. **Real-time Updates**
-   - Uses polling (5-second intervals)
+   - Uses polling (5-second intervals for live trading, 60-second trading cycles)
    - Could be improved with WebSocket for true real-time
 
 4. **Model Management**

@@ -517,7 +517,7 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 - **Models**: `data/models/lstm/` and `data/models/rl/`
 - **Cache**: `data/cache/stock_data/`
 - **Logs**: `data/logs/app.log`
-- **Live Sessions**: `data/live_sessions/live_session.json`
+- **Live Sessions**: `data/live_sessions/SESSION_*.json` (multi-session support)
 
 ### Debugging
 1. Check logs: `tail -f data/logs/app.log`
@@ -557,6 +557,27 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 - [ ] Experiment with LSTM features enabled
 - [ ] Compare different symbols and algorithms
 - [ ] Analyze action distributions and metrics
+
+---
+
+## 🔧 Recent Improvements
+
+### Configuration System
+- **Single Source of Truth**: All environment parameters now centralized in `env_factory.py`
+- **Consistent Defaults**: Training, backtesting, and live trading share identical default values
+- **No Train-Test Mismatch**: Live trading automatically loads exact training configuration from saved models
+
+### Bug Fixes
+- **Short-Selling Prevention**: Fixed bug where agents could accidentally short-sell stocks
+- **Symbol Input**: Now accepts any valid ticker symbol, not restricted to predefined list
+- **Position Limits**: Corrected default max position from 40% to 80% across all systems
+- **Floating Point Precision**: Added tolerance to prevent valid orders from being rejected
+
+### Live Trading Enhancements
+- **Multi-Session Support**: Run multiple trading sessions simultaneously
+- **Session Persistence**: Sessions auto-save and resume across app restarts
+- **Improved UI**: Wider model name column, better session management
+- **Config Loading**: Matches training environment exactly for consistent behavior
 
 ---
 
