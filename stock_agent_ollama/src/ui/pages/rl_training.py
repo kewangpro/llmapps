@@ -69,14 +69,18 @@ class RLTrainingPanel(param.Parameterized):
             button_style='outline'
         )
 
-        # LSTM Policy checkbox
+        # LSTM Policy checkbox (only for PPO)
         from src.rl.training import EnhancedTrainingConfig
         self.use_lstm_policy_checkbox = pn.widgets.Checkbox(
-            name='Use LSTM Policy',
+            name='Use LSTM Policy (PPO only)',
             value=EnhancedTrainingConfig.use_lstm_policy, # Default from config
             align='center',
-            width=180
+            width=180,
+            disabled=False  # Enabled by default since PPO is default
         )
+
+        # Watch agent_type changes to enable/disable LSTM checkbox
+        self.agent_type.param.watch(self._on_agent_type_change, 'value')
 
         # === TRAINING PARAMETERS ===
         # Note: All architectural improvements are always enabled:
@@ -149,6 +153,15 @@ class RLTrainingPanel(param.Parameterized):
 
         # Results panel
         self.results_panel = pn.Column(sizing_mode="stretch_width", min_height=250)
+
+    def _on_agent_type_change(self, event):
+        """Enable/disable LSTM checkbox based on agent type."""
+        # LSTM is only supported for PPO (RecurrentPPO)
+        if event.new == 'PPO':
+            self.use_lstm_policy_checkbox.disabled = False
+        else:
+            self.use_lstm_policy_checkbox.disabled = True
+            self.use_lstm_policy_checkbox.value = False  # Uncheck when disabled
 
     def _start_training(self, event):
         """Start RL training."""
@@ -411,8 +424,15 @@ class RLTrainingPanel(param.Parameterized):
             return None
 
         # Find all model directories for this symbol and agent type
+        # For PPO, also search for LSTM PPO models
+        matching_dirs = []
         pattern = f"{agent_type.lower()}_{symbol}_*"
-        matching_dirs = list(models_dir.glob(pattern))
+        matching_dirs.extend(models_dir.glob(pattern))
+
+        # Also search for LSTM PPO models when looking for PPO
+        if agent_type.lower() == 'ppo':
+            lstm_pattern = f"lstm_ppo_{symbol}_*"
+            matching_dirs.extend(models_dir.glob(lstm_pattern))
 
         if not matching_dirs:
             return None
@@ -429,20 +449,29 @@ class RLTrainingPanel(param.Parameterized):
         if not model_path.exists():
             return None
 
-        # Check if using improved actions by looking at config
+        # Check if using improved actions and LSTM by looking at config
         use_improved_actions = False
+        is_lstm = False
         config_path = latest_dir / "training_config.json"
         if config_path.exists():
             import json
             with open(config_path, 'r') as f:
                 config = json.load(f)
                 use_improved_actions = config.get('use_improved_actions', False)
+                is_lstm = config.get('use_lstm_policy', False)
+
+        # Determine display agent type
+        display_agent_type = agent_type.lower()
+        if is_lstm and agent_type.lower() == 'ppo':
+            display_agent_type = 'lstm_ppo'
 
         return {
             'path': model_path,
-            'agent_type': agent_type.lower(),
+            'agent_type': agent_type.lower(),  # Keep base type for loading
+            'display_agent_type': display_agent_type,  # For display purposes
             'directory': latest_dir,
-            'use_improved_actions': use_improved_actions
+            'use_improved_actions': use_improved_actions,
+            'is_lstm': is_lstm
         }
 
     def _run_backtest(self, event):
@@ -482,46 +511,58 @@ class RLTrainingPanel(param.Parameterized):
                 # Run strategies
                 results = {}
 
-                # Check if there's a trained RL model for this symbol
-                agent_type = self.agent_type.value
-                logger.info(f"Backtest: Selected agent type from dropdown: {agent_type}")
-                model_info = self._find_latest_model(symbol, agent_type)
-                logger.info(f"Backtest: Found model info: {model_info}")
-                if model_info:
-                    try:
-                        # Load the trained agent
-                        agent = EnhancedRLTrainer.load_agent(
-                            model_path=model_info['path'],
-                            agent_type=model_info['agent_type'],
-                            env=engine.env
-                        )
+                # Find and load ALL available trained RL models for this symbol
+                loaded_models = []
+                for agent_type in ['ppo', 'a2c', 'dqn']:
+                    logger.info(f"Backtest: Searching for {agent_type.upper()} model for {symbol}")
+                    model_info = self._find_latest_model(symbol, agent_type)
 
-                        # Determine agent display name
-                        agent_name = f"{model_info['agent_type'].upper()} Agent"
+                    if model_info:
+                        try:
+                            # Load the trained agent
+                            agent = EnhancedRLTrainer.load_agent(
+                                model_path=model_info['path'],
+                                agent_type=model_info['agent_type'],
+                                env=engine.env
+                            )
 
-                        # Run backtest
-                        results[agent_name] = engine.run_agent_backtest(agent, deterministic=True)
+                            # Determine agent display name
+                            display_type = model_info.get('display_agent_type', model_info['agent_type'])
+                            agent_name = f"{display_type.upper().replace('_', ' ')} Agent"
 
-                        # Update model status
-                        model_name = model_info['directory'].name
-                        status_html = f"""<div style='padding: 10px; background: #D1FAE5;
-                                          border-radius: 4px; font-size: 12px; color: #065F46;
-                                          border: 1px solid #A7F3D0;'>
-                            ✅ Using model: <strong>{agent_name}</strong><br>
-                            Directory: {model_name}
-                        </div>"""
-                        pn.state.execute(lambda: setattr(self.model_status_pane, 'object', status_html))
+                            # Run backtest
+                            results[agent_name] = engine.run_agent_backtest(agent, deterministic=True)
 
-                        pn.state.execute(lambda: pn.state.notifications.info(
-                            f"Loaded {agent_name}",
-                            duration=3000
-                        ))
-                    except Exception as e:
-                        logger.error(f"Error loading RL agent: {e}", exc_info=True)
-                        pn.state.execute(lambda: pn.state.notifications.warning(
-                            f"Could not load RL agent: {str(e)}",
-                            duration=4000
-                        ))
+                            # Store agent name and model directory for status display
+                            model_dir = model_info['directory'].name
+                            loaded_models.append((agent_name, model_dir))
+
+                            logger.info(f"Successfully loaded and backtested {agent_name}")
+
+                        except Exception as e:
+                            logger.error(f"Error loading {agent_type.upper()} agent: {e}", exc_info=True)
+
+                # Update model status with all loaded models
+                if loaded_models:
+                    models_list = "<br>".join([f"✅ {name} <span style='color: #059669; font-size: 11px;'>({dir_name})</span>"
+                                               for name, dir_name in loaded_models])
+                    status_html = f"""<div style='padding: 10px; background: #D1FAE5;
+                                      border-radius: 4px; font-size: 12px; color: #065F46;
+                                      border: 1px solid #A7F3D0;'>
+                        <strong>Loaded Models:</strong><br>
+                        {models_list}
+                    </div>"""
+                    pn.state.execute(lambda: setattr(self.model_status_pane, 'object', status_html))
+
+                    pn.state.execute(lambda: pn.state.notifications.info(
+                        f"Loaded {len(loaded_models)} model(s)",
+                        duration=3000
+                    ))
+                else:
+                    pn.state.execute(lambda: pn.state.notifications.warning(
+                        f"No trained models found for {symbol}",
+                        duration=4000
+                    ))
 
                 # Run baseline strategies
                 buy_hold = BuyHoldStrategy()
