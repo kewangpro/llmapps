@@ -221,13 +221,18 @@ class Position:
 **Mechanism:**
 - The state of the `TradingSession` object, including the `Portfolio`, `Position`, and `Trade` objects, is serialized to a JSON file.
 - The session state is saved automatically:
-    - Periodically (e.g., every 5 minutes) while the session is running.
-    - When the "Stop Trading" button is clicked.
-- When the application starts, it checks for a saved session file and loads it if found.
+    - Every 60 seconds while the session is running
+    - When the "Stop Trading" button is clicked
+    - Before application shutdown
+- When the application starts, it checks for saved session files and loads them if found.
 
-**State File:**
-- Location: `data/live_sessions/live_session.json`
-- Format: JSON
+**State Files:**
+- Location: `data/live_sessions/SESSION_SYMBOL_YYYYMMDD_HHMMSS.json`
+- Format: JSON with complete session state including:
+  - Configuration (symbol, algorithm, position limits, stop loss)
+  - Portfolio (cash, positions, trades history)
+  - Session metadata (start time, status, events)
+- Multi-session support: Multiple sessions can be saved and resumed independently
 
 **Risk Controls:**
 
@@ -247,7 +252,7 @@ class StopLossManager:
 **B. Position Limits:**
 ```python
 class PositionLimits:
-    max_position_size: float = 0.40  # Max 40% of portfolio in one stock
+    max_position_size: float = 0.80  # Max 80% of portfolio in one stock
     max_total_exposure: float = 0.80  # Max 80% invested
     min_cash_reserve: float = 0.20  # Keep 20% cash minimum
 ```
@@ -418,7 +423,7 @@ class LiveTradingConfig:
     # Risk Management
     position_stop_loss: float = -0.05
     portfolio_stop_loss: float = -0.10
-    max_position_size: float = 0.40
+    max_position_size: float = 0.80
     max_exposure: float = 0.80
     min_cash: float = 0.20
 
@@ -619,6 +624,20 @@ class TradingEvent:
 - Performance regression tests
 
 ---
+
+## Key Design Decisions & Bug Fixes
+
+### Configuration Management
+**Single Source of Truth:** All environment parameters (transaction costs, position limits, slippage, etc.) are centralized in `env_factory.py` with the `EnvConfig` dataclass. Training, backtesting, and live trading all reference this single source, preventing train-test mismatch.
+
+**Environment Loading:** Live trading automatically loads the exact environment configuration used during training from saved `training_config.json` files, ensuring consistent behavior between training and deployment.
+
+### Critical Bug Fixes
+**Short-Selling Prevention:** Fixed bug in `AdaptiveActionSizer.get_sell_size()` where selling with zero position would return 1 share, creating unintentional short positions. Now properly checks `if position == 0: return 0`.
+
+**Floating Point Tolerance:** Added 0.01% tolerance to position size checks to prevent legitimate orders at exactly the limit (e.g., 80.0%) from being rejected due to floating point precision issues.
+
+**Action Mapping:** Corrected action enums to use `TradingAction` throughout instead of non-existent `OrderAction`, ensuring proper action execution.
 
 ## Technical Implementation
 

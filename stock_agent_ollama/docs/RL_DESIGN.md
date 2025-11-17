@@ -52,6 +52,25 @@ This RL trading system adds advanced reinforcement learning capabilities to the 
 3. **Realism**: Configurable transaction costs and slippage
 4. **Educational**: Transparent metrics and visualizations for learning
 5. **Integration**: Seamlessly extends existing stock analysis platform
+6. **Consistency**: Single source of truth for environment configuration (env_factory.py)
+
+### Key Design Patterns
+
+**Environment Factory Pattern:**
+- `EnvConfig` dataclass serves as single source of truth for all environment parameters
+- All configuration classes (EnhancedTrainingConfig, BacktestConfig, LiveTradingConfig) reference EnvConfig defaults using dataclass field extraction: `_ENV_DEFAULTS = {f.name: f.default for f in EnvConfig.__dataclass_fields__.values()}`
+- Prevents train-test mismatch by ensuring consistent parameters across training, backtesting, and live trading
+- Changing a default (e.g., max_position_pct) requires editing only one place: EnvConfig
+
+**Model Loading Utilities:**
+- `load_rl_agent()` automatically detects and loads PPO, A2C, DQN, or RecurrentPPO models
+- `load_env_config_from_model()` loads exact training configuration from saved models
+- Live trading uses loaded config to match training environment exactly
+
+**Critical Bug Fixes:**
+- **Short-Selling Prevention**: AdaptiveActionSizer now checks if position == 0 before calculating sell size
+- **Floating Point Tolerance**: Position size checks use 0.01% tolerance to handle floating point precision
+- **Action Masking**: Prevents invalid trades (e.g., selling with no position) automatically
 
 ---
 
@@ -62,6 +81,8 @@ This RL trading system adds advanced reinforcement learning capabilities to the 
 ```
 src/rl/
 ├── __init__.py                 # Main RL module exports
+├── env_factory.py              # Shared environment configuration (EnvConfig, create_enhanced_env)
+├── model_utils.py              # Shared model loading utilities (load_rl_agent, load_env_config)
 ├── environments.py             # All trading environments (Base, SingleStock, Enhanced)
 ├── training.py                 # Training pipeline (EnhancedRLTrainer)
 ├── improvements.py             # Action masking, adaptive sizing, curriculum learning
@@ -70,7 +91,6 @@ src/rl/
 ├── backtesting.py              # Backtesting (Engine + Metrics Calculator)
 ├── baselines.py                # Baseline strategies (Buy&Hold, Momentum)
 ├── live_trading.py             # Live paper trading engine
-├── session_manager.py          # Session persistence for live trading
 ├── visualizer.py               # RL-specific visualizations
 └── agents/                     # RL agent implementations (PPO, A2C, DQN)
 
@@ -82,6 +102,14 @@ src/config.py                   # RL configuration
 ```
 
 **Module Organization**:
+- **env_factory.py**: Shared environment configuration system (single source of truth)
+  - `EnvConfig`: Unified configuration dataclass for training, backtesting, and live trading
+  - `create_enhanced_env()`: Factory function that creates consistent environments
+  - Ensures no train-test mismatch by centralizing all environment parameters
+- **model_utils.py**: Shared model loading utilities
+  - `load_rl_agent()`: Automatically loads PPO, A2C, DQN, or RecurrentPPO models
+  - `load_env_config_from_model()`: Loads environment config from trained model directory
+  - Handles LSTM policy detection and proper model class selection
 - **environments.py**: Contains `BaseTradingEnv`, `SingleStockTradingEnv`, and `EnhancedTradingEnv`
 - **training.py**: Contains `EnhancedRLTrainer` and `EnhancedTrainingConfig` using Stable-Baselines3
 - **improvements.py**: Action masking, enhanced rewards, adaptive sizing, curriculum learning
@@ -90,7 +118,6 @@ src/config.py                   # RL configuration
 - **backtesting.py**: `BacktestEngine` and `MetricsCalculator`
 - **baselines.py**: `BuyHoldStrategy` and `MomentumStrategy`
 - **live_trading.py**: Live paper trading engine for real-time strategy execution
-- **session_manager.py**: Session persistence for resuming live trading sessions
 
 ### Data Flow
 

@@ -67,7 +67,7 @@ The platform features a professional light-theme interface with 6 main pages:
 
 ### Quick Analysis
 1. Click **Analysis** tab
-2. Select a stock from the dropdown (AAPL, GOOGL, MSFT, TSLA, AMZN, NVDA, META, TEAM)
+2. Enter or select a stock symbol (e.g., AAPL, GOOGL, MSFT, TSLA, AMZN, NVDA, META, TEAM, or any valid ticker)
 3. Optional: Check "Force Retrain LSTM Model" to retrain
 4. Click **Analyze** button
 5. View comprehensive results
@@ -107,7 +107,7 @@ The platform features a professional light-theme interface with 6 main pages:
 
 1. Click **Trading** tab
 2. **Configure Agent**:
-   - **Symbol**: Select from dropdown (AAPL, MSFT, GOOGL, AMZN, TSLA, META, NVDA, ORCL)
+   - **Symbol**: Enter or select symbol (e.g., AAPL, MSFT, GOOGL, AMZN, TSLA, META, NVDA, or any valid ticker)
    - **Algorithm**: Choose DQN (best performance), PPO (stable), or A2C (faster)
    - **Use LSTM Policy**: Optional for PPO only (RecurrentPPO for bear markets)
    - **Training Period**: 1095 days (3 years, proven optimal)
@@ -165,10 +165,10 @@ The live trading session is **persistent**. You can stop the application and res
 **Starting a New Session:**
 1. Click **Live Trade** tab
 2. **Configure Settings**:
-   - **Symbol**: Select stock (AAPL, MSFT, GOOGL, etc.)
+   - **Symbol**: Enter or select stock (e.g., AAPL, MSFT, GOOGL, or any valid ticker)
    - **Algorithm**: Choose PPO, A2C, or DQN (auto-loads trained model)
    - **Initial Capital**: Starting balance ($100,000 default)
-   - **Max Position %**: Maximum position as % of portfolio (40% default)
+   - **Max Position %**: Maximum position as % of portfolio (80% default)
    - **Stop Loss**: Automatic stop-loss percentage (5% default)
 3. Click **"Create & Start Session"**
 4. Monitor real-time updates

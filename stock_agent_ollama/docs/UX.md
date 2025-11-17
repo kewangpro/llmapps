@@ -143,7 +143,8 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 **Components:**
 
 **A. Stock Header**
-- Symbol selector with autocomplete (AAPL, GOOGL, MSFT, etc.)
+- Symbol input with autocomplete suggestions (AAPL, GOOGL, MSFT, etc.)
+- Accepts any valid stock ticker symbol (not restricted to predefined list)
 - Current price with color-coded change
 - Analyze button to trigger AI analysis
 - Force retrain checkbox for LSTM models
@@ -207,9 +208,9 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 **Features:**
 
 **A. Configuration Panel**
-- Symbol selection (8 major stocks)
-- Agent type: PPO or A2C
-- LSTM feature enhancement toggle
+- Symbol input with autocomplete (accepts any valid ticker)
+- Agent type: PPO, A2C, or DQN
+- LSTM feature enhancement toggle (PPO only)
 - Training period slider (30-730 days)
 - Training steps slider (10k-100k)
 
@@ -276,10 +277,10 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 **Features:**
 
 **A. Session Creation Panel**
-- Symbol autocomplete (AAPL, GOOGL, MSFT, TSLA, AMZN, NVDA, etc.)
-- Algorithm selection (PPO/A2C) - auto-finds latest trained model
+- Symbol input with autocomplete (accepts any valid ticker)
+- Algorithm selection (PPO/A2C/DQN) - auto-finds latest trained model
 - Initial capital input ($10,000-$1,000,000)
-- Max position % (percentage of portfolio, 5-100%, default 40%)
+- Max position % (percentage of portfolio, 5-100%, default 80%)
 - Stop-loss percentage (1-20%)
 - Extended hours trading toggle
 - Creates timestamped session (SESSION_SYMBOL_YYYYMMDD_HHMMSS)
