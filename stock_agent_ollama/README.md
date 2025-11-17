@@ -29,23 +29,22 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 *Stock analysis with interactive charts, technical indicators, and AI-powered insights*
 
 ### 🤖 Reinforcement Learning Trading
-- **Train RL Agents** using PPO and A2C algorithms with action masking
+- **Train RL Agents** using PPO, A2C, and DQN algorithms with action masking
 - **6-Action Trading Space** (HOLD, BUY_SMALL, BUY_MEDIUM, BUY_LARGE, SELL_PARTIAL, SELL_ALL)
 - **Adaptive Position Sizing** that adjusts to market volatility
 - **Training Metrics** (Win Rate, Action Distribution, Episode Rewards, Explained Variance)
-- **Proven Performance** (300k steps, 3 years data beats Buy & Hold consistently)
+- **Algorithm-Specific Rewards** with optimized configs for DQN vs PPO/A2C
 - **Comprehensive Backtesting** with automated best model loading
 - **Strategy Comparison** against Buy & Hold and Momentum baselines
 - **Performance Metrics** (Returns, Sharpe Ratio, Max Drawdown, Win Rate)
 - **Visualization Charts** (Performance comparison, Action distribution, Key metrics)
-- **Curriculum Learning** for progressive training complexity
 
 ![RL Training Screenshot](docs/screenshots/training.png)
 *Train and backtest RL agents with comprehensive performance metrics and strategy comparison*
 
 ### 🔴 Live Trading Simulation
 - **Paper Trading** with real-time market data (Yahoo Finance)
-- **Trained Agent Execution** using PPO/A2C models in live markets
+- **Trained Agent Execution** using PPO, A2C, or DQN models in live markets
 - **Persistent Sessions** that automatically save and resume across restarts
   - Portfolio state preserved
   - Trade history maintained
@@ -127,7 +126,7 @@ python src/main.py
 ┌──────────────────────────┐  ┌──────────────────────────────┐
 │   Analysis Engine        │  │   RL Engine                  │
 │   • Ollama AI            │  │   • Trading Environments     │
-│   • LSTM Ensemble        │  │   • PPO/A2C Agents           │
+│   • LSTM Ensemble        │  │   • PPO/A2C/DQN Agents       │
 │   • Technical Indicators │  │   • Backtest Engine          │
 │   • Chart Generation     │  │   • Baseline Strategies      │
 └──────────────────────────┘  └──────────────────────────────┘
@@ -145,7 +144,7 @@ python src/main.py
 **Technology Stack:**
 - **AI**: Ollama (gemma3:latest) with regex fallback
 - **ML**: TensorFlow LSTM ensemble models (3 models per symbol)
-- **RL**: Stable-Baselines3 (PPO, A2C), Gymnasium environments
+- **RL**: Stable-Baselines3 (PPO, A2C, DQN), Gymnasium environments
 - **Data**: Yahoo Finance API with intelligent caching
 - **UI**: Panel + Plotly interactive visualizations, light theme
 - **Design**: Wide horizontal layouts, minimal scrolling
@@ -199,11 +198,11 @@ stock_agent_ollama/
 
 **Environment Variables:**
 ```bash
-OLLAMA_MODEL=gemma3:latest          # AI model for analysis
+OLLAMA_MODEL=gemma3:latest           # AI model for analysis
 OLLAMA_BASE_URL=http://localhost:11434
-PANEL_PORT=5006                     # Web interface port
-RL_DEFAULT_INITIAL_BALANCE=10000.0  # Starting balance
-RL_TRANSACTION_COST_RATE=0.001      # 0.1% transaction cost
+PANEL_PORT=5006                      # Web interface port
+RL_DEFAULT_INITIAL_BALANCE=100000.0  # Starting balance
+RL_TRANSACTION_COST_RATE=0.0005      # 0.05% transaction cost (DQN)
 ```
 
 **Health Checks:**
@@ -274,11 +273,13 @@ curl http://localhost:11434/api/tags
 - Auto-training on first analysis request
 
 ### RL Trading Agents
-- **PPO**: Proximal Policy Optimization (stable, recommended)
-- **A2C**: Advantage Actor-Critic (faster, experimental)
+- **PPO**: Proximal Policy Optimization (stable, reliable)
+- **A2C**: Advantage Actor-Critic (faster training)
+- **DQN**: Deep Q-Network (off-policy, sample efficient, best performance)
 - **Action Masking**: Prevents invalid trades (e.g., selling with no position)
 - **6-Action Space**: HOLD (default), BUY_SMALL, BUY_MEDIUM, BUY_LARGE, SELL_PARTIAL, SELL_ALL
 - **Adaptive Sizing**: Trade sizes adjust based on market volatility and portfolio state
+- **Algorithm-Specific Rewards**: Separate optimized configs for DQN vs PPO/A2C
 - Realistic environment with transaction costs and slippage
 
 ### Backtesting System
