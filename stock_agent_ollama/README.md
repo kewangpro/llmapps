@@ -288,6 +288,8 @@ curl http://localhost:11434/api/tags
 - **6-Action Space**: HOLD (default), BUY_SMALL, BUY_MEDIUM, BUY_LARGE, SELL_PARTIAL, SELL_ALL
 - **Adaptive Sizing**: Trade sizes adjust based on market volatility and portfolio state
 - **Algorithm-Specific Rewards**: Separate optimized configs for DQN vs PPO/A2C
+- **Environment Factory**: Single source of truth for configuration (env_factory.py)
+- **Config Loading**: Live trading matches exact training environment
 - Realistic environment with transaction costs and slippage
 
 ### Backtesting System
@@ -335,6 +337,27 @@ This platform is designed for learning and research purposes:
 - ✋ Always consult qualified financial professionals before making investment decisions
 
 **Data Source**: Yahoo Finance (real-time, free, no API key required)
+
+---
+
+## 🔧 Recent Improvements
+
+### Architecture Enhancements
+- **Environment Factory Pattern**: Centralized configuration in `env_factory.py` ensures consistency across training, backtesting, and live trading
+- **Model Utilities**: Automatic model type detection and environment config loading from trained models
+- **Single Source of Truth**: All default parameters defined once in `EnvConfig` dataclass
+
+### Critical Bug Fixes
+- **Short-Selling Prevention**: Fixed `AdaptiveActionSizer` bug that allowed unintentional short positions
+- **Symbol Input**: Removed restrictions - now accepts any valid ticker symbol
+- **Position Limits**: Corrected inconsistent defaults (now 80% across all systems)
+- **Floating Point Precision**: Added tolerance to position size checks
+
+### Live Trading Improvements
+- **Multi-Session Support**: Run multiple trading strategies simultaneously
+- **Session Persistence**: Auto-save and resume sessions across app restarts
+- **Environment Matching**: Live trading automatically loads exact training configuration
+- **UI Enhancements**: Wider model name column, improved session management
 
 ---
 
