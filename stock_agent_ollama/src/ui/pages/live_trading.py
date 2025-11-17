@@ -82,11 +82,19 @@ class LiveTradingPage(pn.viewable.Viewer):
             # Search for specific agent type
             pattern = f"{agent_type.lower()}_{symbol}_*"
             matching_dirs.extend(models_dir.glob(pattern))
+
+            # Also search for LSTM PPO models when looking for PPO
+            if agent_type.lower() == 'ppo':
+                lstm_pattern = f"lstm_ppo_{symbol}_*"
+                matching_dirs.extend(models_dir.glob(lstm_pattern))
         else:
             # Search for all agent types
             for atype in ['ppo', 'a2c', 'dqn']:
                 pattern = f"{atype}_{symbol}_*"
                 matching_dirs.extend(models_dir.glob(pattern))
+            # Also include LSTM PPO models
+            lstm_pattern = f"lstm_ppo_{symbol}_*"
+            matching_dirs.extend(models_dir.glob(lstm_pattern))
 
         if not matching_dirs:
             return None
@@ -104,21 +112,29 @@ class LiveTradingPage(pn.viewable.Viewer):
         if not model_path.exists():
             return None
 
-        # Extract agent type from directory name (format: ppo_AAPL_timestamp)
+        # Extract agent type from directory name (format: ppo_AAPL_timestamp or lstm_ppo_AAPL_timestamp)
         dir_name = latest_dir.name
-        if dir_name.startswith('ppo_'):
+        if dir_name.startswith('lstm_ppo_'):
+            found_agent_type = 'ppo'  # LSTM PPO loads as PPO (RecurrentPPO)
+            is_lstm = True
+        elif dir_name.startswith('ppo_'):
             found_agent_type = 'ppo'
+            is_lstm = False
         elif dir_name.startswith('a2c_'):
             found_agent_type = 'a2c'
+            is_lstm = False
         elif dir_name.startswith('dqn_'):
             found_agent_type = 'dqn'
+            is_lstm = False
         else:
             found_agent_type = 'unknown'
+            is_lstm = False
 
         return {
             'path': model_path,
             'agent_type': found_agent_type,
-            'directory': latest_dir
+            'directory': latest_dir,
+            'is_lstm': is_lstm
         }
 
     def _create_ui(self):
