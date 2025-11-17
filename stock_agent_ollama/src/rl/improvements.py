@@ -565,10 +565,15 @@ class AdaptiveActionSizer:
             use_improved_actions: Whether using improved action space
 
         Returns:
-            Number of shares to sell
+            Number of shares to sell (0 if no position)
         """
+        # Can't sell if no position
+        if position == 0:
+            return 0
+
         if use_improved_actions:
             if action == ImprovedTradingAction.SELL_PARTIAL:
+                # Sell 50% of position, minimum 1 share if position > 0
                 return max(1, position // 2)
             elif action == ImprovedTradingAction.SELL_ALL:
                 return position
