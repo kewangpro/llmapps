@@ -206,12 +206,13 @@ reward = (
 
 #### PPO (Proximal Policy Optimization)
 
-**Implementation**: Stable-Baselines3 PPO via `EnhancedRLTrainer` in `src/rl/training.py`
+**Implementation**: Stable-Baselines3 PPO and sb3-contrib RecurrentPPO via `EnhancedRLTrainer` in `src/rl/training.py`
 
 **Advantages**:
 - Stable training with clipped objective
 - Sample efficient
 - Works well with continuous updates
+- Optional LSTM support via RecurrentPPO for temporal patterns
 
 **Hyperparameters**:
 - Learning rate: `3e-4`
@@ -221,10 +222,20 @@ reward = (
 - gamma: `0.99`
 - clip_range: `0.2`
 
+**LSTM Policy (RecurrentPPO)**:
+- Enable via `use_lstm_policy=True` flag in training config
+- Uses LSTM layers for temporal pattern recognition
+- Better at detecting market regime changes
+- Excellent for bear markets (+1.36% on TEAM vs -14.59% baseline)
+- More conservative in bull markets (17.61% on GOOGL vs 40.92% A2C)
+- Model naming: `lstm_ppo_SYMBOL_timestamp`
+- Only available for PPO (not A2C or DQN)
+
 **Use Cases**:
-- General-purpose training
-- Long training runs
-- Stable convergence needed
+- General-purpose training (regular PPO)
+- Downtrending markets (RecurrentPPO with LSTM)
+- When temporal patterns are important
+- Defensive trading strategies
 
 #### A2C (Advantage Actor-Critic)
 
@@ -233,18 +244,27 @@ reward = (
 **Advantages**:
 - Faster training than PPO
 - Simpler algorithm
-- Good for quick experiments
+- Excellent performance in bull markets (40.92% on GOOGL)
+- Simple buy-and-hold like strategies
 
 **Hyperparameters**:
 - Learning rate: `7e-4`
-- n_steps: `5`
+- n_steps: `128`
 - gamma: `0.99`
-- gae_lambda: `1.0`
+- gae_lambda: `0.95`
+- normalize_advantage: `True`
+
+**Performance Characteristics**:
+- Bull markets: Excellent (40.92% on GOOGL, only 0.70% behind Buy & Hold)
+- Bear markets: Poor (-14.59% on TEAM, matches worst baseline)
+- Strategy: Tends toward 100% BUY_MEDIUM (action collapse)
+- Adaptability: None - applies same strategy regardless of market
 
 **Use Cases**:
+- Bull market trading only
+- When confident in uptrend
 - Quick prototyping
-- Faster iteration
-- Simpler problems
+- Risk tolerance for trend reversals
 
 #### DQN (Deep Q-Network)
 
@@ -253,8 +273,9 @@ reward = (
 **Advantages**:
 - Off-policy learning (reuses experiences via replay buffer)
 - Sample efficient with experience replay
-- Epsilon-greedy exploration
-- Best overall performance on uptrending stocks
+- Epsilon-greedy exploration ensures action diversity
+- Most consistent performance across market conditions
+- Adapts strategy based on market trends
 
 **Hyperparameters**:
 - Learning rate: `1e-4`
@@ -265,11 +286,19 @@ reward = (
 - Exploration final eps: `0.05`
 - Tau: `0.005`
 
+**Performance Characteristics**:
+- Bull markets: Good (35.40% on GOOGL)
+- Bear markets: Best loss control (-3.46% on TEAM vs -14.59% baseline)
+- Strategy: Adapts to market conditions
+  - Uptrend: 90% buying, 2% selling (stay long)
+  - Downtrend: 63% buying, 35% selling (active trading)
+- Adaptability: High - market-aware strategy selection
+
 **Use Cases**:
-- Production trading strategies
-- Best risk-adjusted returns
-- Uptrending markets
-- Sample efficiency important
+- Production trading (most reliable)
+- Unknown or mixed market conditions
+- Risk-adjusted returns important
+- Consistent performance required
 
 **Reward Configuration**:
 DQN uses `EnhancedRewardConfig` with lighter penalties compared to PPO/A2C:

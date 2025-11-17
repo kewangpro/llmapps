@@ -109,6 +109,7 @@ The platform features a professional light-theme interface with 6 main pages:
 2. **Configure Agent**:
    - **Symbol**: Select from dropdown (AAPL, MSFT, GOOGL, AMZN, TSLA, META, NVDA, ORCL)
    - **Algorithm**: Choose DQN (best performance), PPO (stable), or A2C (faster)
+   - **Use LSTM Policy**: Optional for PPO only (RecurrentPPO for bear markets)
    - **Training Period**: 1095 days (3 years, proven optimal)
    - **Training Steps**: 100,000 (recommended starting point)
    - **Learning Rate**: Auto-set based on algorithm
@@ -139,12 +140,17 @@ The platform features a professional light-theme interface with 6 main pages:
 4. Wait ~30 seconds
 5. Review comprehensive results
 
+**Automatic Model Loading:**
+- Backtesting automatically finds and loads ALL available trained models for the selected symbol
+- Compares PPO, A2C, DQN, and LSTM PPO agents (if trained)
+- No need to select algorithm - all models are included
+
 **Backtest Results:**
-- **Performance Table**: RL Agent vs Buy & Hold vs Momentum
+- **Performance Table**: All RL Agents vs Buy & Hold vs Momentum
   - Metrics: Total Return %, Sharpe Ratio, Max Drawdown, Win Rate
   - Action distribution (HOLD, BUY_SMALL, BUY_MEDIUM, BUY_LARGE, SELL_PARTIAL, SELL_ALL)
 - **Charts**:
-  - Portfolio value over time comparison
+  - Clean portfolio value comparison (all strategies)
   - Action distribution visualization
   - Key metrics bar chart
 
@@ -217,8 +223,9 @@ The live trading session is **persistent**. You can stop the application and res
 
 **Tab 2: RL Agents**
 - Header: "RL Trading Agents / Reinforcement learning models"
-- Lists all trained PPO, A2C, and DQN agents
+- Lists all trained PPO, A2C, DQN, and LSTM PPO agents
 - Shows algorithm type, symbol, training date
+- LSTM PPO models clearly labeled with "lstm_ppo" prefix
 - Performance column shows "Run backtest →" hint
   - Performance data calculated when you run backtests
   - Not stored with models
@@ -268,18 +275,18 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 - ✅ Force retrain checkbox updates models with latest data
 
 ### RL Trading
-- ✅ **DQN** recommended for best performance (off-policy learning, sample efficient)
-- ✅ **PPO** for stable, reliable strategies (on-policy, LSTM support)
-- ✅ **A2C** for faster training and experimentation
+- ✅ **DQN** recommended for production (most consistent, adapts to markets)
+- ✅ **A2C** excellent for bull markets (40.92% on GOOGL)
+- ✅ **RecurrentPPO (LSTM)** best for bear markets (+1.36% on TEAM)
+- ✅ **PPO** stable baseline (LSTM optional for temporal patterns)
 - ✅ **Action Masking** always enabled - prevents invalid trades automatically
 - ✅ **6-Action Space** provides fine-grained control over position sizing
 - ✅ **Algorithm-Specific Rewards** - DQN and PPO/A2C use different optimized configs
 - ✅ **1095 days** (3 years) proven optimal for diverse market conditions
 - ✅ **100,000 steps** recommended starting point (5-10 min training)
-- ✅ **DQN Results**: 33.53% on GOOGL, -3.46% on TEAM (vs B&H -14.59%)
+- ✅ **Backtesting** automatically loads all trained models for comparison
 - ✅ Training runs in background - UI stays responsive
 - ✅ Models saved automatically with best model selection
-- ✅ Backtests auto-load best performing model
 
 ### Performance
 - ⚡ Real-time data with 5-second refresh
@@ -314,10 +321,11 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 1. Click Trading tab
 2. Select symbol: NVDA
 3. Choose algorithm: DQN (or PPO, A2C)
-4. Use recommended settings: 1095 days (3 years), 100,000 steps
-5. Click "🚀 Start Training"
-6. Monitor progress (5-10 minutes)
-7. Review training results and charts
+4. Optional: Check "Use LSTM Policy" if PPO and downtrend expected
+5. Use recommended settings: 1095 days (3 years), 100,000 steps
+6. Click "🚀 Start Training"
+7. Monitor progress (5-10 minutes)
+8. Review training results and charts
 ```
 
 ### Workflow 4: Backtest Strategy (30 seconds)
@@ -325,9 +333,10 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 1. Trading tab
 2. Select symbol: AAPL
 3. Click "📊 Run Backtest"
-4. Compare RL Agent vs Buy & Hold vs Momentum
-5. Review metrics and performance charts
-6. Analyze action distribution
+4. All trained models automatically loaded and compared
+5. Review all RL agents vs Buy & Hold vs Momentum
+6. Compare metrics and performance charts
+7. Analyze action distribution across all strategies
 ```
 
 ### Workflow 5: Live Trading Session (Real-time)
@@ -405,6 +414,29 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 - **Environment**: Simulates realistic trading with costs
 - **Reward**: Maximizes risk-adjusted returns
 - **Training**: 1000s of episodes on historical data
+
+### Algorithm Selection Guide
+
+**For Production Trading:**
+- Use **DQN** - Most consistent across all market conditions
+  - Adapts strategy to uptrends and downtrends
+  - Good risk management
+  - 35.40% in bulls, -3.46% in bears (best loss control)
+
+**For Bull Markets Only:**
+- Use **A2C** - Excellent performance but no adaptation
+  - 40.92% on GOOGL (only 0.70% behind Buy & Hold)
+  - Will fail catastrophically in bear markets (-14.59%)
+  - Only if you're confident in sustained uptrend
+
+**For Bear Markets:**
+- Use **RecurrentPPO** (PPO with LSTM enabled)
+  - Only algorithm with positive returns in downtrends (+1.36% on TEAM)
+  - Uses temporal patterns to detect trend reversals
+  - Too conservative for bull markets (17.61% on GOOGL)
+
+**For General Use:**
+- Use **DQN** or train all three and let backtesting compare
 
 ---
 
