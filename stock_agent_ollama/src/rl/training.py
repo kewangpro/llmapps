@@ -29,8 +29,12 @@ from .improvements import (
     TrainingDiagnostics
 )
 from .callbacks import TrainingProgressCallback, PerformanceMonitorCallback
+from .env_factory import EnvConfig
 
 logger = logging.getLogger(__name__)
+
+# Reference defaults from EnvConfig (single source of truth)
+_ENV_DEFAULTS = {f.name: f.default for f in EnvConfig.__dataclass_fields__.values()}
 
 
 @dataclass
@@ -41,22 +45,25 @@ class EnhancedTrainingConfig:
     symbol: str
     start_date: str
     end_date: str
-    initial_balance: float = 100000.0
+    initial_balance: float = _ENV_DEFAULTS['initial_balance']
 
     # Environment enhancements
-    use_action_masking: bool = True  # Always enabled for safety
-    use_enhanced_rewards: bool = True
-    use_adaptive_sizing: bool = True
-    use_improved_actions: bool = True  # Always enabled - 6-action space with HOLD as default
+    use_action_masking: bool = _ENV_DEFAULTS['use_action_masking']
+    use_enhanced_rewards: bool = _ENV_DEFAULTS['use_enhanced_rewards']
+    use_adaptive_sizing: bool = _ENV_DEFAULTS['use_adaptive_sizing']
+    use_improved_actions: bool = _ENV_DEFAULTS['use_improved_actions']
     # Disabled curriculum learning - was causing excessive exploration leading to 65% invalid action rate
     # Agent performs better with direct learning on the full task
     use_curriculum_learning: bool = False
-    enable_diagnostics: bool = True
+    enable_diagnostics: bool = _ENV_DEFAULTS['enable_diagnostics']
     use_lstm_policy: bool = False # New field to enable LSTM policy
 
-    # Position limits
-    max_position_size: int = 1000
-    max_position_pct: float = 40.0
+    # Position limits (from EnvConfig)
+    max_position_size: int = _ENV_DEFAULTS['max_position_size']
+    max_position_pct: float = _ENV_DEFAULTS['max_position_pct']
+
+    # Observation parameters (from EnvConfig)
+    lookback_window: int = _ENV_DEFAULTS['lookback_window']
 
     # Reward configuration
     reward_config: EnhancedRewardConfig = field(default_factory=EnhancedRewardConfig)
@@ -79,12 +86,12 @@ class EnhancedTrainingConfig:
     eval_freq: int = 5000
     save_freq: int = 10000
 
-    # Transaction costs
+    # Transaction costs (from EnvConfig)
     # RESTORED to 0.0005 for DQN compatibility
     # DQN works best with light transaction costs (learns optimal trading frequency)
     # PPO/A2C get higher costs via PPORewardConfig (0.002)
-    transaction_cost_rate: float = 0.0005  # 0.05% per trade (DQN-optimized)
-    slippage_rate: float = 0.0005
+    transaction_cost_rate: float = _ENV_DEFAULTS['transaction_cost_rate']  # 0.05% per trade (DQN-optimized)
+    slippage_rate: float = _ENV_DEFAULTS['slippage_rate']
 
     # Save settings
     save_dir: Optional[str] = None
@@ -203,7 +210,8 @@ class EnhancedRLTrainer:
         self.save_dir.mkdir(parents=True, exist_ok=True)
 
     def setup_environment(self) -> EnhancedTradingEnv:
-        """Create enhanced trading environment."""
+        """Create enhanced trading environment using shared factory."""
+        from .env_factory import EnvConfig, create_enhanced_env
 
         # Setup curriculum learning
         if self.config.use_curriculum_learning:
@@ -212,8 +220,8 @@ class EnhancedRLTrainer:
         else:
             self.curriculum_manager = None
 
-        # Create environment
-        env = EnhancedTradingEnv(
+        # Build environment config
+        env_config = EnvConfig(
             symbol=self.config.symbol,
             start_date=self.config.start_date,
             end_date=self.config.end_date,
@@ -222,6 +230,8 @@ class EnhancedRLTrainer:
             slippage_rate=self.config.slippage_rate,
             max_position_size=self.config.max_position_size,
             max_position_pct=self.config.max_position_pct,
+            lookback_window=self.config.lookback_window,
+            include_technical_indicators=True,
             use_action_masking=self.config.use_action_masking,
             use_enhanced_rewards=self.config.use_enhanced_rewards,
             use_adaptive_sizing=self.config.use_adaptive_sizing,
@@ -231,8 +241,9 @@ class EnhancedRLTrainer:
             enable_diagnostics=self.config.enable_diagnostics
         )
 
-        self.env = env
-        return env
+        # Create environment using shared factory
+        self.env = create_enhanced_env(env_config)
+        return self.env
 
     def setup_agent(self) -> Any:
         """Create RL agent."""
@@ -478,30 +489,49 @@ class EnhancedRLTrainer:
         print(f"{'='*70}\n")
 
     def save_config(self):
-        """Save training configuration."""
+        """Save complete training configuration for reproducibility."""
         config_path = self.save_dir / "training_config.json"
 
         config_dict = {
+            # Environment parameters - needed to reproduce exact training environment
             'symbol': self.config.symbol,
             'start_date': self.config.start_date,
             'end_date': self.config.end_date,
             'initial_balance': self.config.initial_balance,
+
+            # Cost parameters - CRITICAL for matching training conditions
+            'transaction_cost_rate': self.config.transaction_cost_rate,
+            'slippage_rate': self.config.slippage_rate,
+
+            # Position limits
+            'max_position_size': self.config.max_position_size,
+            'max_position_pct': self.config.max_position_pct,
+
+            # Enhancement flags - needed to recreate environment
             'use_action_masking': self.config.use_action_masking,
             'use_enhanced_rewards': self.config.use_enhanced_rewards,
             'use_adaptive_sizing': self.config.use_adaptive_sizing,
             'use_improved_actions': self.config.use_improved_actions,
             'use_curriculum_learning': self.config.use_curriculum_learning,
             'use_lstm_policy': self.config.use_lstm_policy,
+
+            # Agent settings
             'agent_type': self.config.agent_type,
             'learning_rate': self.config.learning_rate,
             'total_timesteps': self.config.total_timesteps,
-            'max_position_pct': self.config.max_position_pct,
+
+            # Observation space
+            'lookback_window': self.config.lookback_window,
+            'include_technical_indicators': True,  # Always true in current implementation
+
+            # Optional flags
+            'enable_diagnostics': self.config.enable_diagnostics,
         }
 
         with open(config_path, 'w') as f:
             json.dump(config_dict, f, indent=2)
 
-        logger.info(f"Saved configuration to {config_path}")
+        logger.info(f"Saved complete training config to {config_path}")
 
     @staticmethod
     def load_agent(

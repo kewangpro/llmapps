@@ -10,6 +10,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Tuple, Any
 from src.rl.environments import TradingAction as EnvTradingAction
+from src.rl.env_factory import EnvConfig
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -17,9 +18,10 @@ from pathlib import Path
 import logging
 import json
 
-
-
 logger = logging.getLogger(__name__)
+
+# Reference defaults from EnvConfig (single source of truth)
+_ENV_DEFAULTS = {f.name: f.default for f in EnvConfig.__dataclass_fields__.values()}
 
 
 # ============================================================================
@@ -200,8 +202,8 @@ class LiveTradingConfig:
     """Live trading configuration"""
     symbol: str
     agent_path: str
-    initial_capital: float = 100000.0
-    max_position_size: float = 40.0  # Max position as % of portfolio value (e.g., 40 = 40%)
+    initial_capital: float = _ENV_DEFAULTS['initial_balance']
+    max_position_size: float = _ENV_DEFAULTS['max_position_pct']  # Max position as % of portfolio value (from EnvConfig)
     max_portfolio_risk_pct: float = 2.0  # Max 2% portfolio risk per trade
     stop_loss_pct: float = 5.0  # 5% stop loss
     max_daily_loss_pct: float = 10.0  # 10% max daily loss (circuit breaker)
@@ -477,7 +479,8 @@ class RiskManager:
             total_value_after = total_shares_after * order.price
             position_pct = (total_value_after / portfolio.total_value) * 100
 
-            if position_pct > self.config.max_position_size:
+            # Use small tolerance for floating point comparison (allow up to max + 0.01%)
+            if position_pct > self.config.max_position_size + 0.01:
                 return RiskStatus(
                     approved=False,
                     reason=f"Position would be {position_pct:.1f}% of portfolio, max is {self.config.max_position_size:.1f}%"
@@ -701,38 +704,66 @@ class LiveTradingEngine:
             raise
 
     def setup_environment(self):
-        """Setup enhanced trading environment for live trading."""
-        from .environments import EnhancedTradingEnv
+        """
+        Setup enhanced trading environment matching training configuration.
+
+        This loads the complete environment config from the trained model to ensure
+        live trading uses the exact same settings as training.
+        """
+        from .model_utils import load_env_config_from_model
+        from .env_factory import EnvConfig, create_enhanced_env
         from .improvements import EnhancedRewardConfig
         from datetime import datetime, timedelta
 
-        # Fetch recent historical data for environment initialization
+        # Load config from trained model to match training environment
+        try:
+            training_config = load_env_config_from_model(Path(self.config.agent_path))
+            logger.info(f"Loaded training config from model: {Path(self.config.agent_path).parent}")
+        except Exception as e:
+            logger.warning(f"Could not load training config ({e}), using default values")
+            training_config = {}
+
+        # Use recent historical data for environment (override saved dates)
         end_date = datetime.now().strftime("%Y-%m-%d")
-        start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")  # 1 year of data
+        start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
 
         logger.info(f"Initializing environment with data from {start_date} to {end_date}")
 
-        self.env = EnhancedTradingEnv(
+        # Build env config matching training, with live date ranges
+        env_config = EnvConfig(
             symbol=self.config.symbol,
             start_date=start_date,
             end_date=end_date,
             initial_balance=self.config.initial_capital,
-            transaction_cost_rate=0.001,
-            slippage_rate=0.0,
-            max_position_size=1000,  # Match training default
-            max_position_pct=self.config.max_position_size,
-            include_technical_indicators=True,
-            # Match training configuration
-            use_action_masking=True,
-            use_enhanced_rewards=True,
-            use_adaptive_sizing=True,
-            use_improved_actions=True,
-            reward_config=EnhancedRewardConfig(),
+
+            # Load critical parameters from training config
+            transaction_cost_rate=training_config.get('transaction_cost_rate', 0.0005),
+            slippage_rate=training_config.get('slippage_rate', 0.0005),
+            max_position_size=training_config.get('max_position_size', 1000),
+            max_position_pct=training_config.get('max_position_pct', 80.0),
+            lookback_window=training_config.get('lookback_window', 60),
+            include_technical_indicators=training_config.get('include_technical_indicators', True),
+
+            # Load enhancement flags from training config
+            use_action_masking=training_config.get('use_action_masking', True),
+            use_enhanced_rewards=training_config.get('use_enhanced_rewards', True),
+            use_adaptive_sizing=training_config.get('use_adaptive_sizing', True),
+            use_improved_actions=training_config.get('use_improved_actions', True),
+
+            # No curriculum or diagnostics in live trading
             curriculum_manager=None,
-            enable_diagnostics=False
+            enable_diagnostics=False,
+
+            # Use default reward config
+            reward_config=EnhancedRewardConfig()
         )
 
-        logger.info(f"Environment initialized for live trading")
+        # Create environment using shared factory
+        self.env = create_enhanced_env(env_config)
+
+        logger.info(f"Environment initialized for live trading with training config: "
+                   f"costs={env_config.transaction_cost_rate:.4f}, "
+                   f"max_pos={env_config.max_position_pct}%")
 
     def initialize_session_state(self, session_id: Optional[str] = None) -> TradingSession:
         """Initialize new trading session state"""
@@ -805,15 +836,29 @@ class LiveTradingEngine:
             # Build observation for agent (simplified - would need proper feature engineering)
             observation = self._build_observation(tick)
 
-            # Get action from agent
-            action, _states = self.agent.predict(observation, deterministic=True)
-
             # Initialize environment if not already done
             if self.env is None:
                 self.setup_environment()
 
             # Use ImprovedTradingAction enum (6 actions)
             from .improvements import ImprovedTradingAction
+
+            # Get current position for action masking
+            current_position = self.portfolio.positions.get(self.config.symbol)
+            current_shares = current_position.shares if current_position else 0
+
+            # Get action mask from environment
+            action_mask = self.env.action_masker.get_action_mask(
+                cash=self.portfolio.cash,
+                position=current_shares,
+                current_price=tick.price,
+                max_position_size=1000,  # Match training default
+                portfolio_value=self.portfolio.total_value,
+                max_position_pct=self.config.max_position_size
+            )
+
+            # Get action from agent
+            action, _states = self.agent.predict(observation, deterministic=True)
 
             action_names = {
                 0: 'HOLD',
@@ -825,47 +870,22 @@ class LiveTradingEngine:
             }
 
             action_name = action_names.get(int(action), 'UNKNOWN')
+
+            # Debug logging - show action mask details
+            logger.info(f"{self.session.session_id} - Action mask: {action_mask}")
+            logger.info(f"{self.session.session_id} - Portfolio: Cash=${self.portfolio.cash:.2f}, Position={current_shares} shares, Total Value=${self.portfolio.total_value:.2f}, Price=${tick.price:.2f}")
+
+            # Check if predicted action is valid according to mask
+            if action_mask[int(action)] == 0.0:
+                logger.warning(f"{self.session.session_id} - Agent predicted invalid action: {action_name}, defaulting to HOLD")
+                self.session.add_event("ACTION_MASKED", f"Agent predicted {action_name} but action is invalid, using HOLD")
+                action = ImprovedTradingAction.HOLD
+                action_name = 'HOLD'
+
             logger.info(f"{self.session.session_id} - Agent decision: {action_name} (action={action})")
 
             # Execute trade if not HOLD (action 0)
             if int(action) != ImprovedTradingAction.HOLD:
-                # Get current position
-                current_position = self.portfolio.positions.get(self.config.symbol)
-                current_shares = current_position.shares if current_position else 0
-
-                # Check action masking (prevent invalid actions)
-                action_valid = True
-                skip_reason = ""
-
-                # SELL actions require a position
-                if int(action) in [ImprovedTradingAction.SELL_PARTIAL, ImprovedTradingAction.SELL_ALL]:
-                    if current_shares == 0:
-                        action_valid = False
-                        skip_reason = "Cannot sell - no position held"
-
-                # BUY actions require cash and position limit check
-                elif int(action) in [ImprovedTradingAction.BUY_SMALL, ImprovedTradingAction.BUY_MEDIUM, ImprovedTradingAction.BUY_LARGE]:
-                    if self.portfolio.cash < tick.price:
-                        action_valid = False
-                        skip_reason = f"Insufficient cash: Need ${tick.price:.2f}, have ${self.portfolio.cash:.2f}"
-                    else:
-                        # Check position limit
-                        current_position_value = current_shares * tick.price
-                        current_position_pct = (current_position_value / self.portfolio.total_value) * 100
-                        if current_position_pct >= self.config.max_position_size:
-                            action_valid = False
-                            skip_reason = f"Max position size reached: {current_position_pct:.1f}% (limit: {self.config.max_position_size:.1f}%)"
-
-                if not action_valid:
-                    self.session.add_event("ACTION_MASKED", skip_reason)
-                    logger.info(f"{self.session.session_id} - ⚠️ Action masked: {skip_reason}")
-                    return {
-                        "status": "action_masked",
-                        "reason": skip_reason,
-                        "portfolio_value": self.portfolio.total_value,
-                        "timestamp": tick.timestamp.isoformat()
-                    }
-
                 # Calculate shares using adaptive sizing from environment
                 shares = 0
 
@@ -919,11 +939,11 @@ class LiveTradingEngine:
                         "timestamp": tick.timestamp.isoformat()
                     }
 
-                # Convert to OrderAction for execution
+                # Convert to TradingAction for execution
                 if shares > 0:
-                    order_action = OrderAction.BUY
+                    order_action = TradingAction.BUY_SMALL
                 else:
-                    order_action = OrderAction.SELL
+                    order_action = TradingAction.SELL
                     shares = abs(shares)  # Make shares positive for order
 
                 order = Order(
