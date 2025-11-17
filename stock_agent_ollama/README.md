@@ -158,12 +158,18 @@ stock_agent_ollama/
 ├── src/                # Core application source code
 │   ├── agents/         # AI and query processing (Ollama + hybrid)
 │   ├── rl/             # Reinforcement Learning (training, backtesting, live trading)
-│   ├── tools/          # Data fetching, analysis, prediction (LSTM, indicators)
+│   │   ├── env_factory.py      # Shared environment configuration
+│   │   ├── model_utils.py      # Shared model loading utilities
+│   │   ├── environments.py     # Trading environments
+│   │   ├── training.py         # Training pipeline
+│   │   ├── backtesting.py      # Backtesting engine
+│   │   ├── live_trading.py     # Live trading engine
+│   │   └── improvements.py     # Action masking, adaptive sizing
+│   ├── tools/          # Data fetching, analysis, prediction (LSTM, indicators, caching)
 │   ├── ui/             # Web interface, design system, pages
 │   │   ├── app.py      # Main application factory and layout
 │   │   ├── design_system.py  # Professional light theme
 │   │   └── pages/      # All page implementations
-│   ├── utils/          # Utility functions (caching, helpers)
 │   ├── config.py       # Configuration and environment settings
 │   └── main.py         # Application entry point
 ├── data/               # Cached data, logs, trained models, sessions
@@ -201,8 +207,9 @@ stock_agent_ollama/
 OLLAMA_MODEL=gemma3:latest           # AI model for analysis
 OLLAMA_BASE_URL=http://localhost:11434
 PANEL_PORT=5006                      # Web interface port
-RL_DEFAULT_INITIAL_BALANCE=100000.0  # Starting balance
-RL_TRANSACTION_COST_RATE=0.0005      # 0.05% transaction cost (DQN)
+RL_DEFAULT_INITIAL_BALANCE=100000.0  # Starting balance ($100k)
+RL_TRANSACTION_COST_RATE=0.0005      # 0.05% transaction cost
+RL_MAX_POSITION_PCT=80.0             # Max position size (80% of portfolio)
 ```
 
 **Health Checks:**
