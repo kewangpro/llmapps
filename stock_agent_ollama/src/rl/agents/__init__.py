@@ -3,11 +3,13 @@
 from .base_agent import BaseRLAgent
 from .ppo_agent import PPOAgent
 from .a2c_agent import A2CAgent
+from .dqn_agent import DQNAgent
 
 __all__ = [
     'BaseRLAgent',
     'PPOAgent',
     'A2CAgent',
+    'DQNAgent',
     'create_agent',
 ]
 
@@ -21,7 +23,7 @@ def create_agent(
     Factory function to create RL agents.
 
     Args:
-        agent_type: Type of agent ('ppo', 'a2c')
+        agent_type: Type of agent ('ppo', 'a2c', 'dqn')
         env: Trading environment
         **kwargs: Additional agent parameters
 
@@ -37,5 +39,7 @@ def create_agent(
         return PPOAgent(env, **kwargs)
     elif agent_type == 'a2c':
         return A2CAgent(env, **kwargs)
+    elif agent_type == 'dqn':
+        return DQNAgent(env, **kwargs)
     else:
-        raise ValueError(f"Unknown agent type: {agent_type}. Available: ppo, a2c")
+        raise ValueError(f"Unknown agent type: {agent_type}. Available: ppo, a2c, dqn")
