@@ -5,10 +5,10 @@ This module contains the backtest engine and metrics calculator.
 """
 
 from .agents import BaseRLAgent
-from .environments import SingleStockTradingEnv
-from dataclasses import dataclass
+from .environments import EnhancedTradingEnv
+from .improvements import EnhancedRewardConfig
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional
 from typing import Dict, List, Optional, Any, Callable
 import numpy as np
 import pandas as pd
@@ -393,10 +393,18 @@ class BacktestConfig:
     symbol: str
     start_date: str
     end_date: str
-    initial_balance: float = 10000.0
+    initial_balance: float = 100000.0
     transaction_cost_rate: float = 0.001
     slippage_rate: float = 0.0
     risk_free_rate: float = 0.0
+
+    # Enhancement flags (match training configuration)
+    use_action_masking: bool = True
+    use_enhanced_rewards: bool = True
+    use_adaptive_sizing: bool = True
+    use_improved_actions: bool = True
+    max_position_pct: float = 40.0
+    reward_config: Optional[EnhancedRewardConfig] = field(default_factory=lambda: EnhancedRewardConfig())
 
 
 @dataclass
@@ -437,16 +445,26 @@ class BacktestEngine:
         self.config = config
         self.env = None
 
-    def setup_environment(self) -> SingleStockTradingEnv:
-        """Setup trading environment for backtesting."""
-        env = SingleStockTradingEnv(
+    def setup_environment(self) -> EnhancedTradingEnv:
+        """Setup enhanced trading environment for backtesting."""
+        env = EnhancedTradingEnv(
             symbol=self.config.symbol,
             start_date=self.config.start_date,
             end_date=self.config.end_date,
             initial_balance=self.config.initial_balance,
             transaction_cost_rate=self.config.transaction_cost_rate,
             slippage_rate=self.config.slippage_rate,
-            include_technical_indicators=True
+            max_position_size=1000,  # Match training default
+            max_position_pct=self.config.max_position_pct,
+            include_technical_indicators=True,
+            # Pass all enhancement flags to match training
+            use_action_masking=self.config.use_action_masking,
+            use_enhanced_rewards=self.config.use_enhanced_rewards,
+            use_adaptive_sizing=self.config.use_adaptive_sizing,
+            use_improved_actions=self.config.use_improved_actions,
+            reward_config=self.config.reward_config,
+            curriculum_manager=None,  # No curriculum in backtesting
+            enable_diagnostics=False  # Disable diagnostics for performance
         )
         self.env = env
         return env

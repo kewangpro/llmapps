@@ -17,14 +17,14 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, Any
 import logging
 import json
-import numpy as np
-
-from stable_baselines3 import PPO, A2C
+from stable_baselines3 import PPO, A2C, DQN
 from stable_baselines3.common.callbacks import BaseCallback
+from sb3_contrib import RecurrentPPO
 
 from .environments import EnhancedTradingEnv
 from .improvements import (
     EnhancedRewardConfig,
+    PPORewardConfig,
     CurriculumManager,
     TrainingDiagnostics
 )
@@ -41,15 +41,18 @@ class EnhancedTrainingConfig:
     symbol: str
     start_date: str
     end_date: str
-    initial_balance: float = 10000.0
+    initial_balance: float = 100000.0
 
     # Environment enhancements
     use_action_masking: bool = True  # Always enabled for safety
     use_enhanced_rewards: bool = True
     use_adaptive_sizing: bool = True
     use_improved_actions: bool = True  # Always enabled - 6-action space with HOLD as default
-    use_curriculum_learning: bool = True
+    # Disabled curriculum learning - was causing excessive exploration leading to 65% invalid action rate
+    # Agent performs better with direct learning on the full task
+    use_curriculum_learning: bool = False
     enable_diagnostics: bool = True
+    use_lstm_policy: bool = False # New field to enable LSTM policy
 
     # Position limits
     max_position_size: int = 1000
@@ -62,18 +65,25 @@ class EnhancedTrainingConfig:
     agent_type: str = "ppo"
     learning_rate: float = 3e-4
     gamma: float = 0.99
-    ent_coef: float = 0.01  # Exploration bonus
+    # Entropy coefficient controls exploration vs exploitation
+    # 0.05 caused action collapse (agent only used BUY_MEDIUM)
+    # 0.1 still showed action collapse (86% BUY_SMALL, 14% BUY_MEDIUM)
+    # 0.2 provides stronger exploration to prevent collapse to 1-2 actions
+    ent_coef: float = 0.2
     n_steps: int = 2048  # PPO: steps per update
     batch_size: int = 128  # Increased for better gradient estimates
     n_epochs: int = 10
 
     # Training settings
-    total_timesteps: int = 300000  # Proven default for consistent outperformance
+    total_timesteps: int = 100000  # Reduced from 300k to focus on quality learning with lower invalid action rate
     eval_freq: int = 5000
     save_freq: int = 10000
 
     # Transaction costs
-    transaction_cost_rate: float = 0.001
+    # RESTORED to 0.0005 for DQN compatibility
+    # DQN works best with light transaction costs (learns optimal trading frequency)
+    # PPO/A2C get higher costs via PPORewardConfig (0.002)
+    transaction_cost_rate: float = 0.0005  # 0.05% per trade (DQN-optimized)
     slippage_rate: float = 0.0005
 
     # Save settings
@@ -166,6 +176,18 @@ class EnhancedRLTrainer:
         self.curriculum_manager = None
         self.callbacks = []
 
+        # Select appropriate reward config based on agent type
+        # DQN uses EnhancedRewardConfig (lighter penalties, proven to work)
+        # PPO/A2C use PPORewardConfig (stronger penalties to fight action collapse)
+        if config.reward_config is None or isinstance(config.reward_config, EnhancedRewardConfig):
+            if config.agent_type.lower() in ['ppo', 'a2c']:
+                logger.info(f"Using PPORewardConfig for {config.agent_type.upper()}")
+                self.config.reward_config = PPORewardConfig()
+            else:  # DQN or other
+                logger.info(f"Using EnhancedRewardConfig (DQN-optimized) for {config.agent_type.upper()}")
+                if config.reward_config is None:
+                    self.config.reward_config = EnhancedRewardConfig()
+
         # Setup save directory
         if config.save_dir:
             self.save_dir = Path(config.save_dir)
@@ -213,13 +235,40 @@ class EnhancedRLTrainer:
         if self.env is None:
             self.setup_environment()
 
-        # Agent parameters
+        # Common agent parameters
         agent_params = {
             'learning_rate': self.config.learning_rate,
             'gamma': self.config.gamma,
             'verbose': self.config.verbose,
-            'ent_coef': self.config.ent_coef,
         }
+
+        # Determine agent class and policy type
+        agent_class = None
+        policy_type = 'MlpPolicy' # Default policy
+
+        if self.config.use_lstm_policy:
+            if self.config.agent_type.lower() == 'ppo':
+                agent_class = RecurrentPPO
+                policy_type = 'MlpLstmPolicy'
+            elif self.config.agent_type.lower() == 'a2c':
+                # RecurrentA2C does not exist, fall back to standard A2C
+                logger.warning(f"LSTM policy is not supported for A2C in sb3_contrib. Falling back to MlpPolicy for A2C.")
+                agent_class = A2C
+            else: # DQN or unsupported agent type
+                logger.warning(f"LSTM policy is not supported for {self.config.agent_type.upper()}. Falling back to MlpPolicy.")
+                if self.config.agent_type.lower() == 'dqn':
+                    agent_class = DQN
+                else:
+                    raise ValueError(f"Unsupported agent type: {self.config.agent_type}. Available: ppo, a2c, dqn")
+        else: # Not using LSTM policy
+            if self.config.agent_type.lower() == 'ppo':
+                agent_class = PPO
+            elif self.config.agent_type.lower() == 'a2c':
+                agent_class = A2C
+            elif self.config.agent_type.lower() == 'dqn':
+                agent_class = DQN
+            else:
+                raise ValueError(f"Unsupported agent type: {self.config.agent_type}. Available: ppo, a2c, dqn")
 
         # PPO-specific parameters
         if self.config.agent_type.lower() == 'ppo':
@@ -227,23 +276,40 @@ class EnhancedRLTrainer:
                 'n_steps': self.config.n_steps,
                 'batch_size': self.config.batch_size,
                 'n_epochs': self.config.n_epochs,
+                'ent_coef': self.config.ent_coef,
+            })
+        elif self.config.agent_type.lower() == 'a2c':
+            # A2C-specific parameters to prevent action collapse and improve stability
+            agent_params.update({
+                'ent_coef': self.config.ent_coef,
+                'n_steps': 128,              # Increase from default 5 to reduce variance
+                'gae_lambda': 0.95,          # Reduce from default 1.0 for better bias-variance tradeoff
+                'normalize_advantage': True, # Enable advantage normalization for stability
+                'vf_coef': 0.5,             # Value function coefficient
+                'max_grad_norm': 0.5,       # Gradient clipping
+            })
+        elif self.config.agent_type.lower() == 'dqn':
+            # DQN-specific parameters optimized for stock trading
+            agent_params.update({
+                'buffer_size': 100000,           # Large replay buffer for experience reuse
+                'learning_starts': 10000,        # Fill buffer before learning
+                'batch_size': self.config.batch_size,
+                'tau': 0.005,                    # Soft target network update
+                'train_freq': 4,                 # Update every 4 steps
+                'gradient_steps': 1,
+                'target_update_interval': 1000,  # Hard target update every 1000 steps
+                'exploration_fraction': 0.3,     # 30% of training for exploration
+                'exploration_initial_eps': 1.0,  # Start fully random
+                'exploration_final_eps': 0.05,   # End with 5% random actions
             })
 
-            self.agent = PPO(
-                'MlpPolicy',
-                self.env,
-                **agent_params
-            )
-        elif self.config.agent_type.lower() == 'a2c':
-            self.agent = A2C(
-                'MlpPolicy',
-                self.env,
-                **agent_params
-            )
-        else:
-            raise ValueError(f"Unsupported agent type: {self.config.agent_type}")
+        self.agent = agent_class(
+            policy_type,
+            self.env,
+            **agent_params
+        )
 
-        logger.info(f"Created {self.config.agent_type.upper()} agent")
+        logger.info(f"Created {self.config.agent_type.upper()} agent with {policy_type}")
         return self.agent
 
     def setup_callbacks(self):
@@ -421,6 +487,7 @@ class EnhancedRLTrainer:
             'use_adaptive_sizing': self.config.use_adaptive_sizing,
             'use_improved_actions': self.config.use_improved_actions,
             'use_curriculum_learning': self.config.use_curriculum_learning,
+            'use_lstm_policy': self.config.use_lstm_policy,
             'agent_type': self.config.agent_type,
             'learning_rate': self.config.learning_rate,
             'total_timesteps': self.config.total_timesteps,
@@ -443,25 +510,49 @@ class EnhancedRLTrainer:
 
         Args:
             model_path: Path to saved model
-            agent_type: Type of agent (e.g., 'ppo', 'a2c')
+            agent_type: Type of agent (e.g., 'ppo', 'a2c', 'dqn')
             env: Optional environment (not used, kept for compatibility)
 
         Returns:
             Loaded agent (stable-baselines3 model)
         """
-        from stable_baselines3 import PPO, A2C
+        from stable_baselines3 import PPO, A2C, DQN
+        from sb3_contrib import RecurrentPPO
 
         model_path = Path(model_path)
         if not model_path.exists():
             raise FileNotFoundError(f"Model not found: {model_path}")
 
-        # Load using stable-baselines3 directly
+        # Check if this is an LSTM model by checking the training config
+        model_dir = model_path.parent
+        config_path = model_dir / "training_config.json"
+        use_lstm = False
+
+        if config_path.exists():
+            import json
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+                use_lstm = config.get('use_lstm_policy', False)
+
+        # Load using appropriate class based on agent type and LSTM flag
         if agent_type.lower() == 'ppo':
-            agent = PPO.load(str(model_path))
+            if use_lstm:
+                logger.info(f"Loading RecurrentPPO model from {model_path}")
+                agent = RecurrentPPO.load(str(model_path))
+            else:
+                agent = PPO.load(str(model_path))
         elif agent_type.lower() == 'a2c':
+            # A2C doesn't have recurrent version, always use standard
+            if use_lstm:
+                logger.warning("Loaded A2C model was trained with LSTM requested, but A2C doesn't support LSTM")
             agent = A2C.load(str(model_path))
+        elif agent_type.lower() == 'dqn':
+            # DQN doesn't have recurrent version, always use standard
+            if use_lstm:
+                logger.warning("Loaded DQN model was trained with LSTM requested, but DQN doesn't support LSTM")
+            agent = DQN.load(str(model_path))
         else:
-            raise ValueError(f"Unsupported agent type: {agent_type}")
+            raise ValueError(f"Unsupported agent type: {agent_type}. Available: ppo, a2c, dqn")
 
         # Add is_trained attribute for compatibility with backtest code
         agent.is_trained = True

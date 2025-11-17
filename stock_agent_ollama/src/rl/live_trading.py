@@ -200,7 +200,7 @@ class LiveTradingConfig:
     """Live trading configuration"""
     symbol: str
     agent_path: str
-    initial_capital: float = 10000.0
+    initial_capital: float = 100000.0
     max_position_size: float = 40.0  # Max position as % of portfolio value (e.g., 40 = 40%)
     max_portfolio_risk_pct: float = 2.0  # Max 2% portfolio risk per trade
     stop_loss_pct: float = 5.0  # 5% stop loss
@@ -630,6 +630,7 @@ class LiveTradingEngine:
         self.agent = None  # Will be loaded
         self.session: Optional[TradingSession] = None
         self._is_running = False
+        self.env = None  # Will be initialized when needed
 
     def save_state(self, file_path: Path):
         """Save the current trading session state to a file"""
@@ -673,14 +674,14 @@ class LiveTradingEngine:
 
     def load_agent(self, agent_path: str):
         """Load trained RL agent"""
-        from stable_baselines3 import PPO, A2C
+        from stable_baselines3 import PPO, A2C, DQN
 
         try:
             agent_path = Path(agent_path)
             if not agent_path.exists():
                 raise FileNotFoundError(f"Agent not found: {agent_path}")
 
-            # Try to load as PPO first, then A2C
+            # Try to load as PPO first, then A2C, then DQN
             try:
                 self.agent = PPO.load(str(agent_path))
                 logger.info(f"Loaded PPO agent from {agent_path}")
@@ -689,11 +690,49 @@ class LiveTradingEngine:
                     self.agent = A2C.load(str(agent_path))
                     logger.info(f"Loaded A2C agent from {agent_path}")
                 except Exception as e2:
-                    raise Exception(f"Failed to load as PPO or A2C: {e}, {e2}")
+                    try:
+                        self.agent = DQN.load(str(agent_path))
+                        logger.info(f"Loaded DQN agent from {agent_path}")
+                    except Exception as e3:
+                        raise Exception(f"Failed to load as PPO, A2C, or DQN: {e}, {e2}, {e3}")
 
         except Exception as e:
             logger.error(f"Failed to load agent: {e}")
             raise
+
+    def setup_environment(self):
+        """Setup enhanced trading environment for live trading."""
+        from .environments import EnhancedTradingEnv
+        from .improvements import EnhancedRewardConfig
+        from datetime import datetime, timedelta
+
+        # Fetch recent historical data for environment initialization
+        end_date = datetime.now().strftime("%Y-%m-%d")
+        start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")  # 1 year of data
+
+        logger.info(f"Initializing environment with data from {start_date} to {end_date}")
+
+        self.env = EnhancedTradingEnv(
+            symbol=self.config.symbol,
+            start_date=start_date,
+            end_date=end_date,
+            initial_balance=self.config.initial_capital,
+            transaction_cost_rate=0.001,
+            slippage_rate=0.0,
+            max_position_size=1000,  # Match training default
+            max_position_pct=self.config.max_position_size,
+            include_technical_indicators=True,
+            # Match training configuration
+            use_action_masking=True,
+            use_enhanced_rewards=True,
+            use_adaptive_sizing=True,
+            use_improved_actions=True,
+            reward_config=EnhancedRewardConfig(),
+            curriculum_manager=None,
+            enable_diagnostics=False
+        )
+
+        logger.info(f"Environment initialized for live trading")
 
     def initialize_session_state(self, session_id: Optional[str] = None) -> TradingSession:
         """Initialize new trading session state"""
@@ -769,73 +808,108 @@ class LiveTradingEngine:
             # Get action from agent
             action, _states = self.agent.predict(observation, deterministic=True)
 
-            # Map action (int) to trading decision using environment-aligned enum values
-            if action == TradingAction.SELL.value:
-                trading_action = TradingAction.SELL
-            elif action == TradingAction.BUY_SMALL.value:
-                trading_action = TradingAction.BUY_SMALL
-            elif action == TradingAction.BUY_LARGE.value:
-                trading_action = TradingAction.BUY_LARGE
-            else:
-                trading_action = TradingAction.HOLD
+            # Initialize environment if not already done
+            if self.env is None:
+                self.setup_environment()
 
-            logger.info(f"{self.session.session_id} - Agent decision: {trading_action.name} (action={action})")
+            # Use ImprovedTradingAction enum (6 actions)
+            from .improvements import ImprovedTradingAction
 
-            # Execute trade if not HOLD
-            if trading_action != TradingAction.HOLD:
-                # Determine shares using same logic as training environment
-                affordable_shares = 0
-                current_shares = 0
+            action_names = {
+                0: 'HOLD',
+                1: 'BUY_SMALL',
+                2: 'BUY_MEDIUM',
+                3: 'BUY_LARGE',
+                4: 'SELL_PARTIAL',
+                5: 'SELL_ALL'
+            }
 
-                if trading_action == TradingAction.BUY_SMALL:
-                    # Buy 10% of available cash
-                    affordable_shares = int((self.portfolio.cash * 0.1) / tick.price)
-                    current_position = self.portfolio.positions.get(self.config.symbol)
-                    current_shares = current_position.shares if current_position else 0
+            action_name = action_names.get(int(action), 'UNKNOWN')
+            logger.info(f"{self.session.session_id} - Agent decision: {action_name} (action={action})")
 
-                    # Calculate max shares based on portfolio percentage limit
-                    max_position_value = self.portfolio.total_value * (self.config.max_position_size / 100.0)
-                    max_shares_by_limit = int(max_position_value / tick.price)
-                    remaining_shares = max(0, max_shares_by_limit - current_shares)
+            # Execute trade if not HOLD (action 0)
+            if int(action) != ImprovedTradingAction.HOLD:
+                # Get current position
+                current_position = self.portfolio.positions.get(self.config.symbol)
+                current_shares = current_position.shares if current_position else 0
 
-                    shares = min(affordable_shares, remaining_shares)
+                # Check action masking (prevent invalid actions)
+                action_valid = True
+                skip_reason = ""
 
-                elif trading_action == TradingAction.BUY_LARGE:
-                    # Buy 30% of available cash
-                    affordable_shares = int((self.portfolio.cash * 0.3) / tick.price)
-                    current_position = self.portfolio.positions.get(self.config.symbol)
-                    current_shares = current_position.shares if current_position else 0
+                # SELL actions require a position
+                if int(action) in [ImprovedTradingAction.SELL_PARTIAL, ImprovedTradingAction.SELL_ALL]:
+                    if current_shares == 0:
+                        action_valid = False
+                        skip_reason = "Cannot sell - no position held"
 
-                    # Calculate max shares based on portfolio percentage limit
-                    max_position_value = self.portfolio.total_value * (self.config.max_position_size / 100.0)
-                    max_shares_by_limit = int(max_position_value / tick.price)
-                    remaining_shares = max(0, max_shares_by_limit - current_shares)
-
-                    shares = min(affordable_shares, remaining_shares)
-                elif trading_action == TradingAction.SELL:
-                    # Sell all holdings
-                    current_position = self.portfolio.positions.get(self.config.symbol)
-                    shares = current_position.shares if current_position else 0
-                else:
-                    shares = 0
-
-                # Skip if no shares to trade with specific reason
-                if shares <= 0:
-                    # Determine specific reason for skip
-                    if trading_action == TradingAction.SELL:
-                        reason = f"No position to sell (holdings: 0 shares)"
-                    elif trading_action in (TradingAction.BUY_SMALL, TradingAction.BUY_LARGE):
-                        if affordable_shares == 0:
-                            required_cash = tick.price if trading_action == TradingAction.BUY_SMALL else tick.price * 3
-                            reason = f"Insufficient cash: Need ${required_cash:.2f} for 1 share, have ${self.portfolio.cash:.2f}"
-                        else:
-                            # Calculate current position percentage
-                            current_position_value = current_shares * tick.price
-                            current_position_pct = (current_position_value / self.portfolio.total_value) * 100
-                            reason = f"Max position size reached: {current_position_pct:.1f}% of portfolio (limit: {self.config.max_position_size:.1f}%)"
+                # BUY actions require cash and position limit check
+                elif int(action) in [ImprovedTradingAction.BUY_SMALL, ImprovedTradingAction.BUY_MEDIUM, ImprovedTradingAction.BUY_LARGE]:
+                    if self.portfolio.cash < tick.price:
+                        action_valid = False
+                        skip_reason = f"Insufficient cash: Need ${tick.price:.2f}, have ${self.portfolio.cash:.2f}"
                     else:
-                        reason = f"No shares to trade for {trading_action.name}"
+                        # Check position limit
+                        current_position_value = current_shares * tick.price
+                        current_position_pct = (current_position_value / self.portfolio.total_value) * 100
+                        if current_position_pct >= self.config.max_position_size:
+                            action_valid = False
+                            skip_reason = f"Max position size reached: {current_position_pct:.1f}% (limit: {self.config.max_position_size:.1f}%)"
 
+                if not action_valid:
+                    self.session.add_event("ACTION_MASKED", skip_reason)
+                    logger.info(f"{self.session.session_id} - ⚠️ Action masked: {skip_reason}")
+                    return {
+                        "status": "action_masked",
+                        "reason": skip_reason,
+                        "portfolio_value": self.portfolio.total_value,
+                        "timestamp": tick.timestamp.isoformat()
+                    }
+
+                # Calculate shares using adaptive sizing from environment
+                shares = 0
+
+                if int(action) in [ImprovedTradingAction.BUY_SMALL, ImprovedTradingAction.BUY_MEDIUM, ImprovedTradingAction.BUY_LARGE]:
+                    # Use environment's adaptive sizer
+                    if self.env and self.env.adaptive_sizer:
+                        shares = self.env.adaptive_sizer.get_buy_size(
+                            action=int(action),
+                            cash=self.portfolio.cash,
+                            price=tick.price,
+                            position=current_shares,
+                            portfolio_value=self.portfolio.total_value,
+                            max_position_pct=self.config.max_position_size,
+                            volatility=0.02,  # Could calculate from recent data
+                            use_improved_actions=True
+                        )
+
+                elif int(action) == ImprovedTradingAction.SELL_PARTIAL:
+                    # Sell 50% of position (use environment's logic)
+                    if self.env and self.env.adaptive_sizer:
+                        sell_shares = self.env.adaptive_sizer.get_sell_size(
+                            action=int(action),
+                            position=current_shares,
+                            use_improved_actions=True
+                        )
+                        shares = -sell_shares
+                    else:
+                        shares = -max(1, current_shares // 2)
+
+                elif int(action) == ImprovedTradingAction.SELL_ALL:
+                    # Sell all (use environment's logic)
+                    if self.env and self.env.adaptive_sizer:
+                        sell_shares = self.env.adaptive_sizer.get_sell_size(
+                            action=int(action),
+                            position=current_shares,
+                            use_improved_actions=True
+                        )
+                        shares = -sell_shares
+                    else:
+                        shares = -current_shares
+
+                # Skip if no shares to trade
+                if shares == 0:
+                    reason = f"Calculated trade size is 0 shares for {action_name}"
                     self.session.add_event("ORDER_SKIPPED", reason)
                     logger.info(f"{self.session.session_id} - ⚠️ Order skipped: {reason}")
                     return {
@@ -845,9 +919,16 @@ class LiveTradingEngine:
                         "timestamp": tick.timestamp.isoformat()
                     }
 
+                # Convert to OrderAction for execution
+                if shares > 0:
+                    order_action = OrderAction.BUY
+                else:
+                    order_action = OrderAction.SELL
+                    shares = abs(shares)  # Make shares positive for order
+
                 order = Order(
                     symbol=self.config.symbol,
-                    action=trading_action,
+                    action=order_action,
                     shares=shares,
                     price=tick.price,
                     timestamp=tick.timestamp

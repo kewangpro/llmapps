@@ -39,7 +39,7 @@ class BaseTradingEnv(gym.Env, ABC):
 
     def __init__(
         self,
-        initial_balance: float = 10000.0,
+        initial_balance: float = 100000.0,
         transaction_cost_rate: float = 0.001,
         slippage_rate: float = 0.0,
         max_position_size: int = 1000,
@@ -313,7 +313,7 @@ class SingleStockTradingEnv(BaseTradingEnv):
         symbol: str,
         start_date: str,
         end_date: str,
-        initial_balance: float = 10000.0,
+        initial_balance: float = 100000.0,
         transaction_cost_rate: float = 0.001,
         slippage_rate: float = 0.0,
         max_position_size: int = 1000,
@@ -655,7 +655,7 @@ class EnhancedTradingEnv(SingleStockTradingEnv):
         symbol: str,
         start_date: str,
         end_date: str,
-        initial_balance: float = 10000.0,
+        initial_balance: float = 100000.0,
         transaction_cost_rate: float = 0.001,
         slippage_rate: float = 0.0,
         max_position_size: int = 1000,

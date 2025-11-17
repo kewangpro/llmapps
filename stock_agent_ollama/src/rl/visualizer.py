@@ -178,6 +178,7 @@ class RLVisualizer:
     ) -> go.Figure:
         """
         Plot comparison of multiple strategies with buy/sell indicators.
+        Shows portfolio value on left axis and return percentage on right axis.
 
         Args:
             results: Dictionary mapping strategy names to results
@@ -186,7 +187,10 @@ class RLVisualizer:
         Returns:
             Plotly figure
         """
-        fig = go.Figure()
+        from plotly.subplots import make_subplots
+
+        # Create figure with secondary y-axis
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
 
         colors = ['blue', 'purple', 'orange', 'brown', 'darkgray', 'navy']
 
@@ -197,15 +201,17 @@ class RLVisualizer:
             initial_value = result.portfolio_values[0]
             normalized_values = ((result.portfolio_values / initial_value) - 1) * 100
 
-            # Plot equity curve
+            # Plot portfolio value on left axis
             fig.add_trace(go.Scatter(
                 x=result.dates,
-                y=normalized_values[1:],
+                y=result.portfolio_values[1:],
                 mode='lines',
                 name=name,
                 line=dict(color=color, width=2),
-                showlegend=True
-            ))
+                showlegend=True,
+                customdata=normalized_values[1:].reshape(-1, 1),
+                hovertemplate='<b>%{fullData.name}</b><br>Portfolio: $%{y:,.2f}<br>Return: %{customdata[0]:.2f}%<extra></extra>'
+            ), secondary_y=False)
 
             # Add buy/sell markers for RL agents (first strategy only to avoid clutter)
             if idx == 0 and hasattr(result, 'trades') and len(result.trades) > 0:
@@ -213,29 +219,36 @@ class RLVisualizer:
                 buy_dates = []
                 buy_values = []
                 buy_prices = []
+                buy_portfolio = []
                 sell_dates = []
                 sell_values = []
                 sell_prices = []
+                sell_portfolio = []
 
                 for trade in result.trades:
                     # Find the index of the trade date in the dates array
                     trade_date = trade.get('date')
                     if trade_date in result.dates:
                         trade_step = result.dates.index(trade_date)
-                        trade_value = normalized_values[trade_step + 1]  # +1 because normalized_values[1:] (excludes initial value)
+                        portfolio_value = result.portfolio_values[trade_step + 1]
                         trade_price = trade.get('price')
+                        return_pct = normalized_values[trade_step + 1]
 
                         if trade.get('action') == 'BUY':
                             buy_dates.append(trade_date)
-                            buy_values.append(trade_value)
+                            buy_values.append(portfolio_value)  # Use portfolio value for y-axis
                             buy_prices.append(trade_price)
+                            buy_portfolio.append(return_pct)  # Store return % for hover
                         elif trade.get('action') == 'SELL':
                             sell_dates.append(trade_date)
-                            sell_values.append(trade_value)
+                            sell_values.append(portfolio_value)  # Use portfolio value for y-axis
                             sell_prices.append(trade_price)
+                            sell_portfolio.append(return_pct)  # Store return % for hover
 
                 # Add buy markers - made larger and more visible
                 if buy_dates:
+                    # Prepare customdata with stock price and return %
+                    buy_customdata = [[price, ret_pct] for price, ret_pct in zip(buy_prices, buy_portfolio)]
                     fig.add_trace(go.Scatter(
                         x=buy_dates,
                         y=buy_values,
@@ -248,13 +261,15 @@ class RLVisualizer:
                             line=dict(color='#059669', width=2),
                             opacity=0.9
                         ),
-                        customdata=buy_prices,
-                        hovertemplate='<b>BUY</b><br>Price: $%{customdata:.2f}<extra></extra>',
+                        customdata=buy_customdata,
+                        hovertemplate='<b>BUY</b><br>Stock Price: $%{customdata[0]:.2f}<br>Portfolio: $%{y:,.2f}<br>Return: %{customdata[1]:.2f}%<extra></extra>',
                         showlegend=False
-                    ))
+                    ), secondary_y=False)
 
                 # Add sell markers - made larger and more visible
                 if sell_dates:
+                    # Prepare customdata with stock price and return %
+                    sell_customdata = [[price, ret_pct] for price, ret_pct in zip(sell_prices, sell_portfolio)]
                     fig.add_trace(go.Scatter(
                         x=sell_dates,
                         y=sell_values,
@@ -267,15 +282,19 @@ class RLVisualizer:
                             line=dict(color='#dc2626', width=2),
                             opacity=0.9
                         ),
-                        customdata=sell_prices,
-                        hovertemplate='<b>SELL</b><br>Price: $%{customdata:.2f}<extra></extra>',
+                        customdata=sell_customdata,
+                        hovertemplate='<b>SELL</b><br>Stock Price: $%{customdata[0]:.2f}<br>Portfolio: $%{y:,.2f}<br>Return: %{customdata[1]:.2f}%<extra></extra>',
                         showlegend=False
-                    ))
+                    ), secondary_y=False)
 
+        # Set y-axes titles
+        fig.update_yaxes(title_text="Portfolio Value ($)", secondary_y=False)
+        fig.update_yaxes(title_text="Return (%)", secondary_y=True)
+
+        # Update layout
         fig.update_layout(
             title=title,
             xaxis_title="Date",
-            yaxis_title="Return (%)",
             template="plotly_white",
             hovermode='x unified',
             height=500,
@@ -287,6 +306,20 @@ class RLVisualizer:
                 x=1.02  # Position legend outside plot area
             )
         )
+
+        # Add return % traces on right axis (invisible, just for scaling)
+        for idx, (name, result) in enumerate(results.items()):
+            initial_value = result.portfolio_values[0]
+            normalized_values = ((result.portfolio_values / initial_value) - 1) * 100
+
+            fig.add_trace(go.Scatter(
+                x=result.dates,
+                y=normalized_values[1:],
+                mode='lines',
+                line=dict(color='rgba(0,0,0,0)', width=0),  # Invisible
+                showlegend=False,
+                hoverinfo='skip'
+            ), secondary_y=True)
 
         return fig
 
