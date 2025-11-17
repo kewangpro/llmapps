@@ -193,8 +193,12 @@ class EnhancedRLTrainer:
             self.save_dir = Path(config.save_dir)
         else:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            # All models now use consistent naming without prefix
-            self.save_dir = Path(f"data/models/rl/{config.agent_type}_{config.symbol}_{timestamp}")
+            # Add LSTM prefix for RecurrentPPO models
+            if config.use_lstm_policy and config.agent_type.lower() == 'ppo':
+                model_name = f"lstm_ppo_{config.symbol}_{timestamp}"
+            else:
+                model_name = f"{config.agent_type}_{config.symbol}_{timestamp}"
+            self.save_dir = Path(f"data/models/rl/{model_name}")
 
         self.save_dir.mkdir(parents=True, exist_ok=True)
 

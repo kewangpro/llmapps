@@ -177,7 +177,7 @@ class RLVisualizer:
         title: str = "Strategy Comparison"
     ) -> go.Figure:
         """
-        Plot comparison of multiple strategies with buy/sell indicators.
+        Plot comparison of multiple strategies.
         Shows portfolio value on left axis and return percentage on right axis.
 
         Args:
@@ -212,80 +212,6 @@ class RLVisualizer:
                 customdata=normalized_values[1:].reshape(-1, 1),
                 hovertemplate='<b>%{fullData.name}</b><br>Portfolio: $%{y:,.2f}<br>Return: %{customdata[0]:.2f}%<extra></extra>'
             ), secondary_y=False)
-
-            # Add buy/sell markers for RL agents (first strategy only to avoid clutter)
-            if idx == 0 and hasattr(result, 'trades') and len(result.trades) > 0:
-                # Extract buy and sell trades
-                buy_dates = []
-                buy_values = []
-                buy_prices = []
-                buy_portfolio = []
-                sell_dates = []
-                sell_values = []
-                sell_prices = []
-                sell_portfolio = []
-
-                for trade in result.trades:
-                    # Find the index of the trade date in the dates array
-                    trade_date = trade.get('date')
-                    if trade_date in result.dates:
-                        trade_step = result.dates.index(trade_date)
-                        portfolio_value = result.portfolio_values[trade_step + 1]
-                        trade_price = trade.get('price')
-                        return_pct = normalized_values[trade_step + 1]
-
-                        if trade.get('action') == 'BUY':
-                            buy_dates.append(trade_date)
-                            buy_values.append(portfolio_value)  # Use portfolio value for y-axis
-                            buy_prices.append(trade_price)
-                            buy_portfolio.append(return_pct)  # Store return % for hover
-                        elif trade.get('action') == 'SELL':
-                            sell_dates.append(trade_date)
-                            sell_values.append(portfolio_value)  # Use portfolio value for y-axis
-                            sell_prices.append(trade_price)
-                            sell_portfolio.append(return_pct)  # Store return % for hover
-
-                # Add buy markers - made larger and more visible
-                if buy_dates:
-                    # Prepare customdata with stock price and return %
-                    buy_customdata = [[price, ret_pct] for price, ret_pct in zip(buy_prices, buy_portfolio)]
-                    fig.add_trace(go.Scatter(
-                        x=buy_dates,
-                        y=buy_values,
-                        mode='markers',
-                        name='Buy',
-                        marker=dict(
-                            symbol='triangle-up',
-                            size=16,
-                            color='#10b981',
-                            line=dict(color='#059669', width=2),
-                            opacity=0.9
-                        ),
-                        customdata=buy_customdata,
-                        hovertemplate='<b>BUY</b><br>Stock Price: $%{customdata[0]:.2f}<br>Portfolio: $%{y:,.2f}<br>Return: %{customdata[1]:.2f}%<extra></extra>',
-                        showlegend=False
-                    ), secondary_y=False)
-
-                # Add sell markers - made larger and more visible
-                if sell_dates:
-                    # Prepare customdata with stock price and return %
-                    sell_customdata = [[price, ret_pct] for price, ret_pct in zip(sell_prices, sell_portfolio)]
-                    fig.add_trace(go.Scatter(
-                        x=sell_dates,
-                        y=sell_values,
-                        mode='markers',
-                        name='Sell',
-                        marker=dict(
-                            symbol='triangle-down',
-                            size=16,
-                            color='#ef4444',
-                            line=dict(color='#dc2626', width=2),
-                            opacity=0.9
-                        ),
-                        customdata=sell_customdata,
-                        hovertemplate='<b>SELL</b><br>Stock Price: $%{customdata[0]:.2f}<br>Portfolio: $%{y:,.2f}<br>Return: %{customdata[1]:.2f}%<extra></extra>',
-                        showlegend=False
-                    ), secondary_y=False)
 
         # Set y-axes titles
         fig.update_yaxes(title_text="Portfolio Value ($)", secondary_y=False)
