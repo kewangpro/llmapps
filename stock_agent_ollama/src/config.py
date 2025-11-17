@@ -42,7 +42,7 @@ class Config:
 
     # RL Trading settings
     RL_MODEL_DIR = MODEL_DIR / "rl"
-    RL_DEFAULT_INITIAL_BALANCE = float(os.getenv("RL_INITIAL_BALANCE", "10000.0"))
+    RL_DEFAULT_INITIAL_BALANCE = float(os.getenv("RL_INITIAL_BALANCE", "100000.0"))
     RL_TRANSACTION_COST_RATE = float(os.getenv("RL_TRANSACTION_COST", "0.001"))
     RL_SLIPPAGE_RATE = float(os.getenv("RL_SLIPPAGE", "0.0"))
     RL_DEFAULT_TRAINING_TIMESTEPS = int(os.getenv("RL_TRAINING_TIMESTEPS", "50000"))
