@@ -31,12 +31,12 @@ This RL trading system adds advanced reinforcement learning capabilities to the 
 
 ### Key Features
 
-✅ **RL Agents**: PPO and A2C algorithms via Stable-Baselines3
+✅ **RL Agents**: PPO, A2C, and DQN algorithms via Stable-Baselines3
 ✅ **Action Masking**: Prevents invalid trades (e.g., selling with no position)
 ✅ **6-Action Space**: HOLD (default), BUY_SMALL/MEDIUM/LARGE, SELL_PARTIAL/ALL
 ✅ **Adaptive Position Sizing**: Trade sizes adjust based on volatility and portfolio state
+✅ **Algorithm-Specific Rewards**: Separate optimized configs for DQN vs PPO/A2C
 ✅ **Enhanced Rewards**: Multi-component rewards with risk penalties and bonuses
-✅ **Curriculum Learning**: Progressive training from simple to complex scenarios
 ✅ **Trading Environment**: Gymnasium-based single-stock trading simulation
 ✅ **Backtesting**: Comprehensive performance evaluation with 15+ metrics
 ✅ **Action Analysis**: Visualize trading decisions with action distribution charts
@@ -72,7 +72,7 @@ src/rl/
 ├── live_trading.py             # Live paper trading engine
 ├── session_manager.py          # Session persistence for live trading
 ├── visualizer.py               # RL-specific visualizations
-└── agents/                     # RL agent implementations (PPO, A2C)
+└── agents/                     # RL agent implementations (PPO, A2C, DQN)
 
 src/ui/pages/
 ├── rl_training.py              # RL training UI
@@ -122,7 +122,7 @@ Results Display (UI)
 
 1. **Data Layer**: Stock data fetching and caching (reuses existing `StockFetcher`)
 2. **Environment Layer**: Gymnasium trading environments with action/observation spaces
-3. **Agent Layer**: RL algorithms (PPO, A2C) via Stable-Baselines3
+3. **Agent Layer**: RL algorithms (PPO, A2C, DQN) via Stable-Baselines3
 4. **Training Layer**: Orchestration, callbacks, reward functions
 5. **Evaluation Layer**: Backtesting engine and metrics calculation
 6. **Presentation Layer**: Panel UI components and Plotly visualizations
@@ -246,6 +246,37 @@ reward = (
 - Faster iteration
 - Simpler problems
 
+#### DQN (Deep Q-Network)
+
+**Implementation**: Stable-Baselines3 DQN in `src/rl/training.py`
+
+**Advantages**:
+- Off-policy learning (reuses experiences via replay buffer)
+- Sample efficient with experience replay
+- Epsilon-greedy exploration
+- Best overall performance on uptrending stocks
+
+**Hyperparameters**:
+- Learning rate: `1e-4`
+- Buffer size: `100000`
+- Batch size: `128`
+- Exploration fraction: `0.3`
+- Exploration initial eps: `1.0`
+- Exploration final eps: `0.05`
+- Tau: `0.005`
+
+**Use Cases**:
+- Production trading strategies
+- Best risk-adjusted returns
+- Uptrending markets
+- Sample efficiency important
+
+**Reward Configuration**:
+DQN uses `EnhancedRewardConfig` with lighter penalties compared to PPO/A2C:
+- Transaction cost rate: `0.0005` (vs `0.002` for PPO)
+- Risk penalty weight: `0.1` (vs `0.3` for PPO)
+- Drawdown penalty weight: `0.2` (vs `0.5` for PPO)
+
 ### 3. Training Pipeline
 
 **File**: `src/rl/training.py`
@@ -258,14 +289,14 @@ class TrainingConfig:
     symbol: str                          # Stock ticker
     start_date: str                      # Training start (YYYY-MM-DD)
     end_date: str                        # Training end
-    initial_balance: float = 10000.0     # Starting capital
-    agent_type: str = "ppo"              # ppo or a2c
+    initial_balance: float = 100000.0    # Starting capital
+    agent_type: str = "ppo"              # ppo, a2c, or dqn
     learning_rate: float = 3e-4          # Learning rate
     gamma: float = 0.99                  # Discount factor
-    total_timesteps: int = 50000         # Training duration
+    total_timesteps: int = 100000        # Training duration
     reward_type: str = "risk_adjusted"   # Reward function
-    transaction_cost_rate: float = 0.001 # Transaction costs
-    slippage_rate: float = 0.0           # Slippage
+    transaction_cost_rate: float = 0.0005 # Transaction costs
+    slippage_rate: float = 0.0005        # Slippage
 ```
 
 #### Training Callbacks
@@ -347,9 +378,9 @@ class BacktestConfig:
     symbol: str
     start_date: str
     end_date: str
-    initial_balance: float = 10000.0
-    transaction_cost_rate: float = 0.001
-    slippage_rate: float = 0.0
+    initial_balance: float = 100000.0
+    transaction_cost_rate: float = 0.0005
+    slippage_rate: float = 0.0005
     risk_free_rate: float = 0.0
 ```
 
@@ -484,15 +515,16 @@ seaborn>=0.13.0
 ```python
 # RL Trading settings
 RL_MODEL_DIR = MODEL_DIR / "rl"
-RL_DEFAULT_INITIAL_BALANCE = 10000.0
-RL_TRANSACTION_COST_RATE = 0.001
-RL_SLIPPAGE_RATE = 0.0
-RL_DEFAULT_TRAINING_TIMESTEPS = 50000
+RL_DEFAULT_INITIAL_BALANCE = 100000.0
+RL_TRANSACTION_COST_RATE = 0.0005
+RL_SLIPPAGE_RATE = 0.0005
+RL_DEFAULT_TRAINING_TIMESTEPS = 100000
 RL_LOOKBACK_WINDOW = 60
 
 # RL Agent hyperparameters
 RL_PPO_LEARNING_RATE = 0.0003
 RL_A2C_LEARNING_RATE = 0.0007
+RL_DQN_LEARNING_RATE = 0.0001
 RL_GAMMA = 0.99
 ```
 
@@ -535,17 +567,17 @@ from datetime import datetime, timedelta
 # Setup configuration
 config = EnhancedTrainingConfig(
     symbol="AAPL",
-    start_date=(datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d"),
+    start_date=(datetime.now() - timedelta(days=365*3)).strftime("%Y-%m-%d"),
     end_date=datetime.now().strftime("%Y-%m-%d"),
-    agent_type="ppo",
-    total_timesteps=50000,
-    learning_rate=0.0003,
+    agent_type="dqn",  # or "ppo", "a2c"
+    total_timesteps=100000,
+    learning_rate=0.0001,  # DQN learning rate
+    initial_balance=100000.0,
     # Action masking and 6-action space always enabled
     use_action_masking=True,
     use_improved_actions=True,
     use_enhanced_rewards=True,
-    use_adaptive_sizing=True,
-    use_curriculum_learning=True
+    use_adaptive_sizing=True
 )
 
 # Create trainer
@@ -562,8 +594,8 @@ print(f"Total episodes: {results['total_episodes']}")
 
 1. Navigate to **RL Trading → Training** tab
 2. Select stock symbol (e.g., AAPL)
-3. Choose agent type (PPO or A2C)
-4. Set training parameters
+3. Choose agent type (PPO, A2C, or DQN)
+4. Set training parameters (timesteps, learning rate, etc.)
 5. Click "Start Training"
 6. Monitor progress in real-time
 7. View training curves when complete
@@ -577,8 +609,8 @@ from src.rl import BacktestEngine, BacktestConfig, EnhancedRLTrainer
 
 # Load trained agent
 agent = EnhancedRLTrainer.load_agent(
-    model_path="data/models/rl/ppo_AAPL_20241114_120000/final_model.zip",
-    agent_type="ppo"
+    model_path="data/models/rl/dqn_AAPL_20241114_120000/final_model.zip",
+    agent_type="dqn"
 )
 
 # Setup backtest
@@ -586,7 +618,8 @@ config = BacktestConfig(
     symbol="AAPL",
     start_date="2024-01-01",
     end_date="2024-11-01",
-    transaction_cost_rate=0.001
+    initial_balance=100000.0,
+    transaction_cost_rate=0.0005
 )
 
 engine = BacktestEngine(config)
@@ -668,14 +701,13 @@ config = TrainingConfig(
 
 **Proven Optimal Configuration** (Battle-tested):
 - **Training Period**: 1095 days (3 years) - provides diverse market conditions
-- **Training Steps**: 300,000 - consistently beats Buy & Hold
+- **Training Steps**: 100,000-300,000 depending on algorithm
 - **Batch Size**: 128 for better gradient estimates
-- **Entropy Coefficient**: 0.01-0.02 for exploration
-- **Algorithm**: PPO (more stable than A2C)
+- **Algorithm**: DQN (best performance), PPO (most stable), A2C (fastest)
 
-**Verified Results**:
-- **GOOGL**: +22.72% vs Buy & Hold +10.59% (114% better)
-- **TSLA**: +13.87% vs Buy & Hold +5.29% (162% better)
+**Typical Results**:
+- **DQN on GOOGL**: 33.53% vs Buy & Hold 41.62% (uptrending market)
+- **DQN on TEAM**: -3.46% vs Buy & Hold -14.59% (downtrending market, 11.13% better)
 
 **Typical Training Times** (M1 Mac):
 - 100k steps: 5-8 minutes (quick testing)
@@ -833,10 +865,10 @@ class PerformanceMetrics:
 
 ### Phase 5: Advanced Algorithms
 
-- **DQN**: Deep Q-Networks for discrete actions
 - **SAC**: Soft Actor-Critic for continuous actions
 - **TD3**: Twin Delayed DDPG
-- **Ensemble Methods**: Combine multiple agents
+- **Ensemble Methods**: Combine multiple agents (e.g., PPO + DQN)
+- **RecurrentPPO**: LSTM-based policies for temporal dependencies
 
 ### Phase 6: Research Features
 

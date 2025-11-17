@@ -41,7 +41,7 @@ This document outlines the design for a **live trading simulation system** that 
 │ Market Data  │    │   RL Agent   │    │  Portfolio   │
 │   Stream     │    │   (Trained)  │    │   Manager    │
 │              │    │              │    │              │
-│ • Yahoo API  │    │ • PPO/A2C    │    │ • Positions  │
+│ • Yahoo API  │    │ • PPO/A2C/DQN│    │ • Positions  │
 │ • Real-time  │    │ • LSTM feat  │    │ • Cash       │
 │ • 1-min bars │    │ • Inference  │    │ • P&L        │
 └──────────────┘    └──────────────┘    └──────────────┘
@@ -403,12 +403,12 @@ class TradingSession:
 class LiveTradingConfig:
     # Agent
     agent_path: str
-    agent_type: str  # 'ppo' or 'a2c'
+    agent_type: str  # 'ppo', 'a2c', or 'dqn'
     use_lstm: bool
 
     # Portfolio
-    initial_capital: float = 10000.0
-    transaction_cost: float = 0.001  # 0.1%
+    initial_capital: float = 100000.0
+    transaction_cost: float = 0.0005  # 0.05%
     slippage: float = 0.0005  # 0.05%
 
     # Execution
@@ -928,7 +928,7 @@ educational purposes. No real trades are executed.
 **Via Web UI:**
 All configuration is done through the Live Trade page interface:
 - Symbol selection
-- Algorithm selection (PPO/A2C)
+- Algorithm selection (PPO/A2C/DQN)
 - Initial capital
 - Max position size
 - Stop loss percentage
@@ -938,8 +938,8 @@ Configuration is saved with the session state in:
 - `data/live_sessions/live_session.json`
 
 **Default Settings:**
-- Initial capital: $10,000
-- Transaction cost: 0.1%
+- Initial capital: $100,000
+- Transaction cost: 0.05%
 - Stop loss: 5%
 - Poll interval: 60 seconds
 

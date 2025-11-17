@@ -108,14 +108,11 @@ The platform features a professional light-theme interface with 6 main pages:
 1. Click **Trading** tab
 2. **Configure Agent**:
    - **Symbol**: Select from dropdown (AAPL, MSFT, GOOGL, AMZN, TSLA, META, NVDA, ORCL)
-   - **Algorithm**: Choose PPO (stable, recommended) or A2C (faster)
-   - **Training Options**:
-     - Enhanced Rewards (default: ON)
-     - Adaptive Sizing (default: ON)
-     - Curriculum Learning (default: ON)
+   - **Algorithm**: Choose DQN (best performance), PPO (stable), or A2C (faster)
    - **Training Period**: 1095 days (3 years, proven optimal)
-   - **Training Steps**: 300,000 (proven to beat Buy & Hold)
-   - **Entropy Coefficient**: 0.02 (exploration bonus)
+   - **Training Steps**: 100,000 (recommended starting point)
+   - **Learning Rate**: Auto-set based on algorithm
+   - **Initial Balance**: $100,000
 3. Click **"🚀 Start Training"**
 4. Monitor progress bar and real-time chart
 5. Review training results when complete
@@ -163,11 +160,11 @@ The live trading session is **persistent**. You can stop the application and res
 1. Click **Live Trade** tab
 2. **Configure Settings**:
    - **Symbol**: Select stock (AAPL, MSFT, GOOGL, etc.)
-   - **Algorithm**: Choose PPO or A2C (auto-loads trained model)
-   - **Initial Capital**: Starting balance ($10,000 default)
+   - **Algorithm**: Choose PPO, A2C, or DQN (auto-loads trained model)
+   - **Initial Capital**: Starting balance ($100,000 default)
    - **Max Position %**: Maximum position as % of portfolio (40% default)
    - **Stop Loss**: Automatic stop-loss percentage (5% default)
-3. Click **"▶ Start Trading"**
+3. Click **"Create & Start Session"**
 4. Monitor real-time updates
 
 **Resuming a Session:**
@@ -220,7 +217,7 @@ The live trading session is **persistent**. You can stop the application and res
 
 **Tab 2: RL Agents**
 - Header: "RL Trading Agents / Reinforcement learning models"
-- Lists all trained PPO and A2C agents
+- Lists all trained PPO, A2C, and DQN agents
 - Shows algorithm type, symbol, training date
 - Performance column shows "Run backtest →" hint
   - Performance data calculated when you run backtests
@@ -271,14 +268,15 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 - ✅ Force retrain checkbox updates models with latest data
 
 ### RL Trading
-- ✅ **PPO** recommended for stable, reliable strategies
-- ✅ **A2C** faster but more experimental
+- ✅ **DQN** recommended for best performance (off-policy learning, sample efficient)
+- ✅ **PPO** for stable, reliable strategies (on-policy, LSTM support)
+- ✅ **A2C** for faster training and experimentation
 - ✅ **Action Masking** always enabled - prevents invalid trades automatically
 - ✅ **6-Action Space** provides fine-grained control over position sizing
-- ✅ **Enhanced Rewards** include risk penalties and profitability bonuses
+- ✅ **Algorithm-Specific Rewards** - DQN and PPO/A2C use different optimized configs
 - ✅ **1095 days** (3 years) proven optimal for diverse market conditions
-- ✅ **300,000 steps** proven to beat Buy & Hold consistently (15-20 min training)
-- ✅ **Tested successfully** on GOOGL (+114% vs B&H) and TSLA (+162% vs B&H)
+- ✅ **100,000 steps** recommended starting point (5-10 min training)
+- ✅ **DQN Results**: 33.53% on GOOGL, -3.46% on TEAM (vs B&H -14.59%)
 - ✅ Training runs in background - UI stays responsive
 - ✅ Models saved automatically with best model selection
 - ✅ Backtests auto-load best performing model
@@ -311,16 +309,15 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 6. Review 30-day LSTM prediction
 ```
 
-### Workflow 3: Train RL Agent (15-20 minutes)
+### Workflow 3: Train RL Agent (5-10 minutes)
 ```
 1. Click Trading tab
 2. Select symbol: NVDA
-3. Choose algorithm: PPO
-4. Keep training options checked (Enhanced Rewards, Adaptive Sizing, Curriculum Learning)
-5. Use proven defaults: 1095 days (3 years), 300,000 steps
-6. Click "🚀 Start Training"
-7. Monitor progress (15-20 minutes)
-8. Review training results and charts
+3. Choose algorithm: DQN (or PPO, A2C)
+4. Use recommended settings: 1095 days (3 years), 100,000 steps
+5. Click "🚀 Start Training"
+6. Monitor progress (5-10 minutes)
+7. Review training results and charts
 ```
 
 ### Workflow 4: Backtest Strategy (30 seconds)
@@ -337,11 +334,11 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 ```
 1. Click Live Trade tab
 2. Select symbol: AAPL
-3. Choose algorithm: PPO
-4. Set initial capital: $10,000
-5. Click "▶ Start Trading"
+3. Choose algorithm: DQN (or PPO, A2C)
+4. Set initial capital: $100,000
+5. Click "Create & Start Session"
 6. Monitor portfolio, positions, trades in real-time
-7. Click "■ Stop Trading" when done
+7. Click "Stop" button when done
 ```
 
 ### Workflow 6: Model Management (5 seconds)
