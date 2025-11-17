@@ -273,9 +273,10 @@ curl http://localhost:11434/api/tags
 - Auto-training on first analysis request
 
 ### RL Trading Agents
-- **PPO**: Proximal Policy Optimization (stable, reliable)
-- **A2C**: Advantage Actor-Critic (faster training)
-- **DQN**: Deep Q-Network (off-policy, sample efficient, best performance)
+- **PPO**: Proximal Policy Optimization (stable, reliable, optional LSTM support)
+- **A2C**: Advantage Actor-Critic (fastest training, excellent for bull markets)
+- **DQN**: Deep Q-Network (most consistent, adapts to market conditions)
+- **RecurrentPPO**: LSTM-based PPO for temporal pattern recognition (best for bear markets)
 - **Action Masking**: Prevents invalid trades (e.g., selling with no position)
 - **6-Action Space**: HOLD (default), BUY_SMALL, BUY_MEDIUM, BUY_LARGE, SELL_PARTIAL, SELL_ALL
 - **Adaptive Sizing**: Trade sizes adjust based on market volatility and portfolio state
@@ -283,11 +284,11 @@ curl http://localhost:11434/api/tags
 - Realistic environment with transaction costs and slippage
 
 ### Backtesting System
-- Auto-loads best model (peak performance during training)
-- Compares against Buy & Hold and Momentum baselines
+- Automatically loads all available trained models (PPO, A2C, DQN, LSTM PPO)
+- Compares all agents against Buy & Hold and Momentum baselines
 - Comprehensive metrics: Returns, Sharpe, Sortino, Calmar ratios
 - Action distribution visualization across strategies
-- Performance comparison charts with buy/sell markers
+- Clean performance comparison charts
 - Key metrics bar charts for quick comparison
 
 ---
