@@ -4,6 +4,14 @@ RL Training UI - Enhanced training with comprehensive improvements.
 This panel provides:
 - Enhanced RL training with action masking, curriculum learning, etc.
 - Backtesting with support for improved action spaces
+
+ARCHITECTURE NOTE - Single Source of Truth:
+- All default configuration values are defined in dataclasses:
+  * EnhancedTrainingConfig (src/rl/training.py)
+  * EnhancedRewardConfig (src/rl/improvements.py)
+- The UI reads these defaults and uses them for widget initialization
+- DO NOT hardcode configuration values in the UI
+- To change defaults, modify the dataclass definitions, not the UI
 """
 
 import panel as pn
@@ -27,6 +35,14 @@ class RLTrainingPanel(param.Parameterized):
         super().__init__(**params)
         self.trainer = None
         self.is_training = False
+
+        # Load default configurations (single source of truth)
+        from src.rl.training import EnhancedTrainingConfig
+        from src.rl.improvements import EnhancedRewardConfig
+
+        self._default_training_config = EnhancedTrainingConfig.__dataclass_fields__
+        self._default_reward_config = EnhancedRewardConfig.__dataclass_fields__
+
         self._create_ui()
 
     def _create_ui(self):
@@ -47,32 +63,28 @@ class RLTrainingPanel(param.Parameterized):
         # Agent type
         self.agent_type = pn.widgets.RadioButtonGroup(
             name='Agent',
-            options=['PPO', 'A2C'],
+            options=['PPO', 'A2C', 'DQN'],
             value='PPO',
             button_type='primary',
             button_style='outline'
         )
 
-        # === IMPROVEMENT OPTIONS ===
-        # Note: Action Masking and 6-Action Space are always enabled for safety and performance
-
-        # Enhanced rewards
-        self.use_enhanced_rewards = pn.widgets.Checkbox(
-            name='Enhanced Rewards',
-            value=True
+        # LSTM Policy checkbox
+        from src.rl.training import EnhancedTrainingConfig
+        self.use_lstm_policy_checkbox = pn.widgets.Checkbox(
+            name='Use LSTM Policy',
+            value=EnhancedTrainingConfig.use_lstm_policy, # Default from config
+            align='center',
+            width=180
         )
 
-        # Adaptive sizing
-        self.use_adaptive_sizing = pn.widgets.Checkbox(
-            name='Adaptive Sizing',
-            value=True
-        )
-
-        # Curriculum learning
-        self.use_curriculum = pn.widgets.Checkbox(
-            name='Curriculum Learning',
-            value=True
-        )
+        # === TRAINING PARAMETERS ===
+        # Note: All architectural improvements are always enabled:
+        # - Action Masking (safety)
+        # - 6-Action Space (improved actions)
+        # - Enhanced Rewards (better learning signals)
+        # - Adaptive Sizing (intelligent position sizing)
+        # - Curriculum Learning is DISABLED (causes excessive invalid actions)
 
         # Training parameters
         self.training_days = pn.widgets.IntSlider(
@@ -84,11 +96,12 @@ class RLTrainingPanel(param.Parameterized):
             width=250
         )
 
+        # Use dataclass defaults for widget values (single source of truth)
         self.timesteps = pn.widgets.IntSlider(
             name='Training Steps',
             start=50000,
             end=500000,
-            value=300000,
+            value=self._default_training_config['total_timesteps'].default,
             step=10000,
             width=250
         )
@@ -98,7 +111,7 @@ class RLTrainingPanel(param.Parameterized):
             name='Exploration Bonus (ent_coef)',
             start=0.0,
             end=0.1,
-            value=0.02,
+            value=self._default_training_config['ent_coef'].default,
             step=0.01,
             width=250
         )
@@ -171,13 +184,13 @@ class RLTrainingPanel(param.Parameterized):
                 end_date = datetime.now().strftime("%Y-%m-%d")
                 start_date = (datetime.now() - timedelta(days=self.training_days.value)).strftime("%Y-%m-%d")
 
-                reward_config = EnhancedRewardConfig(
-                    invalid_action_penalty=-0.5,
-                    profitable_trade_bonus=0.2,
-                    use_action_shaping=True,
-                    min_hold_steps=5
-                )
+                # Use default reward config
+                # EnhancedRLTrainer will automatically select:
+                # - EnhancedRewardConfig for DQN (light penalties, proven 39.26% return)
+                # - PPORewardConfig for PPO/A2C (strong penalties to fight action collapse)
+                reward_config = None  # Let trainer auto-select based on agent_type
 
+                # Create training config (uses dataclass defaults for unspecified values)
                 config = EnhancedTrainingConfig(
                     symbol=symbol,
                     start_date=start_date,
@@ -185,14 +198,16 @@ class RLTrainingPanel(param.Parameterized):
                     agent_type=self.agent_type.value.lower(),
                     total_timesteps=self.timesteps.value,
                     ent_coef=self.ent_coef.value,
+                    # transaction_cost_rate uses dataclass default (0.003)
 
-                    # Improvements (Action Masking and 6-Action Space always enabled)
-                    use_action_masking=True,
-                    use_enhanced_rewards=self.use_enhanced_rewards.value,
-                    use_adaptive_sizing=self.use_adaptive_sizing.value,
-                    use_improved_actions=True,
-                    use_curriculum_learning=self.use_curriculum.value,
+                    # All architectural improvements always enabled (not user-configurable)
+                    use_action_masking=True,           # Safety - prevents invalid trades
+                    use_enhanced_rewards=True,         # Better learning signals
+                    use_adaptive_sizing=True,          # Intelligent position sizing
+                    use_improved_actions=True,         # 6-action space
+                    use_curriculum_learning=False,     # Disabled - causes excessive invalid actions
                     enable_diagnostics=True,
+                    use_lstm_policy=self.use_lstm_policy_checkbox.value, # Add this
 
                     reward_config=reward_config,
                     verbose=1
@@ -389,17 +404,15 @@ class RLTrainingPanel(param.Parameterized):
             except Exception as e:
                 logger.error(f"Error plotting action distribution: {e}", exc_info=True)
 
-    def _find_latest_model(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Find the most recently trained model for a symbol."""
+    def _find_latest_model(self, symbol: str, agent_type: str) -> Optional[Dict[str, Any]]:
+        """Find the most recently trained model for a symbol and agent type."""
         models_dir = Path("data/models/rl")
         if not models_dir.exists():
             return None
 
-        # Find all model directories for this symbol
-        matching_dirs = []
-        for agent_type in ['ppo', 'a2c']:
-            pattern = f"{agent_type}_{symbol}_*"
-            matching_dirs.extend(models_dir.glob(pattern))
+        # Find all model directories for this symbol and agent type
+        pattern = f"{agent_type.lower()}_{symbol}_*"
+        matching_dirs = list(models_dir.glob(pattern))
 
         if not matching_dirs:
             return None
@@ -416,10 +429,6 @@ class RLTrainingPanel(param.Parameterized):
         if not model_path.exists():
             return None
 
-        # Extract agent type and mode from directory name
-        dir_name = latest_dir.name
-        agent_type = 'ppo' if 'ppo' in dir_name.lower() else 'a2c'
-
         # Check if using improved actions by looking at config
         use_improved_actions = False
         config_path = latest_dir / "training_config.json"
@@ -431,7 +440,7 @@ class RLTrainingPanel(param.Parameterized):
 
         return {
             'path': model_path,
-            'agent_type': agent_type,
+            'agent_type': agent_type.lower(),
             'directory': latest_dir,
             'use_improved_actions': use_improved_actions
         }
@@ -474,7 +483,10 @@ class RLTrainingPanel(param.Parameterized):
                 results = {}
 
                 # Check if there's a trained RL model for this symbol
-                model_info = self._find_latest_model(symbol)
+                agent_type = self.agent_type.value
+                logger.info(f"Backtest: Selected agent type from dropdown: {agent_type}")
+                model_info = self._find_latest_model(symbol, agent_type)
+                logger.info(f"Backtest: Found model info: {model_info}")
                 if model_info:
                     try:
                         # Load the trained agent
@@ -666,28 +678,19 @@ class RLTrainingPanel(param.Parameterized):
                     self.agent_type,
                     width=180
                 ),
+                pn.Column( # New column for LSTM checkbox
+                    pn.pane.HTML("<div style='font-size: 12px; color: #6b7280; margin-bottom: 5px; font-weight: 500;'>Policy Type</div>"),
+                    self.use_lstm_policy_checkbox,
+                    width=180
+                ),
                 align='start',
                 sizing_mode="stretch_width"
-            ),
-            pn.pane.HTML("<div style='font-size: 13px; font-weight: 600; color: #374151; margin: 10px 0 8px 0;'>Training Options</div>"),
-            pn.pane.HTML("<div style='font-size: 11px; color: #6b7280; margin-bottom: 8px;'>✅ Action Masking and 6-Action Space are always enabled</div>"),
-            pn.Row(
-                pn.Column(self.use_enhanced_rewards, self.use_adaptive_sizing, width=250),
-                pn.Column(self.use_curriculum, width=250),
             ),
             pn.Row(
                 self.training_days,
                 self.timesteps,
                 sizing_mode="stretch_width"
             ),
-            pn.pane.HTML("""
-                <div style='font-size: 11px; color: #059669; background: #D1FAE5;
-                            padding: 8px 12px; border-radius: 4px; margin: 8px 0;
-                            border-left: 3px solid #059669;'>
-                    <strong>💡 Proven Formula:</strong> 300k steps with 3 years of data consistently beats Buy & Hold.
-                    Reduce to 100k steps for quick testing.
-                </div>
-            """),
             pn.Row(
                 self.ent_coef,
                 sizing_mode="stretch_width"

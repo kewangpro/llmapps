@@ -84,7 +84,7 @@ class LiveTradingPage(pn.viewable.Viewer):
             matching_dirs.extend(models_dir.glob(pattern))
         else:
             # Search for all agent types
-            for atype in ['ppo', 'a2c']:
+            for atype in ['ppo', 'a2c', 'dqn']:
                 pattern = f"{atype}_{symbol}_*"
                 matching_dirs.extend(models_dir.glob(pattern))
 
@@ -106,7 +106,14 @@ class LiveTradingPage(pn.viewable.Viewer):
 
         # Extract agent type from directory name (format: ppo_AAPL_timestamp)
         dir_name = latest_dir.name
-        found_agent_type = 'ppo' if dir_name.startswith('ppo_') else 'a2c'
+        if dir_name.startswith('ppo_'):
+            found_agent_type = 'ppo'
+        elif dir_name.startswith('a2c_'):
+            found_agent_type = 'a2c'
+        elif dir_name.startswith('dqn_'):
+            found_agent_type = 'dqn'
+        else:
+            found_agent_type = 'unknown'
 
         return {
             'path': model_path,
@@ -150,14 +157,14 @@ class LiveTradingPage(pn.viewable.Viewer):
         )
 
         self.agent_type = pn.widgets.RadioButtonGroup(
-            options=['PPO', 'A2C'],
+            options=['PPO', 'A2C', 'DQN'],
             value='PPO',
             button_type='primary',
             button_style='outline'
         )
 
         self.capital_input = pn.widgets.FloatInput(
-            value=10000.0,
+            value=100000.0,
             start=1000,
             end=1000000,
             step=1000,
