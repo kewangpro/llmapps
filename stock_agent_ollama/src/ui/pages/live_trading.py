@@ -168,6 +168,7 @@ class LiveTradingPage(pn.viewable.Viewer):
                      'NFLX', 'AMD', 'INTC', 'QCOM', 'CRM', 'ADBE', 'PYPL'],
             placeholder='Enter symbol...',
             case_sensitive=False,
+            restrict=False,  # Allow any symbol, not just predefined ones
             width=100,
             min_characters=1
         )
@@ -188,7 +189,7 @@ class LiveTradingPage(pn.viewable.Viewer):
         )
 
         self.max_position_input = pn.widgets.FloatInput(
-            value=40.0,
+            value=LiveTradingConfig.__dataclass_fields__['max_position_size'].default,
             start=5.0,
             end=100.0,
             step=5.0,

@@ -55,6 +55,7 @@ class RLTrainingPanel(param.Parameterized):
                      'TEAM', 'NFLX', 'AMD', 'INTC', 'QCOM', 'CRM', 'ADBE', 'PYPL'],
             placeholder='Enter symbol...',
             case_sensitive=False,
+            restrict=False,  # Allow any symbol, not just predefined ones
             width=120,
             height=35,
             min_characters=1
