@@ -864,7 +864,7 @@ class LiveTradingPage(pn.viewable.Viewer):
                 rows.append(pn.Row(
                     pn.pane.HTML(f"<div>{summary['session_id']}</div>", width=250),
                     pn.pane.HTML(f"<div>{summary['symbol']}</div>", width=80),
-                    pn.pane.HTML(f"<div>{model_name}</div>", width=200),
+                    pn.pane.HTML(f"<div>{model_name}</div>", width=300),
                     pn.pane.HTML(f"<div>{summary['status']}</div>", width=100),
                     button_row,
                     sizing_mode='stretch_width',
@@ -874,7 +874,7 @@ class LiveTradingPage(pn.viewable.Viewer):
             header = pn.Row(
                 pn.pane.HTML("<b>Session ID</b>", width=250),
                 pn.pane.HTML("<b>Symbol</b>", width=80),
-                pn.pane.HTML("<b>Model Name</b>", width=200),
+                pn.pane.HTML("<b>Model Name</b>", width=300),
                 pn.pane.HTML("<b>Status</b>", width=100),
                 pn.pane.HTML("<b>Actions</b>", width=180, align='center'),
                 sizing_mode='stretch_width'
