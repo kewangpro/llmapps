@@ -33,15 +33,55 @@ def create_app():
     # Create watchlist panel for sidebar
     class WatchlistPanel:
         """Watchlist panel that can be refreshed"""
-        def __init__(self):
+        def __init__(self, session_manager, tabs=None, analysis_app=None):
             self.stock_fetcher = StockFetcher()
+            self.session_manager = session_manager
+            self.tabs = tabs
+            self.analysis_app = analysis_app
             self.watchlist_symbols = portfolio_manager.load_portfolio("default")
-            self.pane = pn.pane.HTML("Loading watchlist...", sizing_mode="stretch_width")
+            self.pane = pn.Column(
+                pn.pane.HTML("Loading watchlist...", sizing_mode="stretch_width"),
+                sizing_mode="stretch_width"
+            )
             pn.state.onload(self.schedule_refresh)
 
         def schedule_refresh(self):
             """Schedule the refresh to run in the background."""
             pn.state.execute(self.refresh)
+
+        def handle_stock_click(self, symbol):
+            """Handle click on a stock in the watchlist"""
+            logger.info(f"Watchlist: Stock {symbol} clicked")
+            if self.tabs and self.analysis_app:
+                # Switch to Analysis tab (index 1)
+                self.tabs.active = 1
+                logger.info(f"Watchlist: Switched to Analysis tab, triggering analysis for {symbol}")
+                # Trigger analysis for the clicked symbol
+                self.analysis_app.analyze_symbol(symbol)
+            else:
+                logger.warning(f"Watchlist: Cannot handle click - tabs={self.tabs is not None}, analysis_app={self.analysis_app is not None}")
+
+        def _get_positions_for_symbol(self, symbol):
+            """Get aggregated position info for a symbol across all sessions"""
+            total_shares = 0
+            total_value = 0.0
+
+            try:
+                # Get all live trading engines
+                engines = self.session_manager.get_all_sessions()
+
+                for engine in engines:
+                    session = engine.session
+                    # Count positions from all sessions (running, paused, or stopped)
+                    # Check if this session has a position in this symbol
+                    if symbol in session.portfolio.positions:
+                        position = session.portfolio.positions[symbol]
+                        total_shares += position.shares
+                        total_value += position.shares * position.current_price
+            except Exception as e:
+                logger.warning(f"Error getting positions for {symbol}: {e}")
+
+            return total_shares, total_value
 
         async def refresh(self):
             """Refresh watchlist data"""
@@ -50,25 +90,28 @@ def create_app():
             tasks = [asyncio.to_thread(self.stock_fetcher.get_real_time_price, symbol) for symbol in self.watchlist_symbols]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            watchlist_html = f"""
-            <div style='background: {Colors.BG_SECONDARY}; border: 1px solid {Colors.BORDER_SUBTLE}; border-radius: 8px; padding: 10px;'>
-                <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 2px solid {Colors.BORDER_SUBTLE}; padding-bottom: 8px;'>
-                    <h3 style='margin: 0; font-size: 1rem; color: {Colors.TEXT_PRIMARY};'>⭐ Watchlist</h3>
-                    <span style='font-size: 0.7rem; color: {Colors.TEXT_SECONDARY};'>{datetime.now().strftime('%I:%M %p')}</span>
-                </div>
-                <div style='max-height: 650px; overflow-y: auto;'>
-            """
+            # Create header HTML
+            watchlist_header = pn.pane.HTML(f"""
+            <div style='display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid {Colors.BORDER_SUBTLE}; padding-bottom: 8px;'>
+                <h3 style='margin: 0; font-size: 1rem; color: {Colors.TEXT_PRIMARY};'>⭐ Watchlist</h3>
+                <span style='font-size: 0.7rem; color: {Colors.TEXT_SECONDARY};'>{datetime.now().strftime('%I:%M %p')}</span>
+            </div>
+            """, sizing_mode="stretch_width")
+
+            # Create stock cards as clickable buttons
+            stock_cards = []
 
             for i, result in enumerate(results):
                 symbol = self.watchlist_symbols[i]
                 if isinstance(result, Exception):
                     logger.warning(f"Failed to fetch {symbol} for watchlist: {result}")
-                    watchlist_html += f"""
-                    <div style='background: {Colors.BG_PRIMARY}; border: 1px solid {Colors.BORDER_SUBTLE}; border-radius: 6px; padding: 10px; margin-bottom: 8px; opacity: 0.5;'>
+                    card_html = f"""
+                    <div style='background: {Colors.BG_PRIMARY}; border: 1px solid {Colors.BORDER_SUBTLE}; border-radius: 6px; padding: 10px; opacity: 0.5;'>
                         <div style='font-weight: 600; color: {Colors.TEXT_SECONDARY}; font-size: 0.9rem;'>{symbol}</div>
                         <div style='font-size: 0.75rem; color: {Colors.TEXT_MUTED};'>Error</div>
                     </div>
                     """
+                    stock_cards.append(pn.pane.HTML(card_html, sizing_mode="stretch_width"))
                 else:
                     real_time_data = result
                     price = real_time_data.get('current_price', 0) or 0
@@ -78,18 +121,35 @@ def create_app():
                     color = Colors.SUCCESS_GREEN if change >= 0 else Colors.DANGER_RED
                     symbol_icon = '▲' if change >= 0 else '▼'
 
-                    watchlist_html += f"""
+                    # Get position information for this symbol
+                    total_shares, total_value = self._get_positions_for_symbol(symbol)
+
+                    # Build position HTML if there are active positions
+                    position_html = ""
+                    if total_shares > 0:
+                        position_html = f"""
+                        <div style='font-size: 0.75rem; color: {Colors.ACCENT_PURPLE}; font-weight: 600; margin-top: 4px;'>
+                            {total_shares} shares (${total_value:,.0f})
+                        </div>
+                        """
+
+                    # Create styled card HTML - simple and clean
+                    card_html = f"""
                     <div style='background: {Colors.BG_PRIMARY};
-                                border: 1px solid {Colors.BORDER_SUBTLE};
+                                border: 1px solid #DEE2E6;
                                 border-radius: 6px;
                                 padding: 10px;
                                 margin-bottom: 8px;
                                 cursor: pointer;
-                                transition: all 0.2s;'
+                                transition: all 0.2s;
+                                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);'
                          onmouseover='this.style.background="{Colors.BG_HOVER}"'
                          onmouseout='this.style.background="{Colors.BG_PRIMARY}"'>
-                        <div style='display: flex; justify-content: space-between; align-items: center;'>
-                            <div style='font-weight: 600; color: {Colors.TEXT_PRIMARY}; font-size: 0.9rem;'>{symbol}</div>
+                        <div style='display: flex; justify-content: space-between; align-items: flex-start;'>
+                            <div style='flex: 1;'>
+                                <div style='font-weight: 600; color: {Colors.TEXT_PRIMARY}; font-size: 0.9rem;'>{symbol}</div>
+                                {position_html}
+                            </div>
                             <div style='text-align: right;'>
                                 <div style='font-family: monospace; font-size: 0.85rem; color: {Colors.TEXT_PRIMARY};'>${price:.2f}</div>
                                 <div style='font-size: 0.75rem; color: {color}; font-weight: 600;'>{symbol_icon} {change_pct:+.2f}%</div>
@@ -98,38 +158,43 @@ def create_app():
                     </div>
                     """
 
-            watchlist_html += """
-                </div>
-            </div>
-            """
+                    stock_cards.append(pn.pane.HTML(card_html, sizing_mode="stretch_width", margin=0))
 
-            self.pane.object = watchlist_html
+            # Update the pane with new content
+            self.pane.clear()
+            self.pane.extend([
+                pn.Column(
+                    watchlist_header,
+                    *stock_cards,
+                    sizing_mode="stretch_width",
+                    scroll=True,
+                    max_height=650,
+                    styles={
+                        'background': Colors.BG_SECONDARY,
+                        'border': f'1px solid {Colors.BORDER_SUBTLE}',
+                        'border-radius': '8px',
+                        'padding': '10px'
+                    }
+                )
+            ])
 
         def get_panel(self):
             """Get the panel component"""
             return self.pane
 
-    # Create watchlist instance
-    watchlist_panel = WatchlistPanel()
-    watchlist_sidebar = pn.Column(
-        watchlist_panel.get_panel(),
-        sizing_mode="stretch_width"
-    )
-
     # Get watchlist symbols from portfolio (for portfolio page)
     watchlist_symbols = portfolio_manager.load_portfolio("default")
 
     # Create all pages
-    dashboard_page = DashboardPage(watchlist_panel=watchlist_panel)
     analysis_app = StockAnalysisApp()
     rl_panel = RLTrainingPanel()
-    portfolio_page = PortfolioPage(watchlist_symbols=watchlist_symbols, watchlist_panel=watchlist_panel)
+    portfolio_page = PortfolioPage(watchlist_symbols=watchlist_symbols, watchlist_panel=None)  # Will set later
     models_page = ModelsPage()
     live_trading_page = create_live_trading_page(session_manager=session_manager)
 
     # Create professional navigation tabs
     tabs = pn.Tabs(
-        ('📊 Dashboard', dashboard_page.get_view()),
+        ('📊 Dashboard', pn.Column()),  # Will set dashboard later
         ('📈 Analysis', analysis_app.get_analysis_tab()),
         ('🤖 Training', rl_panel.get_panel()),
         ('🔴 Live Trade', live_trading_page),
@@ -140,6 +205,20 @@ def create_app():
         tabs_location='above',
         active=0
     )
+
+    # Create watchlist instance with tabs and analysis_app references
+    watchlist_panel = WatchlistPanel(session_manager, tabs=tabs, analysis_app=analysis_app)
+    watchlist_sidebar = pn.Column(
+        watchlist_panel.get_panel(),
+        sizing_mode="stretch_width"
+    )
+
+    # Now create dashboard with watchlist panel
+    dashboard_page = DashboardPage(watchlist_panel=watchlist_panel)
+    tabs[0] = ('📊 Dashboard', dashboard_page.get_view())
+
+    # Update portfolio page with watchlist panel
+    portfolio_page.watchlist_panel = watchlist_panel
 
     # Main layout with professional styling
     layout = pn.Column(
