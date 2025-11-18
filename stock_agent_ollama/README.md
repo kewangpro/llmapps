@@ -13,9 +13,12 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 
 ### 📊 Professional Dashboard
 - **Market Overview** with live major indices (S&P 500, NASDAQ, Dow Jones, Russell 2000)
-- **Dynamic Watchlist** that automatically syncs with your portfolio, displaying real-time prices, daily changes, and key performance metrics for each stock.
-- **Simple Watchlist** with table view showing real-time prices, daily changes, 52-week range, volume, and market cap for tracked stocks.
-- **Quick Actions** for common tasks (Train LSTM, Backtest, Compare, Report)
+- **Interactive Watchlist** in sidebar with clickable stock cards
+  - Real-time prices and daily changes
+  - Live position tracking from active trading sessions
+  - Click any stock to instantly navigate to Analysis page
+  - Automatic updates every 5 seconds
+- **Quick Actions** for common tasks (Train LSTM, Backtest, Live Trading, Report)
 - **Light Theme** professional interface optimized for wide screens
 
 ### 📈 Stock Analysis & Prediction
