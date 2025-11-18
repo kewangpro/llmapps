@@ -330,7 +330,7 @@ class LiveTradingPage(pn.viewable.Viewer):
         try:
             success = self.session_manager.start_session(session_id)
             if success:
-                pn.state.notifications.success(f"Started session", duration=2000)
+                pn.state.notifications.success(f"Started session {session_id}", duration=2000)
                 self.session_manager.set_active_session(session_id)
                 # Smart update: only refresh dashboard and session details
                 self._update_dashboard_and_session()
@@ -343,7 +343,7 @@ class LiveTradingPage(pn.viewable.Viewer):
     def _stop_session(self, session_id: str):
         """Handle stop session"""
         self.session_manager.stop_session(session_id)
-        pn.state.notifications.warning(f"Stopped session", duration=2000)
+        pn.state.notifications.warning(f"Stopped session {session_id}", duration=2000)
         # Smart update: only refresh dashboard and session details
         self._update_dashboard_and_session()
 
