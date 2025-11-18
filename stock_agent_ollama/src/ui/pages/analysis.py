@@ -8,6 +8,7 @@ import logging
 import pandas as pd
 
 from src.agents.query_processor import QueryProcessor
+from src.agents.hybrid_query_processor import HybridQueryProcessor
 from src.tools.visualizer import Visualizer
 from src.tools.portfolio_manager import portfolio_manager # Import portfolio_manager
 
@@ -39,8 +40,13 @@ class StockAnalysisApp(param.Parameterized):
     def __init__(self, **params):
         super().__init__(**params)
 
-        # Initialize components
-        self.query_processor = QueryProcessor()
+        # Initialize components - use enhanced processor with Ollama integration
+        try:
+            self.query_processor = HybridQueryProcessor()
+            logger.info("Using HybridQueryProcessor with Ollama integration")
+        except Exception as e:
+            logger.warning(f"Failed to initialize HybridQueryProcessor, falling back to legacy: {e}")
+            self.query_processor = QueryProcessor()
         self.visualizer = Visualizer()
 
         # UI Components for Analysis Tab
@@ -113,6 +119,13 @@ class StockAnalysisApp(param.Parameterized):
         symbol = event.obj.name
         # Use "Predict" if force retrain is checked, otherwise "Analyze"
         action = "Predict" if self.force_retrain_checkbox.value else "Analyze"
+        self.query_input.value = f"{action} {symbol}"
+        self._handle_query()
+
+    def analyze_symbol(self, symbol: str, force_retrain: bool = False):
+        """Programmatically analyze a symbol (for external triggers like watchlist clicks)"""
+        self.force_retrain_checkbox.value = force_retrain
+        action = "Predict" if force_retrain else "Analyze"
         self.query_input.value = f"{action} {symbol}"
         self._handle_query()
 
