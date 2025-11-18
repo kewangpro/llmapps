@@ -911,7 +911,6 @@ class EnhancedTradingEnv(SingleStockTradingEnv):
             cash=self.cash,
             position=self.position,
             current_price=current_price,
-            max_position_size=self.max_position_size,
             portfolio_value=portfolio_value,
             max_position_pct=self.max_position_pct
         )

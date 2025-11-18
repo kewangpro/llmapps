@@ -852,7 +852,6 @@ class LiveTradingEngine:
                 cash=self.portfolio.cash,
                 position=current_shares,
                 current_price=tick.price,
-                max_position_size=1000,  # Match training default
                 portfolio_value=self.portfolio.total_value,
                 max_position_pct=self.config.max_position_size
             )

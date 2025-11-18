@@ -60,7 +60,6 @@ class ActionMasker:
         cash: float,
         position: int,
         current_price: float,
-        max_position_size: int,
         portfolio_value: float,
         max_position_pct: float = 40.0
     ) -> np.ndarray:
@@ -71,7 +70,6 @@ class ActionMasker:
             cash: Available cash
             position: Current position size (shares)
             current_price: Current stock price
-            max_position_size: Maximum shares allowed
             portfolio_value: Total portfolio value
             max_position_pct: Max position as % of portfolio value
 
@@ -82,18 +80,18 @@ class ActionMasker:
 
         if self.use_improved_actions:
             return self._get_improved_action_mask(
-                cash, position, current_price, max_position_size,
+                cash, position, current_price,
                 portfolio_value, max_position_pct
             )
         else:
             return self._get_standard_action_mask(
-                cash, position, current_price, max_position_size,
+                cash, position, current_price,
                 portfolio_value, max_position_pct
             )
 
     def _get_standard_action_mask(
         self, cash: float, position: int, current_price: float,
-        max_position_size: int, portfolio_value: float, max_position_pct: float
+        portfolio_value: float, max_position_pct: float
     ) -> np.ndarray:
         """Mask for standard TradingAction space."""
         mask = np.ones(len(TradingAction), dtype=np.float32)
@@ -110,11 +108,8 @@ class ActionMasker:
         if buy_small_amount < min_buy_cost:
             mask[TradingAction.BUY_SMALL] = 0.0
         else:
-            # Check position limit
+            # Check percentage limit only
             shares_small = int(buy_small_amount / current_price)
-            if position + shares_small > max_position_size:
-                mask[TradingAction.BUY_SMALL] = 0.0
-            # Check percentage limit
             new_position_value = (position + shares_small) * current_price
             if (new_position_value / portfolio_value * 100) > max_position_pct:
                 mask[TradingAction.BUY_SMALL] = 0.0
@@ -124,9 +119,8 @@ class ActionMasker:
         if buy_large_amount < min_buy_cost:
             mask[TradingAction.BUY_LARGE] = 0.0
         else:
+            # Check percentage limit only
             shares_large = int(buy_large_amount / current_price)
-            if position + shares_large > max_position_size:
-                mask[TradingAction.BUY_LARGE] = 0.0
             new_position_value = (position + shares_large) * current_price
             if (new_position_value / portfolio_value * 100) > max_position_pct:
                 mask[TradingAction.BUY_LARGE] = 0.0
@@ -138,7 +132,7 @@ class ActionMasker:
 
     def _get_improved_action_mask(
         self, cash: float, position: int, current_price: float,
-        max_position_size: int, portfolio_value: float, max_position_pct: float
+        portfolio_value: float, max_position_pct: float
     ) -> np.ndarray:
         """Mask for improved ImprovedTradingAction space."""
         mask = np.ones(len(ImprovedTradingAction), dtype=np.float32)
@@ -174,10 +168,14 @@ class ActionMasker:
                 mask[action] = 0.0
             else:
                 shares = int(buy_amount / current_price)
-                if position + shares > max_position_size:
-                    mask[action] = 0.0
                 new_position_value = (position + shares) * current_price
-                if (new_position_value / portfolio_value * 100) > max_position_pct:
+                position_pct = (new_position_value / portfolio_value * 100) if portfolio_value > 0 else 0
+
+                # Only check percentage-based position limit (removed share count limit)
+                if position_pct > max_position_pct:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Masking {action.name}: new position {position_pct:.1f}% would exceed max_position_pct {max_position_pct:.1f}% (current={position} shares, buying {shares} @ ${current_price:.2f}, cash=${cash:.2f}, portfolio=${portfolio_value:.2f})")
                     mask[action] = 0.0
 
         return mask
@@ -224,11 +222,11 @@ class EnhancedRewardConfig:
     # Balanced to discourage invalid actions without causing action collapse
     # -50.0 was too strong, caused agent to only use BUY_MEDIUM
     # -10.0 provides sufficient penalty while allowing exploration
-    invalid_action_penalty: float = -10.0
+    invalid_action_penalty: float = -1.0
     excessive_trading_penalty: float = -0.1
     # DQN works well with lighter penalties (learns risk naturally via Q-values)
-    risk_penalty_weight: float = 0.1  # RESTORED from 0.3 - DQN doesn't need this strong
-    drawdown_penalty_weight: float = 0.2  # RESTORED from 0.5 - DQN doesn't need this strong
+    risk_penalty_weight: float = 0.01  # RESTORED from 0.3 - DQN doesn't need this strong
+    drawdown_penalty_weight: float = 0.05  # RESTORED from 0.5 - DQN doesn't need this strong
 
     # Bonuses
     profitable_trade_bonus: float = 0.1
@@ -250,7 +248,7 @@ class EnhancedRewardConfig:
 
     # Legacy fields (no longer used but kept for compatibility)
     action_diversity_bonus: float = 0.1  # NOT USED - removed to restore DQN
-    hold_winner_bonus: float = 0.3  # NOT USED - removed to restore DQN
+    hold_winner_bonus: float = 0.1  # NOT USED - removed to restore DQN
     diversity_window: int = 50  # NOT USED - removed to restore DQN
 
 
@@ -329,7 +327,6 @@ class EnhancedRewardFunction:
         position: float,
         price: float,
         prev_price: float,
-        max_position_size: int = 1000,
         max_position_pct: float = 40.0,
         **kwargs
     ) -> float:
@@ -344,7 +341,6 @@ class EnhancedRewardFunction:
             position: Current position (shares)
             price: Current price
             prev_price: Previous price
-            max_position_size: Max shares allowed
             max_position_pct: Max position as % of portfolio
 
         Returns:
@@ -376,7 +372,6 @@ class EnhancedRewardFunction:
                 cash=cash,
                 position=int(position),
                 current_price=price,
-                max_position_size=max_position_size,
                 portfolio_value=portfolio_value,
                 max_position_pct=max_position_pct
             )
@@ -448,6 +443,12 @@ class EnhancedRewardFunction:
         # === 6. PROFITABLE TRADE BONUS ===
         if portfolio_return > 0:
             reward += self.config.profitable_trade_bonus
+
+        # === 7. HOLD WINNER BONUS ===
+        if self.config.use_action_shaping:
+            is_hold = (action == ImprovedTradingAction.HOLD if self.use_improved_actions else action == TradingAction.HOLD)
+            if is_hold and position > 0 and price > prev_price:
+                reward += self.config.hold_winner_bonus
 
         # Update state
         self.prev_portfolio_value = portfolio_value
