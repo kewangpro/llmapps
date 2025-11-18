@@ -174,11 +174,15 @@ def create_app():
                     """
 
                     # Create invisible button for click handling
+                    # Height matches card height: 50px without positions, 60px with positions
+                    # Negative top margin matches height to fully overlay the card
+                    # No bottom margin since card HTML already has margin-bottom: 8px
+                    btn_height = 50 if total_shares == 0 else 60
                     btn = pn.widgets.Button(
                         name="",
                         sizing_mode="stretch_width",
-                        margin=(-58, 0, 8, 0),  # Negative margin to position over the card
-                        height=50 if total_shares == 0 else 60,
+                        margin=(-btn_height, 0, 0, 0),
+                        height=btn_height,
                         stylesheets=["""
                         :host {
                             opacity: 0 !important;
