@@ -6,6 +6,7 @@ Panel application including all pages, sidebar, and navigation.
 """
 
 import panel as pn
+import param
 import asyncio
 import logging
 from datetime import datetime
@@ -31,9 +32,12 @@ def create_app():
     session_manager = LiveSessionManager()
 
     # Create watchlist panel for sidebar
-    class WatchlistPanel:
+    class WatchlistPanel(param.Parameterized):
         """Watchlist panel that can be refreshed"""
+        clicked_symbol = param.String(default="")
+
         def __init__(self, session_manager, tabs=None, analysis_app=None):
+            super().__init__()
             self.stock_fetcher = StockFetcher()
             self.session_manager = session_manager
             self.tabs = tabs
@@ -45,9 +49,21 @@ def create_app():
             )
             pn.state.onload(self.schedule_refresh)
 
+            # Watch for symbol clicks
+            self.param.watch(self._on_symbol_clicked, 'clicked_symbol')
+
         def schedule_refresh(self):
             """Schedule the refresh to run in the background."""
             pn.state.execute(self.refresh)
+
+        def _on_symbol_clicked(self, event):
+            """Handle symbol click via parameter change"""
+            symbol = event.new
+            if symbol:
+                logger.info(f"Watchlist: Stock {symbol} clicked via parameter")
+                self.handle_stock_click(symbol)
+                # Reset the parameter
+                self.clicked_symbol = ""
 
         def handle_stock_click(self, symbol):
             """Handle click on a stock in the watchlist"""
@@ -133,14 +149,13 @@ def create_app():
                         </div>
                         """
 
-                    # Create styled card HTML - simple and clean
+                    # Create styled card HTML
                     card_html = f"""
                     <div style='background: {Colors.BG_PRIMARY};
                                 border: 1px solid #DEE2E6;
                                 border-radius: 6px;
                                 padding: 10px;
                                 margin-bottom: 8px;
-                                cursor: pointer;
                                 transition: all 0.2s;
                                 box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);'
                          onmouseover='this.style.background="{Colors.BG_HOVER}"'
@@ -158,7 +173,30 @@ def create_app():
                     </div>
                     """
 
+                    # Create invisible button for click handling
+                    btn = pn.widgets.Button(
+                        name="",
+                        sizing_mode="stretch_width",
+                        margin=(-58, 0, 8, 0),  # Negative margin to position over the card
+                        height=50 if total_shares == 0 else 60,
+                        stylesheets=["""
+                        :host {
+                            opacity: 0 !important;
+                            cursor: pointer !important;
+                        }
+                        """]
+                    )
+
+                    # Use closure to capture symbol
+                    def make_click_handler(sym):
+                        def handler(event):
+                            self.clicked_symbol = sym
+                        return handler
+
+                    btn.on_click(make_click_handler(symbol))
+
                     stock_cards.append(pn.pane.HTML(card_html, sizing_mode="stretch_width", margin=0))
+                    stock_cards.append(btn)
 
             # Update the pane with new content
             self.pane.clear()
