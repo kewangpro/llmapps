@@ -282,18 +282,38 @@ class LSTMPredictionService:
         return metrics
 
     def predict(
-        self, 
-        symbol: str, 
-        data: pd.DataFrame, 
+        self,
+        symbol: str,
+        data: pd.DataFrame,
         days: int = None,
-        ensemble_size: int = None
+        ensemble_size: int = None,
+        prediction_callback: Any = None
     ) -> Dict[str, Any]:
-        """Generate predictions using trained ensemble with improved error handling"""
-        
+        """Generate predictions using trained ensemble with improved error handling
+
+        Args:
+            symbol: Stock symbol
+            data: Historical price data
+            days: Number of days to predict
+            ensemble_size: Number of models in ensemble
+            prediction_callback: Optional callback for prediction progress updates
+        """
+
         days = days or Config.PREDICTION_DAYS
         ensemble_size = ensemble_size or self.ensemble_size
-        
+
+        # Progress callback helper
+        def report_progress(step: str, progress: int):
+            if prediction_callback:
+                prediction_callback({
+                    'type': 'prediction_progress',
+                    'symbol': symbol,
+                    'step': step,
+                    'progress': progress
+                })
+
         try:
+            report_progress("Loading models...", 10)
             # Load models with error handling and automatic fallback
             models, scaler = load_ensemble_with_fallback(symbol, self.model_dir, self.sequence_length, ensemble_size, data)
             if not models:
@@ -324,14 +344,15 @@ class LSTMPredictionService:
         
         # Ensure data has proper datetime index before processing
         data = _ensure_datetime_index(data)
-        
+
+        report_progress("Preparing data...", 30)
         # CRITICAL FIX: Use backward compatibility system to determine feature set
         compatibility_info = determine_feature_compatibility(symbol, self.model_dir)
         use_enhanced_features = compatibility_info['uses_enhanced_features']
-        
+
         logger.info(f"Model for {symbol}: Enhanced features={use_enhanced_features}, "
                    f"Feature count={compatibility_info['feature_count']}")
-        
+
         # Prepare data with matching feature set for backward compatibility
         try:
             if use_enhanced_features:
@@ -358,13 +379,15 @@ class LSTMPredictionService:
         
         if len(X) == 0:
             raise ValueError("Insufficient data for prediction")
-        
+
         # Use the last sequence for prediction
         last_sequence = X[-1:, :, :]
-        
+
+        report_progress("Generating predictions...", 50)
         # CRITICAL FIX: Improved multi-step prediction with consistent scaling
         predictions = _generate_multi_step_predictions(models, scaler, X, days, self._predict_ensemble) # Pass self._predict_ensemble
-        
+
+        report_progress("Calculating confidence intervals...", 70)
         # Calculate confidence intervals with improved ensemble variance
         ensemble_predictions = _generate_ensemble_predictions(models, scaler, X, days, self._predict_ensemble) # Pass self._predict_ensemble
         pred_std = np.std(ensemble_predictions, axis=0)
@@ -401,6 +424,7 @@ class LSTMPredictionService:
             freq='D'
         )
         
+        report_progress("Finalizing results...", 90)
         result = {
             'type': 'prediction',
             'symbol': symbol,
@@ -412,7 +436,8 @@ class LSTMPredictionService:
             'prediction_period_days': days,
             'prediction_variance': pred_std.tolist()
         }
-        
+
+        report_progress("Complete!", 100)
         return result
 
     def validate_model(self, data: pd.DataFrame, symbol: str = "TEST") -> Dict[str, Any]:
