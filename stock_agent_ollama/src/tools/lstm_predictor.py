@@ -44,18 +44,28 @@ class LSTMPredictor:
         )
 
     def predict(
-        self, 
-        symbol: str, 
-        data: pd.DataFrame, 
+        self,
+        symbol: str,
+        data: pd.DataFrame,
         days: int = None,
-        ensemble_size: int = None
+        ensemble_size: int = None,
+        prediction_callback: Any = None
     ) -> Dict[str, Any]:
-        """Generate predictions using trained ensemble with improved error handling"""
+        """Generate predictions using trained ensemble with improved error handling
+
+        Args:
+            symbol: Stock symbol
+            data: Historical price data
+            days: Number of days to predict
+            ensemble_size: Number of models in ensemble
+            prediction_callback: Optional callback for prediction progress updates
+        """
         return self.service.predict(
             symbol=symbol,
             data=data,
             days=days,
-            ensemble_size=ensemble_size
+            ensemble_size=ensemble_size,
+            prediction_callback=prediction_callback
         )
 
     def validate_improvements(self, data: pd.DataFrame, symbol: str = "TEST") -> Dict[str, Any]:
