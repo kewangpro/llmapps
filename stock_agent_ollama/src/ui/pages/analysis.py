@@ -167,13 +167,9 @@ class StockAnalysisApp(param.Parameterized):
             """
             pn.state.execute(lambda: setattr(self.lstm_prediction_text, 'object', status_html))
 
-            # Hide when complete
+            # Hide immediately when complete
             if progress >= 100:
-                import asyncio
-                async def hide_after_delay():
-                    await asyncio.sleep(1)
-                    pn.state.execute(lambda: setattr(self.lstm_prediction_progress, 'visible', False))
-                asyncio.create_task(hide_after_delay())
+                pn.state.execute(lambda: setattr(self.lstm_prediction_progress, 'visible', False))
 
     def _update_lstm_progress(self, progress_data: Dict):
         """Update LSTM training progress."""
