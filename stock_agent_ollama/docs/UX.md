@@ -74,11 +74,16 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 
 ### Sidebar (Left Panel)
 
-**Watchlist Panel** (240px width)
-- Live stock prices with real-time updates
-- Color-coded percentage changes
-- Click symbol → load in Analysis view
-- Symbols: AAPL, GOOGL, MSFT, TSLA, AMZN, NVDA
+**Interactive Watchlist Panel** (240px width)
+- Clickable stock cards with hover effects
+- Live stock prices with real-time updates (every 5 seconds)
+- Color-coded percentage changes (green▲/red▼)
+- Active position tracking from live trading sessions
+  - Shows shares owned and current value in purple
+  - Aggregates positions across all active sessions
+- Click any card → instantly navigate to Analysis page and analyze that stock
+- Automatically syncs with portfolio manager
+- Clean card-based design with borders and shadows
 
 ---
 

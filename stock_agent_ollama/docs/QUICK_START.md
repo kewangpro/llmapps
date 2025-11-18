@@ -42,9 +42,12 @@ The platform features a professional light-theme interface with 6 main pages:
 - **Models** - LSTM and RL model registry
 
 **Sidebar:**
-- Live **Watchlist** with real-time prices
-- Stocks: AAPL, GOOGL, MSFT, TSLA, AMZN, NVDA
-- Click any symbol to analyze
+- **Interactive Watchlist** with clickable stock cards
+- Real-time prices and daily changes (updates every 5 seconds)
+- Shows live positions from active trading sessions (shares + value)
+- Click any card → instantly navigate to Analysis page
+- Automatically syncs with your portfolio
+- Supports any stock ticker symbol, not just predefined ones
 
 ---
 
