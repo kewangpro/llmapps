@@ -93,6 +93,17 @@ class StockAnalysisApp(param.Parameterized):
         )
         self.lstm_status_text = pn.pane.HTML("")
 
+        # LSTM Prediction progress tracking
+        self.lstm_prediction_progress = pn.Column(visible=False)
+        self.lstm_prediction_bar = pn.indicators.Progress(
+            name='Generating Predictions',
+            value=0,
+            max=100,
+            width=300,
+            bar_color='info'
+        )
+        self.lstm_prediction_text = pn.pane.HTML("")
+
         # Quick action buttons - more compact
         quick_stocks = ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META", "TEAM"]
         self.quick_buttons = pn.Row(
@@ -128,6 +139,41 @@ class StockAnalysisApp(param.Parameterized):
         action = "Predict" if force_retrain else "Analyze"
         self.query_input.value = f"{action} {symbol}"
         self._handle_query()
+
+    def _update_prediction_progress(self, progress_data: Dict):
+        """Update LSTM prediction progress."""
+        progress_type = progress_data.get('type', '')
+
+        if progress_type == 'prediction_progress':
+            # Show progress panel if not visible
+            if not self.lstm_prediction_progress.visible:
+                pn.state.execute(lambda: setattr(self.lstm_prediction_progress, 'visible', True))
+
+            symbol = progress_data.get('symbol', '')
+            step = progress_data.get('step', '')
+            progress = progress_data.get('progress', 0)
+
+            # Update progress bar
+            pn.state.execute(lambda: setattr(self.lstm_prediction_bar, 'value', progress))
+
+            # Update status text
+            from src.ui.design_system import Colors
+            status_html = f"""
+            <div style='background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+                        color: white; padding: 12px; border-radius: 8px; margin: 10px 0;'>
+                <h4 style='margin: 0 0 8px 0; font-size: 0.95rem;'>🔮 {step}</h4>
+                <div style='font-size: 0.85rem; opacity: 0.9;'>{symbol} • {progress}% complete</div>
+            </div>
+            """
+            pn.state.execute(lambda: setattr(self.lstm_prediction_text, 'object', status_html))
+
+            # Hide when complete
+            if progress >= 100:
+                import asyncio
+                async def hide_after_delay():
+                    await asyncio.sleep(1)
+                    pn.state.execute(lambda: setattr(self.lstm_prediction_progress, 'visible', False))
+                asyncio.create_task(hide_after_delay())
 
     def _update_lstm_progress(self, progress_data: Dict):
         """Update LSTM training progress."""
@@ -238,6 +284,7 @@ class StockAnalysisApp(param.Parameterized):
         # Clear previous results and hide progress
         self.results_column.clear()
         self.lstm_training_progress.visible = False
+        self.lstm_prediction_progress.visible = False
 
         # Show loading state
         self._set_loading_state(True)
@@ -254,7 +301,8 @@ class StockAnalysisApp(param.Parameterized):
                     query,
                     force_retrain=force_retrain,
                     progress_callback=self._update_lstm_progress,
-                    training_complete_callback=self._display_training_history_immediate
+                    training_complete_callback=self._display_training_history_immediate,
+                    prediction_callback=self._update_prediction_progress
                 ))
                 loop.close()
 
@@ -668,6 +716,13 @@ class StockAnalysisApp(param.Parameterized):
             self.lstm_progress_bar
         ])
 
+        # LSTM Prediction progress section
+        self.lstm_prediction_progress.clear()
+        self.lstm_prediction_progress.extend([
+            self.lstm_prediction_text,
+            self.lstm_prediction_bar
+        ])
+
         # Disclaimer at bottom
         from src.ui.design_system import HTMLComponents
         disclaimer_html = HTMLComponents.disclaimer()
@@ -675,6 +730,7 @@ class StockAnalysisApp(param.Parameterized):
         return pn.Column(
             input_section,
             self.lstm_training_progress,
+            self.lstm_prediction_progress,
             self.results_column,
             pn.pane.HTML(disclaimer_html),
             sizing_mode="stretch_width",
