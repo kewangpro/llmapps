@@ -112,7 +112,7 @@ class QueryProcessor:
     def _extract_intent_and_entities(self, query: str) -> Tuple[str, dict]:
         """Extract intent and entities from query using pattern matching"""
         entities = {}
-        
+
         # Try to match query patterns
         for intent, patterns in self.query_patterns.items():
             for pattern in patterns:
@@ -121,22 +121,28 @@ class QueryProcessor:
                     # Extract stock symbols
                     symbols = []
                     for group in match.groups():
-                        if group and group.upper() in self.popular_symbols:
-                            symbols.append(group.upper())
-                        elif group:
-                            # Try to match partial symbol names
-                            potential_symbol = self._find_symbol_by_name(group)
-                            if potential_symbol:
-                                symbols.append(potential_symbol)
-                    
+                        if group:
+                            # First check if it's in our known symbols list
+                            if group.upper() in self.popular_symbols:
+                                symbols.append(group.upper())
+                            else:
+                                # Try to match company name to symbol
+                                potential_symbol = self._find_symbol_by_name(group)
+                                if potential_symbol:
+                                    symbols.append(potential_symbol)
+                                else:
+                                    # Accept any valid-looking ticker symbol (alphanumeric, 1-5 chars typically)
+                                    # This allows symbols not in the predefined list (e.g., FDIG, SNOW, etc.)
+                                    symbols.append(group.upper())
+
                     if symbols:
                         entities['symbols'] = symbols
-                        
+
                         # Extract time period
                         time_period = self._extract_time_period(query)
                         if time_period:
                             entities['period'] = time_period
-                        
+
                         return intent, entities
         
         # If no specific pattern matched, try to extract symbols anyway
@@ -154,9 +160,10 @@ class QueryProcessor:
         """Extract stock symbols from text"""
         symbols = []
         words = text.split()
-        
+
         for word in words:
             word_upper = word.upper().strip('.,!?')
+            # Check if it's in known symbols
             if word_upper in self.popular_symbols:
                 symbols.append(word_upper)
             else:
@@ -164,7 +171,11 @@ class QueryProcessor:
                 potential_symbol = self._find_symbol_by_name(word)
                 if potential_symbol:
                     symbols.append(potential_symbol)
-        
+                elif len(word_upper) >= 1 and len(word_upper) <= 5 and word_upper.isalpha():
+                    # Accept any 1-5 letter alphabetic word as a potential ticker symbol
+                    # This catches symbols not in the predefined list (e.g., FDIG)
+                    symbols.append(word_upper)
+
         return list(set(symbols))  # Remove duplicates
     
     def _find_symbol_by_name(self, name: str) -> Optional[str]:

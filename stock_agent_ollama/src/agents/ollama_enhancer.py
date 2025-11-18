@@ -170,10 +170,28 @@ Keep responses conversational but informative. Always include educational discla
             
             # Try to parse JSON response
             result = json.loads(json_text)
-            
+
             # Validate required fields
             required_fields = ['intent', 'symbols', 'confidence']
             if all(field in result for field in required_fields):
+                # Validate and fix time_period if present
+                if 'time_period' in result and result['time_period']:
+                    time_period = result['time_period']
+                    # If Ollama returned pipe-delimited options, take the first valid one
+                    if '|' in time_period:
+                        logger.warning(f"Ollama returned pipe-delimited time_period: {time_period}, extracting first value")
+                        # Valid yfinance periods
+                        valid_periods = ['1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', 'ytd', 'max']
+                        parts = time_period.split('|')
+                        for part in parts:
+                            if part.strip() in valid_periods:
+                                result['time_period'] = part.strip()
+                                logger.info(f"Normalized time_period to: {result['time_period']}")
+                                break
+                        else:
+                            # No valid period found, default to 1y
+                            result['time_period'] = '1y'
+                            logger.info("No valid period found, defaulting to 1y")
                 return result
             else:
                 logger.warning(f"Ollama response missing required fields: {response}")

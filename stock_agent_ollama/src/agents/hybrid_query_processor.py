@@ -32,31 +32,51 @@ class HybridQueryProcessor(QueryProcessor):
             'analytical': ['analyze', 'analysis', 'review', 'assess', 'evaluate']
         }
     
-    async def process_query(self, query: str, conversation_context: List[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Enhanced query processing with Ollama integration and regex fallback"""
+    async def process_query(
+        self,
+        query: str,
+        force_retrain: bool = False,
+        progress_callback: Any = None,
+        training_complete_callback: Any = None,
+        conversation_context: List[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Enhanced query processing with Ollama integration and regex fallback
+
+        Args:
+            query: Natural language query string
+            force_retrain: If True, force retrain LSTM models for predictions
+            progress_callback: Optional callback for LSTM training progress
+            training_complete_callback: Optional callback when training completes
+            conversation_context: Optional conversation history for context
+        """
         try:
             query_lower = query.lower().strip()
             conversation_context = conversation_context or []
-            
+
+            # Store these for use in handlers
+            self._force_retrain = force_retrain
+            self._progress_callback = progress_callback
+            self._training_complete_callback = training_complete_callback
+
             # First attempt: Use Ollama for natural language understanding
             ollama_result = None
             if self.use_ollama:
                 logger.info("Attempting Ollama query understanding")
                 ollama_result = await self.ollama_enhancer.understand_query(query)
-                
+
                 if ollama_result and ollama_result.get('confidence', 0) > 0.7:
                     logger.info(f"Ollama understanding successful with confidence: {ollama_result['confidence']}")
                     return await self._process_ollama_result(query, ollama_result, conversation_context)
                 else:
                     logger.info(f"Ollama understanding failed or low confidence: {ollama_result}")
-            
+
             # Fallback: Use original regex-based processing
             if self.fallback_to_regex:
                 logger.info("Falling back to regex-based query processing")
                 return await self._process_with_regex_fallback(query, conversation_context)
             else:
                 return self._handle_processing_failure(query)
-                
+
         except Exception as e:
             logger.error(f"Hybrid query processing failed: {e}")
             return {
@@ -88,7 +108,12 @@ class HybridQueryProcessor(QueryProcessor):
         if intent == 'analyze':
             result = await self._handle_analyze_query(entities)
         elif intent == 'predict':
-            result = await self._handle_predict_query(entities)
+            result = await self._handle_predict_query(
+                entities,
+                force_retrain=getattr(self, '_force_retrain', False),
+                progress_callback=getattr(self, '_progress_callback', None),
+                training_complete_callback=getattr(self, '_training_complete_callback', None)
+            )
         elif intent == 'compare':
             result = await self._handle_compare_query(entities)
         elif intent == 'price':
@@ -105,18 +130,23 @@ class HybridQueryProcessor(QueryProcessor):
         return result
     
     async def _process_with_regex_fallback(
-        self, 
-        query: str, 
+        self,
+        query: str,
         conversation_context: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """Process query using original regex patterns with enhancements"""
-        # Use original regex processing
-        result = await super().process_query(query)
-        
+        # Use original regex processing with stored parameters
+        result = await super().process_query(
+            query,
+            force_retrain=getattr(self, '_force_retrain', False),
+            progress_callback=getattr(self, '_progress_callback', None),
+            training_complete_callback=getattr(self, '_training_complete_callback', None)
+        )
+
         # Add educational enhancements if the query suggests learning intent
         if self._is_educational_query(query):
             result = await self._add_educational_enhancements(result, query, conversation_context)
-        
+
         return result
     
     def _is_educational_query(self, query: str) -> bool:
