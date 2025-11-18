@@ -75,7 +75,7 @@ class QueryProcessor:
             '2y': 730
         }
     
-    async def process_query(self, query: str, force_retrain: bool = False, progress_callback: Any = None, training_complete_callback: Any = None) -> Dict[str, Any]:
+    async def process_query(self, query: str, force_retrain: bool = False, progress_callback: Any = None, training_complete_callback: Any = None, prediction_callback: Any = None) -> Dict[str, Any]:
         """Process natural language query and return structured response
 
         Args:
@@ -83,6 +83,7 @@ class QueryProcessor:
             force_retrain: If True, force retrain LSTM models for predictions
             progress_callback: Optional callback for LSTM training progress
             training_complete_callback: Optional callback when training completes
+            prediction_callback: Optional callback for LSTM prediction progress
         """
         try:
             query_lower = query.lower().strip()
@@ -91,9 +92,9 @@ class QueryProcessor:
             intent, entities = self._extract_intent_and_entities(query_lower)
 
             if intent == 'analyze':
-                return await self._handle_analyze_query(entities)
+                return await self._handle_analyze_query(entities, prediction_callback=prediction_callback)
             elif intent == 'predict':
-                return await self._handle_predict_query(entities, force_retrain=force_retrain, progress_callback=progress_callback, training_complete_callback=training_complete_callback)
+                return await self._handle_predict_query(entities, force_retrain=force_retrain, progress_callback=progress_callback, training_complete_callback=training_complete_callback, prediction_callback=prediction_callback)
             elif intent == 'compare':
                 return await self._handle_compare_query(entities)
             elif intent == 'price':
@@ -227,15 +228,20 @@ class QueryProcessor:
         
         return '1y'  # Default period
     
-    async def _handle_analyze_query(self, entities: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle stock analysis queries"""
+    async def _handle_analyze_query(self, entities: Dict[str, Any], prediction_callback: Any = None) -> Dict[str, Any]:
+        """Handle stock analysis queries
+
+        Args:
+            entities: Extracted entities from query
+            prediction_callback: Optional callback for prediction progress updates
+        """
         symbols = entities.get('symbols', [])
         if not symbols:
             return {
                 'type': 'error',
                 'message': 'Please specify a stock symbol to analyze (e.g., AAPL, GOOGL, MSFT)'
             }
-        
+
         symbol = symbols[0]  # Analyze first symbol
         period = entities.get('period', '1y')
         
@@ -264,7 +270,7 @@ class QueryProcessor:
             if self.lstm_predictor.is_model_trained(symbol):
                 logger.info(f"[{symbol}] LSTM model is trained. Attempting prediction.")
                 try:
-                    predictions = self.lstm_predictor.predict(symbol, stock_data)
+                    predictions = self.lstm_predictor.predict(symbol, stock_data, prediction_callback=prediction_callback)
                     logger.info(f"[{symbol}] LSTM prediction complete.")
                 except Exception as e:
                     logger.warning(f"[{symbol}] Prediction failed: {e}")
@@ -291,7 +297,7 @@ class QueryProcessor:
                 'message': f"Failed to analyze {symbol}: {str(e)}"
             }
     
-    async def _handle_predict_query(self, entities: Dict[str, Any], force_retrain: bool = False, progress_callback: Any = None, training_complete_callback: Any = None) -> Dict[str, Any]:
+    async def _handle_predict_query(self, entities: Dict[str, Any], force_retrain: bool = False, progress_callback: Any = None, training_complete_callback: Any = None, prediction_callback: Any = None) -> Dict[str, Any]:
         """Handle stock prediction queries
 
         Args:
@@ -299,6 +305,7 @@ class QueryProcessor:
             force_retrain: If True, retrain model even if it exists
             progress_callback: Optional callback for training progress
             training_complete_callback: Optional callback when training completes
+            prediction_callback: Optional callback for prediction progress
         """
         symbols = entities.get('symbols', [])
         logger.debug(f"Prediction request - entities: {entities}, force_retrain: {force_retrain}")
@@ -357,9 +364,9 @@ class QueryProcessor:
             logger.debug(f"Fetching stock data for predictions: {symbol}")
             stock_data = self.stock_fetcher.fetch_stock_data(symbol, '1y')
             logger.debug(f"Stock data fetched: {len(stock_data)} rows")
-            
+
             logger.debug(f"Generating predictions for {symbol}")
-            predictions = self.lstm_predictor.predict(symbol, stock_data)
+            predictions = self.lstm_predictor.predict(symbol, stock_data, prediction_callback=prediction_callback)
             logger.info(f"Predictions generated for {symbol}: {len(predictions.get('predictions', []))} days")
             
             # Get current data for context

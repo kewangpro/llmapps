@@ -38,6 +38,7 @@ class HybridQueryProcessor(QueryProcessor):
         force_retrain: bool = False,
         progress_callback: Any = None,
         training_complete_callback: Any = None,
+        prediction_callback: Any = None,
         conversation_context: List[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Enhanced query processing with Ollama integration and regex fallback
@@ -47,6 +48,7 @@ class HybridQueryProcessor(QueryProcessor):
             force_retrain: If True, force retrain LSTM models for predictions
             progress_callback: Optional callback for LSTM training progress
             training_complete_callback: Optional callback when training completes
+            prediction_callback: Optional callback for LSTM prediction progress
             conversation_context: Optional conversation history for context
         """
         try:
@@ -57,6 +59,7 @@ class HybridQueryProcessor(QueryProcessor):
             self._force_retrain = force_retrain
             self._progress_callback = progress_callback
             self._training_complete_callback = training_complete_callback
+            self._prediction_callback = prediction_callback
 
             # First attempt: Use Ollama for natural language understanding
             ollama_result = None
@@ -106,13 +109,17 @@ class HybridQueryProcessor(QueryProcessor):
         
         # Route to appropriate handler based on intent
         if intent == 'analyze':
-            result = await self._handle_analyze_query(entities)
+            result = await self._handle_analyze_query(
+                entities,
+                prediction_callback=getattr(self, '_prediction_callback', None)
+            )
         elif intent == 'predict':
             result = await self._handle_predict_query(
                 entities,
                 force_retrain=getattr(self, '_force_retrain', False),
                 progress_callback=getattr(self, '_progress_callback', None),
-                training_complete_callback=getattr(self, '_training_complete_callback', None)
+                training_complete_callback=getattr(self, '_training_complete_callback', None),
+                prediction_callback=getattr(self, '_prediction_callback', None)
             )
         elif intent == 'compare':
             result = await self._handle_compare_query(entities)
@@ -140,7 +147,8 @@ class HybridQueryProcessor(QueryProcessor):
             query,
             force_retrain=getattr(self, '_force_retrain', False),
             progress_callback=getattr(self, '_progress_callback', None),
-            training_complete_callback=getattr(self, '_training_complete_callback', None)
+            training_complete_callback=getattr(self, '_training_complete_callback', None),
+            prediction_callback=getattr(self, '_prediction_callback', None)
         )
 
         # Add educational enhancements if the query suggests learning intent
