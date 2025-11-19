@@ -493,38 +493,42 @@ class RLTrainingPanel(param.Parameterized):
                 from src.rl import BacktestEngine, BacktestConfig
                 from src.rl.training import EnhancedRLTrainer
                 from src.rl.baselines import BuyHoldStrategy, MomentumStrategy
+                from src.rl.model_utils import load_env_config_from_model
 
                 # Setup dates (last 6 months + lookback buffer)
-                # Add 100 extra days to account for 60-day lookback window
-                # (60 trading days ≈ 85 calendar days + buffer)
                 end_date = datetime.now().strftime("%Y-%m-%d")
                 start_date = (datetime.now() - timedelta(days=280)).strftime("%Y-%m-%d")
 
-                config = BacktestConfig(
-                    symbol=symbol,
-                    start_date=start_date,
-                    end_date=end_date
-                )
-
-                engine = BacktestEngine(config)
-                engine.setup_environment()
-
-                # Run strategies
                 results = {}
+                loaded_models = []
 
                 # Find and load ALL available trained RL models for this symbol
-                loaded_models = []
                 for agent_type in ['ppo', 'a2c', 'dqn']:
                     logger.info(f"Backtest: Searching for {agent_type.upper()} model for {symbol}")
                     model_info = self._find_latest_model(symbol, agent_type)
 
                     if model_info:
                         try:
+                            # Load training config to create the correct environment
+                            training_config = load_env_config_from_model(model_info['path'])
+
+                            # Create a specific backtest config for this agent
+                            agent_backtest_config = BacktestConfig(
+                                symbol=symbol,
+                                start_date=start_date,
+                                end_date=end_date,
+                                use_improved_actions=training_config.get('use_improved_actions', True),
+                                include_trend_indicators=training_config.get('include_trend_indicators', False)
+                            )
+
+                            # Create a new engine for this agent
+                            engine = BacktestEngine(agent_backtest_config)
+
                             # Load the trained agent
                             agent = EnhancedRLTrainer.load_agent(
                                 model_path=model_info['path'],
                                 agent_type=model_info['agent_type'],
-                                env=engine.env
+                                env=None  # Let the backtest engine create the env
                             )
 
                             # Determine agent display name
@@ -543,6 +547,10 @@ class RLTrainingPanel(param.Parameterized):
                         except Exception as e:
                             logger.error(f"Error loading {agent_type.upper()} agent: {e}", exc_info=True)
 
+                # Run baseline strategies using a default engine
+                default_config = BacktestConfig(symbol=symbol, start_date=start_date, end_date=end_date)
+                baseline_engine = BacktestEngine(default_config)
+
                 # Update model status with all loaded models
                 if loaded_models:
                     models_list = "<br>".join([f"✅ {name} <span style='color: #059669; font-size: 11px;'>({dir_name})</span>"
@@ -554,23 +562,20 @@ class RLTrainingPanel(param.Parameterized):
                         {models_list}
                     </div>"""
                     pn.state.execute(lambda: setattr(self.model_status_pane, 'object', status_html))
-
                     pn.state.execute(lambda: pn.state.notifications.info(
-                        f"Loaded {len(loaded_models)} model(s)",
-                        duration=3000
+                        f"Loaded {len(loaded_models)} model(s)", duration=3000
                     ))
                 else:
                     pn.state.execute(lambda: pn.state.notifications.warning(
-                        f"No trained models found for {symbol}",
-                        duration=4000
+                        f"No trained models found for {symbol}", duration=4000
                     ))
 
                 # Run baseline strategies
                 buy_hold = BuyHoldStrategy()
-                results['Buy & Hold'] = engine.run_strategy_backtest(buy_hold.get_action)
+                results['Buy & Hold'] = baseline_engine.run_strategy_backtest(buy_hold.get_action)
 
                 momentum = MomentumStrategy()
-                results['Momentum'] = engine.run_strategy_backtest(momentum.get_action)
+                results['Momentum'] = baseline_engine.run_strategy_backtest(momentum.get_action)
 
                 # Display results
                 pn.state.execute(lambda: self._display_backtest_results(
