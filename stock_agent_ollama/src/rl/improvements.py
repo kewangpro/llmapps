@@ -175,7 +175,7 @@ class ActionMasker:
                 if position_pct > max_position_pct:
                     import logging
                     logger = logging.getLogger(__name__)
-                    logger.warning(f"Masking {action.name}: new position {position_pct:.1f}% would exceed max_position_pct {max_position_pct:.1f}% (current={position} shares, buying {shares} @ ${current_price:.2f}, cash=${cash:.2f}, portfolio=${portfolio_value:.2f})")
+                    logger.debug(f"Masking {action.name}: new position {position_pct:.1f}% would exceed max_position_pct {max_position_pct:.1f}% (current={position} shares, buying {shares} @ ${current_price:.2f}, cash=${cash:.2f}, portfolio=${portfolio_value:.2f})")
                     mask[action] = 0.0
 
         return mask
@@ -273,6 +273,63 @@ class PPORewardConfig(EnhancedRewardConfig):
 
     # Higher transaction costs to discourage overtrading
     transaction_cost_rate: float = 0.002  # 4x stronger than DQN
+
+
+class LSTMPPORewardConfig(PPORewardConfig):
+    """
+    Reward configuration optimized specifically for LSTM PPO.
+
+    Fixes for excessive SELL_ALL behavior:
+    - Reduced risk/drawdown penalties to allow trend riding
+    - Added HOLD bonus during winning positions
+    - Reduced transaction costs for SELL actions
+    - Increased profitable trade bonus
+    """
+    # Lighter penalties to reduce premature exits
+    risk_penalty_weight: float = 0.1  # Reduced from 0.3
+    drawdown_penalty_weight: float = 0.2  # Reduced from 0.5
+
+    # Encourage holding winning positions
+    hold_winning_position_bonus: float = 0.15  # Bonus for HOLD when in profit
+
+    # Reduce excessive trading penalty slightly
+    excessive_trading_penalty: float = -0.05  # Reduced from -0.1
+
+    # Increase reward for profitable trades
+    profitable_trade_bonus: float = 0.3  # Increased from 0.1
+
+    # Reduce transaction costs slightly
+    transaction_cost_rate: float = 0.0015  # Reduced from 0.002
+
+
+class EnhancedLSTMPPORewardConfig(PPORewardConfig):
+    """
+    Enhanced reward configuration for LSTM PPO to match Buy & Hold performance.
+
+    V2 improvements:
+    - Much stronger HOLD incentive during uptrends
+    - Momentum trend bonus for riding winners
+    - Minimal penalties to avoid premature exits
+    - Encourages fuller position sizing
+    """
+    # Minimal penalties to allow full trend riding
+    risk_penalty_weight: float = 0.05  # Further reduced
+    drawdown_penalty_weight: float = 0.1  # Further reduced
+
+    # Very strong HOLD incentive during winning positions
+    hold_winning_position_bonus: float = 0.5  # Increased from 0.15
+
+    # Momentum bonus for staying invested during uptrends
+    momentum_trend_bonus: float = 0.3  # NEW: Bonus for holding during strong momentum
+
+    # Minimal trading penalty (we want to avoid overtrading)
+    excessive_trading_penalty: float = -0.02  # Further reduced
+
+    # Strong reward for profitable trades
+    profitable_trade_bonus: float = 0.5  # Further increased
+
+    # Minimal transaction costs
+    transaction_cost_rate: float = 0.001  # Further reduced
 
 
 class EnhancedRewardFunction:
@@ -445,10 +502,37 @@ class EnhancedRewardFunction:
             reward += self.config.profitable_trade_bonus
 
         # === 7. HOLD WINNER BONUS ===
-        if self.config.use_action_shaping:
+        # Encourage holding winning positions (especially for LSTM PPO)
+        if self.config.use_action_shaping and hasattr(self.config, 'hold_winning_position_bonus'):
             is_hold = (action == ImprovedTradingAction.HOLD if self.use_improved_actions else action == TradingAction.HOLD)
-            if is_hold and position > 0 and price > prev_price:
-                reward += self.config.hold_winner_bonus
+            # Check if in a winning position (portfolio increasing)
+            if is_hold and position > 0 and portfolio_return > 0:
+                reward += self.config.hold_winning_position_bonus
+                logger.debug(f"HOLD winning position bonus applied: +{self.config.hold_winning_position_bonus}")
+
+        # === 8. MOMENTUM TREND BONUS ===
+        # Bonus for holding positions during strong upward momentum
+        if self.config.use_action_shaping and hasattr(self.config, 'momentum_trend_bonus'):
+            # Calculate price momentum
+            price_momentum = (price - prev_price) / prev_price if prev_price > 0 else 0
+
+            # Calculate portfolio momentum (recent trend)
+            recent_returns = self.returns_history[-5:] if len(self.returns_history) >= 5 else self.returns_history
+            avg_recent_return = np.mean(recent_returns) if len(recent_returns) > 0 else 0
+
+            # Strong uptrend: positive price momentum AND positive recent returns AND holding position
+            is_strong_uptrend = price_momentum > 0.005 and avg_recent_return > 0 and position > 0
+
+            # Bonus for holding or buying during uptrend (not selling)
+            is_hold_or_buy = (action == ImprovedTradingAction.HOLD or
+                             action == ImprovedTradingAction.BUY_SMALL or
+                             action == ImprovedTradingAction.BUY_MEDIUM or
+                             action == ImprovedTradingAction.BUY_LARGE) if self.use_improved_actions else (
+                             action == TradingAction.HOLD or action == TradingAction.BUY)
+
+            if is_strong_uptrend and is_hold_or_buy:
+                reward += self.config.momentum_trend_bonus
+                logger.debug(f"Momentum trend bonus applied: +{self.config.momentum_trend_bonus}")
 
         # Update state
         self.prev_portfolio_value = portfolio_value

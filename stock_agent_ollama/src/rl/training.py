@@ -25,6 +25,8 @@ from .environments import EnhancedTradingEnv
 from .improvements import (
     EnhancedRewardConfig,
     PPORewardConfig,
+    LSTMPPORewardConfig,
+    EnhancedLSTMPPORewardConfig,
     CurriculumManager,
     TrainingDiagnostics
 )
@@ -186,10 +188,16 @@ class EnhancedRLTrainer:
         # Select appropriate reward config based on agent type
         # DQN uses EnhancedRewardConfig (lighter penalties, proven to work)
         # PPO/A2C use PPORewardConfig (stronger penalties to fight action collapse)
+        # LSTM PPO uses LSTMPPORewardConfig (reduced penalties for trend riding)
         if config.reward_config is None or isinstance(config.reward_config, EnhancedRewardConfig):
             if config.agent_type.lower() in ['ppo', 'a2c']:
-                logger.info(f"Using PPORewardConfig for {config.agent_type.upper()}")
-                self.config.reward_config = PPORewardConfig()
+                # Use specialized config for LSTM PPO
+                if config.use_lstm_policy and config.agent_type.lower() == 'ppo':
+                    logger.info(f"Using EnhancedLSTMPPORewardConfig V2 for LSTM PPO (stronger HOLD incentive + momentum bonus)")
+                    self.config.reward_config = EnhancedLSTMPPORewardConfig()
+                else:
+                    logger.info(f"Using PPORewardConfig for {config.agent_type.upper()}")
+                    self.config.reward_config = PPORewardConfig()
             else:  # DQN or other
                 logger.info(f"Using EnhancedRewardConfig (DQN-optimized) for {config.agent_type.upper()}")
                 if config.reward_config is None:
@@ -221,6 +229,11 @@ class EnhancedRLTrainer:
             self.curriculum_manager = None
 
         # Build environment config
+        # Enable trend indicators for LSTM PPO (for trend-following capability)
+        include_trend = self.config.use_lstm_policy and self.config.agent_type.lower() == 'ppo'
+        if include_trend:
+            logger.info("Enabling trend indicators for LSTM PPO")
+
         env_config = EnvConfig(
             symbol=self.config.symbol,
             start_date=self.config.start_date,
@@ -232,6 +245,7 @@ class EnhancedRLTrainer:
             max_position_pct=self.config.max_position_pct,
             lookback_window=self.config.lookback_window,
             include_technical_indicators=True,
+            include_trend_indicators=include_trend,  # Enable for LSTM PPO
             use_action_masking=self.config.use_action_masking,
             use_enhanced_rewards=self.config.use_enhanced_rewards,
             use_adaptive_sizing=self.config.use_adaptive_sizing,
@@ -523,6 +537,7 @@ class EnhancedRLTrainer:
             # Observation space
             'lookback_window': self.config.lookback_window,
             'include_technical_indicators': True,  # Always true in current implementation
+            'include_trend_indicators': self.config.use_lstm_policy and self.config.agent_type.lower() == 'ppo',
 
             # Optional flags
             'enable_diagnostics': self.config.enable_diagnostics,

@@ -407,6 +407,7 @@ class BacktestConfig:
     use_enhanced_rewards: bool = _ENV_DEFAULTS['use_enhanced_rewards']
     use_adaptive_sizing: bool = _ENV_DEFAULTS['use_adaptive_sizing']
     use_improved_actions: bool = _ENV_DEFAULTS['use_improved_actions']
+    include_trend_indicators: bool = False  # For LSTM models
     max_position_pct: float = _ENV_DEFAULTS['max_position_pct']
     reward_config: Optional[EnhancedRewardConfig] = field(default_factory=lambda: EnhancedRewardConfig())
 
@@ -464,6 +465,7 @@ class BacktestEngine:
             max_position_size=1000,  # Standard default
             max_position_pct=self.config.max_position_pct,
             include_technical_indicators=True,
+            include_trend_indicators=self.config.include_trend_indicators,
             use_action_masking=self.config.use_action_masking,
             use_enhanced_rewards=self.config.use_enhanced_rewards,
             use_adaptive_sizing=self.config.use_adaptive_sizing,

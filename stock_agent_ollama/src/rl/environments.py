@@ -320,6 +320,7 @@ class SingleStockTradingEnv(BaseTradingEnv):
         reward_function: Optional[Any] = None,
         lookback_window: int = 60,
         include_technical_indicators: bool = True,
+        include_trend_indicators: bool = False,
     ):
         """
         Initialize single stock trading environment.
@@ -348,6 +349,7 @@ class SingleStockTradingEnv(BaseTradingEnv):
         self.end_date = end_date
         self.lookback_window = lookback_window
         self.include_technical_indicators = include_technical_indicators
+        self.include_trend_indicators = include_trend_indicators
 
         # Reward function - import here to avoid circular dependency
         if reward_function is None:
@@ -420,6 +422,19 @@ class SingleStockTradingEnv(BaseTradingEnv):
         self.data['EMA_12'] = TechnicalAnalysis.calculate_ema(close_prices, 12)
         self.data['EMA_26'] = TechnicalAnalysis.calculate_ema(close_prices, 26)
 
+        # === TREND-FOLLOWING INDICATORS (for LSTM PPO) ===
+        # Only add if include_trend_indicators is True (for backwards compatibility)
+        if self.include_trend_indicators:
+            # 1. SMA trend (slope of 20-period SMA) - indicates trend direction
+            sma_20 = self.data['SMA_20']
+            self.data['SMA_Trend'] = sma_20.diff(periods=5) / (sma_20.shift(5) + 1e-8)  # 5-day slope
+
+            # 2. EMA crossover signal (bullish when EMA12 > EMA26, bearish otherwise)
+            self.data['EMA_Crossover'] = (self.data['EMA_12'] - self.data['EMA_26']) / (self.data['EMA_26'] + 1e-8)
+
+            # 3. Price momentum (5-day rate of change) - measures trend strength
+            self.data['Price_Momentum'] = close_prices.pct_change(periods=5)
+
         # Fill NaN values (use newer pandas method)
         self.data = self.data.bfill().ffill()
 
@@ -454,6 +469,20 @@ class SingleStockTradingEnv(BaseTradingEnv):
             if 'Stochastic' in self.data.columns:
                 self.data['Stochastic_Normalized'] = self.data['Stochastic'] / 100.0
 
+            # Normalize trend indicators (only if enabled)
+            if self.include_trend_indicators:
+                if 'SMA_Trend' in self.data.columns:
+                    # SMA trend slope - clip to reasonable range
+                    self.data['SMA_Trend_Normalized'] = self.data['SMA_Trend'].clip(-0.1, 0.1) * 10  # Scale to ~[-1, 1]
+
+                if 'EMA_Crossover' in self.data.columns:
+                    # EMA crossover - already ratio, clip to reasonable range
+                    self.data['EMA_Crossover_Normalized'] = self.data['EMA_Crossover'].clip(-0.2, 0.2) * 5  # Scale to ~[-1, 1]
+
+                if 'Price_Momentum' in self.data.columns:
+                    # Price momentum - clip to reasonable range
+                    self.data['Price_Momentum_Normalized'] = self.data['Price_Momentum'].clip(-0.1, 0.1) * 10  # Scale to ~[-1, 1]
+
     def _define_observation_space(self):
         """Define the observation space."""
         # Base features: price info + portfolio state
@@ -462,6 +491,10 @@ class SingleStockTradingEnv(BaseTradingEnv):
         # Add technical indicators
         if self.include_technical_indicators:
             num_features += 5  # RSI, MACD, MACD_Signal, Bollinger, Stochastic
+
+            # Add trend indicators only if enabled (for backwards compatibility)
+            if self.include_trend_indicators:
+                num_features += 3  # Trend indicators: SMA_Trend, EMA_Crossover, Price_Momentum
 
         # Observation is a window of historical data
         self.observation_space = gym.spaces.Box(
@@ -529,6 +562,26 @@ class SingleStockTradingEnv(BaseTradingEnv):
                 features.append(stoch)
             else:
                 features.append(np.zeros(self.lookback_window))
+
+            # Trend-following indicators (only if enabled)
+            if self.include_trend_indicators:
+                if 'SMA_Trend_Normalized' in self.data.columns:
+                    sma_trend = self.data['SMA_Trend_Normalized'].iloc[start_idx:end_idx].values
+                    features.append(sma_trend)
+                else:
+                    features.append(np.zeros(self.lookback_window))
+
+                if 'EMA_Crossover_Normalized' in self.data.columns:
+                    ema_cross = self.data['EMA_Crossover_Normalized'].iloc[start_idx:end_idx].values
+                    features.append(ema_cross)
+                else:
+                    features.append(np.zeros(self.lookback_window))
+
+                if 'Price_Momentum_Normalized' in self.data.columns:
+                    momentum = self.data['Price_Momentum_Normalized'].iloc[start_idx:end_idx].values
+                    features.append(momentum)
+                else:
+                    features.append(np.zeros(self.lookback_window))
 
         # Stack features (shape: lookback_window x num_features)
         observation = np.column_stack(features).astype(np.float32)
@@ -662,6 +715,7 @@ class EnhancedTradingEnv(SingleStockTradingEnv):
         max_position_pct: float = 40.0,
         lookback_window: int = 60,
         include_technical_indicators: bool = True,
+        include_trend_indicators: bool = False,  # For LSTM PPO backwards compatibility
         # Enhancement parameters
         use_action_masking: bool = True,
         use_enhanced_rewards: bool = True,
@@ -733,7 +787,8 @@ class EnhancedTradingEnv(SingleStockTradingEnv):
             max_position_size=max_position_size,
             reward_function=None,  # We'll handle this ourselves
             lookback_window=lookback_window,
-            include_technical_indicators=include_technical_indicators
+            include_technical_indicators=include_technical_indicators,
+            include_trend_indicators=include_trend_indicators
         )
 
         # Override action space if using improved actions

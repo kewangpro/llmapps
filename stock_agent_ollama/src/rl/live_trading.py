@@ -743,6 +743,7 @@ class LiveTradingEngine:
             max_position_pct=training_config.get('max_position_pct', 80.0),
             lookback_window=training_config.get('lookback_window', 60),
             include_technical_indicators=training_config.get('include_technical_indicators', True),
+            include_trend_indicators=training_config.get('include_trend_indicators', False),  # Backwards compatibility
 
             # Load enhancement flags from training config
             use_action_masking=training_config.get('use_action_masking', True),
@@ -992,12 +993,16 @@ class LiveTradingEngine:
             return {"status": "error", "message": str(e)}
 
     def _build_observation(self, tick: MarketTick) -> np.ndarray:
-        """Build observation matching training environment format (60, 10)"""
+        """Build observation matching training environment format (60, 10 or 60, 13)"""
         from ..tools.stock_fetcher import StockFetcher
         from ..tools.technical_analysis import TechnicalAnalysis
         from datetime import datetime, timedelta
 
         try:
+            # Initialize environment if not already done to access config
+            if self.env is None:
+                self.setup_environment()
+
             # Fetch 90 days of historical data to ensure we have enough after calculating indicators
             end_date = datetime.now().strftime("%Y-%m-%d")
             start_date = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
@@ -1011,9 +1016,10 @@ class LiveTradingEngine:
                 force_refresh=True  # Always fetch fresh data for live trading
             )
 
+            expected_features = 13 if self.env.include_trend_indicators else 10
             if hist_data is None or len(hist_data) < 60:
                 logger.warning(f"{self.session.session_id} - Insufficient historical data for observation, using zeros")
-                return np.zeros((60, 10), dtype=np.float32)
+                return np.zeros((60, expected_features), dtype=np.float32)
 
             # Calculate technical indicators
             close = hist_data['Close']
@@ -1037,6 +1043,16 @@ class LiveTradingEngine:
             stoch_indicators = TechnicalAnalysis.calculate_stochastic(high, low, close)
             stochastic = stoch_indicators['stoch_k']
 
+            # --- Trend Indicators (for LSTM models) ---
+            if self.env.include_trend_indicators:
+                sma_20 = TechnicalAnalysis.calculate_sma(close, 20)
+                ema_12 = TechnicalAnalysis.calculate_ema(close, 12)
+                ema_26 = TechnicalAnalysis.calculate_ema(close, 26)
+
+                sma_trend = sma_20.diff(periods=5) / (sma_20.shift(5) + 1e-8)
+                ema_crossover = (ema_12 - ema_26) / (ema_26 + 1e-8)
+                price_momentum = close.pct_change(periods=5)
+
             # Fill NaN values
             hist_data = hist_data.bfill().ffill()
             rsi = rsi.bfill().ffill()
@@ -1045,6 +1061,10 @@ class LiveTradingEngine:
             bb_upper = bb_upper.bfill().ffill()
             bb_lower = bb_lower.bfill().ffill()
             stochastic = stochastic.bfill().ffill()
+            if self.env.include_trend_indicators:
+                sma_trend = sma_trend.bfill().ffill()
+                ema_crossover = ema_crossover.bfill().ffill()
+                price_momentum = price_momentum.bfill().ffill()
 
             # Get last 60 days
             close_last_60 = close.iloc[-60:].values
@@ -1055,6 +1075,10 @@ class LiveTradingEngine:
             bb_upper_last_60 = bb_upper.iloc[-60:].values
             bb_lower_last_60 = bb_lower.iloc[-60:].values
             stochastic_last_60 = stochastic.iloc[-60:].values
+            if self.env.include_trend_indicators:
+                sma_trend_last_60 = sma_trend.iloc[-60:].values
+                ema_crossover_last_60 = ema_crossover.iloc[-60:].values
+                price_momentum_last_60 = price_momentum.iloc[-60:].values
 
             # Normalize features
             first_price = close_last_60[0]
@@ -1083,8 +1107,8 @@ class LiveTradingEngine:
             value_change = np.full(60, (portfolio_value - prev_value) / prev_value if prev_value > 0 else 0.0)
             self._prev_portfolio_value = portfolio_value
 
-            # Stack all features (shape: 60 x 10)
-            observation = np.column_stack([
+            # Stack all features
+            features = [
                 close_norm,
                 volume_norm,
                 cash_ratio,
@@ -1095,11 +1119,20 @@ class LiveTradingEngine:
                 macd_signal_norm,
                 bb_position,
                 stochastic_norm
-            ]).astype(np.float32)
+            ]
+
+            if self.env.include_trend_indicators:
+                sma_trend_norm = np.clip(sma_trend_last_60, -0.1, 0.1) * 10
+                ema_crossover_norm = np.clip(ema_crossover_last_60, -0.2, 0.2) * 5
+                price_momentum_norm = np.clip(price_momentum_last_60, -0.1, 0.1) * 10
+                features.extend([sma_trend_norm, ema_crossover_norm, price_momentum_norm])
+
+            observation = np.column_stack(features).astype(np.float32)
 
             return observation
 
         except Exception as e:
             logger.error(f"{self.session.session_id} - Error building observation: {e}")
             # Return zeros as fallback
-            return np.zeros((60, 10), dtype=np.float32)
+            expected_features = 13 if hasattr(self, 'env') and self.env and self.env.include_trend_indicators else 10
+            return np.zeros((60, expected_features), dtype=np.float32)

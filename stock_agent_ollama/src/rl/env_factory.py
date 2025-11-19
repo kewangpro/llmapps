@@ -36,6 +36,7 @@ class EnvConfig:
     # Observation parameters
     lookback_window: int = 60
     include_technical_indicators: bool = True
+    include_trend_indicators: bool = False  # Trend indicators for LSTM PPO (SMA_Trend, EMA_Crossover, Price_Momentum)
 
     # Enhancement flags
     use_action_masking: bool = True
@@ -61,6 +62,7 @@ class EnvConfig:
             'slippage_rate': self.slippage_rate,
             'lookback_window': self.lookback_window,
             'include_technical_indicators': self.include_technical_indicators,
+            'include_trend_indicators': self.include_trend_indicators,
             'use_action_masking': self.use_action_masking,
             'use_enhanced_rewards': self.use_enhanced_rewards,
             'use_adaptive_sizing': self.use_adaptive_sizing,
@@ -76,8 +78,8 @@ class EnvConfig:
             'symbol', 'start_date', 'end_date', 'initial_balance',
             'max_position_size', 'max_position_pct', 'transaction_cost_rate',
             'slippage_rate', 'lookback_window', 'include_technical_indicators',
-            'use_action_masking', 'use_enhanced_rewards', 'use_adaptive_sizing',
-            'use_improved_actions', 'enable_diagnostics'
+            'include_trend_indicators', 'use_action_masking', 'use_enhanced_rewards',
+            'use_adaptive_sizing', 'use_improved_actions', 'enable_diagnostics'
         }
         filtered_data = {k: v for k, v in data.items() if k in valid_fields}
         return cls(**filtered_data)
@@ -111,6 +113,7 @@ def create_enhanced_env(config: EnvConfig) -> EnhancedTradingEnv:
         max_position_pct=config.max_position_pct,
         lookback_window=config.lookback_window,
         include_technical_indicators=config.include_technical_indicators,
+        include_trend_indicators=config.include_trend_indicators,
         use_action_masking=config.use_action_masking,
         use_enhanced_rewards=config.use_enhanced_rewards,
         use_adaptive_sizing=config.use_adaptive_sizing,
