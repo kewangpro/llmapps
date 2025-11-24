@@ -32,11 +32,13 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 *Stock analysis with interactive charts, technical indicators, and AI-powered insights*
 
 ### 🤖 Reinforcement Learning Trading
-- **Train RL Agents** using PPO, A2C, and DQN algorithms with action masking
+- **Train RL Agents** using PPO, A2C, DQN, and LSTM PPO (RecurrentPPO) with action masking
 - **6-Action Trading Space** (HOLD, BUY_SMALL, BUY_MEDIUM, BUY_LARGE, SELL_PARTIAL, SELL_ALL)
+- **LSTM Policy Support** for temporal pattern recognition in trending markets
+- **Trend Indicators** for LSTM PPO (SMA_Trend, EMA_Crossover, Price_Momentum)
 - **Adaptive Position Sizing** that adjusts to market volatility
 - **Training Metrics** (Win Rate, Action Distribution, Episode Rewards, Explained Variance)
-- **Algorithm-Specific Rewards** with optimized configs for DQN vs PPO/A2C
+- **Algorithm-Specific Rewards** with optimized configs per algorithm (DQN, PPO/A2C, LSTM PPO)
 - **Comprehensive Backtesting** with automated best model loading
 - **Strategy Comparison** against Buy & Hold and Momentum baselines
 - **Performance Metrics** (Returns, Sharpe Ratio, Max Drawdown, Win Rate)
@@ -283,20 +285,27 @@ curl http://localhost:11434/api/tags
 - Auto-training on first analysis request
 
 ### RL Trading Agents
-- **PPO**: Proximal Policy Optimization (stable, reliable, optional LSTM support)
+- **PPO**: Proximal Policy Optimization (stable, reliable, LSTM policy optional)
 - **A2C**: Advantage Actor-Critic (fastest training, excellent for bull markets)
 - **DQN**: Deep Q-Network (most consistent, adapts to market conditions)
-- **RecurrentPPO**: LSTM-based PPO for temporal pattern recognition (best for bear markets)
+- **LSTM PPO (RecurrentPPO)**: LSTM-based PPO with trend indicators (best for downtrends)
+  - Uses 13 features (10 base + 3 trend indicators)
+  - SMA_Trend, EMA_Crossover, Price_Momentum indicators
+  - Enhanced reward configuration optimized for trend-following
+  - Automatic backwards compatibility with older models
 - **Action Masking**: Prevents invalid trades (e.g., selling with no position)
 - **6-Action Space**: HOLD (default), BUY_SMALL, BUY_MEDIUM, BUY_LARGE, SELL_PARTIAL, SELL_ALL
 - **Adaptive Sizing**: Trade sizes adjust based on market volatility and portfolio state
-- **Algorithm-Specific Rewards**: Separate optimized configs for DQN vs PPO/A2C
+- **Algorithm-Specific Rewards**: Optimized configs for DQN, PPO/A2C, and LSTM PPO
 - **Environment Factory**: Single source of truth for configuration (env_factory.py)
 - **Config Loading**: Live trading matches exact training environment
+- **Backwards Compatibility**: Conditional trend indicators support both old (10-feature) and new (13-feature) models
 - Realistic environment with transaction costs and slippage
 
 ### Backtesting System
 - Automatically loads all available trained models (PPO, A2C, DQN, LSTM PPO)
+- Detects and loads correct model type (RecurrentPPO for LSTM models)
+- Matches environment configuration to model training settings
 - Compares all agents against Buy & Hold and Momentum baselines
 - Comprehensive metrics: Returns, Sharpe, Sortino, Calmar ratios
 - Action distribution visualization across strategies
@@ -343,23 +352,33 @@ This platform is designed for learning and research purposes:
 
 ---
 
-## 🔧 Recent Improvements
+## 🔧 Key Technical Features
+
+### LSTM PPO Enhancements
+- **Trend-Following Indicators**: 3 additional features (SMA_Trend, EMA_Crossover, Price_Momentum) for LSTM PPO
+- **Enhanced Reward Configuration**: Optimized `EnhancedLSTMPPORewardConfig` with reduced penalties and momentum bonuses
+- **Hold Winner Bonus**: Rewards holding profitable positions during uptrends
+- **Momentum Trend Bonus**: Additional reward for staying long during strong uptrends
+- **Observation Space**: 13 features for LSTM PPO (10 base + 3 trend), 10 features for other algorithms
+- **Model Compatibility**: Backwards compatible with older 10-feature models
 
 ### Architecture Enhancements
 - **Environment Factory Pattern**: Centralized configuration in `env_factory.py` ensures consistency across training, backtesting, and live trading
-- **Model Utilities**: Automatic model type detection and environment config loading from trained models
+- **Model Utilities**: Automatic model type detection (PPO, A2C, DQN, RecurrentPPO) and environment config loading
 - **Single Source of Truth**: All default parameters defined once in `EnvConfig` dataclass
+- **Conditional Features**: Trend indicators automatically enabled for LSTM PPO, disabled for other algorithms
 
 ### Critical Bug Fixes
 - **Short-Selling Prevention**: Fixed `AdaptiveActionSizer` bug that allowed unintentional short positions
 - **Symbol Input**: Removed restrictions - now accepts any valid ticker symbol
 - **Position Limits**: Corrected inconsistent defaults (now 80% across all systems)
 - **Floating Point Precision**: Added tolerance to position size checks
+- **Backwards Compatibility**: Old models (10 features) work alongside new models (13 features)
 
 ### Live Trading Improvements
 - **Multi-Session Support**: Run multiple trading strategies simultaneously
 - **Session Persistence**: Auto-save and resume sessions across app restarts
-- **Environment Matching**: Live trading automatically loads exact training configuration
+- **Environment Matching**: Live trading automatically loads exact training configuration including trend indicators
 - **UI Enhancements**: Wider model name column, improved session management
 
 ---
