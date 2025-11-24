@@ -112,7 +112,11 @@ The platform features a professional light-theme interface with 6 main pages:
 2. **Configure Agent**:
    - **Symbol**: Enter or select symbol (e.g., AAPL, MSFT, GOOGL, AMZN, TSLA, META, NVDA, or any valid ticker)
    - **Algorithm**: Choose DQN (best performance), PPO (stable), or A2C (faster)
-   - **Use LSTM Policy**: Optional for PPO only (RecurrentPPO for bear markets)
+   - **Use LSTM Policy**: Optional for PPO only
+     - Enables RecurrentPPO with LSTM memory
+     - Automatically adds 3 trend indicators (SMA_Trend, EMA_Crossover, Price_Momentum)
+     - Uses enhanced reward config optimized for trend-following
+     - Best for downtrending or bear markets
    - **Training Period**: 1095 days (3 years, proven optimal)
    - **Training Steps**: 100,000 (recommended starting point)
    - **Learning Rate**: Auto-set based on algorithm
@@ -279,12 +283,15 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 
 ### RL Trading
 - ✅ **DQN** recommended for production (most consistent, adapts to markets)
-- ✅ **A2C** excellent for bull markets (40.92% on GOOGL)
-- ✅ **RecurrentPPO (LSTM)** best for bear markets (+1.36% on TEAM)
+- ✅ **A2C** excellent for bull markets (+74.77% on GOOGL after retraining)
+- ✅ **LSTM PPO (RecurrentPPO)** best for downtrends (+24.74% on TEAM in -28% bear market)
+  - Uses 13 features with trend indicators (SMA_Trend, EMA_Crossover, Price_Momentum)
+  - Enhanced reward config with momentum bonuses and reduced penalties
+  - Automatically backwards compatible with older 10-feature models
 - ✅ **PPO** stable baseline (LSTM optional for temporal patterns)
 - ✅ **Action Masking** always enabled - prevents invalid trades automatically
 - ✅ **6-Action Space** provides fine-grained control over position sizing
-- ✅ **Algorithm-Specific Rewards** - DQN and PPO/A2C use different optimized configs
+- ✅ **Algorithm-Specific Rewards** - DQN, PPO/A2C, and LSTM PPO use different optimized configs
 - ✅ **1095 days** (3 years) proven optimal for diverse market conditions
 - ✅ **100,000 steps** recommended starting point (5-10 min training)
 - ✅ **Backtesting** automatically loads all trained models for comparison
@@ -433,10 +440,12 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
   - Only if you're confident in sustained uptrend
 
 **For Bear Markets:**
-- Use **RecurrentPPO** (PPO with LSTM enabled)
-  - Only algorithm with positive returns in downtrends (+1.36% on TEAM)
-  - Uses temporal patterns to detect trend reversals
-  - Too conservative for bull markets (17.61% on GOOGL)
+- Use **LSTM PPO** (PPO with LSTM enabled)
+  - Only algorithm profitable in downtrends (+24.74% on TEAM in -28% bear market)
+  - Uses 13 features with trend indicators for pattern detection
+  - Enhanced reward config encourages holding winning positions during uptrends
+  - Automatic momentum bonuses during strong uptrends
+  - May be conservative in strong bull markets
 
 **For General Use:**
 - Use **DQN** or train all three and let backtesting compare
@@ -563,12 +572,20 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 
 ---
 
-## 🔧 Recent Improvements
+## 🔧 Key Features
+
+### LSTM PPO Improvements
+- **Trend Indicators**: SMA_Trend, EMA_Crossover, and Price_Momentum automatically added for LSTM PPO
+- **Enhanced Rewards**: Optimized `EnhancedLSTMPPORewardConfig` with hold winner bonuses and momentum bonuses
+- **13 Features**: LSTM PPO uses expanded observation space (10 base + 3 trend indicators)
+- **Backwards Compatible**: Automatic detection supports both old (10-feature) and new (13-feature) models
+- **Auto-Detection**: Training automatically enables trend indicators when LSTM policy is selected
 
 ### Configuration System
 - **Single Source of Truth**: All environment parameters now centralized in `env_factory.py`
 - **Consistent Defaults**: Training, backtesting, and live trading share identical default values
 - **No Train-Test Mismatch**: Live trading automatically loads exact training configuration from saved models
+- **Conditional Features**: Trend indicators enabled only for LSTM PPO, maintaining compatibility
 
 ### Bug Fixes
 - **Short-Selling Prevention**: Fixed bug where agents could accidentally short-sell stocks
@@ -580,7 +597,7 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 - **Multi-Session Support**: Run multiple trading sessions simultaneously
 - **Session Persistence**: Sessions auto-save and resume across app restarts
 - **Improved UI**: Wider model name column, better session management
-- **Config Loading**: Matches training environment exactly for consistent behavior
+- **Config Loading**: Matches training environment exactly including trend indicators for LSTM models
 
 ---
 

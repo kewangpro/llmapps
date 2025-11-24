@@ -31,19 +31,22 @@ This RL trading system adds advanced reinforcement learning capabilities to the 
 
 ### Key Features
 
-✅ **RL Agents**: PPO, A2C, and DQN algorithms via Stable-Baselines3
+✅ **RL Agents**: PPO, A2C, DQN, and LSTM PPO (RecurrentPPO) via Stable-Baselines3
+✅ **LSTM Support**: Recurrent policies with trend indicators for temporal pattern recognition
+✅ **Trend Indicators**: SMA_Trend, EMA_Crossover, Price_Momentum (LSTM PPO only)
 ✅ **Action Masking**: Prevents invalid trades (e.g., selling with no position)
 ✅ **6-Action Space**: HOLD (default), BUY_SMALL/MEDIUM/LARGE, SELL_PARTIAL/ALL
 ✅ **Adaptive Position Sizing**: Trade sizes adjust based on volatility and portfolio state
-✅ **Algorithm-Specific Rewards**: Separate optimized configs for DQN vs PPO/A2C
-✅ **Enhanced Rewards**: Multi-component rewards with risk penalties and bonuses
+✅ **Algorithm-Specific Rewards**: Optimized configs for DQN, PPO/A2C, and LSTM PPO
+✅ **Enhanced Rewards**: Multi-component rewards with risk penalties, hold bonuses, and momentum bonuses
 ✅ **Trading Environment**: Gymnasium-based single-stock trading simulation
 ✅ **Backtesting**: Comprehensive performance evaluation with 15+ metrics
 ✅ **Action Analysis**: Visualize trading decisions with action distribution charts
-✅ **Auto-Load Models**: Automatically loads trained models for backtesting
+✅ **Auto-Load Models**: Automatically loads trained models with correct type (RecurrentPPO detection)
 ✅ **Baseline Strategies**: Buy-and-hold and momentum for comparison
 ✅ **Interactive UI**: Panel-based web interface for training and backtesting
 ✅ **Visualization**: Training progress, equity curves, action distributions, drawdown charts
+✅ **Backwards Compatibility**: Supports both 10-feature (old) and 13-feature (LSTM PPO) models
 
 ### Design Philosophy
 
@@ -71,6 +74,7 @@ This RL trading system adds advanced reinforcement learning capabilities to the 
 - **Short-Selling Prevention**: AdaptiveActionSizer now checks if position == 0 before calculating sell size
 - **Floating Point Tolerance**: Position size checks use 0.01% tolerance to handle floating point precision
 - **Action Masking**: Prevents invalid trades (e.g., selling with no position) automatically
+- **Backwards Compatibility**: Conditional trend indicators via `include_trend_indicators` flag supports both 10-feature and 13-feature models
 
 ---
 
@@ -165,9 +169,11 @@ Results Display (UI)
 #### Observation Space
 
 **Shape**: `(lookback_window, num_features)`
-**Default**: `(60, 10)` - 60 days of 10 features
+**Default**:
+- `(60, 10)` - Standard models (PPO, A2C, DQN)
+- `(60, 13)` - LSTM PPO with trend indicators
 
-**Features**:
+**Base Features (10)**:
 - Price (normalized): `close_price / first_price - 1`
 - Volume (normalized): `volume / max_volume`
 - Cash ratio: `cash / portfolio_value`
@@ -179,6 +185,17 @@ Results Display (UI)
   - MACD Signal (normalized)
   - Bollinger Bands position (0-1)
   - Stochastic (normalized 0-1)
+
+**Trend Indicators (3 - LSTM PPO only)**:
+- SMA_Trend: 5-day slope of 20-period SMA (normalized)
+- EMA_Crossover: (EMA12 - EMA26) / EMA26 (normalized)
+- Price_Momentum: 5-day rate of change (normalized)
+
+**Backwards Compatibility**:
+- Controlled by `include_trend_indicators` flag in EnvConfig
+- Automatically enabled for LSTM PPO during training
+- Loaded from model's training_config.json during inference
+- Old models (10 features) work alongside new models (13 features)
 
 #### Action Space
 
@@ -252,17 +269,25 @@ reward = (
 **LSTM Policy (RecurrentPPO)**:
 - Enable via `use_lstm_policy=True` flag in training config
 - Uses LSTM layers for temporal pattern recognition
-- Better at detecting market regime changes
-- Excellent for bear markets (+1.36% on TEAM vs -14.59% baseline)
-- More conservative in bull markets (17.61% on GOOGL vs 40.92% A2C)
+- Automatically adds 3 trend indicators to observation space (13 features total)
+- Uses `EnhancedLSTMPPORewardConfig` with optimized rewards:
+  - Reduced risk/drawdown penalties (0.05 vs 0.3 for regular PPO)
+  - Hold winning position bonus (0.5)
+  - Momentum trend bonus (0.3)
+  - Reduced transaction costs (0.001 vs 0.002)
+- Better at detecting market regime changes and trend reversals
+- Excellent for bear markets (+24.74% on TEAM vs -28% market decline)
+- Profitable in downtrends while Buy & Hold loses money
 - Model naming: `lstm_ppo_SYMBOL_timestamp`
 - Only available for PPO (not A2C or DQN)
+- Backwards compatible with old 10-feature models
 
 **Use Cases**:
 - General-purpose training (regular PPO)
-- Downtrending markets (RecurrentPPO with LSTM)
-- When temporal patterns are important
+- Downtrending or bear markets (RecurrentPPO with LSTM + trends)
+- When temporal patterns and momentum are important
 - Defensive trading strategies
+- Trend-following strategies
 
 #### A2C (Advantage Actor-Critic)
 
@@ -327,11 +352,25 @@ reward = (
 - Risk-adjusted returns important
 - Consistent performance required
 
-**Reward Configuration**:
-DQN uses `EnhancedRewardConfig` with lighter penalties compared to PPO/A2C:
-- Transaction cost rate: `0.0005` (vs `0.002` for PPO)
-- Risk penalty weight: `0.1` (vs `0.3` for PPO)
-- Drawdown penalty weight: `0.2` (vs `0.5` for PPO)
+**Reward Configurations by Algorithm**:
+
+1. **DQN** uses `EnhancedRewardConfig`:
+   - Transaction cost rate: `0.0005`
+   - Risk penalty weight: `0.1`
+   - Drawdown penalty weight: `0.2`
+
+2. **PPO/A2C** use `PPORewardConfig`:
+   - Transaction cost rate: `0.002`
+   - Risk penalty weight: `0.3`
+   - Drawdown penalty weight: `0.5`
+
+3. **LSTM PPO** uses `EnhancedLSTMPPORewardConfig`:
+   - Transaction cost rate: `0.001`
+   - Risk penalty weight: `0.05` (much lighter)
+   - Drawdown penalty weight: `0.1` (much lighter)
+   - Hold winning position bonus: `0.5` (encourages staying long)
+   - Momentum trend bonus: `0.3` (rewards uptrend positions)
+   - Profitable trade bonus: `0.5` (increased from 0.1)
 
 ### 3. Training Pipeline
 
@@ -585,6 +624,7 @@ class EnvConfig:
     # Observation parameters
     lookback_window: int = 60
     include_technical_indicators: bool = True
+    include_trend_indicators: bool = False  # For LSTM PPO backwards compatibility
 
     # Enhancement flags
     use_action_masking: bool = True
@@ -592,6 +632,12 @@ class EnvConfig:
     use_adaptive_sizing: bool = True
     use_improved_actions: bool = True
 ```
+
+**Trend Indicators Configuration:**
+- `include_trend_indicators` defaults to `False` for backwards compatibility
+- Automatically set to `True` when training LSTM PPO (detected via `use_lstm_policy=True` and `agent_type='ppo'`)
+- Saved in model's `training_config.json` for consistent inference
+- Live trading loads this flag from saved config to match training environment
 
 **Algorithm-Specific Settings in `src/config.py`:**
 
