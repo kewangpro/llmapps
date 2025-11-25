@@ -79,22 +79,21 @@ class LiveTradingPage(pn.viewable.Viewer):
         # Find all model directories for this symbol and agent type
         matching_dirs = []
         if agent_type:
-            # Search for specific agent type
-            pattern = f"{agent_type.lower()}_{symbol}_*"
-            matching_dirs.extend(models_dir.glob(pattern))
+            # Convert UI format to file format
+            # UI: 'PPO', 'RecurrentPPO', 'SAC', 'QRDQN'
+            # Files: 'ppo_', 'recurrent_ppo_', 'sac_', 'qrdqn_'
+            agent_type_lower = agent_type.lower()
+            if agent_type_lower == 'recurrentppo':
+                agent_type_lower = 'recurrent_ppo'
 
-            # Also search for LSTM PPO models when looking for PPO
-            if agent_type.lower() == 'ppo':
-                lstm_pattern = f"lstm_ppo_{symbol}_*"
-                matching_dirs.extend(models_dir.glob(lstm_pattern))
+            # Search for specific agent type
+            pattern = f"{agent_type_lower}_{symbol}_*"
+            matching_dirs.extend(models_dir.glob(pattern))
         else:
             # Search for all agent types
-            for atype in ['ppo', 'a2c', 'dqn']:
+            for atype in ['ppo', 'recurrent_ppo', 'sac', 'qrdqn']:
                 pattern = f"{atype}_{symbol}_*"
                 matching_dirs.extend(models_dir.glob(pattern))
-            # Also include LSTM PPO models
-            lstm_pattern = f"lstm_ppo_{symbol}_*"
-            matching_dirs.extend(models_dir.glob(lstm_pattern))
 
         if not matching_dirs:
             return None
@@ -112,29 +111,24 @@ class LiveTradingPage(pn.viewable.Viewer):
         if not model_path.exists():
             return None
 
-        # Extract agent type from directory name (format: ppo_AAPL_timestamp or lstm_ppo_AAPL_timestamp)
+        # Extract agent type from directory name
+        # Formats: ppo_, recurrent_ppo_, sac_, qrdqn_
         dir_name = latest_dir.name
-        if dir_name.startswith('lstm_ppo_'):
-            found_agent_type = 'ppo'  # LSTM PPO loads as PPO (RecurrentPPO)
-            is_lstm = True
+        if dir_name.startswith('recurrent_ppo_'):
+            found_agent_type = 'recurrent_ppo'
         elif dir_name.startswith('ppo_'):
             found_agent_type = 'ppo'
-            is_lstm = False
-        elif dir_name.startswith('a2c_'):
-            found_agent_type = 'a2c'
-            is_lstm = False
-        elif dir_name.startswith('dqn_'):
-            found_agent_type = 'dqn'
-            is_lstm = False
+        elif dir_name.startswith('sac_'):
+            found_agent_type = 'sac'
+        elif dir_name.startswith('qrdqn_'):
+            found_agent_type = 'qrdqn'
         else:
             found_agent_type = 'unknown'
-            is_lstm = False
 
         return {
             'path': model_path,
             'agent_type': found_agent_type,
-            'directory': latest_dir,
-            'is_lstm': is_lstm
+            'directory': latest_dir
         }
 
     def _create_ui(self):
@@ -174,10 +168,12 @@ class LiveTradingPage(pn.viewable.Viewer):
         )
 
         self.agent_type = pn.widgets.RadioButtonGroup(
-            options=['PPO', 'A2C', 'DQN'],
+            options=['PPO', 'RecurrentPPO', 'SAC', 'QRDQN'],
             value='PPO',
             button_type='primary',
-            button_style='outline'
+            button_style='outline',
+            width=300,
+            height=40
         )
 
         self.capital_input = pn.widgets.FloatInput(

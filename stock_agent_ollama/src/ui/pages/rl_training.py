@@ -68,7 +68,8 @@ class RLTrainingPanel(param.Parameterized):
             value='PPO',
             button_type='primary',
             button_style='outline',
-            width=500  # Wide enough for all 4 buttons
+            width=300,
+            height=40
         )
 
         # === TRAINING PARAMETERS ===
@@ -180,8 +181,9 @@ class RLTrainingPanel(param.Parameterized):
 
                 # Use default reward config
                 # EnhancedRLTrainer will automatically select:
-                # - EnhancedRewardConfig for DQN (light penalties, proven 39.26% return)
-                # - PPORewardConfig for PPO/A2C (strong penalties to fight action collapse)
+                # - EnhancedRewardConfig for QRDQN/SAC (light penalties)
+                # - PPORewardConfig for PPO (strong penalties to fight action collapse)
+                # - EnhancedLSTMPPORewardConfig for RecurrentPPO (trend-following)
                 reward_config = None  # Let trainer auto-select based on agent_type
 
                 # Convert UI agent type to training format
@@ -418,20 +420,6 @@ class RLTrainingPanel(param.Parameterized):
         matching_dirs = []
         pattern = f"{agent_type.lower()}_{symbol}_*"
         matching_dirs.extend(models_dir.glob(pattern))
-
-        # Also search for legacy LSTM PPO models (named lstm_ppo_*) when looking for recurrent_ppo
-        if agent_type.lower() == 'recurrent_ppo':
-            legacy_lstm_pattern = f"lstm_ppo_{symbol}_*"
-            matching_dirs.extend(models_dir.glob(legacy_lstm_pattern))
-
-        # Also search for legacy A2C and DQN models (for backwards compatibility)
-        if agent_type.lower() == 'sac':
-            legacy_a2c_pattern = f"a2c_{symbol}_*"
-            matching_dirs.extend(models_dir.glob(legacy_a2c_pattern))
-
-        if agent_type.lower() == 'qrdqn':
-            legacy_dqn_pattern = f"dqn_{symbol}_*"
-            matching_dirs.extend(models_dir.glob(legacy_dqn_pattern))
 
         if not matching_dirs:
             return None
