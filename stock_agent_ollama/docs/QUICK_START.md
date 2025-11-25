@@ -111,14 +111,9 @@ The platform features a professional light-theme interface with 6 main pages:
 1. Click **Trading** tab
 2. **Configure Agent**:
    - **Symbol**: Enter or select symbol (e.g., AAPL, MSFT, GOOGL, AMZN, TSLA, META, NVDA, or any valid ticker)
-   - **Algorithm**: Choose DQN (best performance), PPO (stable), A2C (faster), or SAC (continuous actions)
-   - **Use LSTM Policy**: Optional for PPO only
-     - Enables RecurrentPPO with LSTM memory
-     - Automatically adds 3 trend indicators (SMA_Trend, EMA_Crossover, Price_Momentum)
-     - Uses enhanced reward config optimized for trend-following
-     - Best for downtrending or bear markets
+   - **Algorithm**: Choose PPO (stable baseline), RecurrentPPO (LSTM memory), SAC (exploration), or QRDQN (risk-aware)
    - **Training Period**: 1095 days (3 years, proven optimal)
-   - **Training Steps**: 100,000 (recommended starting point)
+   - **Training Steps**: 300,000 (recommended for all algorithms)
    - **Learning Rate**: Auto-set based on algorithm
    - **Initial Balance**: $100,000
 3. Click **"🚀 Start Training"**
@@ -154,6 +149,7 @@ The platform features a professional light-theme interface with 6 main pages:
 
 **Backtest Results:**
 - **Performance Table**: All RL Agents vs Buy & Hold vs Momentum
+  - Compares PPO, RecurrentPPO, SAC, QRDQN (if trained)
   - Metrics: Total Return %, Sharpe Ratio, Max Drawdown, Win Rate
   - Action distribution (HOLD, BUY_SMALL, BUY_MEDIUM, BUY_LARGE, SELL_PARTIAL, SELL_ALL)
 - **Charts**:
@@ -282,19 +278,16 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 - ✅ Force retrain checkbox updates models with latest data
 
 ### RL Trading
-- ✅ **QRDQN** recommended for production (distributional RL, risk-aware decisions)
-- ✅ **SAC** good for exploring continuous action spaces and fine-grained control
-- ✅ **RecurrentPPO** best for downtrends (+24.74% on TEAM in -28% bear market)
-  - Uses 13 features with trend indicators (SMA_Trend, EMA_Crossover, Price_Momentum)
-  - Enhanced reward config with momentum bonuses and reduced penalties
-  - Automatically backwards compatible with older 10-feature models
+- ✅ **4 Algorithms**: PPO, RecurrentPPO, SAC, QRDQN via Stable-Baselines3
+- ✅ **RecurrentPPO** uses LSTM memory with trend indicators for temporal patterns
+- ✅ **QRDQN** recommended for risk-aware decisions (distributional RL)
+- ✅ **SAC** good for exploration with maximum entropy framework
 - ✅ **PPO** stable baseline for general-purpose trading
 - ✅ **Action Masking** always enabled - prevents invalid trades automatically
 - ✅ **6-Action Space** provides fine-grained control over position sizing
 - ✅ **Algorithm-Specific Rewards** - Each algorithm uses optimized reward configs
 - ✅ **1095 days** (3 years) proven optimal for diverse market conditions
-- ✅ **100,000 steps** for PPO, SAC, QRDQN (5-10 min training)
-- ✅ **300,000 steps** for RecurrentPPO (15-20 min) - LSTM needs more training
+- ✅ **300,000 steps** recommended for all algorithms (15-35 min training)
 - ✅ **Backtesting** automatically loads all trained models for comparison
 - ✅ Training runs in background - UI stays responsive
 - ✅ Models saved automatically with best model selection
@@ -331,11 +324,9 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 ```
 1. Click Trading tab
 2. Select symbol: NVDA
-3. Choose algorithm: QRDQN, PPO, RecurrentPPO, or SAC
+3. Choose algorithm: PPO, RecurrentPPO, SAC, or QRDQN
 4. Set training period: 1095 days (3 years)
-5. Set timesteps:
-   - 100,000 for PPO/SAC/QRDQN (5-10 min)
-   - 300,000 for RecurrentPPO (15-20 min)
+5. Set timesteps: 300,000 (recommended for all algorithms)
 6. Click "🚀 Start Training"
 7. Monitor progress
 8. Review training results and charts
@@ -430,29 +421,30 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 
 ### Algorithm Selection Guide
 
-**For Production Trading:**
-- Use **QRDQN** - Distributional RL for risk-aware decisions
-  - Learns value distribution instead of expected value
-  - Off-policy learning with experience replay
-  - Better handling of uncertainty
+**QRDQN (Quantile Regression DQN)**
+- Distributional RL for risk-aware decisions
+- Learns value distribution instead of expected value
+- Off-policy learning with experience replay
+- Good for: Risk-conscious trading strategies
 
-**For Exploration:**
-- Use **SAC** - Continuous action space with maximum entropy
-  - DiscreteToBoxWrapper converts outputs to 6 discrete actions
-  - Encourages exploration
-  - Good for fine-grained control
+**RecurrentPPO**
+- LSTM memory for temporal pattern recognition
+- Uses trend indicators (SMA_Trend, EMA_Crossover, Price_Momentum)
+- Enhanced reward config for trend-following
+- Good for: Markets with temporal dependencies
 
-**For Bear Markets:**
-- Use **RecurrentPPO**
-  - Only algorithm profitable in downtrends (+24.74% on TEAM in -28% bear market)
-  - Uses 13 features with trend indicators for pattern detection
-  - Enhanced reward config encourages holding winning positions during uptrends
-  - Automatic momentum bonuses during strong uptrends
-  - Requires 300k timesteps (LSTM needs more training than standard PPO)
-  - May be conservative in strong bull markets
+**SAC (Soft Actor-Critic)**
+- Maximum entropy framework for exploration
+- DiscreteToBoxWrapper converts continuous actions to discrete
+- Off-policy with replay buffer
+- Good for: Exploration and fine-grained control
 
-**For General Use:**
-- Use **PPO** as stable baseline or train all four and let backtesting compare
+**PPO (Proximal Policy Optimization)**
+- Stable on-policy baseline
+- Clipped objective for training stability
+- Good for: General-purpose trading
+
+**Recommendation**: Train all 4 algorithms and compare via backtesting
 
 ---
 
@@ -496,17 +488,16 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 
 ### Slow RL Training
 **Fix:**
-- Start with 100,000 steps for quick testing
-- Reduce training period to 365 days
-- Close other applications
-- Use PPO (more efficient than A2C)
+- Default is 300,000 steps for best results
+- Can reduce to 100,000 steps for quick testing
+- Reduce training period to 365 days for faster experiments
+- Close other applications to free up resources
 
-**Expected Training Times:**
-- 100k steps: ~5-8 minutes (quick testing)
-- 200k steps: ~10-15 minutes (decent results)
-- 300k steps: ~15-20 minutes (proven optimal, recommended)
-- 400k+ steps: ~25-35 minutes (diminishing returns)
-- Volatile stocks train slower due to curriculum learning stages
+**Expected Training Times (300k steps):**
+- PPO: ~15-20 minutes (efficient on-policy)
+- RecurrentPPO: ~25-35 minutes (LSTM requires more compute)
+- SAC: ~15-20 minutes (off-policy with replay buffer)
+- QRDQN: ~15-20 minutes (off-policy DQN variant)
 
 ### "Module not found" Error
 **Fix:**

@@ -303,14 +303,14 @@ print(f"Sharpe Ratio: {result.metrics.sharpe_ratio:.2f}")
 
 **Optimal Configuration**:
 - **Training Period**: 1095 days (3 years)
-- **Training Steps**:
-  - PPO, SAC, QRDQN: 100,000 steps
-  - RecurrentPPO: 300,000 steps (LSTM requires more training)
-- **Algorithm**: QRDQN (risk-aware), RecurrentPPO (downtrends), PPO (baseline), SAC (exploration)
+- **Training Steps**: 300,000 (recommended for all algorithms)
+- **Algorithms**: PPO, RecurrentPPO, SAC, QRDQN
 
-**Training Times** (M1 Mac):
-- 100k steps: 5-8 minutes (PPO, SAC, QRDQN)
-- 300k steps: 15-20 minutes (RecurrentPPO recommended)
+**Training Times** (M1 Mac, 300k steps):
+- PPO: 15-20 minutes
+- RecurrentPPO: 25-35 minutes (LSTM requires more compute)
+- SAC: 15-20 minutes
+- QRDQN: 15-20 minutes
 
 **Model Saving**:
 - `best_model.zip`: Peak mean reward (used for backtesting)

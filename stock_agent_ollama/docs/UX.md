@@ -197,10 +197,10 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 ┌─────────────────────────────────────────────────────────┐
 │ Configuration Panel                                     │
 │                                                         │
-│ Symbol: [AAPL ▼]  Algorithm: [◉ PPO  ○ A2C]          │
-│ Use LSTM Features: [☑]                                 │
-│ Training Period: [========] 365 days                   │
-│ Training Steps: [========] 50,000                      │
+│ Symbol: [AAPL ▼]  Algorithm: [PPO ▼]                  │
+│ Algorithms: PPO, RecurrentPPO, SAC, QRDQN              │
+│ Training Period: [========] 1095 days                  │
+│ Training Steps: [========] 300,000                     │
 │                                                         │
 │ [🚀 Start Training]  [📊 Run Backtest]                │
 └─────────────────────────────────────────────────────────┘
@@ -214,10 +214,9 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 
 **A. Configuration Panel**
 - Symbol input with autocomplete (accepts any valid ticker)
-- Agent type: PPO, A2C, DQN, or SAC
-- LSTM feature enhancement toggle (PPO only)
-- Training period slider (30-730 days)
-- Training steps slider (10k-100k)
+- Algorithm: PPO, RecurrentPPO, SAC, or QRDQN
+- Training period slider (180-1095 days)
+- Training steps slider (50k-500k, default 300k)
 
 **B. Training Monitor**
 - Real-time progress bar
@@ -241,8 +240,8 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │ Create New Session                                              │
-│ Symbol: [AAPL ▼] Algorithm: [◉ PPO ○ A2C]                     │
-│ Capital: [$10,000] Max Pos: [100] Stop Loss: [5%]             │
+│ Symbol: [AAPL ▼] Algorithm: [PPO ▼]                           │
+│ Capital: [$100,000] Max Pos: [80%] Stop Loss: [5%]            │
 │ [☐ Allow Extended Hours]  [Create & Start Session]            │
 └─────────────────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────────────────┐
@@ -283,7 +282,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 
 **A. Session Creation Panel**
 - Symbol input with autocomplete (accepts any valid ticker)
-- Algorithm selection (PPO/A2C/DQN/SAC) - auto-finds latest trained model
+- Algorithm selection (PPO/RecurrentPPO/SAC/QRDQN) - auto-finds latest trained model
 - Initial capital input ($10,000-$1,000,000)
 - Max position % (percentage of portfolio, 5-100%, default 80%)
 - Stop-loss percentage (1-20%)
@@ -415,7 +414,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 - Training date for each model
 
 **RL Agents Tab:**
-- Lists all trained RL agents (PPO, A2C, DQN, SAC)
+- Lists all trained RL agents (PPO, RecurrentPPO, SAC, QRDQN)
 - Shows agent type and symbol
 - Training date
 - Performance note: "Run backtest →" (metrics calculated on-demand)
@@ -502,11 +501,11 @@ All cards follow consistent styling:
 - Model performance tracking (Final Loss, Val Loss)
 
 ### ✅ RL Trading Agents
-- PPO, RecurrentPPO, SAC, and QRDQN algorithms
-- LSTM-based RecurrentPPO with trend indicators
-- Live training progress
-- Comprehensive backtesting
-- Strategy comparison (RL vs Buy&Hold vs Momentum)
+- 4 algorithms: PPO, RecurrentPPO, SAC, QRDQN
+- RecurrentPPO with LSTM memory and trend indicators
+- Live training progress with real-time metrics
+- Comprehensive backtesting engine
+- Strategy comparison (All RL agents vs Buy&Hold vs Momentum)
 
 ### ✅ Live Trading Simulation
 - Paper trading with real-time data
@@ -550,7 +549,7 @@ Configure LSTM → Fetch data → Train ensemble (3 models)
                             → Display training history
 
 Configure RL   → Fetch data → Create trading environment
-                            → Train agent (PPO/A2C)
+                            → Train agent (PPO/RecurrentPPO/SAC/QRDQN)
                             → Save model checkpoints
                             → Show progress and results
 ```

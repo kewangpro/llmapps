@@ -577,7 +577,7 @@ class TradingEvent:
 - Agent-to-order translation
 
 **Testing:**
-- Test with multiple agent types (PPO, A2C, DQN, SAC)
+- Test with all agent types (PPO, RecurrentPPO, SAC, QRDQN)
 - Validate observation construction
 - Compare backtest vs live predictions
 
@@ -946,7 +946,7 @@ educational purposes. No real trades are executed.
 **Via Web UI:**
 All configuration is done through the Live Trade page interface:
 - Symbol selection
-- Algorithm selection (PPO/A2C/DQN/SAC)
+- Algorithm selection (PPO/RecurrentPPO/SAC/QRDQN)
 - Initial capital
 - Max position size
 - Stop loss percentage
