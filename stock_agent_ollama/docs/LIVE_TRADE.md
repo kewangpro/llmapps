@@ -41,9 +41,9 @@ This document outlines the design for a **live trading simulation system** that 
 │ Market Data  │    │   RL Agent   │    │  Portfolio   │
 │   Stream     │    │   (Trained)  │    │   Manager    │
 │              │    │              │    │              │
-│ • Yahoo API  │    │ • PPO/A2C/DQN│    │ • Positions  │
-│ • Real-time  │    │ • LSTM feat  │    │ • Cash       │
-│ • 1-min bars │    │ • Inference  │    │ • P&L        │
+│ • Yahoo API  │    │ • PPO/RecurrentPPO/  │    │ • Positions  │
+│ • Real-time  │    │   SAC/QRDQN      │    │ • Cash       │
+│ • 1-min bars │    │ • Inference      │    │ • P&L        │
 └──────────────┘    └──────────────┘    └──────────────┘
          │                    │                    │
          └────────────────────┴────────────────────┘
@@ -408,8 +408,7 @@ class TradingSession:
 class LiveTradingConfig:
     # Agent
     agent_path: str
-    agent_type: str  # 'ppo', 'a2c', or 'dqn'
-    use_lstm: bool
+    agent_type: str  # 'ppo', 'recurrent_ppo', 'sac', or 'qrdqn'
 
     # Portfolio
     initial_capital: float = 100000.0
@@ -578,7 +577,7 @@ class TradingEvent:
 - Agent-to-order translation
 
 **Testing:**
-- Test with multiple agent types (PPO, A2C)
+- Test with multiple agent types (PPO, A2C, DQN, SAC)
 - Validate observation construction
 - Compare backtest vs live predictions
 
@@ -947,7 +946,7 @@ educational purposes. No real trades are executed.
 **Via Web UI:**
 All configuration is done through the Live Trade page interface:
 - Symbol selection
-- Algorithm selection (PPO/A2C/DQN)
+- Algorithm selection (PPO/A2C/DQN/SAC)
 - Initial capital
 - Max position size
 - Stop loss percentage

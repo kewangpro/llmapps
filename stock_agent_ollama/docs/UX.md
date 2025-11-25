@@ -214,7 +214,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 
 **A. Configuration Panel**
 - Symbol input with autocomplete (accepts any valid ticker)
-- Agent type: PPO, A2C, or DQN
+- Agent type: PPO, A2C, DQN, or SAC
 - LSTM feature enhancement toggle (PPO only)
 - Training period slider (30-730 days)
 - Training steps slider (10k-100k)
@@ -283,7 +283,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 
 **A. Session Creation Panel**
 - Symbol input with autocomplete (accepts any valid ticker)
-- Algorithm selection (PPO/A2C/DQN) - auto-finds latest trained model
+- Algorithm selection (PPO/A2C/DQN/SAC) - auto-finds latest trained model
 - Initial capital input ($10,000-$1,000,000)
 - Max position % (percentage of portfolio, 5-100%, default 80%)
 - Stop-loss percentage (1-20%)
@@ -415,7 +415,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 - Training date for each model
 
 **RL Agents Tab:**
-- Lists all trained RL agents (PPO, A2C)
+- Lists all trained RL agents (PPO, A2C, DQN, SAC)
 - Shows agent type and symbol
 - Training date
 - Performance note: "Run backtest →" (metrics calculated on-demand)
@@ -502,15 +502,15 @@ All cards follow consistent styling:
 - Model performance tracking (Final Loss, Val Loss)
 
 ### ✅ RL Trading Agents
-- PPO and A2C algorithms
-- LSTM-enhanced feature option
+- PPO, RecurrentPPO, SAC, and QRDQN algorithms
+- LSTM-based RecurrentPPO with trend indicators
 - Live training progress
 - Comprehensive backtesting
 - Strategy comparison (RL vs Buy&Hold vs Momentum)
 
 ### ✅ Live Trading Simulation
 - Paper trading with real-time data
-- Trained agent execution (PPO/A2C)
+- Trained agent execution (PPO/RecurrentPPO/SAC/QRDQN)
 - Real-time portfolio tracking
 - Risk management controls
 - Live monitoring dashboard

@@ -111,7 +111,7 @@ The platform features a professional light-theme interface with 6 main pages:
 1. Click **Trading** tab
 2. **Configure Agent**:
    - **Symbol**: Enter or select symbol (e.g., AAPL, MSFT, GOOGL, AMZN, TSLA, META, NVDA, or any valid ticker)
-   - **Algorithm**: Choose DQN (best performance), PPO (stable), or A2C (faster)
+   - **Algorithm**: Choose DQN (best performance), PPO (stable), A2C (faster), or SAC (continuous actions)
    - **Use LSTM Policy**: Optional for PPO only
      - Enables RecurrentPPO with LSTM memory
      - Automatically adds 3 trend indicators (SMA_Trend, EMA_Crossover, Price_Momentum)
@@ -149,7 +149,7 @@ The platform features a professional light-theme interface with 6 main pages:
 
 **Automatic Model Loading:**
 - Backtesting automatically finds and loads ALL available trained models for the selected symbol
-- Compares PPO, A2C, DQN, and LSTM PPO agents (if trained)
+- Compares PPO, RecurrentPPO, SAC, and QRDQN agents (if trained)
 - No need to select algorithm - all models are included
 
 **Backtest Results:**
@@ -173,7 +173,7 @@ The live trading session is **persistent**. You can stop the application and res
 1. Click **Live Trade** tab
 2. **Configure Settings**:
    - **Symbol**: Enter or select stock (e.g., AAPL, MSFT, GOOGL, or any valid ticker)
-   - **Algorithm**: Choose PPO, A2C, or DQN (auto-loads trained model)
+   - **Algorithm**: Choose PPO, RecurrentPPO, SAC, or QRDQN (auto-loads trained model)
    - **Initial Capital**: Starting balance ($100,000 default)
    - **Max Position %**: Maximum position as % of portfolio (80% default)
    - **Stop Loss**: Automatic stop-loss percentage (5% default)
@@ -230,9 +230,9 @@ The live trading session is **persistent**. You can stop the application and res
 
 **Tab 2: RL Agents**
 - Header: "RL Trading Agents / Reinforcement learning models"
-- Lists all trained PPO, A2C, DQN, and LSTM PPO agents
+- Lists all trained PPO, RecurrentPPO, SAC, and QRDQN agents
 - Shows algorithm type, symbol, training date
-- LSTM PPO models clearly labeled with "lstm_ppo" prefix
+- RecurrentPPO models clearly identified by algorithm type
 - Performance column shows "Run backtest →" hint
   - Performance data calculated when you run backtests
   - Not stored with models
@@ -282,18 +282,19 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 - ✅ Force retrain checkbox updates models with latest data
 
 ### RL Trading
-- ✅ **DQN** recommended for production (most consistent, adapts to markets)
-- ✅ **A2C** excellent for bull markets (+74.77% on GOOGL after retraining)
-- ✅ **LSTM PPO (RecurrentPPO)** best for downtrends (+24.74% on TEAM in -28% bear market)
+- ✅ **QRDQN** recommended for production (distributional RL, risk-aware decisions)
+- ✅ **SAC** good for exploring continuous action spaces and fine-grained control
+- ✅ **RecurrentPPO** best for downtrends (+24.74% on TEAM in -28% bear market)
   - Uses 13 features with trend indicators (SMA_Trend, EMA_Crossover, Price_Momentum)
   - Enhanced reward config with momentum bonuses and reduced penalties
   - Automatically backwards compatible with older 10-feature models
-- ✅ **PPO** stable baseline (LSTM optional for temporal patterns)
+- ✅ **PPO** stable baseline for general-purpose trading
 - ✅ **Action Masking** always enabled - prevents invalid trades automatically
 - ✅ **6-Action Space** provides fine-grained control over position sizing
-- ✅ **Algorithm-Specific Rewards** - DQN, PPO/A2C, and LSTM PPO use different optimized configs
+- ✅ **Algorithm-Specific Rewards** - Each algorithm uses optimized reward configs
 - ✅ **1095 days** (3 years) proven optimal for diverse market conditions
-- ✅ **100,000 steps** recommended starting point (5-10 min training)
+- ✅ **100,000 steps** for PPO, SAC, QRDQN (5-10 min training)
+- ✅ **300,000 steps** for RecurrentPPO (15-20 min) - LSTM needs more training
 - ✅ **Backtesting** automatically loads all trained models for comparison
 - ✅ Training runs in background - UI stays responsive
 - ✅ Models saved automatically with best model selection
@@ -326,15 +327,17 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 6. Review 30-day LSTM prediction
 ```
 
-### Workflow 3: Train RL Agent (5-10 minutes)
+### Workflow 3: Train RL Agent
 ```
 1. Click Trading tab
 2. Select symbol: NVDA
-3. Choose algorithm: DQN (or PPO, A2C)
-4. Optional: Check "Use LSTM Policy" if PPO and downtrend expected
-5. Use recommended settings: 1095 days (3 years), 100,000 steps
+3. Choose algorithm: QRDQN, PPO, RecurrentPPO, or SAC
+4. Set training period: 1095 days (3 years)
+5. Set timesteps:
+   - 100,000 for PPO/SAC/QRDQN (5-10 min)
+   - 300,000 for RecurrentPPO (15-20 min)
 6. Click "🚀 Start Training"
-7. Monitor progress (5-10 minutes)
+7. Monitor progress
 8. Review training results and charts
 ```
 
@@ -353,7 +356,7 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 ```
 1. Click Live Trade tab
 2. Select symbol: AAPL
-3. Choose algorithm: DQN (or PPO, A2C)
+3. Choose algorithm: QRDQN, PPO, RecurrentPPO, or SAC
 4. Set initial capital: $100,000
 5. Click "Create & Start Session"
 6. Monitor portfolio, positions, trades in real-time
@@ -428,27 +431,28 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 ### Algorithm Selection Guide
 
 **For Production Trading:**
-- Use **DQN** - Most consistent across all market conditions
-  - Adapts strategy to uptrends and downtrends
-  - Good risk management
-  - 35.40% in bulls, -3.46% in bears (best loss control)
+- Use **QRDQN** - Distributional RL for risk-aware decisions
+  - Learns value distribution instead of expected value
+  - Off-policy learning with experience replay
+  - Better handling of uncertainty
 
-**For Bull Markets Only:**
-- Use **A2C** - Excellent performance but no adaptation
-  - 40.92% on GOOGL (only 0.70% behind Buy & Hold)
-  - Will fail catastrophically in bear markets (-14.59%)
-  - Only if you're confident in sustained uptrend
+**For Exploration:**
+- Use **SAC** - Continuous action space with maximum entropy
+  - DiscreteToBoxWrapper converts outputs to 6 discrete actions
+  - Encourages exploration
+  - Good for fine-grained control
 
 **For Bear Markets:**
-- Use **LSTM PPO** (PPO with LSTM enabled)
+- Use **RecurrentPPO**
   - Only algorithm profitable in downtrends (+24.74% on TEAM in -28% bear market)
   - Uses 13 features with trend indicators for pattern detection
   - Enhanced reward config encourages holding winning positions during uptrends
   - Automatic momentum bonuses during strong uptrends
+  - Requires 300k timesteps (LSTM needs more training than standard PPO)
   - May be conservative in strong bull markets
 
 **For General Use:**
-- Use **DQN** or train all three and let backtesting compare
+- Use **PPO** as stable baseline or train all four and let backtesting compare
 
 ---
 
