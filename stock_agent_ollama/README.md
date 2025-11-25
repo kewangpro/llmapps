@@ -101,8 +101,9 @@ python src/main.py
 
 **RL Training:**
 - Click Trading → Configure agent → Start Training
-- PPO/SAC/QRDQN: 5-10 min (100k steps)
-- RecurrentPPO: 15-20 min (300k steps for LSTM)
+- Default: 300,000 steps (recommended for all algorithms)
+- PPO/SAC/QRDQN: 15-20 min (300k steps)
+- RecurrentPPO: 25-35 min (300k steps, LSTM needs more compute)
 - Run Backtest → Compare strategies and metrics
 
 **Live Trading:**
@@ -275,7 +276,7 @@ curl http://localhost:11434/api/tags
 | Ollama unavailable | Platform works with fallback mode (regex-based) |
 | Port 5006 in use | Set `PANEL_PORT=5007` |
 | Memory issues | Need 8GB+ RAM for RL training |
-| RL training slow | PPO/SAC/QRDQN: 100k steps. RecurrentPPO: 300k steps (LSTM needs more) |
+| RL training slow | Default: 300k steps recommended for all algorithms. Can reduce to 100k for quick tests. |
 | LSTM models empty | Run analysis once - auto-trains model (5-10 min) |
 | RL shows "Run backtest →" | Normal - performance calculated during backtesting |
 
