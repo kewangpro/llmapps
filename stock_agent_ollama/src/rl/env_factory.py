@@ -30,13 +30,13 @@ class EnvConfig:
     max_position_pct: float = 80.0  # Max position as % of portfolio
 
     # Cost parameters
-    transaction_cost_rate: float = 0.0005  # 0.05% per trade (DQN-optimized)
+    transaction_cost_rate: float = 0.0005  # 0.05% per trade
     slippage_rate: float = 0.0005  # 0.05% slippage
 
     # Observation parameters
     lookback_window: int = 60
     include_technical_indicators: bool = True
-    include_trend_indicators: bool = False  # Trend indicators for LSTM PPO (SMA_Trend, EMA_Crossover, Price_Momentum)
+    include_trend_indicators: bool = False  # Trend indicators for RecurrentPPO (SMA_Trend, EMA_Crossover, Price_Momentum)
 
     # Enhancement flags
     use_action_masking: bool = True

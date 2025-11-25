@@ -31,7 +31,7 @@ def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
         FileNotFoundError: If model file not found
         ValueError: If model cannot be loaded with any supported agent type
     """
-    from stable_baselines3 import PPO, A2C, DQN, SAC
+    from stable_baselines3 import PPO, SAC
     from sb3_contrib import RecurrentPPO, QRDQN
 
     model_path = Path(model_path)

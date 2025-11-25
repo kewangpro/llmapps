@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, Any
 import logging
 import json
-from stable_baselines3 import PPO, A2C, DQN, SAC
+from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.callbacks import BaseCallback
 from sb3_contrib import RecurrentPPO, QRDQN
 
@@ -84,15 +84,14 @@ class EnhancedTrainingConfig:
     n_epochs: int = 10
 
     # Training settings
-    total_timesteps: int = 100000  # Good for PPO/SAC/QRDQN. RecurrentPPO should use 300k (LSTM needs more training)
+    total_timesteps: int = 300000  # Recommended for all algorithms, especially RecurrentPPO (LSTM needs more training)
     eval_freq: int = 5000
     save_freq: int = 10000
 
     # Transaction costs (from EnvConfig)
-    # RESTORED to 0.0005 for DQN compatibility
-    # DQN works best with light transaction costs (learns optimal trading frequency)
-    # PPO/A2C get higher costs via PPORewardConfig (0.002)
-    transaction_cost_rate: float = _ENV_DEFAULTS['transaction_cost_rate']  # 0.05% per trade (DQN-optimized)
+    # Light transaction costs for QRDQN/SAC (learns optimal trading frequency)
+    # PPO gets higher costs via PPORewardConfig (0.002)
+    transaction_cost_rate: float = _ENV_DEFAULTS['transaction_cost_rate']  # 0.05% per trade
     slippage_rate: float = _ENV_DEFAULTS['slippage_rate']
 
     # Save settings
@@ -186,18 +185,19 @@ class EnhancedRLTrainer:
         self.callbacks = []
 
         # Select appropriate reward config based on agent type
-        # QRDQN/SAC use EnhancedRewardConfig (lighter penalties, proven to work)
-        # PPO uses PPORewardConfig (stronger penalties to fight action collapse)
-        # RecurrentPPO uses EnhancedLSTMPPORewardConfig (reduced penalties for trend riding)
+        # Algorithm-specific reward configurations:
+        # - QRDQN/SAC: EnhancedRewardConfig (lighter penalties)
+        # - PPO: PPORewardConfig (stronger penalties to fight action collapse)
+        # - RecurrentPPO: EnhancedLSTMPPORewardConfig (reduced penalties for trend riding)
         if config.reward_config is None or isinstance(config.reward_config, EnhancedRewardConfig):
             if config.agent_type.lower() == 'recurrent_ppo':
-                logger.info(f"Using EnhancedLSTMPPORewardConfig V2 for RecurrentPPO (stronger HOLD incentive + momentum bonus)")
+                logger.info(f"Using EnhancedLSTMPPORewardConfig for RecurrentPPO (HOLD incentive + momentum bonus)")
                 self.config.reward_config = EnhancedLSTMPPORewardConfig()
             elif config.agent_type.lower() == 'ppo':
                 logger.info(f"Using PPORewardConfig for PPO")
                 self.config.reward_config = PPORewardConfig()
-            else:  # QRDQN, SAC, or other
-                logger.info(f"Using EnhancedRewardConfig (DQN-optimized) for {config.agent_type.upper()}")
+            else:  # QRDQN, SAC
+                logger.info(f"Using EnhancedRewardConfig for {config.agent_type.upper()}")
                 if config.reward_config is None:
                     self.config.reward_config = EnhancedRewardConfig()
 
@@ -424,7 +424,7 @@ class EnhancedRLTrainer:
 
         training_stats = progress_callback.get_training_stats() if progress_callback else {}
 
-        # Extract explained variance from model logger (PPO/A2C specific)
+        # Extract explained variance from model logger (PPO specific)
         explained_variance = None
         try:
             if hasattr(self.agent, 'logger') and self.agent.logger is not None:
@@ -589,7 +589,7 @@ def main():
     parser.add_argument('--end-date', type=str, help='End date (YYYY-MM-DD)',
                        default=datetime.now().strftime('%Y-%m-%d'))
     parser.add_argument('--timesteps', type=int, default=100000, help='Total timesteps')
-    parser.add_argument('--agent', type=str, default='ppo', choices=['ppo', 'a2c'])
+    parser.add_argument('--agent', type=str, default='ppo', choices=['ppo', 'recurrent_ppo', 'sac', 'qrdqn'])
 
     # Improvement flags
     parser.add_argument('--use-improvements', action='store_true',

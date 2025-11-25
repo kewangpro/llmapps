@@ -676,28 +676,17 @@ class LiveTradingEngine:
 
 
     def load_agent(self, agent_path: str):
-        """Load trained RL agent"""
-        from stable_baselines3 import PPO, A2C, DQN
+        """Load trained RL agent using centralized model loader"""
+        from .model_utils import load_rl_agent
 
         try:
             agent_path = Path(agent_path)
             if not agent_path.exists():
                 raise FileNotFoundError(f"Agent not found: {agent_path}")
 
-            # Try to load as PPO first, then A2C, then DQN
-            try:
-                self.agent = PPO.load(str(agent_path))
-                logger.info(f"Loaded PPO agent from {agent_path}")
-            except Exception as e:
-                try:
-                    self.agent = A2C.load(str(agent_path))
-                    logger.info(f"Loaded A2C agent from {agent_path}")
-                except Exception as e2:
-                    try:
-                        self.agent = DQN.load(str(agent_path))
-                        logger.info(f"Loaded DQN agent from {agent_path}")
-                    except Exception as e3:
-                        raise Exception(f"Failed to load as PPO, A2C, or DQN: {e}, {e2}, {e3}")
+            # Use centralized loader that handles PPO, RecurrentPPO, SAC, QRDQN
+            self.agent = load_rl_agent(agent_path, env=None)
+            logger.info(f"Successfully loaded agent from {agent_path}")
 
         except Exception as e:
             logger.error(f"Failed to load agent: {e}")

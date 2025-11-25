@@ -206,27 +206,22 @@ class EnhancedRewardConfig:
     """
     Configuration for enhanced reward function.
 
-    OPTIMIZED FOR DQN - RESTORED to original working configuration!
-    This is the exact reward function that produced 39.26% return.
+    OPTIMIZED FOR QRDQN/SAC - Base reward configuration.
+    Lighter penalties allow exploration and learning from Q-values.
 
-    REMOVED FEATURES (they broke DQN):
-    - HOLD winner bonus (incentivized wrong behavior)
-    - Entropy-based diversity bonus (caused over-selling)
-
-    For PPO/A2C, use PPORewardConfig instead.
+    For PPO, use PPORewardConfig instead.
+    For RecurrentPPO, use EnhancedLSTMPPORewardConfig.
     """
     # Base rewards
     return_weight: float = 1.0
 
     # Penalties
     # Balanced to discourage invalid actions without causing action collapse
-    # -50.0 was too strong, caused agent to only use BUY_MEDIUM
-    # -10.0 provides sufficient penalty while allowing exploration
     invalid_action_penalty: float = -1.0
     excessive_trading_penalty: float = -0.1
-    # DQN works well with lighter penalties (learns risk naturally via Q-values)
-    risk_penalty_weight: float = 0.01  # RESTORED from 0.3 - DQN doesn't need this strong
-    drawdown_penalty_weight: float = 0.05  # RESTORED from 0.5 - DQN doesn't need this strong
+    # QRDQN/SAC work well with lighter penalties (learn risk naturally via Q-values)
+    risk_penalty_weight: float = 0.01
+    drawdown_penalty_weight: float = 0.05
 
     # Bonuses
     profitable_trade_bonus: float = 0.1
@@ -234,7 +229,7 @@ class EnhancedRewardConfig:
     valid_action_bonus: float = 0.1
 
     # Transaction costs
-    # DQN learns from costs naturally, weak penalty allows it to find optimal trading frequency
+    # QRDQN/SAC learn from costs naturally, weak penalty allows optimal trading frequency
     transaction_cost_rate: float = 0.0005
     slippage_rate: float = 0.0005
 
@@ -246,33 +241,33 @@ class EnhancedRewardConfig:
     # Advanced
     min_hold_steps: int = 5  # Minimum steps to hold before selling
 
-    # Legacy fields (no longer used but kept for compatibility)
-    action_diversity_bonus: float = 0.1  # NOT USED - removed to restore DQN
-    hold_winner_bonus: float = 0.1  # NOT USED - removed to restore DQN
-    diversity_window: int = 50  # NOT USED - removed to restore DQN
+    # Legacy fields (not used in current implementation)
+    action_diversity_bonus: float = 0.1  # NOT USED
+    hold_winner_bonus: float = 0.1  # NOT USED
+    diversity_window: int = 50  # NOT USED
 
 
 @dataclass
 class PPORewardConfig(EnhancedRewardConfig):
     """
-    Reward configuration optimized for PPO and A2C.
+    Reward configuration optimized for PPO.
 
-    PPO/A2C need stronger penalties/bonuses because:
-    - Entropy-based exploration (vs DQN's epsilon-greedy)
-    - On-policy learning (discard experiences)
+    PPO needs stronger penalties/bonuses because:
+    - Entropy-based exploration (vs epsilon-greedy)
+    - On-policy learning (discards experiences)
     - Prone to action collapse
 
-    These stronger values attempt to prevent collapse, but so far have not succeeded.
+    These stronger values help prevent collapse.
     """
     # Stronger penalties to discourage collapse
-    risk_penalty_weight: float = 0.3  # 3x stronger than DQN
-    drawdown_penalty_weight: float = 0.5  # 2.5x stronger than DQN
+    risk_penalty_weight: float = 0.3
+    drawdown_penalty_weight: float = 0.5
 
     # Stronger diversity bonus to prevent action collapse
-    action_diversity_bonus: float = 1.0  # 10x stronger than DQN
+    action_diversity_bonus: float = 1.0
 
     # Higher transaction costs to discourage overtrading
-    transaction_cost_rate: float = 0.002  # 4x stronger than DQN
+    transaction_cost_rate: float = 0.002
 
 
 @dataclass
