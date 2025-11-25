@@ -61,27 +61,15 @@ class RLTrainingPanel(param.Parameterized):
             min_characters=1
         )
 
-        # Agent type
+        # Agent type - 4 separate algorithms
         self.agent_type = pn.widgets.RadioButtonGroup(
-            name='Agent',
-            options=['PPO', 'A2C', 'DQN'],
+            name='Algorithm',
+            options=['PPO', 'RecurrentPPO', 'SAC', 'QRDQN'],
             value='PPO',
             button_type='primary',
-            button_style='outline'
+            button_style='outline',
+            width=500  # Wide enough for all 4 buttons
         )
-
-        # LSTM Policy checkbox (only for PPO)
-        from src.rl.training import EnhancedTrainingConfig
-        self.use_lstm_policy_checkbox = pn.widgets.Checkbox(
-            name='Use LSTM Policy (PPO only)',
-            value=EnhancedTrainingConfig.use_lstm_policy, # Default from config
-            align='center',
-            width=180,
-            disabled=False  # Enabled by default since PPO is default
-        )
-
-        # Watch agent_type changes to enable/disable LSTM checkbox
-        self.agent_type.param.watch(self._on_agent_type_change, 'value')
 
         # === TRAINING PARAMETERS ===
         # Note: All architectural improvements are always enabled:
@@ -155,14 +143,6 @@ class RLTrainingPanel(param.Parameterized):
         # Results panel
         self.results_panel = pn.Column(sizing_mode="stretch_width", min_height=250)
 
-    def _on_agent_type_change(self, event):
-        """Enable/disable LSTM checkbox based on agent type."""
-        # LSTM is only supported for PPO (RecurrentPPO)
-        if event.new == 'PPO':
-            self.use_lstm_policy_checkbox.disabled = False
-        else:
-            self.use_lstm_policy_checkbox.disabled = True
-            self.use_lstm_policy_checkbox.value = False  # Uncheck when disabled
 
     def _start_training(self, event):
         """Start RL training."""
@@ -204,15 +184,26 @@ class RLTrainingPanel(param.Parameterized):
                 # - PPORewardConfig for PPO/A2C (strong penalties to fight action collapse)
                 reward_config = None  # Let trainer auto-select based on agent_type
 
+                # Convert UI agent type to training format
+                # UI: 'PPO', 'RecurrentPPO', 'SAC', 'QRDQN'
+                # Training: 'ppo', 'recurrent_ppo', 'sac', 'qrdqn'
+                agent_type_map = {
+                    'PPO': 'ppo',
+                    'RecurrentPPO': 'recurrent_ppo',
+                    'SAC': 'sac',
+                    'QRDQN': 'qrdqn'
+                }
+                agent_type = agent_type_map.get(self.agent_type.value, self.agent_type.value.lower())
+
                 # Create training config (uses dataclass defaults for unspecified values)
                 config = EnhancedTrainingConfig(
                     symbol=symbol,
                     start_date=start_date,
                     end_date=end_date,
-                    agent_type=self.agent_type.value.lower(),
+                    agent_type=agent_type,
                     total_timesteps=self.timesteps.value,
                     ent_coef=self.ent_coef.value,
-                    # transaction_cost_rate uses dataclass default (0.003)
+                    # transaction_cost_rate uses dataclass default (0.0005)
 
                     # All architectural improvements always enabled (not user-configurable)
                     use_action_masking=True,           # Safety - prevents invalid trades
@@ -221,7 +212,6 @@ class RLTrainingPanel(param.Parameterized):
                     use_improved_actions=True,         # 6-action space
                     use_curriculum_learning=False,     # Disabled - causes excessive invalid actions
                     enable_diagnostics=True,
-                    use_lstm_policy=self.use_lstm_policy_checkbox.value, # Add this
 
                     reward_config=reward_config,
                     verbose=1
@@ -425,15 +415,23 @@ class RLTrainingPanel(param.Parameterized):
             return None
 
         # Find all model directories for this symbol and agent type
-        # For PPO, also search for LSTM PPO models
         matching_dirs = []
         pattern = f"{agent_type.lower()}_{symbol}_*"
         matching_dirs.extend(models_dir.glob(pattern))
 
-        # Also search for LSTM PPO models when looking for PPO
-        if agent_type.lower() == 'ppo':
-            lstm_pattern = f"lstm_ppo_{symbol}_*"
-            matching_dirs.extend(models_dir.glob(lstm_pattern))
+        # Also search for legacy LSTM PPO models (named lstm_ppo_*) when looking for recurrent_ppo
+        if agent_type.lower() == 'recurrent_ppo':
+            legacy_lstm_pattern = f"lstm_ppo_{symbol}_*"
+            matching_dirs.extend(models_dir.glob(legacy_lstm_pattern))
+
+        # Also search for legacy A2C and DQN models (for backwards compatibility)
+        if agent_type.lower() == 'sac':
+            legacy_a2c_pattern = f"a2c_{symbol}_*"
+            matching_dirs.extend(models_dir.glob(legacy_a2c_pattern))
+
+        if agent_type.lower() == 'qrdqn':
+            legacy_dqn_pattern = f"dqn_{symbol}_*"
+            matching_dirs.extend(models_dir.glob(legacy_dqn_pattern))
 
         if not matching_dirs:
             return None
@@ -450,29 +448,28 @@ class RLTrainingPanel(param.Parameterized):
         if not model_path.exists():
             return None
 
-        # Check if using improved actions and LSTM by looking at config
+        # Check config for display info
         use_improved_actions = False
-        is_lstm = False
         config_path = latest_dir / "training_config.json"
+        actual_agent_type = agent_type.lower()
+
         if config_path.exists():
             import json
             with open(config_path, 'r') as f:
                 config = json.load(f)
                 use_improved_actions = config.get('use_improved_actions', False)
-                is_lstm = config.get('use_lstm_policy', False)
+                # Get actual agent type from config (handles legacy models)
+                actual_agent_type = config.get('agent_type', agent_type).lower()
 
         # Determine display agent type
-        display_agent_type = agent_type.lower()
-        if is_lstm and agent_type.lower() == 'ppo':
-            display_agent_type = 'lstm_ppo'
+        display_agent_type = actual_agent_type.replace('_', ' ').title()
 
         return {
             'path': model_path,
-            'agent_type': agent_type.lower(),  # Keep base type for loading
+            'agent_type': actual_agent_type,  # Actual type from config for loading
             'display_agent_type': display_agent_type,  # For display purposes
             'directory': latest_dir,
-            'use_improved_actions': use_improved_actions,
-            'is_lstm': is_lstm
+            'use_improved_actions': use_improved_actions
         }
 
     def _run_backtest(self, event):
@@ -503,7 +500,7 @@ class RLTrainingPanel(param.Parameterized):
                 loaded_models = []
 
                 # Find and load ALL available trained RL models for this symbol
-                for agent_type in ['ppo', 'a2c', 'dqn']:
+                for agent_type in ['ppo', 'recurrent_ppo', 'sac', 'qrdqn']:
                     logger.info(f"Backtest: Searching for {agent_type.upper()} model for {symbol}")
                     model_info = self._find_latest_model(symbol, agent_type)
 
@@ -512,13 +509,21 @@ class RLTrainingPanel(param.Parameterized):
                             # Load training config to create the correct environment
                             training_config = load_env_config_from_model(model_info['path'])
 
+                            # Determine include_trend_indicators
+                            # RecurrentPPO ALWAYS uses trend indicators (13 features)
+                            # Override config if agent is RecurrentPPO (for backwards compatibility)
+                            include_trend = training_config.get('include_trend_indicators', False)
+                            if agent_type == 'recurrent_ppo':
+                                include_trend = True
+                                logger.info(f"RecurrentPPO detected - forcing include_trend_indicators=True")
+
                             # Create a specific backtest config for this agent
                             agent_backtest_config = BacktestConfig(
                                 symbol=symbol,
                                 start_date=start_date,
                                 end_date=end_date,
                                 use_improved_actions=training_config.get('use_improved_actions', True),
-                                include_trend_indicators=training_config.get('include_trend_indicators', False)
+                                include_trend_indicators=include_trend
                             )
 
                             # Create a new engine for this agent
@@ -723,12 +728,7 @@ class RLTrainingPanel(param.Parameterized):
                 pn.Column(
                     pn.pane.HTML("<div style='font-size: 12px; color: #6b7280; margin-bottom: 5px; font-weight: 500;'>Algorithm</div>"),
                     self.agent_type,
-                    width=180
-                ),
-                pn.Column( # New column for LSTM checkbox
-                    pn.pane.HTML("<div style='font-size: 12px; color: #6b7280; margin-bottom: 5px; font-weight: 500;'>Policy Type</div>"),
-                    self.use_lstm_policy_checkbox,
-                    width=180
+                    width=520  # Wider to accommodate all 4 algorithm buttons
                 ),
                 align='start',
                 sizing_mode="stretch_width"
