@@ -3,8 +3,7 @@ Backtesting engine for evaluating trading strategies.
 
 This module contains the backtest engine and metrics calculator.
 """
-
-from .agents import BaseRLAgent
+import logging
 from .environments import EnhancedTradingEnv
 from .improvements import EnhancedRewardConfig
 from .env_factory import EnvConfig
@@ -13,6 +12,8 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any, Callable
 import numpy as np
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 # Reference defaults from EnvConfig (single source of truth)
 _ENV_DEFAULTS = {f.name: f.default for f in EnvConfig.__dataclass_fields__.values()}
@@ -246,68 +247,67 @@ class MetricsCalculator:
         Returns:
             Dictionary of trading metrics
         """
-        if len(trades) == 0:
+        if not trades:
             return {
-                'total_trades': 0,
-                'winning_trades': 0,
-                'losing_trades': 0,
-                'win_rate': 0.0,
-                'profit_factor': 0.0,
-                'avg_win': 0.0,
-                'avg_loss': 0.0,
-                'avg_trade': 0.0,
-                'largest_win': 0.0,
-                'largest_loss': 0.0,
-                'total_fees': 0.0
+                'total_trades': 0, 'winning_trades': 0, 'losing_trades': 0,
+                'win_rate': 0.0, 'profit_factor': 0.0, 'avg_win': 0.0, 'avg_loss': 0.0,
+                'avg_trade': 0.0, 'largest_win': 0.0, 'largest_loss': 0.0, 'total_fees': 0.0
             }
 
-        # Extract trade returns (simplified - assuming trades have PnL)
-        total_trades = len(trades)
-        total_fees = sum(t.get('cost', 0) for t in trades)
+        total_fees = sum(t.get('cost', 0.0) for t in trades)
+        
+        position = 0
+        avg_cost_basis = 0.0
+        realized_profits = []
 
-        # For detailed trade analysis, we'd need to pair buy/sell trades
-        # Simplified version here
-        buy_trades = [t for t in trades if t['action'] == 'BUY']
-        sell_trades = [t for t in trades if t['action'] == 'SELL']
+        for trade in trades:
+            shares = trade['shares']
+            price = trade['price']
 
-        # Match buys and sells to calculate profits
-        profits = []
-        for i, sell in enumerate(sell_trades):
-            if i < len(buy_trades):
-                buy = buy_trades[i]
-                profit = (sell['price'] - buy['price']) * sell['shares']
-                profits.append(profit)
+            if trade['action'] == 'BUY':
+                total_cost = (position * avg_cost_basis) + (shares * price)
+                position += shares
+                avg_cost_basis = total_cost / position if position > 0 else 0
+            
+            elif trade['action'] == 'SELL':
+                if position > 0:
+                    shares_to_sell = min(shares, position)
+                    profit = (price - avg_cost_basis) * shares_to_sell
+                    realized_profits.append(profit)
+                    position -= shares_to_sell
+                    if position == 0:
+                        avg_cost_basis = 0.0
+        
+        if not realized_profits:
+            return {
+                'total_trades': len(trades), 'winning_trades': 0, 'losing_trades': 0,
+                'win_rate': 0.0, 'profit_factor': 0.0, 'avg_win': 0.0, 'avg_loss': 0.0,
+                'avg_trade': 0.0, 'largest_win': 0.0, 'largest_loss': 0.0, 'total_fees': total_fees
+            }
 
-        if len(profits) > 0:
-            wins = [p for p in profits if p > 0]
-            losses = [p for p in profits if p < 0]
+        wins = [p for p in realized_profits if p > 0]
+        losses = [p for p in realized_profits if p < 0]
 
-            winning_trades = len(wins)
-            losing_trades = len(losses)
-            win_rate = winning_trades / len(profits) if len(profits) > 0 else 0.0
+        winning_trades = len(wins)
+        losing_trades = len(losses)
+        
+        total_sell_trades = winning_trades + losing_trades
+        win_rate = winning_trades / total_sell_trades if total_sell_trades > 0 else 0.0
+        
+        total_wins = sum(wins)
+        total_losses = abs(sum(losses))
 
-            total_wins = sum(wins) if wins else 0.0
-            total_losses = abs(sum(losses)) if losses else 0.0
-
-            profit_factor = total_wins / total_losses if total_losses > 0 else 0.0
-            avg_win = np.mean(wins) if wins else 0.0
-            avg_loss = np.mean(losses) if losses else 0.0
-            avg_trade = np.mean(profits)
-            largest_win = max(wins) if wins else 0.0
-            largest_loss = min(losses) if losses else 0.0
-        else:
-            winning_trades = 0
-            losing_trades = 0
-            win_rate = 0.0
-            profit_factor = 0.0
-            avg_win = 0.0
-            avg_loss = 0.0
-            avg_trade = 0.0
-            largest_win = 0.0
-            largest_loss = 0.0
+        profit_factor = total_wins / total_losses if total_losses > 0 else float('inf') if total_wins > 0 else 0.0
+        
+        avg_win = total_wins / winning_trades if winning_trades > 0 else 0.0
+        avg_loss = total_losses / losing_trades if losing_trades > 0 else 0.0
+        avg_trade = sum(realized_profits) / total_sell_trades if total_sell_trades > 0 else 0.0
+        
+        largest_win = max(wins) if wins else 0.0
+        largest_loss = min(losses) if losses else 0.0
 
         return {
-            'total_trades': total_trades,
+            'total_trades': len(trades),
             'winning_trades': winning_trades,
             'losing_trades': losing_trades,
             'win_rate': win_rate,
@@ -481,7 +481,7 @@ class BacktestEngine:
 
     def run_agent_backtest(
         self,
-        agent: BaseRLAgent,
+        agent: Any,  # Stable-Baselines3 agent (PPO, RecurrentPPO, SAC, QRDQN)
         deterministic: bool = True
     ) -> BacktestResult:
         """
@@ -494,14 +494,25 @@ class BacktestEngine:
         Returns:
             BacktestResult with performance metrics
         """
-        if not agent.is_trained:
-            raise ValueError("Agent must be trained before backtesting")
+        # Stable-Baselines3 agents don't have is_trained attribute
+        # Skip this check - assume agent is trained if loaded successfully
 
         if self.env is None:
             self.setup_environment()
 
+        # Check if agent is SAC and wrap environment if needed
+        from stable_baselines3 import SAC
+        env_to_use = self.env
+        is_sac_agent = isinstance(agent, SAC)
+
+        if is_sac_agent:
+            # SAC needs continuous action space, wrap the environment
+            from .sac_discrete_wrapper import DiscreteToBoxWrapper
+            env_to_use = DiscreteToBoxWrapper(self.env, n_discrete_actions=6)
+            logger.info("Wrapped environment for SAC backtesting")
+
         # Run episode
-        obs, _ = self.env.reset()
+        obs, _ = env_to_use.reset()
         done = False
 
         actions = []
@@ -512,11 +523,24 @@ class BacktestEngine:
         while not done:
             # Get action from agent
             action, _ = agent.predict(obs, deterministic=deterministic)
-            actions.append(action)
 
             # Execute action
-            obs, reward, terminated, truncated, info = self.env.step(action)
+            obs, reward, terminated, truncated, info = env_to_use.step(action)
             done = terminated or truncated
+
+            # Record action (convert to discrete for SAC)
+            if is_sac_agent:
+                # SAC outputs continuous action, convert to discrete using same logic as wrapper
+                continuous_val = action.item() if isinstance(action, np.ndarray) else action
+                continuous_val = np.clip(continuous_val, -1.0, 1.0)
+                # Discretize using 6 equal bins in [-1, 1]
+                bin_edges = np.linspace(-1.0, 1.0, 7)  # 7 edges for 6 bins
+                discrete_action = np.digitize(continuous_val, bin_edges[1:-1])
+                discrete_action = np.clip(discrete_action, 0, 5)
+                actions.append(int(discrete_action))
+            else:
+                actions.append(int(action.item() if isinstance(action, np.ndarray) else action))
+
 
             # Record state
             portfolio_values.append(info['portfolio_value'])
@@ -660,7 +684,8 @@ class BacktestEngine:
         results = {}
 
         for name, strategy in strategies.items():
-            if isinstance(strategy, BaseRLAgent):
+            # Check if it's an RL agent (has predict method from Stable-Baselines3)
+            if hasattr(strategy, 'predict') and hasattr(strategy, 'policy'):
                 result = self.run_agent_backtest(strategy, deterministic)
             elif callable(strategy):
                 result = self.run_strategy_backtest(strategy)

@@ -275,6 +275,7 @@ class PPORewardConfig(EnhancedRewardConfig):
     transaction_cost_rate: float = 0.002  # 4x stronger than DQN
 
 
+@dataclass
 class LSTMPPORewardConfig(PPORewardConfig):
     """
     Reward configuration optimized specifically for LSTM PPO.
@@ -302,6 +303,7 @@ class LSTMPPORewardConfig(PPORewardConfig):
     transaction_cost_rate: float = 0.0015  # Reduced from 0.002
 
 
+@dataclass
 class EnhancedLSTMPPORewardConfig(PPORewardConfig):
     """
     Enhanced reward configuration for LSTM PPO to match Buy & Hold performance.

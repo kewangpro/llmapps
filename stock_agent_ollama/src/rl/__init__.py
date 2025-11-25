@@ -3,7 +3,7 @@ Reinforcement Learning Trading System
 
 This module provides a complete RL trading framework including:
 - Enhanced trading environments with action masking
-- RL agents (PPO, A2C) with improved training
+- RL agents (PPO, RecurrentPPO, SAC, QRDQN) via Stable-Baselines3
 - Enhanced training pipeline with curriculum learning
 - Backtesting engine with comprehensive metrics
 - Baseline strategies for comparison
@@ -11,7 +11,6 @@ This module provides a complete RL trading framework including:
 """
 
 from .environments import SingleStockTradingEnv, BaseTradingEnv, TradingAction, EnhancedTradingEnv
-from .agents import PPOAgent, A2CAgent, create_agent
 from .training import EnhancedRLTrainer, EnhancedTrainingConfig
 from .improvements import (
     ActionMasker,
@@ -36,11 +35,6 @@ __all__ = [
     'EnhancedTradingEnv',
     'TradingAction',
     'ImprovedTradingAction',
-
-    # Agents
-    'PPOAgent',
-    'A2CAgent',
-    'create_agent',
 
     # Training
     'EnhancedRLTrainer',

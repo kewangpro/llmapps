@@ -15,11 +15,10 @@ logger = logging.getLogger(__name__)
 
 def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
     """
-    Load RL agent with automatic type detection and LSTM support.
+    Load RL agent with automatic type detection.
 
-    This function automatically detects the agent type (PPO, A2C, DQN) and
-    whether it uses LSTM by reading the training config. It supports both
-    regular and recurrent (LSTM) policies.
+    This function automatically detects the agent type (PPO, RecurrentPPO, SAC, QRDQN)
+    by reading the training config. It supports all 4 algorithms.
 
     Args:
         model_path: Path to model file (best_model.zip or final_model.zip)
@@ -32,58 +31,69 @@ def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
         FileNotFoundError: If model file not found
         ValueError: If model cannot be loaded with any supported agent type
     """
-    from stable_baselines3 import PPO, A2C, DQN
-    from sb3_contrib import RecurrentPPO
+    from stable_baselines3 import PPO, A2C, DQN, SAC
+    from sb3_contrib import RecurrentPPO, QRDQN
 
     model_path = Path(model_path)
     if not model_path.exists():
         raise FileNotFoundError(f"Model not found: {model_path}")
 
-    # Load training config to determine agent type and LSTM
+    # Load training config to determine agent type
     config_path = model_path.parent / "training_config.json"
     agent_type = None
-    use_lstm = False
 
     if config_path.exists():
         try:
             with open(config_path, 'r') as f:
                 config = json.load(f)
                 agent_type = config.get('agent_type', '').lower()
-                use_lstm = config.get('use_lstm_policy', False)
-                logger.info(f"Detected agent type: {agent_type}, LSTM: {use_lstm}")
+                logger.info(f"Detected agent type: {agent_type}")
         except Exception as e:
             logger.warning(f"Could not read training config: {e}")
 
     # Try loading with appropriate class based on config
     if agent_type == 'ppo':
-        agent_class = RecurrentPPO if use_lstm else PPO
         try:
-            agent = agent_class.load(str(model_path), env=env)
+            agent = PPO.load(str(model_path), env=env)
             agent.is_trained = True
-            logger.info(f"Successfully loaded {agent_class.__name__} from {model_path}")
+            logger.info(f"Successfully loaded PPO from {model_path}")
             return agent
         except Exception as e:
-            logger.error(f"Failed to load {agent_class.__name__}: {e}")
+            logger.error(f"Failed to load PPO: {e}")
             raise
 
-    elif agent_type == 'a2c':
+    elif agent_type == 'recurrent_ppo':
         try:
-            agent = A2C.load(str(model_path), env=env)
+            agent = RecurrentPPO.load(str(model_path), env=env)
             agent.is_trained = True
-            logger.info(f"Successfully loaded A2C from {model_path}")
+            logger.info(f"Successfully loaded RecurrentPPO from {model_path}")
             return agent
         except Exception as e:
-            logger.error(f"Failed to load A2C: {e}")
+            logger.error(f"Failed to load RecurrentPPO: {e}")
             raise
 
-    elif agent_type == 'dqn':
+    elif agent_type == 'sac':
         try:
-            agent = DQN.load(str(model_path), env=env)
+            # SAC uses continuous action space, need to wrap environment
+            if env is not None:
+                from .sac_discrete_wrapper import DiscreteToBoxWrapper
+                env = DiscreteToBoxWrapper(env, n_discrete_actions=6)
+            agent = SAC.load(str(model_path), env=env)
             agent.is_trained = True
-            logger.info(f"Successfully loaded DQN from {model_path}")
+            logger.info(f"Successfully loaded SAC from {model_path}")
             return agent
         except Exception as e:
-            logger.error(f"Failed to load DQN: {e}")
+            logger.error(f"Failed to load SAC: {e}")
+            raise
+
+    elif agent_type == 'qrdqn':
+        try:
+            agent = QRDQN.load(str(model_path), env=env)
+            agent.is_trained = True
+            logger.info(f"Successfully loaded QRDQN from {model_path}")
+            return agent
+        except Exception as e:
+            logger.error(f"Failed to load QRDQN: {e}")
             raise
 
     else:
@@ -92,11 +102,17 @@ def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
         for agent_name, agent_class in [
             ('PPO', PPO),
             ('RecurrentPPO', RecurrentPPO),
-            ('A2C', A2C),
-            ('DQN', DQN)
+            ('SAC', SAC),
+            ('QRDQN', QRDQN)
         ]:
             try:
-                agent = agent_class.load(str(model_path), env=env)
+                load_env = env
+                # Special handling for SAC
+                if agent_name == 'SAC' and env is not None:
+                    from .sac_discrete_wrapper import DiscreteToBoxWrapper
+                    load_env = DiscreteToBoxWrapper(env, n_discrete_actions=6)
+
+                agent = agent_class.load(str(model_path), env=load_env)
                 agent.is_trained = True
                 logger.info(f"Successfully auto-detected and loaded {agent_name}")
                 return agent
