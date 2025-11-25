@@ -32,13 +32,13 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 *Stock analysis with interactive charts, technical indicators, and AI-powered insights*
 
 ### 🤖 Reinforcement Learning Trading
-- **Train RL Agents** using PPO, A2C, DQN, and LSTM PPO (RecurrentPPO) with action masking
+- **Train RL Agents** using PPO, RecurrentPPO, SAC, and QRDQN with action masking
 - **6-Action Trading Space** (HOLD, BUY_SMALL, BUY_MEDIUM, BUY_LARGE, SELL_PARTIAL, SELL_ALL)
-- **LSTM Policy Support** for temporal pattern recognition in trending markets
-- **Trend Indicators** for LSTM PPO (SMA_Trend, EMA_Crossover, Price_Momentum)
+- **RecurrentPPO** with LSTM memory for temporal pattern recognition in trending markets
+- **Trend Indicators** for RecurrentPPO (SMA_Trend, EMA_Crossover, Price_Momentum)
 - **Adaptive Position Sizing** that adjusts to market volatility
 - **Training Metrics** (Win Rate, Action Distribution, Episode Rewards, Explained Variance)
-- **Algorithm-Specific Rewards** with optimized configs per algorithm (DQN, PPO/A2C, LSTM PPO)
+- **Algorithm-Specific Rewards** with optimized configs per algorithm
 - **Comprehensive Backtesting** with automated best model loading
 - **Strategy Comparison** against Buy & Hold and Momentum baselines
 - **Performance Metrics** (Returns, Sharpe Ratio, Max Drawdown, Win Rate)
@@ -49,7 +49,7 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 
 ### 🔴 Live Trading Simulation
 - **Paper Trading** with real-time market data (Yahoo Finance)
-- **Trained Agent Execution** using PPO, A2C, or DQN models in live markets
+- **Trained Agent Execution** using PPO, RecurrentPPO, SAC, or QRDQN models in live markets
 - **Persistent Sessions** that automatically save and resume across restarts
   - Portfolio state preserved
   - Trade history maintained
@@ -100,7 +100,9 @@ python src/main.py
 - Get charts, signals, LSTM predictions, and AI insights
 
 **RL Training:**
-- Click Trading → Configure agent → Start Training (5-10 min)
+- Click Trading → Configure agent → Start Training
+- PPO/SAC/QRDQN: 5-10 min (100k steps)
+- RecurrentPPO: 15-20 min (300k steps for LSTM)
 - Run Backtest → Compare strategies and metrics
 
 **Live Trading:**
@@ -131,9 +133,10 @@ python src/main.py
 ┌──────────────────────────┐  ┌──────────────────────────────┐
 │   Analysis Engine        │  │   RL Engine                  │
 │   • Ollama AI            │  │   • Trading Environments     │
-│   • LSTM Ensemble        │  │   • PPO/A2C/DQN Agents       │
-│   • Technical Indicators │  │   • Backtest Engine          │
-│   • Chart Generation     │  │   • Baseline Strategies      │
+│   • LSTM Ensemble        │  │   • PPO/RecurrentPPO/SAC/    │
+│   • Technical Indicators │  │     QRDQN Agents             │
+│   • Chart Generation     │  │   • Backtest Engine          │
+│                          │  │   • Baseline Strategies      │
 └──────────────────────────┘  └──────────────────────────────┘
               │                          │
               └──────────┬───────────────┘
@@ -149,7 +152,7 @@ python src/main.py
 **Technology Stack:**
 - **AI**: Ollama (gemma3:latest) with regex fallback
 - **ML**: TensorFlow LSTM ensemble models (3 models per symbol)
-- **RL**: Stable-Baselines3 (PPO, A2C, DQN), Gymnasium environments
+- **RL**: Stable-Baselines3 (PPO, SAC) + sb3-contrib (RecurrentPPO, QRDQN), Gymnasium environments
 - **Data**: Yahoo Finance API with intelligent caching
 - **UI**: Panel + Plotly interactive visualizations, light theme
 - **Design**: Wide horizontal layouts, minimal scrolling
@@ -160,35 +163,39 @@ python src/main.py
 
 ```
 stock_agent_ollama/
-├── src/                # Core application source code
-│   ├── agents/         # AI and query processing (Ollama + hybrid)
-│   ├── rl/             # Reinforcement Learning (training, backtesting, live trading)
-│   │   ├── env_factory.py      # Shared environment configuration
-│   │   ├── model_utils.py      # Shared model loading utilities
-│   │   ├── environments.py     # Trading environments
-│   │   ├── training.py         # Training pipeline
-│   │   ├── backtesting.py      # Backtesting engine
-│   │   ├── live_trading.py     # Live trading engine
-│   │   └── improvements.py     # Action masking, adaptive sizing
-│   ├── tools/          # Data fetching, analysis, prediction (LSTM, indicators, caching)
-│   ├── ui/             # Web interface, design system, pages
-│   │   ├── app.py      # Main application factory and layout
-│   │   ├── design_system.py  # Professional light theme
-│   │   └── pages/      # All page implementations
-│   ├── config.py       # Configuration and environment settings
-│   └── main.py         # Application entry point
-├── data/               # Cached data, logs, trained models, sessions
-│   ├── cache/          # Stock data cache
-│   ├── models/         # LSTM and RL trained models
-│   ├── logs/           # Application logs
-│   └── live_sessions/  # Live trading session state
-├── docs/               # Project documentation
-│   ├── QUICK_START.md  # User guide and workflows
-│   ├── UX.md           # Interface design documentation
-│   ├── RL_DESIGN.md    # RL system architecture
-│   └── LIVE_TRADE.md   # Live trading design
-├── requirements.txt    # Python dependencies
-└── README.md           # This file
+├── src/                    # Core application
+│   ├── agents/            # AI query processing
+│   ├── rl/                # Reinforcement Learning
+│   │   ├── env_factory.py
+│   │   ├── model_utils.py
+│   │   ├── sac_discrete_wrapper.py
+│   │   ├── environments.py
+│   │   ├── training.py
+│   │   ├── backtesting.py
+│   │   ├── live_trading.py
+│   │   └── improvements.py
+│   ├── tools/             # Data and analysis
+│   │   ├── stock_fetcher.py
+│   │   ├── technical_analysis.py
+│   │   └── lstm/          # LSTM models
+│   ├── ui/                # Web interface
+│   │   ├── app.py
+│   │   └── pages/
+│   ├── config.py
+│   └── main.py
+│
+├── data/                  # Data storage
+│   ├── cache/            # Stock data
+│   ├── models/           # Trained models
+│   ├── logs/             # Application logs
+│   └── live_sessions/    # Trading sessions
+│
+├── docs/                  # Documentation
+│   ├── QUICK_START.md
+│   ├── RL_DESIGN.md
+│   └── LIVE_TRADE.md
+│
+└── requirements.txt       # Dependencies
 ```
 
 ---
@@ -268,7 +275,7 @@ curl http://localhost:11434/api/tags
 | Ollama unavailable | Platform works with fallback mode (regex-based) |
 | Port 5006 in use | Set `PANEL_PORT=5007` |
 | Memory issues | Need 8GB+ RAM for RL training |
-| RL training slow | Use recommended 200k steps (10-20 min) or reduce to 100k for testing |
+| RL training slow | PPO/SAC/QRDQN: 100k steps. RecurrentPPO: 300k steps (LSTM needs more) |
 | LSTM models empty | Run analysis once - auto-trains model (5-10 min) |
 | RL shows "Run backtest →" | Normal - performance calculated during backtesting |
 
@@ -285,26 +292,30 @@ curl http://localhost:11434/api/tags
 - Auto-training on first analysis request
 
 ### RL Trading Agents
-- **PPO**: Proximal Policy Optimization (stable, reliable, LSTM policy optional)
-- **A2C**: Advantage Actor-Critic (fastest training, excellent for bull markets)
-- **DQN**: Deep Q-Network (most consistent, adapts to market conditions)
-- **LSTM PPO (RecurrentPPO)**: LSTM-based PPO with trend indicators (best for downtrends)
+- **PPO**: Proximal Policy Optimization (stable, reliable baseline)
+- **RecurrentPPO**: LSTM-based PPO with trend indicators (best for downtrends)
   - Uses 13 features (10 base + 3 trend indicators)
   - SMA_Trend, EMA_Crossover, Price_Momentum indicators
   - Enhanced reward configuration optimized for trend-following
   - Automatic backwards compatibility with older models
+- **SAC**: Soft Actor-Critic with continuous action space
+  - DiscreteToBoxWrapper converts continuous outputs to 6 discrete actions
+  - Maximum entropy framework encourages exploration
+- **QRDQN**: Quantile Regression DQN (distributional RL for risk-aware decisions)
+  - Off-policy learning with experience replay
+  - Learns value distribution instead of expected value
 - **Action Masking**: Prevents invalid trades (e.g., selling with no position)
 - **6-Action Space**: HOLD (default), BUY_SMALL, BUY_MEDIUM, BUY_LARGE, SELL_PARTIAL, SELL_ALL
 - **Adaptive Sizing**: Trade sizes adjust based on market volatility and portfolio state
-- **Algorithm-Specific Rewards**: Optimized configs for DQN, PPO/A2C, and LSTM PPO
+- **Algorithm-Specific Rewards**: Optimized configs per algorithm
 - **Environment Factory**: Single source of truth for configuration (env_factory.py)
 - **Config Loading**: Live trading matches exact training environment
 - **Backwards Compatibility**: Conditional trend indicators support both old (10-feature) and new (13-feature) models
 - Realistic environment with transaction costs and slippage
 
 ### Backtesting System
-- Automatically loads all available trained models (PPO, A2C, DQN, LSTM PPO)
-- Detects and loads correct model type (RecurrentPPO for LSTM models)
+- Automatically loads all available trained models (PPO, RecurrentPPO, SAC, QRDQN)
+- Detects and loads correct model type via model_utils
 - Matches environment configuration to model training settings
 - Compares all agents against Buy & Hold and Momentum baselines
 - Comprehensive metrics: Returns, Sharpe, Sortino, Calmar ratios
@@ -354,19 +365,20 @@ This platform is designed for learning and research purposes:
 
 ## 🔧 Key Technical Features
 
-### LSTM PPO Enhancements
-- **Trend-Following Indicators**: 3 additional features (SMA_Trend, EMA_Crossover, Price_Momentum) for LSTM PPO
+### RecurrentPPO Enhancements
+- **Trend-Following Indicators**: 3 additional features (SMA_Trend, EMA_Crossover, Price_Momentum) for RecurrentPPO
 - **Enhanced Reward Configuration**: Optimized `EnhancedLSTMPPORewardConfig` with reduced penalties and momentum bonuses
 - **Hold Winner Bonus**: Rewards holding profitable positions during uptrends
 - **Momentum Trend Bonus**: Additional reward for staying long during strong uptrends
-- **Observation Space**: 13 features for LSTM PPO (10 base + 3 trend), 10 features for other algorithms
+- **Observation Space**: 13 features for RecurrentPPO (10 base + 3 trend), 10 features for other algorithms
 - **Model Compatibility**: Backwards compatible with older 10-feature models
 
 ### Architecture Enhancements
 - **Environment Factory Pattern**: Centralized configuration in `env_factory.py` ensures consistency across training, backtesting, and live trading
-- **Model Utilities**: Automatic model type detection (PPO, A2C, DQN, RecurrentPPO) and environment config loading
+- **Model Utilities**: Automatic model type detection (PPO, RecurrentPPO, SAC, QRDQN) and environment config loading
+- **SAC Wrapper**: DiscreteToBoxWrapper in `sac_discrete_wrapper.py` converts continuous actions to discrete for SAC
 - **Single Source of Truth**: All default parameters defined once in `EnvConfig` dataclass
-- **Conditional Features**: Trend indicators automatically enabled for LSTM PPO, disabled for other algorithms
+- **Conditional Features**: Trend indicators automatically enabled for RecurrentPPO, disabled for other algorithms
 
 ### Critical Bug Fixes
 - **Short-Selling Prevention**: Fixed `AdaptiveActionSizer` bug that allowed unintentional short positions
