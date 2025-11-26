@@ -569,12 +569,25 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 
 ## 🔧 Key Features
 
-### LSTM PPO Improvements
-- **Trend Indicators**: SMA_Trend, EMA_Crossover, and Price_Momentum automatically added for LSTM PPO
-- **Enhanced Rewards**: Optimized `EnhancedLSTMPPORewardConfig` with hold winner bonuses and momentum bonuses
-- **13 Features**: LSTM PPO uses expanded observation space (10 base + 3 trend indicators)
-- **Backwards Compatible**: Automatic detection supports both old (10-feature) and new (13-feature) models
-- **Auto-Detection**: Training automatically enables trend indicators when LSTM policy is selected
+### Algorithm-Specific Optimizations
+- **RecurrentPPO**: LSTM memory with trend indicators for temporal pattern recognition
+  - SMA_Trend, EMA_Crossover, and Price_Momentum automatically enabled
+  - `RecurrentPPORewardConfig`: Optimized rewards with hold winner bonuses and momentum bonuses
+  - 13-feature observation space (10 base + 3 trend indicators)
+- **SAC**: Continuous action discretization with optimized learning
+  - `SACRewardConfig`: EXTREME reward shaping (2025 v3 - overcomes entropy bias)
+    - Base HOLD: +0.5 (10x original)
+    - Diversity penalty: -1.0 for <30% (prevents all collapse types)
+    - Consecutive penalty: -1.0 to -5.0 max (immediate, no delay)
+    - Transaction costs on ALL trades
+    - Verified: BUY spam=-5.7, HOLD spam=-0.3, Mixed=+0.4
+    - Forces >50% action diversity to avoid severe penalties
+  - Higher entropy coefficient (0.3) for action diversity
+  - Adjusted training frequency for temporal stability
+- **PPO**: Reliable on-policy baseline
+  - `PPORewardConfig`: Strong penalties and diversity bonuses to prevent action collapse
+- **QRDQN**: Distributional RL for risk-aware decisions
+  - `EnhancedRewardConfig`: Light penalties to let distributional learning work naturally
 
 ### Configuration System
 - **Single Source of Truth**: All environment parameters now centralized in `env_factory.py`

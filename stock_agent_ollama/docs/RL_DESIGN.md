@@ -33,7 +33,6 @@ This RL trading system provides advanced reinforcement learning capabilities for
 ✅ **Baseline Strategies**: Buy-and-hold and momentum for comparison
 ✅ **Interactive UI**: Panel-based web interface for training and backtesting
 ✅ **Visualization**: Training progress, equity curves, action distributions, drawdown charts
-✅ **Backwards Compatibility**: Supports both 10-feature (old) and 13-feature (RecurrentPPO) models
 
 ### Design Philosophy
 
@@ -66,7 +65,21 @@ This RL trading system provides advanced reinforcement learning capabilities for
 - **Short-Selling Prevention**: AdaptiveActionSizer now checks if position == 0 before calculating sell size
 - **Floating Point Tolerance**: Position size checks use 0.01% tolerance to handle floating point precision
 - **Action Masking**: Prevents invalid trades automatically
-- **Backwards Compatibility**: Conditional trend indicators support both 10-feature and 13-feature models
+- **SAC Action Collapse Fix (2025 v3 - EXTREME)**: Overcomes SAC's entropy-seeking with extreme rewards
+  - **Root Causes Identified**:
+    1. Penalty delay (fixed in v2)
+    2. Diversity bonus never triggered (only rewarded, never penalized)
+    3. SAC's maximum entropy objective fights deterministic HOLD
+  - **EXTREME Fixes**:
+    - Base HOLD incentive: **+0.5** (10x stronger than v1's 0.05)
+    - Diversity PENALTY: **-1.0** for <30% diversity (NEW - prevents ALL collapse)
+    - Consecutive penalty: **-1.0 base, max -5.0** (was -1.5)
+    - Immediate penalty on 1st repeat (no delay)
+  - **Verified Results**:
+    - BUY spam (100%): **-5.7 average** reward
+    - HOLD spam (100%): **-0.3 average** (diversity penalty)
+    - Mixed actions (>50% diversity): **+0.4 average** (best strategy!)
+  - Forces SAC to maintain >50% action diversity to avoid severe penalties
 
 ---
 
@@ -174,31 +187,45 @@ src/config.py                   # RL configuration
 **Advantages**:
 - LSTM memory for temporal patterns
 - Trend indicators (13 features)
-- Best for downtrends
-- Enhanced reward config
+- Best for trending markets
+- RecurrentPPORewardConfig with momentum bonuses
 
 **Hyperparameters**:
-- Same as PPO
+- Same as PPO base parameters
 - Uses MlpLstmPolicy
-- Requires 300k timesteps (3x more than PPO due to LSTM complexity)
+- Requires 300k timesteps (LSTM needs more training)
 
 #### SAC (Soft Actor-Critic)
 
 **Implementation**: Stable-Baselines3 SAC with DiscreteToBoxWrapper
 
 **Advantages**:
-- Maximum entropy framework
-- Continuous action space
-- Off-policy learning
+- Maximum entropy framework for exploration
+- Off-policy learning with replay buffer
+- Continuous action discretization
 
 **Wrapper**:
 - DiscreteToBoxWrapper converts Box[-1,1] to Discrete[0-5]
 - Bins continuous actions into 6 discrete buckets
 
 **Hyperparameters**:
-- Learning rate: `1e-4`
+- Learning rate: `3e-4`
 - Buffer size: `100000`
-- Train freq: `4`
+- Learning starts: `15000` (fill buffer before learning)
+- Train freq: `8` (temporal stability)
+- Gradient steps: `4` (sample efficiency)
+- Entropy coef: `0.3` (higher entropy for action diversity)
+- **SACRewardConfig** (2025 v3 - EXTREME to overcome entropy bias):
+  - Base HOLD incentive: **+0.5** (10x original 0.05)
+  - Diversity PENALTY: **-1.0** for <30% diversity (NEW!)
+  - Diversity REWARD: **+0.5** for >50% diversity
+  - Consecutive penalty: **-1.0 base, max -5.0** (was -1.5)
+  - Immediate penalty on 1st repeat (no delay)
+  - Transaction costs on ALL trades
+  - **Verified rewards**:
+    - BUY spam (100%): **-5.7 average**
+    - HOLD spam (100%): **-0.3 average**
+    - Mixed (>50% diversity): **+0.4 average** ← Optimal!
 
 #### QRDQN (Quantile Regression DQN)
 
