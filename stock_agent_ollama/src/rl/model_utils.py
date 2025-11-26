@@ -17,8 +17,8 @@ def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
     """
     Load RL agent with automatic type detection.
 
-    This function automatically detects the agent type (PPO, RecurrentPPO, SAC, QRDQN)
-    by reading the training config. It supports all 4 algorithms.
+    This function automatically detects the agent type (PPO, RecurrentPPO, A2C, SAC, QRDQN)
+    by reading the training config. It supports all 5 algorithms.
 
     Args:
         model_path: Path to model file (best_model.zip or final_model.zip)
@@ -31,7 +31,7 @@ def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
         FileNotFoundError: If model file not found
         ValueError: If model cannot be loaded with any supported agent type
     """
-    from stable_baselines3 import PPO, SAC
+    from stable_baselines3 import PPO, SAC, A2C
     from sb3_contrib import RecurrentPPO, QRDQN
 
     model_path = Path(model_path)
@@ -72,6 +72,16 @@ def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
             logger.error(f"Failed to load RecurrentPPO: {e}")
             raise
 
+    elif agent_type == 'a2c':
+        try:
+            agent = A2C.load(str(model_path), env=env)
+            agent.is_trained = True
+            logger.info(f"Successfully loaded A2C from {model_path}")
+            return agent
+        except Exception as e:
+            logger.error(f"Failed to load A2C: {e}")
+            raise
+
     elif agent_type == 'sac':
         try:
             # SAC uses continuous action space, need to wrap environment
@@ -102,6 +112,7 @@ def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
         for agent_name, agent_class in [
             ('PPO', PPO),
             ('RecurrentPPO', RecurrentPPO),
+            ('A2C', A2C),
             ('SAC', SAC),
             ('QRDQN', QRDQN)
         ]:

@@ -345,6 +345,36 @@ class RecurrentPPORewardConfig(PPORewardConfig):
     transaction_cost_rate: float = 0.001  # Further reduced
 
 
+@dataclass
+class A2CRewardConfig(EnhancedRewardConfig):
+    """
+    Reward configuration optimized for A2C (Advantage Actor-Critic).
+
+    A2C is a synchronous, on-policy algorithm that:
+    - Natively supports discrete actions (no continuous→discrete conversion)
+    - Uses advantage estimation for stable learning
+    - Faster training than PPO with similar stability
+    - Less prone to action collapse than PPO due to simpler architecture
+
+    This config uses moderate penalties - stronger than base (QRDQN) but lighter than PPO:
+    - A2C doesn't need extreme penalties to prevent collapse
+    - Natural discrete action support allows balanced exploration
+    - Entropy bonus (not objective) provides gentler exploration
+    """
+    # Moderate penalties (between base and PPO)
+    risk_penalty_weight: float = 0.15      # Between base (0.01) and PPO (0.3)
+    drawdown_penalty_weight: float = 0.25  # Between base (0.05) and PPO (0.5)
+
+    # Moderate transaction costs
+    transaction_cost_rate: float = 0.001   # Between base (0.0005) and PPO (0.002)
+
+    # Action diversity bonus (lighter than PPO since A2C less prone to collapse)
+    action_diversity_bonus: float = 0.5    # Half of PPO (1.0)
+
+    # Moderate trading penalty
+    excessive_trading_penalty: float = -0.15  # Between base (-0.1) and PPO (implicit via costs)
+
+
 class EnhancedRewardFunction:
     """
     Advanced reward function with:

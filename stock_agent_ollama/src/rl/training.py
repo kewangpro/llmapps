@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, Any
 import logging
 import json
-from stable_baselines3 import PPO, SAC
+from stable_baselines3 import PPO, SAC, A2C
 from stable_baselines3.common.callbacks import BaseCallback
 from sb3_contrib import RecurrentPPO, QRDQN
 
@@ -27,6 +27,7 @@ from .improvements import (
     PPORewardConfig,
     SACRewardConfig,
     RecurrentPPORewardConfig,
+    A2CRewardConfig,
     CurriculumManager,
     TrainingDiagnostics
 )
@@ -193,6 +194,7 @@ class EnhancedRLTrainer:
         # - QRDQN: EnhancedRewardConfig (lighter penalties)
         # - PPO: PPORewardConfig (stronger penalties to fight action collapse)
         # - RecurrentPPO: RecurrentPPORewardConfig (reduced penalties for trend riding)
+        # - A2C: A2CRewardConfig (moderate penalties, native discrete support)
         if config.reward_config is None or isinstance(config.reward_config, EnhancedRewardConfig):
             if config.agent_type.lower() == 'recurrent_ppo':
                 logger.info(f"Using RecurrentPPORewardConfig for RecurrentPPO (HOLD incentive + momentum bonus)")
@@ -200,6 +202,9 @@ class EnhancedRLTrainer:
             elif config.agent_type.lower() == 'ppo':
                 logger.info(f"Using PPORewardConfig for PPO")
                 self.config.reward_config = PPORewardConfig()
+            elif config.agent_type.lower() == 'a2c':
+                logger.info(f"Using A2CRewardConfig for A2C (moderate penalties, native discrete actions)")
+                self.config.reward_config = A2CRewardConfig()
             elif config.agent_type.lower() == 'sac':
                 logger.info(f"Using SACRewardConfig for SAC (moderate penalties, HOLD incentive, higher tx costs)")
                 self.config.reward_config = SACRewardConfig()
@@ -283,6 +288,9 @@ class EnhancedRLTrainer:
         elif agent_type_lower == 'recurrent_ppo':
             agent_class = RecurrentPPO
             policy_type = 'MlpLstmPolicy'
+        elif agent_type_lower == 'a2c':
+            agent_class = A2C
+            policy_type = 'MlpPolicy'
         elif agent_type_lower == 'sac':
             # SAC requires continuous action space
             # We'll use a wrapper to discretize continuous actions
@@ -297,7 +305,7 @@ class EnhancedRLTrainer:
             agent_class = QRDQN
             policy_type = 'MlpPolicy'
         else:
-            raise ValueError(f"Unsupported agent type: {self.config.agent_type}. Available: ppo, recurrent_ppo, sac, qrdqn")
+            raise ValueError(f"Unsupported agent type: {self.config.agent_type}. Available: ppo, recurrent_ppo, a2c, sac, qrdqn")
 
         # Algorithm-specific parameters
         if agent_type_lower == 'ppo':
@@ -313,6 +321,23 @@ class EnhancedRLTrainer:
                 'batch_size': self.config.batch_size,
                 'n_epochs': self.config.n_epochs,
                 'ent_coef': self.config.ent_coef,
+            })
+        elif agent_type_lower == 'a2c':
+            # A2C-specific parameters optimized for stock trading
+            # A2C is synchronous actor-critic with advantage estimation
+            # - Faster training than PPO (simpler updates)
+            # - Native discrete action support (no wrapper needed)
+            # - n_steps=5 for quick updates (A2C standard)
+            # - ent_coef=0.01 for balanced exploration
+            agent_params.update({
+                'n_steps': 5,                    # Shorter rollout for faster updates (A2C standard)
+                'ent_coef': 0.01,                # Small entropy bonus for exploration
+                'vf_coef': 0.5,                  # Value function coefficient
+                'max_grad_norm': 0.5,            # Gradient clipping
+                'rms_prop_eps': 1e-5,            # RMSprop epsilon
+                'use_rms_prop': True,            # Use RMSprop optimizer (A2C standard)
+                'gae_lambda': 1.0,               # GAE lambda
+                'normalize_advantage': False,    # Don't normalize advantages
             })
         elif agent_type_lower == 'sac':
             # SAC-specific parameters optimized for stock trading
