@@ -18,7 +18,7 @@ This RL trading system provides advanced reinforcement learning capabilities for
 
 ### Key Features
 
-✅ **RL Agents**: PPO, RecurrentPPO, SAC, and QRDQN via Stable-Baselines3 and sb3-contrib
+✅ **RL Agents**: PPO, RecurrentPPO, A2C, SAC, and QRDQN via Stable-Baselines3 and sb3-contrib
 ✅ **RecurrentPPO**: LSTM-based policy with trend indicators for temporal pattern recognition
 ✅ **Trend Indicators**: SMA_Trend, EMA_Crossover, Price_Momentum (RecurrentPPO only)
 ✅ **Action Masking**: Prevents invalid trades (e.g., selling with no position)
@@ -195,7 +195,38 @@ src/config.py                   # RL configuration
 - Uses MlpLstmPolicy
 - Requires 300k timesteps (LSTM needs more training)
 
-#### SAC (Soft Actor-Critic)
+#### A2C (Advantage Actor-Critic)
+
+**Implementation**: Stable-Baselines3 A2C
+
+**Advantages**:
+- Native discrete action support (no wrapper needed)
+- Faster training than PPO (synchronous updates)
+- Simpler architecture less prone to action collapse
+- Advantage estimation for stable learning
+- RMSprop optimizer with entropy bonus
+
+**Recommended Use Case**:
+- **Replacement for SAC** for discrete action trading
+- Good balance between speed and stability
+- Less hyperparameter tuning than PPO
+
+**Hyperparameters**:
+- Learning rate: `3e-4`
+- n_steps: `5` (short rollout for fast updates)
+- Entropy coefficient: `0.01` (balanced exploration)
+- vf_coef: `0.5` (value function weight)
+- max_grad_norm: `0.5` (gradient clipping)
+- RMSprop optimizer with eps=1e-5
+
+**A2CRewardConfig**:
+- Moderate penalties (between base QRDQN and PPO)
+- risk_penalty_weight: `0.15` (vs PPO's 0.3)
+- drawdown_penalty_weight: `0.25` (vs PPO's 0.5)
+- transaction_cost_rate: `0.001` (balanced)
+- action_diversity_bonus: `0.5` (vs PPO's 1.0)
+
+#### SAC (Soft Actor-Critic) - NOT RECOMMENDED
 
 **Implementation**: Stable-Baselines3 SAC with DiscreteToBoxWrapper
 
@@ -291,7 +322,7 @@ config = EnhancedTrainingConfig(
     symbol="AAPL",
     start_date="2021-01-01",
     end_date="2024-01-01",
-    agent_type="qrdqn",  # or "ppo", "recurrent_ppo", "sac"
+    agent_type="a2c",  # or "ppo", "recurrent_ppo", "sac", "qrdqn"
     total_timesteps=100000
 )
 
@@ -367,7 +398,7 @@ Then update `src/rl/model_utils.py` for loading.
 This RL trading system provides a complete framework for training, evaluating, and deploying RL agents for algorithmic trading. Key strengths include modular architecture, realistic simulation, comprehensive metrics, and user-friendly interface.
 
 **Next Steps**:
-1. Train your first agent (PPO, RecurrentPPO, SAC, or QRDQN)
+1. Train your first agent (PPO, RecurrentPPO, A2C recommended, SAC not recommended, or QRDQN)
 2. Backtest and compare strategies
 3. Extend with custom reward functions
 4. Deploy to live paper trading
