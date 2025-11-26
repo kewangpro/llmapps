@@ -18,21 +18,21 @@ This RL trading system provides advanced reinforcement learning capabilities for
 
 ### Key Features
 
-✅ **RL Agents**: PPO, RecurrentPPO, A2C, SAC, and QRDQN via Stable-Baselines3 and sb3-contrib
-✅ **RecurrentPPO**: LSTM-based policy with trend indicators for temporal pattern recognition
+✅ **RL Agents**: PPO, RecurrentPPO, QRDQN via Stable-Baselines3 and sb3-contrib
+✅ **RecurrentPPO**: LSTM memory with trend indicators for temporal patterns
 ✅ **Trend Indicators**: SMA_Trend, EMA_Crossover, Price_Momentum (RecurrentPPO only)
-✅ **Action Masking**: Prevents invalid trades (e.g., selling with no position)
-✅ **6-Action Space**: HOLD (default), BUY_SMALL/MEDIUM/LARGE, SELL_PARTIAL/ALL
-✅ **Adaptive Position Sizing**: Trade sizes adjust based on volatility and portfolio state
-✅ **Algorithm-Specific Rewards**: Optimized configs per algorithm
-✅ **Enhanced Rewards**: Multi-component rewards with risk penalties, hold bonuses, momentum bonuses
-✅ **Trading Environment**: Gymnasium-based single-stock trading simulation
-✅ **Backtesting**: Comprehensive performance evaluation with 15+ metrics
-✅ **Action Analysis**: Visualize trading decisions with action distribution charts
-✅ **Auto-Load Models**: Automatically loads trained models with correct type detection
-✅ **Baseline Strategies**: Buy-and-hold and momentum for comparison
-✅ **Interactive UI**: Panel-based web interface for training and backtesting
-✅ **Visualization**: Training progress, equity curves, action distributions, drawdown charts
+✅ **Action Masking**: Prevents invalid trades
+✅ **6-Action Space**: HOLD, BUY_SMALL/MEDIUM/LARGE, SELL_PARTIAL/ALL
+✅ **Adaptive Position Sizing**: Adjusts to volatility and portfolio state
+✅ **Algorithm-Specific Rewards**: Optimized per algorithm
+✅ **Enhanced Rewards**: Multi-component with risk penalties, bonuses
+✅ **Trading Environment**: Gymnasium-based simulation
+✅ **Backtesting**: Comprehensive metrics and evaluation
+✅ **Action Analysis**: Distribution visualization
+✅ **Auto-Load Models**: Automatic type detection
+✅ **Baseline Strategies**: Buy & Hold and Momentum
+✅ **Interactive UI**: Panel-based training and backtesting
+✅ **Visualization**: Progress, equity curves, actions, drawdowns
 
 ### Design Philosophy
 
@@ -62,24 +62,9 @@ This RL trading system provides advanced reinforcement learning capabilities for
 - Transparent wrapping with `__getattr__` forwarding
 
 **Critical Bug Fixes:**
-- **Short-Selling Prevention**: AdaptiveActionSizer now checks if position == 0 before calculating sell size
-- **Floating Point Tolerance**: Position size checks use 0.01% tolerance to handle floating point precision
+- **Short-Selling Prevention**: Checks position before sell calculations
+- **Floating Point Tolerance**: 0.01% tolerance for precision
 - **Action Masking**: Prevents invalid trades automatically
-- **SAC Action Collapse Fix (2025 v3 - EXTREME)**: Overcomes SAC's entropy-seeking with extreme rewards
-  - **Root Causes Identified**:
-    1. Penalty delay (fixed in v2)
-    2. Diversity bonus never triggered (only rewarded, never penalized)
-    3. SAC's maximum entropy objective fights deterministic HOLD
-  - **EXTREME Fixes**:
-    - Base HOLD incentive: **+0.5** (10x stronger than v1's 0.05)
-    - Diversity PENALTY: **-1.0** for <30% diversity (NEW - prevents ALL collapse)
-    - Consecutive penalty: **-1.0 base, max -5.0** (was -1.5)
-    - Immediate penalty on 1st repeat (no delay)
-  - **Verified Results**:
-    - BUY spam (100%): **-5.7 average** reward
-    - HOLD spam (100%): **-0.3 average** (diversity penalty)
-    - Mixed actions (>50% diversity): **+0.4 average** (best strategy!)
-  - Forces SAC to maintain >50% action diversity to avoid severe penalties
 
 ---
 
@@ -169,10 +154,10 @@ src/config.py                   # RL configuration
 
 **Implementation**: Stable-Baselines3 PPO
 
-**Advantages**:
+**Strengths**:
 - Stable training with clipped objective
-- Sample efficient
-- Good baseline performance
+- Reliable baseline performance
+- Strong penalties prevent action collapse
 
 **Hyperparameters**:
 - Learning rate: `3e-4`
@@ -180,98 +165,41 @@ src/config.py                   # RL configuration
 - n_steps: `2048`
 - n_epochs: `10`
 
+**Reward Config**: `PPORewardConfig` with strong penalties and diversity bonuses
+
 #### RecurrentPPO
 
 **Implementation**: sb3-contrib RecurrentPPO
 
-**Advantages**:
+**Strengths**:
 - LSTM memory for temporal patterns
-- Trend indicators (13 features)
+- Trend indicators (13 features vs 10 base)
 - Best for trending markets
-- RecurrentPPORewardConfig with momentum bonuses
+- Momentum bonuses
 
 **Hyperparameters**:
-- Same as PPO base parameters
+- Same as PPO
 - Uses MlpLstmPolicy
-- Requires 300k timesteps (LSTM needs more training)
+- Requires 300k timesteps
 
-#### A2C (Advantage Actor-Critic)
-
-**Implementation**: Stable-Baselines3 A2C
-
-**Advantages**:
-- Native discrete action support (no wrapper needed)
-- Faster training than PPO (synchronous updates)
-- Simpler architecture less prone to action collapse
-- Advantage estimation for stable learning
-- RMSprop optimizer with entropy bonus
-
-**Recommended Use Case**:
-- **Replacement for SAC** for discrete action trading
-- Good balance between speed and stability
-- Less hyperparameter tuning than PPO
-
-**Hyperparameters**:
-- Learning rate: `3e-4`
-- n_steps: `5` (short rollout for fast updates)
-- Entropy coefficient: `0.01` (balanced exploration)
-- vf_coef: `0.5` (value function weight)
-- max_grad_norm: `0.5` (gradient clipping)
-- RMSprop optimizer with eps=1e-5
-
-**A2CRewardConfig**:
-- Moderate penalties (between base QRDQN and PPO)
-- risk_penalty_weight: `0.15` (vs PPO's 0.3)
-- drawdown_penalty_weight: `0.25` (vs PPO's 0.5)
-- transaction_cost_rate: `0.001` (balanced)
-- action_diversity_bonus: `0.5` (vs PPO's 1.0)
-
-#### SAC (Soft Actor-Critic) - NOT RECOMMENDED
-
-**Implementation**: Stable-Baselines3 SAC with DiscreteToBoxWrapper
-
-**Advantages**:
-- Maximum entropy framework for exploration
-- Off-policy learning with replay buffer
-- Continuous action discretization
-
-**Wrapper**:
-- DiscreteToBoxWrapper converts Box[-1,1] to Discrete[0-5]
-- Bins continuous actions into 6 discrete buckets
-
-**Hyperparameters**:
-- Learning rate: `3e-4`
-- Buffer size: `100000`
-- Learning starts: `15000` (fill buffer before learning)
-- Train freq: `8` (temporal stability)
-- Gradient steps: `4` (sample efficiency)
-- Entropy coef: `0.3` (higher entropy for action diversity)
-- **SACRewardConfig** (2025 v3 - EXTREME to overcome entropy bias):
-  - Base HOLD incentive: **+0.5** (10x original 0.05)
-  - Diversity PENALTY: **-1.0** for <30% diversity (NEW!)
-  - Diversity REWARD: **+0.5** for >50% diversity
-  - Consecutive penalty: **-1.0 base, max -5.0** (was -1.5)
-  - Immediate penalty on 1st repeat (no delay)
-  - Transaction costs on ALL trades
-  - **Verified rewards**:
-    - BUY spam (100%): **-5.7 average**
-    - HOLD spam (100%): **-0.3 average**
-    - Mixed (>50% diversity): **+0.4 average** ← Optimal!
+**Reward Config**: `RecurrentPPORewardConfig` with momentum bonuses and hold winner rewards
 
 #### QRDQN (Quantile Regression DQN)
 
 **Implementation**: sb3-contrib QRDQN
 
-**Advantages**:
-- Distributional RL
-- Risk-aware decisions
-- Off-policy learning
+**Strengths**:
+- Distributional RL learns value distribution
+- Risk-aware decision making
+- Off-policy learning with replay
 
 **Hyperparameters**:
 - Learning rate: `1e-4`
 - Buffer size: `100000`
 - Train freq: `4`
 - Exploration: 0.3 fraction
+
+**Reward Config**: `QRDQNRewardConfig` with risk-encouraging rewards to counter natural conservatism
 
 ---
 

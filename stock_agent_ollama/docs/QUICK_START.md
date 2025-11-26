@@ -106,54 +106,53 @@ The platform features a professional light-theme interface with 6 main pages:
 
 ## 🤖 RL Trading
 
-### Training an Agent (5-10 minutes)
+### Training an Agent
 
 1. Click **Trading** tab
 2. **Configure Agent**:
-   - **Symbol**: Enter or select symbol (e.g., AAPL, MSFT, GOOGL, AMZN, TSLA, META, NVDA, or any valid ticker)
-   - **Algorithm**: Choose PPO (stable baseline), RecurrentPPO (LSTM memory), SAC (exploration), or QRDQN (risk-aware)
-   - **Training Period**: 1095 days (3 years, proven optimal)
-   - **Training Steps**: 300,000 (recommended for all algorithms)
-   - **Learning Rate**: Auto-set based on algorithm
+   - **Symbol**: Enter any valid ticker (e.g., AAPL, TSLA, NVDA)
+   - **Algorithm**: PPO (stable), RecurrentPPO (LSTM memory), or QRDQN (risk-aware)
+   - **Training Period**: 1095 days (3 years recommended)
+   - **Training Steps**: 300,000 (recommended)
+   - **Learning Rate**: Auto-set per algorithm
    - **Initial Balance**: $100,000
 3. Click **"🚀 Start Training"**
-4. Monitor progress bar and real-time chart
+4. Monitor progress bar and chart
 5. Review training results when complete
 
 **Training Results:**
-- Summary card with agent details, episodes, and training time
-- Training diagnostics: Invalid action rate, mean episode reward, portfolio return
-- Training metrics: Win rate, final/best episode reward, explained variance
-- Training progress chart showing reward improvement over episodes
-- Action distribution pie chart showing how agent used each action
-- Model automatically saved to `data/models/rl/ppo_SYMBOL_timestamp/`
-  - `best_model.zip`: Peak performance model (used for backtesting)
-  - `final_model.zip`: End-of-training model
+- Summary with agent details, episodes, training time
+- Diagnostics: Invalid action rate, episode reward, portfolio return
+- Metrics: Win rate, episode rewards, explained variance
+- Progress chart showing reward improvement
+- Action distribution pie chart
+- Auto-saved to `data/models/rl/ALGO_SYMBOL_timestamp/`
+  - `best_model.zip`: Peak performance (used for backtesting)
+  - `final_model.zip`: End-of-training
 
 **Always Enabled:**
-- Action Masking: Prevents invalid trades (e.g., selling with no shares)
-- 6-Action Space: HOLD, BUY_SMALL, BUY_MEDIUM, BUY_LARGE, SELL_PARTIAL, SELL_ALL
+- Action Masking: Prevents invalid trades
+- 6-Action Space: HOLD, BUY_SMALL/MEDIUM/LARGE, SELL_PARTIAL/ALL
 
 ### Running Backtests
 
 1. **Trading** tab
-2. Select stock symbol from dropdown
+2. Select stock symbol
 3. Click **"📊 Run Backtest"**
 4. Wait ~30 seconds
-5. Review comprehensive results
+5. Review results
 
 **Automatic Model Loading:**
-- Backtesting automatically finds and loads ALL available trained models for the selected symbol
-- Compares PPO, RecurrentPPO, SAC, and QRDQN agents (if trained)
-- No need to select algorithm - all models are included
+- Automatically finds all trained models for selected symbol
+- Compares PPO, RecurrentPPO, QRDQN (if trained)
+- All models included automatically
 
 **Backtest Results:**
-- **Performance Table**: All RL Agents vs Buy & Hold vs Momentum
-  - Compares PPO, RecurrentPPO, SAC, QRDQN (if trained)
+- **Performance Table**: All RL agents vs Buy & Hold vs Momentum
   - Metrics: Total Return %, Sharpe Ratio, Max Drawdown, Win Rate
-  - Action distribution (HOLD, BUY_SMALL, BUY_MEDIUM, BUY_LARGE, SELL_PARTIAL, SELL_ALL)
+  - Action distribution across all 6 actions
 - **Charts**:
-  - Clean portfolio value comparison (all strategies)
+  - Portfolio value comparison
   - Action distribution visualization
   - Key metrics bar chart
 
@@ -168,11 +167,11 @@ The live trading session is **persistent**. You can stop the application and res
 **Starting a New Session:**
 1. Click **Live Trade** tab
 2. **Configure Settings**:
-   - **Symbol**: Enter or select stock (e.g., AAPL, MSFT, GOOGL, or any valid ticker)
-   - **Algorithm**: Choose PPO, RecurrentPPO, SAC, or QRDQN (auto-loads trained model)
+   - **Symbol**: Enter any valid ticker (e.g., AAPL, TSLA, NVDA)
+   - **Algorithm**: PPO, RecurrentPPO, or QRDQN (auto-loads trained model)
    - **Initial Capital**: Starting balance ($100,000 default)
-   - **Max Position %**: Maximum position as % of portfolio (80% default)
-   - **Stop Loss**: Automatic stop-loss percentage (5% default)
+   - **Max Position %**: Maximum position (80% default)
+   - **Stop Loss**: Auto stop-loss percentage (5% default)
 3. Click **"Create & Start Session"**
 4. Monitor real-time updates
 
@@ -226,11 +225,10 @@ The live trading session is **persistent**. You can stop the application and res
 
 **Tab 2: RL Agents**
 - Header: "RL Trading Agents / Reinforcement learning models"
-- Lists all trained PPO, RecurrentPPO, SAC, and QRDQN agents
+- Lists all trained PPO, RecurrentPPO, and QRDQN agents
 - Shows algorithm type, symbol, training date
-- RecurrentPPO models clearly identified by algorithm type
 - Performance column shows "Run backtest →" hint
-  - Performance data calculated when you run backtests
+  - Performance calculated when you run backtests
   - Not stored with models
 - Click "Load" to use in backtesting (if enabled)
 
@@ -278,19 +276,18 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 - ✅ Force retrain checkbox updates models with latest data
 
 ### RL Trading
-- ✅ **4 Algorithms**: PPO, RecurrentPPO, SAC, QRDQN via Stable-Baselines3
-- ✅ **RecurrentPPO** uses LSTM memory with trend indicators for temporal patterns
-- ✅ **QRDQN** recommended for risk-aware decisions (distributional RL)
-- ✅ **SAC** good for exploration with maximum entropy framework
-- ✅ **PPO** stable baseline for general-purpose trading
-- ✅ **Action Masking** always enabled - prevents invalid trades automatically
-- ✅ **6-Action Space** provides fine-grained control over position sizing
-- ✅ **Algorithm-Specific Rewards** - Each algorithm uses optimized reward configs
-- ✅ **1095 days** (3 years) proven optimal for diverse market conditions
-- ✅ **300,000 steps** recommended for all algorithms (15-35 min training)
-- ✅ **Backtesting** automatically loads all trained models for comparison
-- ✅ Training runs in background - UI stays responsive
-- ✅ Models saved automatically with best model selection
+- ✅ **3 Algorithms**: PPO, RecurrentPPO, QRDQN
+- ✅ **RecurrentPPO** uses LSTM memory with trend indicators
+- ✅ **QRDQN** for risk-aware decisions (distributional RL)
+- ✅ **PPO** stable baseline for general trading
+- ✅ **Action Masking** prevents invalid trades
+- ✅ **6-Action Space** fine-grained position sizing
+- ✅ **Algorithm-Specific Rewards** optimized per algorithm
+- ✅ **1095 days** (3 years) optimal for diverse conditions
+- ✅ **300,000 steps** recommended (15-35 min training)
+- ✅ **Backtesting** auto-loads all models
+- ✅ Training runs in background
+- ✅ Auto-saves best model
 
 ### Performance
 - ⚡ Real-time data with 5-second refresh
@@ -324,12 +321,12 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 ```
 1. Click Trading tab
 2. Select symbol: NVDA
-3. Choose algorithm: PPO, RecurrentPPO, SAC, or QRDQN
+3. Choose algorithm: PPO, RecurrentPPO, or QRDQN
 4. Set training period: 1095 days (3 years)
-5. Set timesteps: 300,000 (recommended for all algorithms)
+5. Set timesteps: 300,000 (recommended)
 6. Click "🚀 Start Training"
 7. Monitor progress
-8. Review training results and charts
+8. Review results
 ```
 
 ### Workflow 4: Backtest Strategy (30 seconds)
@@ -343,15 +340,15 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 7. Analyze action distribution across all strategies
 ```
 
-### Workflow 5: Live Trading Session (Real-time)
+### Workflow 5: Live Trading Session
 ```
 1. Click Live Trade tab
 2. Select symbol: AAPL
-3. Choose algorithm: QRDQN, PPO, RecurrentPPO, or SAC
+3. Choose algorithm: PPO, RecurrentPPO, or QRDQN
 4. Set initial capital: $100,000
 5. Click "Create & Start Session"
-6. Monitor portfolio, positions, trades in real-time
-7. Click "Stop" button when done
+6. Monitor portfolio, positions, trades
+7. Click "Stop" when done
 ```
 
 ### Workflow 6: Model Management (5 seconds)
@@ -421,30 +418,24 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 
 ### Algorithm Selection Guide
 
-**QRDQN (Quantile Regression DQN)**
-- Distributional RL for risk-aware decisions
-- Learns value distribution instead of expected value
-- Off-policy learning with experience replay
-- Good for: Risk-conscious trading strategies
-
-**RecurrentPPO**
-- LSTM memory for temporal pattern recognition
-- Uses trend indicators (SMA_Trend, EMA_Crossover, Price_Momentum)
-- Enhanced reward config for trend-following
-- Good for: Markets with temporal dependencies
-
-**SAC (Soft Actor-Critic)**
-- Maximum entropy framework for exploration
-- DiscreteToBoxWrapper converts continuous actions to discrete
-- Off-policy with replay buffer
-- Good for: Exploration and fine-grained control
-
 **PPO (Proximal Policy Optimization)**
 - Stable on-policy baseline
 - Clipped objective for training stability
 - Good for: General-purpose trading
 
-**Recommendation**: Train all 4 algorithms and compare via backtesting
+**RecurrentPPO**
+- LSTM memory for temporal patterns
+- Trend indicators (SMA_Trend, EMA_Crossover, Price_Momentum)
+- Enhanced reward for trend-following
+- Good for: Markets with temporal dependencies
+
+**QRDQN (Quantile Regression DQN)**
+- Distributional RL for risk-awareness
+- Learns value distribution vs expected value
+- Off-policy learning with replay
+- Good for: Risk-conscious strategies
+
+**Recommendation**: Train all 3 algorithms and compare via backtesting
 
 ---
 
@@ -496,8 +487,7 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 **Expected Training Times (300k steps):**
 - PPO: ~15-20 minutes (efficient on-policy)
 - RecurrentPPO: ~25-35 minutes (LSTM requires more compute)
-- SAC: ~15-20 minutes (off-policy with replay buffer)
-- QRDQN: ~15-20 minutes (off-policy DQN variant)
+- QRDQN: ~15-20 minutes (off-policy DQN)
 
 ### "Module not found" Error
 **Fix:**
@@ -570,42 +560,32 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 ## 🔧 Key Features
 
 ### Algorithm-Specific Optimizations
-- **RecurrentPPO**: LSTM memory with trend indicators for temporal pattern recognition
-  - SMA_Trend, EMA_Crossover, and Price_Momentum automatically enabled
-  - `RecurrentPPORewardConfig`: Optimized rewards with hold winner bonuses and momentum bonuses
-  - 13-feature observation space (10 base + 3 trend indicators)
-- **SAC**: Continuous action discretization with optimized learning
-  - `SACRewardConfig`: EXTREME reward shaping (2025 v3 - overcomes entropy bias)
-    - Base HOLD: +0.5 (10x original)
-    - Diversity penalty: -1.0 for <30% (prevents all collapse types)
-    - Consecutive penalty: -1.0 to -5.0 max (immediate, no delay)
-    - Transaction costs on ALL trades
-    - Verified: BUY spam=-5.7, HOLD spam=-0.3, Mixed=+0.4
-    - Forces >50% action diversity to avoid severe penalties
-  - Higher entropy coefficient (0.3) for action diversity
-  - Adjusted training frequency for temporal stability
-- **PPO**: Reliable on-policy baseline
-  - `PPORewardConfig`: Strong penalties and diversity bonuses to prevent action collapse
-- **QRDQN**: Distributional RL for risk-aware decisions
-  - `EnhancedRewardConfig`: Light penalties to let distributional learning work naturally
+- **RecurrentPPO**: LSTM memory with trend indicators
+  - SMA_Trend, EMA_Crossover, Price_Momentum auto-enabled
+  - `RecurrentPPORewardConfig`: Hold winner and momentum bonuses
+  - 13-feature observation (10 base + 3 trend)
+- **PPO**: Stable on-policy baseline
+  - `PPORewardConfig`: Strong penalties prevent action collapse
+- **QRDQN**: Distributional RL for risk-awareness
+  - `QRDQNRewardConfig`: Risk-encouraging to counter conservatism
 
 ### Configuration System
-- **Single Source of Truth**: All environment parameters now centralized in `env_factory.py`
-- **Consistent Defaults**: Training, backtesting, and live trading share identical default values
-- **No Train-Test Mismatch**: Live trading automatically loads exact training configuration from saved models
-- **Conditional Features**: Trend indicators enabled only for LSTM PPO, maintaining compatibility
+- **Single Source of Truth**: Centralized in `env_factory.py`
+- **Consistent Defaults**: Shared across training/backtesting/live trading
+- **No Train-Test Mismatch**: Auto-loads exact training config
+- **Conditional Features**: Trend indicators for RecurrentPPO only
 
 ### Bug Fixes
-- **Short-Selling Prevention**: Fixed bug where agents could accidentally short-sell stocks
-- **Symbol Input**: Now accepts any valid ticker symbol, not restricted to predefined list
-- **Position Limits**: Corrected default max position from 40% to 80% across all systems
-- **Floating Point Precision**: Added tolerance to prevent valid orders from being rejected
+- **Short-Selling Prevention**: Fixed accidental short positions
+- **Symbol Input**: Accepts any valid ticker
+- **Position Limits**: Consistent 80% across systems
+- **Floating Point Precision**: Tolerance prevents rejection
 
 ### Live Trading Enhancements
-- **Multi-Session Support**: Run multiple trading sessions simultaneously
-- **Session Persistence**: Sessions auto-save and resume across app restarts
-- **Improved UI**: Wider model name column, better session management
-- **Config Loading**: Matches training environment exactly including trend indicators for LSTM models
+- **Multi-Session Support**: Run multiple strategies
+- **Session Persistence**: Auto-save and resume
+- **Improved UI**: Better session management
+- **Config Loading**: Matches training environment exactly
 
 ---
 
