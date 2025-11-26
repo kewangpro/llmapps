@@ -8,7 +8,7 @@ Usage:
 Options:
     --symbol SYMBOL         Stock symbol to train on (required)
     --algorithms ALG1,ALG2  Comma-separated list of algorithms to train
-                           (options: ppo, recurrent_ppo, a2c, qrdqn)
+                           (options: ppo, recurrent_ppo, a2c, sac, qrdqn)
                            (default: all)
     --timesteps N          Training timesteps (default: 300000)
     --skip-training        Skip training, only run backtest
@@ -18,8 +18,8 @@ Example:
     # Retrain all algorithms on TSLA
     python retrain_and_compare.py --symbol TSLA
 
-    # Retrain only A2C and QRDQN on AAPL
-    python retrain_and_compare.py --symbol AAPL --algorithms a2c,qrdqn
+    # Retrain only A2C, SAC and QRDQN on AAPL
+    python retrain_and_compare.py --symbol AAPL --algorithms a2c,sac,qrdqn
 
     # Only backtest existing models for NVDA
     python retrain_and_compare.py --symbol NVDA --skip-training
