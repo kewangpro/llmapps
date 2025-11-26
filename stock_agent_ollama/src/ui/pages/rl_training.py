@@ -181,9 +181,10 @@ class RLTrainingPanel(param.Parameterized):
 
                 # Use default reward config
                 # EnhancedRLTrainer will automatically select:
-                # - EnhancedRewardConfig for QRDQN/SAC (light penalties)
+                # - EnhancedRewardConfig for QRDQN (light penalties)
+                # - SACRewardConfig for SAC (moderate penalties + HOLD incentive)
                 # - PPORewardConfig for PPO (strong penalties to fight action collapse)
-                # - EnhancedLSTMPPORewardConfig for RecurrentPPO (trend-following)
+                # - RecurrentPPORewardConfig for RecurrentPPO (trend-following)
                 reward_config = None  # Let trainer auto-select based on agent_type
 
                 # Convert UI agent type to training format
@@ -499,7 +500,6 @@ class RLTrainingPanel(param.Parameterized):
 
                             # Determine include_trend_indicators
                             # RecurrentPPO ALWAYS uses trend indicators (13 features)
-                            # Override config if agent is RecurrentPPO (for backwards compatibility)
                             include_trend = training_config.get('include_trend_indicators', False)
                             if agent_type == 'recurrent_ppo':
                                 include_trend = True
