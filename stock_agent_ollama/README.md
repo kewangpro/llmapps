@@ -32,7 +32,7 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 *Stock analysis with interactive charts, technical indicators, and AI-powered insights*
 
 ### 🤖 Reinforcement Learning Trading
-- **Train RL Agents** using PPO, RecurrentPPO, SAC, and QRDQN with action masking
+- **Train RL Agents** using PPO, RecurrentPPO, A2C, SAC, and QRDQN with action masking
 - **6-Action Trading Space** (HOLD, BUY_SMALL, BUY_MEDIUM, BUY_LARGE, SELL_PARTIAL, SELL_ALL)
 - **RecurrentPPO** with LSTM memory for temporal pattern recognition in trending markets
 - **Trend Indicators** for RecurrentPPO (SMA_Trend, EMA_Crossover, Price_Momentum)
@@ -299,9 +299,15 @@ curl http://localhost:11434/api/tags
   - SMA_Trend, EMA_Crossover, Price_Momentum indicators
   - Enhanced reward configuration optimized for trend-following
   - Automatic backwards compatibility with older models
-- **SAC**: Soft Actor-Critic with continuous action space
+- **A2C**: Advantage Actor-Critic (recommended SAC replacement)
+  - Native discrete action support (no continuous→discrete conversion)
+  - Faster training than PPO with similar stability
+  - Less prone to action collapse due to simpler architecture
+  - Synchronous updates with advantage estimation
+- **SAC**: Soft Actor-Critic with continuous action space (NOT recommended - see A2C)
   - DiscreteToBoxWrapper converts continuous outputs to 6 discrete actions
   - Maximum entropy framework encourages exploration
+  - Known issue: Collapses to single action due to deterministic testing
 - **QRDQN**: Quantile Regression DQN (distributional RL for risk-aware decisions)
   - Off-policy learning with experience replay
   - Learns value distribution instead of expected value
@@ -314,7 +320,7 @@ curl http://localhost:11434/api/tags
 - Realistic environment with transaction costs and slippage
 
 ### Backtesting System
-- Automatically loads all available trained models (PPO, RecurrentPPO, SAC, QRDQN)
+- Automatically loads all available trained models (PPO, RecurrentPPO, A2C, SAC, QRDQN)
 - Detects and loads correct model type via model_utils
 - Matches environment configuration to model training settings
 - Compares all agents against Buy & Hold and Momentum baselines
@@ -371,7 +377,15 @@ This platform is designed for learning and research purposes:
   - Hold Winner Bonus: Rewards holding profitable positions during uptrends
   - Momentum Trend Bonus: Additional reward for staying long during strong uptrends
   - 13-feature observation space (10 base + 3 trend indicators)
-- **SAC**: Optimized for off-policy learning with continuous action discretization
+- **PPO**: Baseline on-policy algorithm
+  - `PPORewardConfig`: Strong penalties and diversity bonuses to prevent action collapse
+- **A2C**: Synchronous actor-critic (recommended SAC replacement)
+  - `A2CRewardConfig`: Moderate penalties between base (QRDQN) and PPO
+  - Native discrete action support (no wrapper needed)
+  - Faster training than PPO (n_steps=5 vs PPO's 2048)
+  - RMSprop optimizer with entropy bonus (ent_coef=0.01)
+  - Less prone to action collapse than PPO or SAC
+- **SAC**: Optimized for off-policy learning with continuous action discretization (NOT recommended)
   - `SACRewardConfig`: EXTREME reward shaping to overcome entropy-seeking (2025 v3)
     - **Base HOLD incentive**: +0.5 (was 0.05) - 10x stronger!
     - **Diversity PENALTY**: -1.0 for <30% diversity (prevents ALL collapse types)
@@ -381,14 +395,13 @@ This platform is designed for learning and research purposes:
     - **Result**: BUY spam = -5.7, HOLD spam = -0.3, Mixed = +0.4 (forces diversity!)
   - Higher entropy coefficient (0.3) for action diversity
   - Adjusted training frequency for temporal stability
-- **PPO**: Baseline on-policy algorithm
-  - `PPORewardConfig`: Strong penalties and diversity bonuses to prevent action collapse
+  - **Known Issue**: Still collapses to 100% BUY_MEDIUM despite extreme fixes
 - **QRDQN**: Distributional RL for risk-aware decisions
   - `EnhancedRewardConfig`: Light penalties to let distributional learning work naturally
 
 ### Architecture Enhancements
 - **Environment Factory Pattern**: Centralized configuration in `env_factory.py` ensures consistency across training, backtesting, and live trading
-- **Model Utilities**: Automatic model type detection (PPO, RecurrentPPO, SAC, QRDQN) and environment config loading
+- **Model Utilities**: Automatic model type detection (PPO, RecurrentPPO, A2C, SAC, QRDQN) and environment config loading
 - **SAC Wrapper**: DiscreteToBoxWrapper in `sac_discrete_wrapper.py` converts continuous actions to discrete for SAC
 - **Single Source of Truth**: All default parameters defined once in `EnvConfig` dataclass
 - **Conditional Features**: Trend indicators automatically enabled for RecurrentPPO, disabled for other algorithms
