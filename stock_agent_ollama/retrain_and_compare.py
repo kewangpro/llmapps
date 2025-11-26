@@ -29,6 +29,7 @@ import sys
 import argparse
 from pathlib import Path
 from datetime import datetime, timedelta
+from collections import Counter
 import logging
 
 # Add src to path
@@ -238,7 +239,11 @@ def display_results(results: dict):
     data = []
     for strategy, result in results.items():
         metrics = result.metrics
-        actions = result.action_counts
+
+        # Calculate action counts from actions list
+        action_names = ['HOLD', 'BUY_SMALL', 'BUY_MEDIUM', 'BUY_LARGE', 'SELL_PARTIAL', 'SELL_ALL']
+        action_counts = Counter(result.actions)
+        actions = {action_names[i]: action_counts.get(i, 0) for i in range(6)}
 
         # Calculate action percentages
         total_actions = sum(actions.values())
@@ -251,7 +256,7 @@ def display_results(results: dict):
             'Strategy': strategy,
             'Return': f"{metrics.total_return_pct:+.2f}%",
             'Sharpe': f"{metrics.sharpe_ratio:.2f}",
-            'Max DD': f"{metrics.max_drawdown_pct:.2f}%",
+            'Max DD': f"{metrics.max_drawdown * 100:.2f}%",
             'Win Rate': f"{metrics.win_rate:.0f}%",
             'HOLD': f"{action_pcts.get('HOLD', 0):.0f}%",
             'BUY_S': f"{action_pcts.get('BUY_SMALL', 0):.0f}%",
@@ -298,11 +303,12 @@ def analyze_results(results: dict):
     print(f"\n📊 Action Distribution Analysis:")
     for strategy, result in results.items():
         if "Agent" in strategy:
-            actions = result.action_counts
-            total = sum(actions.values())
+            # Calculate action counts from actions list
+            action_counts = Counter(result.actions)
+            total = len(result.actions)
 
             if total > 0:
-                max_action = max(actions.values())
+                max_action = max(action_counts.values())
                 max_pct = (max_action / total) * 100
 
                 if max_pct > 80:
