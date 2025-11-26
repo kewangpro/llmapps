@@ -80,8 +80,8 @@ class LiveTradingPage(pn.viewable.Viewer):
         matching_dirs = []
         if agent_type:
             # Convert UI format to file format
-            # UI: 'PPO', 'RecurrentPPO', 'SAC', 'QRDQN'
-            # Files: 'ppo_', 'recurrent_ppo_', 'sac_', 'qrdqn_'
+            # UI: 'PPO', 'RecurrentPPO', 'A2C', 'SAC', 'QRDQN'
+            # Files: 'ppo_', 'recurrent_ppo_', 'a2c_', 'sac_', 'qrdqn_'
             agent_type_lower = agent_type.lower()
             if agent_type_lower == 'recurrentppo':
                 agent_type_lower = 'recurrent_ppo'
@@ -168,11 +168,11 @@ class LiveTradingPage(pn.viewable.Viewer):
         )
 
         self.agent_type = pn.widgets.RadioButtonGroup(
-            options=['PPO', 'RecurrentPPO', 'SAC', 'QRDQN'],
-            value='PPO',
+            options=['PPO', 'RecurrentPPO', 'A2C', 'SAC', 'QRDQN'],
+            value='A2C',
             button_type='primary',
             button_style='outline',
-            width=300,
+            width=350,
             height=40
         )
 
@@ -242,14 +242,12 @@ class LiveTradingPage(pn.viewable.Viewer):
                     pn.pane.HTML("<div style='font-size: 12px; color: #6b7280; margin-bottom: 5px; font-weight: 500;'>Stop Loss (%)</div>"),
                     self.stop_loss_input,
                 ),
-                pn.Column(
-                    self.allow_extended_hours_input,
-                    margin=(20, 10, 0, 10)
-                ),
                 align='end',
                 sizing_mode='stretch_width'
             ),
             pn.Row(
+                self.allow_extended_hours_input,
+                pn.Spacer(width=20),
                 self.create_session_btn,
                 margin=(10, 0, 0, 0)
             ),
