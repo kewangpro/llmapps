@@ -311,7 +311,6 @@ curl http://localhost:11434/api/tags
 - **Algorithm-Specific Rewards**: Optimized configs per algorithm
 - **Environment Factory**: Single source of truth for configuration (env_factory.py)
 - **Config Loading**: Live trading matches exact training environment
-- **Backwards Compatibility**: Conditional trend indicators support both old (10-feature) and new (13-feature) models
 - Realistic environment with transaction costs and slippage
 
 ### Backtesting System
@@ -366,13 +365,26 @@ This platform is designed for learning and research purposes:
 
 ## 🔧 Key Technical Features
 
-### RecurrentPPO Enhancements
-- **Trend-Following Indicators**: 3 additional features (SMA_Trend, EMA_Crossover, Price_Momentum) for RecurrentPPO
-- **Enhanced Reward Configuration**: Optimized `EnhancedLSTMPPORewardConfig` with reduced penalties and momentum bonuses
-- **Hold Winner Bonus**: Rewards holding profitable positions during uptrends
-- **Momentum Trend Bonus**: Additional reward for staying long during strong uptrends
-- **Observation Space**: 13 features for RecurrentPPO (10 base + 3 trend), 10 features for other algorithms
-- **Model Compatibility**: Backwards compatible with older 10-feature models
+### Algorithm-Specific Configurations
+- **RecurrentPPO**: LSTM memory with 3 trend indicators (SMA_Trend, EMA_Crossover, Price_Momentum)
+  - `RecurrentPPORewardConfig`: Reduced penalties and momentum bonuses for trend-following
+  - Hold Winner Bonus: Rewards holding profitable positions during uptrends
+  - Momentum Trend Bonus: Additional reward for staying long during strong uptrends
+  - 13-feature observation space (10 base + 3 trend indicators)
+- **SAC**: Optimized for off-policy learning with continuous action discretization
+  - `SACRewardConfig`: EXTREME reward shaping to overcome entropy-seeking (2025 v3)
+    - **Base HOLD incentive**: +0.5 (was 0.05) - 10x stronger!
+    - **Diversity PENALTY**: -1.0 for <30% diversity (prevents ALL collapse types)
+    - **Consecutive penalty**: -1.0 base, scales to **-5.0 max** (was -1.5)
+    - **Immediate** penalty on 1st repeat (no delay)
+    - Transaction costs on ALL trades (prevents spam)
+    - **Result**: BUY spam = -5.7, HOLD spam = -0.3, Mixed = +0.4 (forces diversity!)
+  - Higher entropy coefficient (0.3) for action diversity
+  - Adjusted training frequency for temporal stability
+- **PPO**: Baseline on-policy algorithm
+  - `PPORewardConfig`: Strong penalties and diversity bonuses to prevent action collapse
+- **QRDQN**: Distributional RL for risk-aware decisions
+  - `EnhancedRewardConfig`: Light penalties to let distributional learning work naturally
 
 ### Architecture Enhancements
 - **Environment Factory Pattern**: Centralized configuration in `env_factory.py` ensures consistency across training, backtesting, and live trading
@@ -386,7 +398,6 @@ This platform is designed for learning and research purposes:
 - **Symbol Input**: Removed restrictions - now accepts any valid ticker symbol
 - **Position Limits**: Corrected inconsistent defaults (now 80% across all systems)
 - **Floating Point Precision**: Added tolerance to position size checks
-- **Backwards Compatibility**: Old models (10 features) work alongside new models (13 features)
 
 ### Live Trading Improvements
 - **Multi-Session Support**: Run multiple trading strategies simultaneously
