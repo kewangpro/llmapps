@@ -422,8 +422,8 @@ class SingleStockTradingEnv(BaseTradingEnv):
         self.data['EMA_12'] = TechnicalAnalysis.calculate_ema(close_prices, 12)
         self.data['EMA_26'] = TechnicalAnalysis.calculate_ema(close_prices, 26)
 
-        # === TREND-FOLLOWING INDICATORS (for LSTM PPO) ===
-        # Only add if include_trend_indicators is True (for backwards compatibility)
+        # === TREND-FOLLOWING INDICATORS (for RecurrentPPO) ===
+        # Only add if include_trend_indicators is True
         if self.include_trend_indicators:
             # 1. SMA trend (slope of 20-period SMA) - indicates trend direction
             sma_20 = self.data['SMA_20']
@@ -492,7 +492,7 @@ class SingleStockTradingEnv(BaseTradingEnv):
         if self.include_technical_indicators:
             num_features += 5  # RSI, MACD, MACD_Signal, Bollinger, Stochastic
 
-            # Add trend indicators only if enabled (for backwards compatibility)
+            # Add trend indicators only if enabled (RecurrentPPO only)
             if self.include_trend_indicators:
                 num_features += 3  # Trend indicators: SMA_Trend, EMA_Crossover, Price_Momentum
 
@@ -715,7 +715,7 @@ class EnhancedTradingEnv(SingleStockTradingEnv):
         max_position_pct: float = 40.0,
         lookback_window: int = 60,
         include_technical_indicators: bool = True,
-        include_trend_indicators: bool = False,  # For LSTM PPO backwards compatibility
+        include_trend_indicators: bool = False,  # RecurrentPPO only
         # Enhancement parameters
         use_action_masking: bool = True,
         use_enhanced_rewards: bool = True,

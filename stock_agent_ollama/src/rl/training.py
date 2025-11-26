@@ -25,8 +25,8 @@ from .environments import EnhancedTradingEnv
 from .improvements import (
     EnhancedRewardConfig,
     PPORewardConfig,
-    LSTMPPORewardConfig,
-    EnhancedLSTMPPORewardConfig,
+    SACRewardConfig,
+    RecurrentPPORewardConfig,
     CurriculumManager,
     TrainingDiagnostics
 )
@@ -89,9 +89,12 @@ class EnhancedTrainingConfig:
     save_freq: int = 10000
 
     # Transaction costs (from EnvConfig)
-    # Light transaction costs for QRDQN/SAC (learns optimal trading frequency)
-    # PPO gets higher costs via PPORewardConfig (0.002)
-    transaction_cost_rate: float = _ENV_DEFAULTS['transaction_cost_rate']  # 0.05% per trade
+    # Algorithm-specific transaction costs via reward configs:
+    # - QRDQN: 0.0005 (0.05%) via EnhancedRewardConfig
+    # - SAC: 0.001 (0.1%) via SACRewardConfig
+    # - PPO: 0.002 (0.2%) via PPORewardConfig
+    # - RecurrentPPO: 0.001 (0.1%) via RecurrentPPORewardConfig
+    transaction_cost_rate: float = _ENV_DEFAULTS['transaction_cost_rate']  # 0.05% per trade (base)
     slippage_rate: float = _ENV_DEFAULTS['slippage_rate']
 
     # Save settings
@@ -186,17 +189,21 @@ class EnhancedRLTrainer:
 
         # Select appropriate reward config based on agent type
         # Algorithm-specific reward configurations:
-        # - QRDQN/SAC: EnhancedRewardConfig (lighter penalties)
+        # - SAC: SACRewardConfig (moderate penalties, HOLD incentive, higher transaction costs)
+        # - QRDQN: EnhancedRewardConfig (lighter penalties)
         # - PPO: PPORewardConfig (stronger penalties to fight action collapse)
-        # - RecurrentPPO: EnhancedLSTMPPORewardConfig (reduced penalties for trend riding)
+        # - RecurrentPPO: RecurrentPPORewardConfig (reduced penalties for trend riding)
         if config.reward_config is None or isinstance(config.reward_config, EnhancedRewardConfig):
             if config.agent_type.lower() == 'recurrent_ppo':
-                logger.info(f"Using EnhancedLSTMPPORewardConfig for RecurrentPPO (HOLD incentive + momentum bonus)")
-                self.config.reward_config = EnhancedLSTMPPORewardConfig()
+                logger.info(f"Using RecurrentPPORewardConfig for RecurrentPPO (HOLD incentive + momentum bonus)")
+                self.config.reward_config = RecurrentPPORewardConfig()
             elif config.agent_type.lower() == 'ppo':
                 logger.info(f"Using PPORewardConfig for PPO")
                 self.config.reward_config = PPORewardConfig()
-            else:  # QRDQN, SAC
+            elif config.agent_type.lower() == 'sac':
+                logger.info(f"Using SACRewardConfig for SAC (moderate penalties, HOLD incentive, higher tx costs)")
+                self.config.reward_config = SACRewardConfig()
+            else:  # QRDQN
                 logger.info(f"Using EnhancedRewardConfig for {config.agent_type.upper()}")
                 if config.reward_config is None:
                     self.config.reward_config = EnhancedRewardConfig()
@@ -309,14 +316,19 @@ class EnhancedRLTrainer:
             })
         elif agent_type_lower == 'sac':
             # SAC-specific parameters optimized for stock trading
+            # Fixed based on investigation of -3.55% return bug:
+            # - learning_starts increased to fill buffer with diverse experiences
+            # - train_freq reduced for temporal stability (stock data has autocorrelation)
+            # - gradient_steps increased for better sample efficiency
+            # - ent_coef increased to 0.3 for action diversity (0.2 caused 94% BUY_MEDIUM collapse)
             agent_params.update({
                 'buffer_size': 100000,           # Large replay buffer
-                'learning_starts': 5000,         # Reduced from 10000 for faster start
+                'learning_starts': 15000,        # Fill buffer before learning (was 5000 - too early)
                 'batch_size': self.config.batch_size,
                 'tau': 0.005,                    # Soft target network update
-                'train_freq': 4,                 # Update every 4 steps (was 1 - 4x faster!)
-                'gradient_steps': 1,
-                'ent_coef': 'auto',             # Automatic entropy tuning
+                'train_freq': 8,                 # Less frequent updates for temporal stability (was 4 - too frequent)
+                'gradient_steps': 4,             # More learning per update (was 1 - insufficient)
+                'ent_coef': 0.3,                # Higher entropy for action diversity (was 0.2 - caused collapse)
             })
         elif agent_type_lower == 'qrdqn':
             # QRDQN-specific parameters (similar to DQN but with distributional RL)

@@ -732,7 +732,7 @@ class LiveTradingEngine:
             max_position_pct=training_config.get('max_position_pct', 80.0),
             lookback_window=training_config.get('lookback_window', 60),
             include_technical_indicators=training_config.get('include_technical_indicators', True),
-            include_trend_indicators=training_config.get('include_trend_indicators', False),  # Backwards compatibility
+            include_trend_indicators=training_config.get('include_trend_indicators', False),
 
             # Load enhancement flags from training config
             use_action_masking=training_config.get('use_action_masking', True),

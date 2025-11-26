@@ -206,11 +206,12 @@ class EnhancedRewardConfig:
     """
     Configuration for enhanced reward function.
 
-    OPTIMIZED FOR QRDQN/SAC - Base reward configuration.
+    OPTIMIZED FOR QRDQN - Base reward configuration.
     Lighter penalties allow exploration and learning from Q-values.
 
     For PPO, use PPORewardConfig instead.
-    For RecurrentPPO, use EnhancedLSTMPPORewardConfig.
+    For SAC, use SACRewardConfig instead.
+    For RecurrentPPO, use RecurrentPPORewardConfig.
     """
     # Base rewards
     return_weight: float = 1.0
@@ -271,40 +272,55 @@ class PPORewardConfig(EnhancedRewardConfig):
 
 
 @dataclass
-class LSTMPPORewardConfig(PPORewardConfig):
+class SACRewardConfig(EnhancedRewardConfig):
     """
-    Reward configuration optimized specifically for LSTM PPO.
+    Reward configuration optimized for SAC (Soft Actor-Critic).
 
-    Fixes for excessive SELL_ALL behavior:
-    - Reduced risk/drawdown penalties to allow trend riding
-    - Added HOLD bonus during winning positions
-    - Reduced transaction costs for SELL actions
-    - Increased profitable trade bonus
+    SAC needs balanced penalties between base and PPO because:
+    - Off-policy learning with replay buffer (more sample efficient)
+    - Automatic entropy tuning can collapse to greedy policy
+    - Continuous→discrete conversion needs position holding incentive
+    - High trading frequency needs stronger transaction costs
+
+    Key fixes for SAC's performance issues (2025 update):
+    - Transaction costs apply to ALL trades (not just action changes) to prevent spam
+    - Base HOLD incentive to encourage exploration of HOLD action
+    - Action diversity bonus to prevent action collapse
+    - Progressive consecutive action penalty (scales up to 5x)
+    - Moderate risk penalties (stronger than base, lighter than PPO)
     """
-    # Lighter penalties to reduce premature exits
-    risk_penalty_weight: float = 0.1  # Reduced from 0.3
-    drawdown_penalty_weight: float = 0.2  # Reduced from 0.5
+    # Moderate transaction costs (between base 0.0005 and PPO 0.002)
+    transaction_cost_rate: float = 0.001  # 0.1% per trade
 
-    # Encourage holding winning positions
-    hold_winning_position_bonus: float = 0.15  # Bonus for HOLD when in profit
+    # Moderate penalties (stronger than base, lighter than PPO)
+    risk_penalty_weight: float = 0.1      # 10x base (0.01), 1/3 of PPO (0.3)
+    drawdown_penalty_weight: float = 0.2  # 4x base (0.05), 0.4x of PPO (0.5)
 
-    # Reduce excessive trading penalty slightly
-    excessive_trading_penalty: float = -0.05  # Reduced from -0.1
+    # HOLD incentive during winning positions (prevent 0% HOLD collapse)
+    hold_winning_position_bonus: float = 0.2
 
-    # Increase reward for profitable trades
-    profitable_trade_bonus: float = 0.3  # Increased from 0.1
+    # NEW: Base HOLD incentive (always reward HOLD to encourage exploration)
+    # EXTREME value needed to overcome SAC's entropy-seeking behavior
+    base_hold_incentive: float = 0.5  # Strong constant bonus for HOLD
 
-    # Reduce transaction costs slightly
-    transaction_cost_rate: float = 0.0015  # Reduced from 0.002
+    # NEW: Action diversity bonus (prevent collapse to single action)
+    # PENALIZES low diversity instead of just rewarding high diversity
+    diversity_bonus: float = 0.5  # Reward for high diversity
+    diversity_penalty: float = -1.0  # NEW: Penalty for low diversity (<30%)
+
+    # Discourage excessive trading (now scales progressively)
+    # EXTREME penalty to prevent any consecutive actions
+    excessive_trading_penalty: float = -1.0  # Base penalty (scales 1x-5x, max -5.0!)
 
 
 @dataclass
-class EnhancedLSTMPPORewardConfig(PPORewardConfig):
+class RecurrentPPORewardConfig(PPORewardConfig):
     """
-    Enhanced reward configuration for LSTM PPO to match Buy & Hold performance.
+    Reward configuration optimized for RecurrentPPO.
 
-    V2 improvements:
-    - Much stronger HOLD incentive during uptrends
+    RecurrentPPO uses LSTM memory with trend indicators for temporal pattern recognition.
+    This config encourages trend-following behavior:
+    - Strong HOLD incentive during uptrends
     - Momentum trend bonus for riding winners
     - Minimal penalties to avoid premature exits
     - Encourages fuller position sizing
@@ -360,6 +376,7 @@ class EnhancedRewardFunction:
         self.consecutive_same_actions = 0
         self.prev_action = None
         self.step_count = 0
+        self.recent_actions = []  # For action diversity tracking
 
     def reset(self):
         """Reset internal state."""
@@ -371,6 +388,7 @@ class EnhancedRewardFunction:
         self.consecutive_same_actions = 0
         self.prev_action = None
         self.step_count = 0
+        self.recent_actions = []  # Reset action diversity tracking
 
     def calculate(
         self,
@@ -441,10 +459,20 @@ class EnhancedRewardFunction:
         # === 2. ACTION SEQUENCE SHAPING ===
         if self.config.use_action_shaping:
             # Penalize excessive trading (same action repeatedly)
-            if action == self.prev_action and action != 0:  # Not HOLD
+            # FIX 2.0: Start penalty IMMEDIATELY on first repeat (not 2nd!)
+            is_trading_action = action != (ImprovedTradingAction.HOLD if self.use_improved_actions
+                                          else TradingAction.HOLD)
+
+            if action == self.prev_action and is_trading_action:
                 self.consecutive_same_actions += 1
-                if self.consecutive_same_actions > 3:
-                    reward += self.config.excessive_trading_penalty
+
+                # Progressive penalty: START AT FIRST REPEAT
+                if self.consecutive_same_actions >= 1:  # Changed from >= 2
+                    # Scale penalty: 1x, 2x, 3x, 4x, 5x (cap at 5x)
+                    penalty_multiplier = min(self.consecutive_same_actions, 5)  # Removed -1
+                    progressive_penalty = self.config.excessive_trading_penalty * penalty_multiplier
+                    reward += progressive_penalty  # excessive_trading_penalty is negative
+                    logger.debug(f"Consecutive action penalty ({self.consecutive_same_actions}x): {progressive_penalty:.4f}")
             else:
                 self.consecutive_same_actions = 0
 
@@ -466,12 +494,24 @@ class EnhancedRewardFunction:
                     reward -= 0.1 * (self.config.min_hold_steps - steps_held) / self.config.min_hold_steps
 
         # === 3. TRANSACTION COSTS ===
-        if action != prev_action and action != 0:  # Action changed and not HOLD
-            transaction_value = price * max(position, 100)  # Estimate
+        # FIX: Apply costs to ALL trades (buy or sell), not just when action changes
+        # This prevents SAC from spamming BUY_MEDIUM repeatedly with zero cost
+        if self.use_improved_actions:
+            is_buy = action in [1, 2, 3]  # BUY_SMALL, BUY_MEDIUM, BUY_LARGE
+            is_sell = action in [4, 5]    # SELL_PARTIAL, SELL_ALL
+        else:
+            is_buy = action in [2, 3]     # BUY_SMALL, BUY_LARGE (old action space)
+            is_sell = action == 0         # SELL (old action space)
+
+        is_trading = is_buy or is_sell
+
+        if is_trading:  # Charge costs for every trade execution
+            transaction_value = price * max(position, 100)  # Estimate trade value
             transaction_cost = transaction_value * self.config.transaction_cost_rate
             slippage = transaction_value * self.config.slippage_rate
             total_cost = (transaction_cost + slippage) / self.prev_portfolio_value
             reward -= total_cost
+            logger.debug(f"Transaction costs applied: -{total_cost:.6f}")
 
         # === 4. RISK PENALTIES ===
         if self.config.use_risk_shaping and len(self.returns_history) >= 2:
@@ -498,14 +538,22 @@ class EnhancedRewardFunction:
         if portfolio_return > 0:
             reward += self.config.profitable_trade_bonus
 
-        # === 7. HOLD WINNER BONUS ===
-        # Encourage holding winning positions (especially for LSTM PPO)
+        # === 7. HOLD INCENTIVES ===
+        # Encourage holding winning positions (especially for RecurrentPPO and SAC)
         if self.config.use_action_shaping and hasattr(self.config, 'hold_winning_position_bonus'):
-            is_hold = (action == ImprovedTradingAction.HOLD if self.use_improved_actions else action == TradingAction.HOLD)
-            # Check if in a winning position (portfolio increasing)
+            is_hold = (action == ImprovedTradingAction.HOLD if self.use_improved_actions
+                      else action == TradingAction.HOLD)
+
+            # HOLD winner bonus: extra reward for holding profitable positions
             if is_hold and position > 0 and portfolio_return > 0:
                 reward += self.config.hold_winning_position_bonus
-                logger.debug(f"HOLD winning position bonus applied: +{self.config.hold_winning_position_bonus}")
+                logger.debug(f"HOLD winning position bonus: +{self.config.hold_winning_position_bonus}")
+
+            # FIX: Base HOLD incentive (always reward HOLD to encourage exploration)
+            # This ensures SAC explores HOLD action even when not in winning position
+            if is_hold and hasattr(self.config, 'base_hold_incentive'):
+                reward += self.config.base_hold_incentive
+                logger.debug(f"Base HOLD incentive: +{self.config.base_hold_incentive}")
 
         # === 8. MOMENTUM TREND BONUS ===
         # Bonus for holding positions during strong upward momentum
@@ -530,6 +578,34 @@ class EnhancedRewardFunction:
             if is_strong_uptrend and is_hold_or_buy:
                 reward += self.config.momentum_trend_bonus
                 logger.debug(f"Momentum trend bonus applied: +{self.config.momentum_trend_bonus}")
+
+        # === 9. ACTION DIVERSITY REWARD/PENALTY ===
+        # FIX v3: PENALIZE low diversity aggressively, reward high diversity
+        if hasattr(self.config, 'diversity_bonus'):
+            # Track recent actions
+            self.recent_actions.append(action)
+            if len(self.recent_actions) > 10:  # Keep last 10 actions
+                self.recent_actions.pop(0)
+
+            # Calculate diversity ratio
+            if len(self.recent_actions) >= 5:
+                unique_actions = len(set(self.recent_actions))
+                diversity_ratio = unique_actions / len(self.recent_actions)
+
+                # AGGRESSIVE: Penalize low diversity (<30%), reward high diversity (>50%)
+                if diversity_ratio < 0.3:
+                    # Severe penalty for action collapse
+                    if hasattr(self.config, 'diversity_penalty'):
+                        diversity_punishment = self.config.diversity_penalty * (1.0 - diversity_ratio)
+                        reward += diversity_punishment  # diversity_penalty is negative
+                        logger.debug(f"LOW diversity penalty: {diversity_punishment:.4f} "
+                                   f"({unique_actions}/{len(self.recent_actions)} = {diversity_ratio:.1%})")
+                elif diversity_ratio > 0.5:
+                    # Reward good diversity
+                    diversity_reward = self.config.diversity_bonus * diversity_ratio
+                    reward += diversity_reward
+                    logger.debug(f"Action diversity reward: +{diversity_reward:.4f} "
+                               f"({unique_actions}/{len(self.recent_actions)} unique actions)")
 
         # Update state
         self.prev_portfolio_value = portfolio_value
