@@ -28,6 +28,7 @@ from .improvements import (
     SACRewardConfig,
     RecurrentPPORewardConfig,
     A2CRewardConfig,
+    QRDQNRewardConfig,
     CurriculumManager,
     TrainingDiagnostics
 )
@@ -191,10 +192,10 @@ class EnhancedRLTrainer:
         # Select appropriate reward config based on agent type
         # Algorithm-specific reward configurations:
         # - SAC: SACRewardConfig (moderate penalties, HOLD incentive, higher transaction costs)
-        # - QRDQN: EnhancedRewardConfig (lighter penalties)
+        # - QRDQN: QRDQNRewardConfig (risk-encouraging to counter natural conservatism)
         # - PPO: PPORewardConfig (stronger penalties to fight action collapse)
         # - RecurrentPPO: RecurrentPPORewardConfig (reduced penalties for trend riding)
-        # - A2C: A2CRewardConfig (moderate penalties, native discrete support)
+        # - A2C: A2CRewardConfig (balanced penalties, native discrete support)
         if config.reward_config is None or isinstance(config.reward_config, EnhancedRewardConfig):
             if config.agent_type.lower() == 'recurrent_ppo':
                 logger.info(f"Using RecurrentPPORewardConfig for RecurrentPPO (HOLD incentive + momentum bonus)")
@@ -203,12 +204,15 @@ class EnhancedRLTrainer:
                 logger.info(f"Using PPORewardConfig for PPO")
                 self.config.reward_config = PPORewardConfig()
             elif config.agent_type.lower() == 'a2c':
-                logger.info(f"Using A2CRewardConfig for A2C (moderate penalties, native discrete actions)")
+                logger.info(f"Using A2CRewardConfig for A2C (balanced penalties, native discrete actions)")
                 self.config.reward_config = A2CRewardConfig()
             elif config.agent_type.lower() == 'sac':
                 logger.info(f"Using SACRewardConfig for SAC (moderate penalties, HOLD incentive, higher tx costs)")
                 self.config.reward_config = SACRewardConfig()
-            else:  # QRDQN
+            elif config.agent_type.lower() == 'qrdqn':
+                logger.info(f"Using QRDQNRewardConfig for QRDQN (risk-encouraging to counter conservatism)")
+                self.config.reward_config = QRDQNRewardConfig()
+            else:  # Unknown agent type
                 logger.info(f"Using EnhancedRewardConfig for {config.agent_type.upper()}")
                 if config.reward_config is None:
                     self.config.reward_config = EnhancedRewardConfig()
@@ -325,19 +329,22 @@ class EnhancedRLTrainer:
         elif agent_type_lower == 'a2c':
             # A2C-specific parameters optimized for stock trading
             # A2C is synchronous actor-critic with advantage estimation
-            # - Faster training than PPO (simpler updates)
             # - Native discrete action support (no wrapper needed)
-            # - n_steps=5 for quick updates (A2C standard)
-            # - ent_coef=0.01 for balanced exploration
+            # - Simpler architecture than PPO (more sensitive to hyperparameters)
+            #
+            # UPDATED (2025 v3 - BALANCED):
+            # v1: n_steps=5 → too short → 100% BUY_MEDIUM collapse
+            # v2: n_steps=256, strong penalties → 100% SELL_PARTIAL collapse
+            # v3: n_steps=512 (closer to PPO's 2048), balanced penalties, higher entropy
             agent_params.update({
-                'n_steps': 5,                    # Shorter rollout for faster updates (A2C standard)
-                'ent_coef': 0.01,                # Small entropy bonus for exploration
+                'n_steps': 512,                  # Longer rollout (closer to PPO, was 256)
+                'ent_coef': 0.02,                # Higher entropy for exploration (was 0.01)
                 'vf_coef': 0.5,                  # Value function coefficient
                 'max_grad_norm': 0.5,            # Gradient clipping
                 'rms_prop_eps': 1e-5,            # RMSprop epsilon
                 'use_rms_prop': True,            # Use RMSprop optimizer (A2C standard)
                 'gae_lambda': 1.0,               # GAE lambda
-                'normalize_advantage': False,    # Don't normalize advantages
+                'normalize_advantage': True,     # Enable normalization (was False)
             })
         elif agent_type_lower == 'sac':
             # SAC-specific parameters optimized for stock trading

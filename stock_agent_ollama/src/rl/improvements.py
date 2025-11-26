@@ -249,6 +249,44 @@ class EnhancedRewardConfig:
 
 
 @dataclass
+class QRDQNRewardConfig(EnhancedRewardConfig):
+    """
+    Reward configuration optimized for QRDQN (Quantile Regression DQN).
+
+    QRDQN is a distributional RL algorithm that:
+    - Learns entire value distribution (not just expected value)
+    - Naturally risk-aware due to variance sensitivity
+    - Tends to prefer low-variance actions (conservative)
+
+    PROBLEM: QRDQN became TOO conservative on TSLA:
+    - Only 1% BUY_LARGE (vs PPO's 36%)
+    - 31% SELL_PARTIAL (selling winners too early)
+    - Result: +2.08% return vs PPO's +34.74%
+
+    SOLUTION: Risk-encouraging rewards to counter natural conservatism:
+    - Zero risk penalties (QRDQN already risk-aware via distribution)
+    - Bonus for aggressive position sizing (BUY_LARGE)
+    - Penalty for excessive selling (holding winners)
+    - Lower transaction costs to encourage trading
+    """
+    # ZERO risk penalties (QRDQN learns risk naturally from distribution)
+    risk_penalty_weight: float = 0.0       # Was 0.01 (no penalty needed)
+    drawdown_penalty_weight: float = 0.0   # Was 0.05 (no penalty needed)
+
+    # Lower transaction costs to encourage trading
+    transaction_cost_rate: float = 0.0003  # Was 0.0005 (reduce by 40%)
+
+    # BONUS for aggressive position sizing (counter conservatism)
+    large_position_bonus: float = 0.2      # NEW: Reward BUY_LARGE actions
+
+    # PENALTY for excessive selling (let winners run)
+    excessive_selling_penalty: float = -0.15  # NEW: Discourage SELL_PARTIAL spam
+
+    # Higher profitable trade bonus
+    profitable_trade_bonus: float = 0.3    # Was 0.1 (3x stronger)
+
+
+@dataclass
 class PPORewardConfig(EnhancedRewardConfig):
     """
     Reward configuration optimized for PPO.
@@ -353,26 +391,28 @@ class A2CRewardConfig(EnhancedRewardConfig):
     A2C is a synchronous, on-policy algorithm that:
     - Natively supports discrete actions (no continuous→discrete conversion)
     - Uses advantage estimation for stable learning
-    - Faster training than PPO with similar stability
-    - Less prone to action collapse than PPO due to simpler architecture
+    - Simpler architecture than PPO (more sensitive to reward tuning)
 
-    This config uses moderate penalties - stronger than base (QRDQN) but lighter than PPO:
-    - A2C doesn't need extreme penalties to prevent collapse
-    - Natural discrete action support allows balanced exploration
-    - Entropy bonus (not objective) provides gentler exploration
+    UPDATED (2025 v3 - BALANCED): Trial and error showed:
+    - v1 (weak penalties): 100% BUY_MEDIUM collapse → +23.18%
+    - v2 (PPO-strength penalties): 100% SELL_PARTIAL collapse → 0% (worse!)
+    - v3 (balanced penalties): Goldilocks zone between weak and strong
+
+    This config uses BALANCED penalties optimized for A2C's simpler architecture:
+    - A2C is more sensitive to penalty strength than PPO
+    - Too weak → action collapse (BUY spam)
+    - Too strong → risk-averse collapse (SELL spam)
+    - Sweet spot: 60-70% of PPO's penalty strength
     """
-    # Moderate penalties (between base and PPO)
-    risk_penalty_weight: float = 0.15      # Between base (0.01) and PPO (0.3)
-    drawdown_penalty_weight: float = 0.25  # Between base (0.05) and PPO (0.5)
+    # BALANCED penalties (60-70% of PPO strength - "Goldilocks zone")
+    risk_penalty_weight: float = 0.2       # 67% of PPO (0.3), stronger than v1 (0.15)
+    drawdown_penalty_weight: float = 0.35  # 70% of PPO (0.5), stronger than v1 (0.25)
 
-    # Moderate transaction costs
-    transaction_cost_rate: float = 0.001   # Between base (0.0005) and PPO (0.002)
+    # Balanced transaction costs
+    transaction_cost_rate: float = 0.0015  # 75% of PPO (0.002), stronger than v1 (0.001)
 
-    # Action diversity bonus (lighter than PPO since A2C less prone to collapse)
-    action_diversity_bonus: float = 0.5    # Half of PPO (1.0)
-
-    # Moderate trading penalty
-    excessive_trading_penalty: float = -0.15  # Between base (-0.1) and PPO (implicit via costs)
+    # Balanced action diversity bonus
+    action_diversity_bonus: float = 0.75   # 75% of PPO (1.0), stronger than v1 (0.5)
 
 
 class EnhancedRewardFunction:
