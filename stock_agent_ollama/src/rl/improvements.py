@@ -331,8 +331,8 @@ class SACRewardConfig(EnhancedRewardConfig):
     transaction_cost_rate: float = 0.001  # 0.1% per trade
 
     # Moderate penalties (stronger than base, lighter than PPO)
-    risk_penalty_weight: float = 0.1      # 10x base (0.01), 1/3 of PPO (0.3)
-    drawdown_penalty_weight: float = 0.2  # 4x base (0.05), 0.4x of PPO (0.5)
+    risk_penalty_weight: float = 0.05      # Reduced from 0.1 to encourage taking risk
+    drawdown_penalty_weight: float = 0.1   # Reduced from 0.2
 
     # HOLD incentive during winning positions (prevent 0% HOLD collapse)
     hold_winning_position_bonus: float = 0.2
@@ -347,8 +347,8 @@ class SACRewardConfig(EnhancedRewardConfig):
     diversity_penalty: float = -1.0  # NEW: Penalty for low diversity (<30%)
 
     # Discourage excessive trading (now scales progressively)
-    # EXTREME penalty to prevent any consecutive actions
-    excessive_trading_penalty: float = -1.0  # Base penalty (scales 1x-5x, max -5.0!)
+    # Reduced from -1.0 since we fixed the action mapping
+    excessive_trading_penalty: float = -0.5  # Base penalty (scales 1x-5x)
 
 
 @dataclass
@@ -393,26 +393,21 @@ class A2CRewardConfig(EnhancedRewardConfig):
     - Uses advantage estimation for stable learning
     - Simpler architecture than PPO (more sensitive to reward tuning)
 
-    UPDATED (2025 v3 - BALANCED): Trial and error showed:
-    - v1 (weak penalties): 100% BUY_MEDIUM collapse → +23.18%
-    - v2 (PPO-strength penalties): 100% SELL_PARTIAL collapse → 0% (worse!)
-    - v3 (balanced penalties): Goldilocks zone between weak and strong
-
-    This config uses BALANCED penalties optimized for A2C's simpler architecture:
-    - A2C is more sensitive to penalty strength than PPO
-    - Too weak → action collapse (BUY spam)
-    - Too strong → risk-averse collapse (SELL spam)
-    - Sweet spot: 60-70% of PPO's penalty strength
+    UPDATED (2025 v4 - AGGRESSIVE):
+    - v3 (Balanced) caused "Sell Panic" (87% SELL) because risk penalties were too high
+      for a bear market. Agent learned to hide in cash.
+    - v4 (Aggressive) reduces risk penalties significantly to force the agent to
+      engage with the market even in downtrends.
     """
-    # BALANCED penalties (60-70% of PPO strength - "Goldilocks zone")
-    risk_penalty_weight: float = 0.2       # 67% of PPO (0.3), stronger than v1 (0.15)
-    drawdown_penalty_weight: float = 0.35  # 70% of PPO (0.5), stronger than v1 (0.25)
+    # REDUCED penalties to stop "Sell Panic" (hide in cash) behavior
+    risk_penalty_weight: float = 0.1       # Reduced from 0.2
+    drawdown_penalty_weight: float = 0.15  # Reduced from 0.35
 
     # Balanced transaction costs
-    transaction_cost_rate: float = 0.0015  # 75% of PPO (0.002), stronger than v1 (0.001)
+    transaction_cost_rate: float = 0.0015  # 75% of PPO (0.002)
 
     # Balanced action diversity bonus
-    action_diversity_bonus: float = 0.75   # 75% of PPO (1.0), stronger than v1 (0.5)
+    action_diversity_bonus: float = 0.5    # Reduced from 0.75 to allow some trend following
 
 
 class EnhancedRewardFunction:
@@ -1007,3 +1002,515 @@ class TrainingDiagnostics:
         for i, pct in enumerate(summary['action_distribution']):
             print(f"  Action {i}: {pct:.2%}")
         print(f"{'='*60}\n")
+
+
+# ============================================================================
+# RISK MANAGEMENT (STOP-LOSS INTEGRATION)
+# ============================================================================
+
+class RiskManager:
+    """
+    Hard-coded risk limits that override agent actions.
+
+    Provides protection against:
+    - Large position losses (stop-loss)
+    - Declining positions (trailing stop)
+    - Portfolio-level drawdowns (circuit breaker)
+
+    CRITICAL for preventing TEAM-like crashes (-32% → capped at -5%)
+    """
+
+    def __init__(
+        self,
+        stop_loss_pct: float = 0.05,      # 5% stop-loss per position
+        trailing_stop_pct: float = 0.03,   # 3% trailing stop from peak
+        max_drawdown_pct: float = 0.15,    # 15% portfolio drawdown limit
+        enable_stops: bool = True
+    ):
+        self.stop_loss_pct = stop_loss_pct
+        self.trailing_stop_pct = trailing_stop_pct
+        self.max_drawdown_pct = max_drawdown_pct
+        self.enable_stops = enable_stops
+
+        # Position tracking
+        self.entry_price = None
+        self.peak_price = None
+
+        # Portfolio tracking
+        self.peak_portfolio_value = None
+        self.initial_portfolio_value = None
+
+        logger.info(f"RiskManager initialized: stop_loss={stop_loss_pct:.1%}, "
+                   f"trailing_stop={trailing_stop_pct:.1%}, max_drawdown={max_drawdown_pct:.1%}")
+
+    def reset(self):
+        """Reset risk manager state."""
+        self.entry_price = None
+        self.peak_price = None
+        self.peak_portfolio_value = None
+        self.initial_portfolio_value = None
+
+    def on_position_entry(self, entry_price: float, portfolio_value: float):
+        """
+        Record entry for stop-loss tracking.
+
+        Args:
+            entry_price: Price at which position was entered
+            portfolio_value: Current portfolio value
+        """
+        self.entry_price = entry_price
+        self.peak_price = entry_price
+
+        if self.initial_portfolio_value is None:
+            self.initial_portfolio_value = portfolio_value
+        if self.peak_portfolio_value is None:
+            self.peak_portfolio_value = portfolio_value
+
+        logger.debug(f"Position entry recorded: price=${entry_price:.2f}")
+
+    def check_stop_loss(
+        self,
+        current_price: float,
+        portfolio_value: float,
+        position: int
+    ) -> Tuple[bool, str]:
+        """
+        Check if any stop-loss condition is triggered.
+
+        Args:
+            current_price: Current stock price
+            portfolio_value: Current portfolio value
+            position: Current position size (shares)
+
+        Returns:
+            (should_exit_position, reason)
+        """
+        if not self.enable_stops:
+            return False, ""
+
+        if position == 0:
+            return False, ""
+
+        # Update peaks
+        if self.peak_price is not None:
+            self.peak_price = max(self.peak_price, current_price)
+        if self.peak_portfolio_value is not None:
+            self.peak_portfolio_value = max(self.peak_portfolio_value, portfolio_value)
+
+        # === 1. Position-Level Stop-Loss ===
+        if self.entry_price is not None and current_price < self.entry_price:
+            loss = (self.entry_price - current_price) / self.entry_price
+            if loss > self.stop_loss_pct:
+                logger.debug(f"STOP-LOSS TRIGGERED: {loss:.1%} loss from entry (${self.entry_price:.2f} → ${current_price:.2f})")
+                return True, f"Stop-loss: {loss:.1%} loss"
+
+        # === 2. Trailing Stop (from peak price) ===
+        if self.peak_price is not None and current_price < self.peak_price:
+            drawdown_from_peak = (self.peak_price - current_price) / self.peak_price
+            if drawdown_from_peak > self.trailing_stop_pct:
+                logger.debug(f"TRAILING STOP TRIGGERED: {drawdown_from_peak:.1%} from peak (${self.peak_price:.2f} → ${current_price:.2f})")
+                return True, f"Trailing stop: {drawdown_from_peak:.1%} from peak ${self.peak_price:.2f}"
+
+        # === 3. Portfolio-Level Circuit Breaker ===
+        if self.peak_portfolio_value is not None and portfolio_value < self.peak_portfolio_value:
+            portfolio_drawdown = (self.peak_portfolio_value - portfolio_value) / self.peak_portfolio_value
+            if portfolio_drawdown > self.max_drawdown_pct:
+                logger.debug(f"PORTFOLIO STOP TRIGGERED: {portfolio_drawdown:.1%} drawdown (${self.peak_portfolio_value:.2f} → ${portfolio_value:.2f})")
+                return True, f"Portfolio stop: {portfolio_drawdown:.1%} drawdown"
+
+        return False, ""
+
+    def on_position_exit(self):
+        """Reset position tracking when exiting."""
+        self.entry_price = None
+        self.peak_price = None
+        logger.debug("Position exit recorded, stop tracking reset")
+
+
+# ============================================================================
+# MARKET REGIME DETECTION
+# ============================================================================
+
+class MarketRegime(IntEnum):
+    """Market regime classification."""
+    BULL = 0      # Strong uptrend (ADX > 25, upward)
+    BEAR = 1      # Strong downtrend (ADX > 25, downward)
+    SIDEWAYS = 2  # Choppy/ranging (ADX < 25)
+    VOLATILE = 3  # High volatility regime
+
+
+class RegimeDetector:
+    """
+    Detects market regime and provides regime-based features.
+
+    Addresses RecurrentPPO's failure in TEAM downtrend (-5.88%).
+    Adds 7 new features to observation space:
+    - 4 regime one-hot features (BULL, BEAR, SIDEWAYS, VOLATILE)
+    - 1 trend strength (ADX)
+    - 1 trend direction (+1/-1)
+    - 1 volatility regime score
+    """
+
+    def __init__(
+        self,
+        adx_period: int = 14,
+        volatility_window: int = 20,
+        high_volatility_threshold: float = 0.03  # 3% daily volatility
+    ):
+        self.adx_period = adx_period
+        self.volatility_window = volatility_window
+        self.high_volatility_threshold = high_volatility_threshold
+
+        self.regime_history = []
+
+    def detect_regime(
+        self,
+        prices: np.ndarray,
+        volumes: Optional[np.ndarray] = None
+    ) -> Tuple[int, Dict[str, np.ndarray]]:
+        """
+        Detect current market regime.
+
+        Args:
+            prices: Historical prices (at least 50 data points recommended)
+            volumes: Historical volumes (optional)
+
+        Returns:
+            (regime_id, regime_features_dict)
+        """
+        if len(prices) < 50:
+            # Not enough data, return neutral regime
+            return MarketRegime.SIDEWAYS, self._get_default_features()
+
+        # Calculate ADX (Average Directional Index) for trend strength
+        adx = self._calculate_adx(prices)
+
+        # Calculate trend direction (20-day vs 50-day SMA)
+        sma_20 = np.mean(prices[-20:])
+        sma_50 = np.mean(prices[-50:])
+        trend_direction = 1.0 if sma_20 > sma_50 else -1.0
+
+        # Calculate volatility regime
+        returns = np.diff(prices[-self.volatility_window:]) / prices[-self.volatility_window:-1]
+        volatility = np.std(returns) if len(returns) > 0 else 0.0
+
+        # Classify regime
+        if volatility > self.high_volatility_threshold:
+            regime = MarketRegime.VOLATILE
+        elif adx > 25 and trend_direction > 0:
+            regime = MarketRegime.BULL
+        elif adx > 25 and trend_direction < 0:
+            regime = MarketRegime.BEAR
+        else:
+            regime = MarketRegime.SIDEWAYS
+
+        # Track regime history
+        self.regime_history.append(regime)
+        if len(self.regime_history) > 100:
+            self.regime_history.pop(0)
+
+        # Build regime features
+        regime_features = {
+            'regime_one_hot': np.eye(4)[regime],  # 4 features
+            'trend_strength': np.array([min(adx / 100.0, 1.0)]),  # 1 feature (normalized)
+            'trend_direction': np.array([trend_direction]),  # 1 feature
+            'volatility_regime': np.array([min(volatility / self.high_volatility_threshold, 1.0)])  # 1 feature
+        }
+
+        logger.debug(f"Regime detected: {MarketRegime(regime).name}, ADX={adx:.1f}, "
+                    f"Trend={trend_direction:.0f}, Vol={volatility:.3f}")
+
+        return regime, regime_features
+
+    def _get_default_features(self) -> Dict[str, np.ndarray]:
+        """Return default features when not enough data."""
+        return {
+            'regime_one_hot': np.array([0, 0, 1, 0]),  # SIDEWAYS
+            'trend_strength': np.array([0.0]),
+            'trend_direction': np.array([0.0]),
+            'volatility_regime': np.array([0.0])
+        }
+
+    def _calculate_adx(self, prices: np.ndarray) -> float:
+        """
+        Calculate Average Directional Index (ADX).
+
+        ADX measures trend strength (0-100):
+        - 0-25: Weak or no trend
+        - 25-50: Strong trend
+        - 50-75: Very strong trend
+        - 75-100: Extremely strong trend
+        """
+        if len(prices) < self.adx_period + 1:
+            return 0.0
+
+        # Calculate True Range components (simplified without high/low data)
+        # Using price changes as proxy
+        high = prices
+        low = prices
+        close = prices
+
+        # True Range
+        tr1 = high[1:] - low[1:]
+        tr2 = np.abs(high[1:] - close[:-1])
+        tr3 = np.abs(low[1:] - close[:-1])
+        tr = np.maximum(tr1, np.maximum(tr2, tr3))
+
+        # Directional Movement
+        up_move = high[1:] - high[:-1]
+        down_move = low[:-1] - low[1:]
+
+        plus_dm = np.where((up_move > down_move) & (up_move > 0), up_move, 0)
+        minus_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0)
+
+        # Smooth with EMA
+        atr = self._ema(tr, self.adx_period)
+        plus_di = 100 * self._ema(plus_dm, self.adx_period) / (atr + 1e-8)
+        minus_di = 100 * self._ema(minus_dm, self.adx_period) / (atr + 1e-8)
+
+        # DX and ADX
+        dx = 100 * np.abs(plus_di - minus_di) / (plus_di + minus_di + 1e-8)
+        adx = self._ema(dx, self.adx_period)
+
+        return float(adx[-1]) if len(adx) > 0 else 0.0
+
+    def _ema(self, data: np.ndarray, period: int) -> np.ndarray:
+        """Calculate Exponential Moving Average."""
+        alpha = 2.0 / (period + 1)
+        ema = np.zeros_like(data)
+        ema[0] = data[0]
+
+        for i in range(1, len(data)):
+            ema[i] = alpha * data[i] + (1 - alpha) * ema[i - 1]
+
+        return ema
+
+
+# ============================================================================
+# MULTI-TIMEFRAME FEATURES
+# ============================================================================
+
+class MultiTimeframeFeatures:
+    """
+    Extracts features from multiple timeframes.
+
+    Adds 6 new features to observation space:
+    - Weekly trend (5-day SMA slope)
+    - Monthly trend (20-day SMA slope)
+    - Support distance (% to weekly low)
+    - Resistance distance (% to weekly high)
+    - Weekly price position (0-1)
+    - Monthly price position (0-1)
+
+    Total observation: 10 base + 3 trend (RecurrentPPO) + 7 regime + 6 MTF = 26 features
+    """
+
+    def __init__(
+        self,
+        weekly_window: int = 5,
+        monthly_window: int = 20
+    ):
+        self.weekly_window = weekly_window
+        self.monthly_window = monthly_window
+
+    def extract_features(
+        self,
+        prices: np.ndarray,
+        volumes: Optional[np.ndarray] = None
+    ) -> np.ndarray:
+        """
+        Extract multi-timeframe features.
+
+        Args:
+            prices: Historical prices
+            volumes: Historical volumes (optional)
+
+        Returns:
+            Array of 6 features
+        """
+        if len(prices) < self.monthly_window:
+            # Not enough data
+            return np.zeros(6)
+
+        current_price = prices[-1]
+
+        # === Weekly Features (5 days) ===
+        weekly_prices = prices[-self.weekly_window:]
+        weekly_sma = np.mean(weekly_prices)
+        weekly_slope = (prices[-1] - prices[-self.weekly_window]) / prices[-self.weekly_window] if len(prices) >= self.weekly_window else 0.0
+        weekly_high = np.max(weekly_prices)
+        weekly_low = np.min(weekly_prices)
+        weekly_range = weekly_high - weekly_low
+        weekly_position = (current_price - weekly_low) / (weekly_range + 1e-8)
+
+        # === Monthly Features (20 days) ===
+        monthly_prices = prices[-self.monthly_window:]
+        monthly_sma = np.mean(monthly_prices)
+        monthly_slope = (prices[-1] - prices[-self.monthly_window]) / prices[-self.monthly_window] if len(prices) >= self.monthly_window else 0.0
+        monthly_high = np.max(monthly_prices)
+        monthly_low = np.min(monthly_prices)
+        monthly_range = monthly_high - monthly_low
+        monthly_position = (current_price - monthly_low) / (monthly_range + 1e-8)
+
+        # === Support/Resistance Distances ===
+        support_dist = (current_price - weekly_low) / (current_price + 1e-8)
+        resistance_dist = (weekly_high - current_price) / (current_price + 1e-8)
+
+        features = np.array([
+            weekly_slope,       # Trend strength (weekly)
+            monthly_slope,      # Trend strength (monthly)
+            support_dist,       # Distance to support (0-1)
+            resistance_dist,    # Distance to resistance (0-1)
+            weekly_position,    # Position in weekly range (0-1)
+            monthly_position    # Position in monthly range (0-1)
+        ])
+
+        # Clip to reasonable ranges
+        features = np.clip(features, -1.0, 1.0)
+
+        return features
+
+
+# ============================================================================
+# KELLY CRITERION POSITION SIZING
+# ============================================================================
+
+class KellyPositionSizer:
+    """
+    Dynamic position sizing based on Kelly Criterion.
+
+    Kelly Fraction = (win_prob * avg_win - loss_prob * avg_loss) / avg_win
+
+    Adjusts BUY action sizes based on recent edge:
+    - Strong edge → Larger positions
+    - Weak edge → Smaller positions
+    - No edge → Minimum positions
+    """
+
+    def __init__(
+        self,
+        max_kelly_fraction: float = 0.5,  # Use half-Kelly for safety
+        min_trades_required: int = 20,     # Need history before using Kelly
+        lookback_window: int = 50          # Recent trades to consider
+    ):
+        self.max_kelly_fraction = max_kelly_fraction
+        self.min_trades_required = min_trades_required
+        self.lookback_window = lookback_window
+
+        # Trade tracking
+        self.trade_results = []  # List of (is_win, pnl_pct) tuples
+
+    def record_trade(self, entry_price: float, exit_price: float, position_size: int):
+        """
+        Record completed trade for Kelly calculation.
+
+        Args:
+            entry_price: Entry price
+            exit_price: Exit price
+            position_size: Number of shares
+        """
+        if position_size == 0:
+            return
+
+        pnl_pct = (exit_price - entry_price) / entry_price
+        is_win = pnl_pct > 0
+
+        self.trade_results.append((is_win, pnl_pct))
+
+        # Keep only recent trades
+        if len(self.trade_results) > self.lookback_window:
+            self.trade_results.pop(0)
+
+        logger.debug(f"Trade recorded: {'WIN' if is_win else 'LOSS'} {pnl_pct:+.2%} "
+                    f"({len(self.trade_results)} trades tracked)")
+
+    def calculate_kelly_fraction(self) -> float:
+        """
+        Calculate Kelly fraction based on recent performance.
+
+        Returns:
+            Kelly fraction (0.0 to max_kelly_fraction)
+        """
+        if len(self.trade_results) < self.min_trades_required:
+            logger.debug(f"Insufficient trades for Kelly ({len(self.trade_results)}/{self.min_trades_required}), using default 0.25")
+            return 0.25  # Default to 25% until enough data
+
+        # Separate wins and losses
+        wins = [pnl for is_win, pnl in self.trade_results if is_win]
+        losses = [pnl for is_win, pnl in self.trade_results if not is_win]
+
+        if len(wins) == 0 or len(losses) == 0:
+            return 0.15  # Conservative if no wins or losses
+
+        # Calculate statistics
+        win_prob = len(wins) / len(self.trade_results)
+        loss_prob = 1 - win_prob
+        avg_win = np.mean(wins)
+        avg_loss = abs(np.mean(losses))
+
+        if avg_win == 0:
+            return 0.1
+
+        # Kelly formula
+        kelly = (win_prob * avg_win - loss_prob * avg_loss) / avg_win
+
+        # Use fractional Kelly for safety (half-Kelly = max_kelly_fraction)
+        safe_kelly = kelly * self.max_kelly_fraction
+
+        # Clip to reasonable range
+        safe_kelly = np.clip(safe_kelly, 0.05, 0.6)
+
+        logger.debug(f"Kelly calculation: win_prob={win_prob:.2f}, avg_win={avg_win:+.2%}, "
+                    f"avg_loss={avg_loss:.2%}, kelly={kelly:.2f}, safe_kelly={safe_kelly:.2f}")
+
+        return float(safe_kelly)
+
+    def adjust_action(
+        self,
+        base_action: int,
+        use_improved_actions: bool = True
+    ) -> int:
+        """
+        Adjust buy action based on Kelly fraction.
+
+        Args:
+            base_action: Agent's original action
+            use_improved_actions: Whether using improved action space
+
+        Returns:
+            Adjusted action
+        """
+        # Only adjust buy actions
+        if use_improved_actions:
+            is_buy = base_action in [
+                ImprovedTradingAction.BUY_SMALL,
+                ImprovedTradingAction.BUY_MEDIUM,
+                ImprovedTradingAction.BUY_LARGE
+            ]
+        else:
+            is_buy = base_action in [TradingAction.BUY_SMALL, TradingAction.BUY_LARGE]
+
+        if not is_buy:
+            return base_action  # Don't adjust HOLD or SELL
+
+        # Calculate Kelly fraction
+        kelly_pct = self.calculate_kelly_fraction()
+
+        # Map Kelly to actions
+        if use_improved_actions:
+            if kelly_pct < 0.2:
+                adjusted_action = ImprovedTradingAction.BUY_SMALL
+            elif kelly_pct < 0.4:
+                adjusted_action = ImprovedTradingAction.BUY_MEDIUM
+            else:
+                adjusted_action = ImprovedTradingAction.BUY_LARGE
+        else:
+            if kelly_pct < 0.25:
+                adjusted_action = TradingAction.BUY_SMALL
+            else:
+                adjusted_action = TradingAction.BUY_LARGE
+
+        if adjusted_action != base_action:
+            logger.debug(f"Kelly adjusted action: {base_action} → {adjusted_action} (kelly={kelly_pct:.2f})")
+
+        return int(adjusted_action)

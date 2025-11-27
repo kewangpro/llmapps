@@ -44,8 +44,31 @@ class DiscreteToBoxWrapper(gym.ActionWrapper):
         )
 
         # Define bin edges for discretization
-        # Range [-1, 1] divided into n_discrete_actions equal bins
-        self.bin_edges = np.linspace(-1.0, 1.0, n_discrete_actions + 1)
+        # Custom bins to center HOLD (Action 0) around 0.0
+        # Mapping:
+        # [-1.0, -0.6] -> SELL_ALL (5)
+        # [-0.6, -0.2] -> SELL_PARTIAL (4)
+        # [-0.2,  0.2] -> HOLD (0)
+        # [ 0.2,  0.5] -> BUY_SMALL (1)
+        # [ 0.5,  0.8] -> BUY_MEDIUM (2)
+        # [ 0.8,  1.0] -> BUY_LARGE (3)
+        self.bin_edges = np.array([-1.0, -0.6, -0.2, 0.2, 0.5, 0.8, 1.0])
+        
+        # Map bin index to discrete action
+        # bin 0: [-1.0, -0.6] -> SELL_ALL (5)
+        # bin 1: [-0.6, -0.2] -> SELL_PARTIAL (4)
+        # bin 2: [-0.2,  0.2] -> HOLD (0)
+        # bin 3: [ 0.2,  0.5] -> BUY_SMALL (1)
+        # bin 4: [ 0.5,  0.8] -> BUY_MEDIUM (2)
+        # bin 5: [ 0.8,  1.0] -> BUY_LARGE (3)
+        self.bin_map = {
+            0: 5, # SELL_ALL
+            1: 4, # SELL_PARTIAL
+            2: 0, # HOLD
+            3: 1, # BUY_SMALL
+            4: 2, # BUY_MEDIUM
+            5: 3  # BUY_LARGE
+        }
 
     def action(self, continuous_action):
         """
@@ -65,13 +88,15 @@ class DiscreteToBoxWrapper(gym.ActionWrapper):
         continuous_action = np.clip(continuous_action, -1.0, 1.0)
 
         # Find which bin the action falls into
-        # np.digitize returns bin index (1-indexed), subtract 1 for 0-indexing
-        discrete_action = np.digitize(continuous_action, self.bin_edges[1:-1])
+        # np.digitize returns bin index (1-indexed)
+        # bins: [-1.0, -0.6, -0.2, 0.2, 0.5, 0.8, 1.0]
+        # val: -0.8 -> index 1 (bin 0)
+        bin_idx = np.digitize(continuous_action, self.bin_edges) - 1
+        
+        # Clamp index
+        bin_idx = max(0, min(bin_idx, len(self.bin_map) - 1))
 
-        # Ensure within bounds
-        discrete_action = np.clip(discrete_action, 0, self.n_discrete_actions - 1)
-
-        return discrete_action
+        return self.bin_map[bin_idx]
 
     def step(self, action):
         """
@@ -85,19 +110,18 @@ class DiscreteToBoxWrapper(gym.ActionWrapper):
 
     def reverse_action(self, discrete_action):
         """
-        Convert discrete action to continuous (for analysis/visualization).
-
-        Args:
-            discrete_action: Integer in range [0, n_discrete_actions-1]
-
-        Returns:
-            continuous_action: Float in range [-1, 1]
+        Convert discrete action to continuous (approximate center of bin).
         """
-        # Map to center of the corresponding bin
-        bin_width = 2.0 / self.n_discrete_actions
-        continuous_action = -1.0 + (discrete_action + 0.5) * bin_width
-
-        return continuous_action
+        # Reverse map
+        action_to_bin = {v: k for k, v in self.bin_map.items()}
+        
+        if discrete_action in action_to_bin:
+            bin_idx = action_to_bin[discrete_action]
+            low = self.bin_edges[bin_idx]
+            high = self.bin_edges[bin_idx + 1]
+            return (low + high) / 2.0
+            
+        return 0.0  # Default to HOLD center
 
     def get_diagnostics_summary(self):
         """

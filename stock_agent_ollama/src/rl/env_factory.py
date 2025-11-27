@@ -44,6 +44,15 @@ class EnvConfig:
     use_adaptive_sizing: bool = True
     use_improved_actions: bool = True
 
+    # New improvement flags (Priority 1-5)
+    use_risk_manager: bool = True
+    use_regime_detector: bool = True
+    use_mtf_features: bool = True
+    use_kelly_sizing: bool = True
+    stop_loss_pct: float = 0.05
+    trailing_stop_pct: float = 0.03
+    max_drawdown_pct: float = 0.15
+
     # Optional components
     reward_config: Optional[EnhancedRewardConfig] = None
     curriculum_manager: Optional[CurriculumManager] = None
@@ -68,6 +77,14 @@ class EnvConfig:
             'use_adaptive_sizing': self.use_adaptive_sizing,
             'use_improved_actions': self.use_improved_actions,
             'enable_diagnostics': self.enable_diagnostics,
+            # New improvements
+            'use_risk_manager': self.use_risk_manager,
+            'use_regime_detector': self.use_regime_detector,
+            'use_mtf_features': self.use_mtf_features,
+            'use_kelly_sizing': self.use_kelly_sizing,
+            'stop_loss_pct': self.stop_loss_pct,
+            'trailing_stop_pct': self.trailing_stop_pct,
+            'max_drawdown_pct': self.max_drawdown_pct,
         }
 
     @classmethod
@@ -79,7 +96,10 @@ class EnvConfig:
             'max_position_size', 'max_position_pct', 'transaction_cost_rate',
             'slippage_rate', 'lookback_window', 'include_technical_indicators',
             'include_trend_indicators', 'use_action_masking', 'use_enhanced_rewards',
-            'use_adaptive_sizing', 'use_improved_actions', 'enable_diagnostics'
+            'use_adaptive_sizing', 'use_improved_actions', 'enable_diagnostics',
+            # New improvements
+            'use_risk_manager', 'use_regime_detector', 'use_mtf_features',
+            'use_kelly_sizing', 'stop_loss_pct', 'trailing_stop_pct', 'max_drawdown_pct'
         }
         filtered_data = {k: v for k, v in data.items() if k in valid_fields}
         return cls(**filtered_data)
@@ -120,5 +140,13 @@ def create_enhanced_env(config: EnvConfig) -> EnhancedTradingEnv:
         use_improved_actions=config.use_improved_actions,
         reward_config=reward_config,
         curriculum_manager=config.curriculum_manager,
-        enable_diagnostics=config.enable_diagnostics
+        enable_diagnostics=config.enable_diagnostics,
+        # New improvements
+        use_risk_manager=config.use_risk_manager,
+        use_regime_detector=config.use_regime_detector,
+        use_mtf_features=config.use_mtf_features,
+        use_kelly_sizing=config.use_kelly_sizing,
+        stop_loss_pct=config.stop_loss_pct,
+        trailing_stop_pct=config.trailing_stop_pct,
+        max_drawdown_pct=config.max_drawdown_pct
     )

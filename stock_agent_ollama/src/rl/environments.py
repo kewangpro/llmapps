@@ -689,7 +689,11 @@ from .improvements import (
     AdaptiveActionSizer,
     CurriculumManager,
     TrainingDiagnostics,
-    ImprovedTradingAction
+    ImprovedTradingAction,
+    RiskManager,
+    RegimeDetector,
+    MultiTimeframeFeatures,
+    KellyPositionSizer
 )
 
 
@@ -724,6 +728,14 @@ class EnhancedTradingEnv(SingleStockTradingEnv):
         reward_config: Optional[EnhancedRewardConfig] = None,
         curriculum_manager: Optional[CurriculumManager] = None,
         enable_diagnostics: bool = True,
+        # New improvement parameters
+        use_risk_manager: bool = True,
+        use_regime_detector: bool = True,
+        use_mtf_features: bool = True,
+        use_kelly_sizing: bool = True,
+        stop_loss_pct: float = 0.05,
+        trailing_stop_pct: float = 0.03,
+        max_drawdown_pct: float = 0.15,
         **kwargs
     ):
         """
@@ -740,6 +752,7 @@ class EnhancedTradingEnv(SingleStockTradingEnv):
             max_position_pct: Max position as % of portfolio value
             lookback_window: Historical window size
             include_technical_indicators: Include technical indicators
+            include_trend_indicators: Include trend indicators (RecurrentPPO only)
             use_action_masking: Enable action masking
             use_enhanced_rewards: Use enhanced reward function
             use_adaptive_sizing: Use adaptive position sizing
@@ -747,6 +760,13 @@ class EnhancedTradingEnv(SingleStockTradingEnv):
             reward_config: Custom reward configuration
             curriculum_manager: Curriculum learning manager
             enable_diagnostics: Enable training diagnostics
+            use_risk_manager: Enable risk manager with stop-loss
+            use_regime_detector: Enable market regime detection
+            use_mtf_features: Enable multi-timeframe features
+            use_kelly_sizing: Enable Kelly criterion position sizing
+            stop_loss_pct: Stop-loss percentage (default 5%)
+            trailing_stop_pct: Trailing stop percentage (default 3%)
+            max_drawdown_pct: Maximum portfolio drawdown (default 15%)
         """
         # Store enhancement flags
         self.use_action_masking = use_action_masking
@@ -755,6 +775,10 @@ class EnhancedTradingEnv(SingleStockTradingEnv):
         self.use_improved_actions = use_improved_actions
         self.max_position_pct = max_position_pct
         self.enable_diagnostics = enable_diagnostics
+        self.use_risk_manager = use_risk_manager
+        self.use_regime_detector = use_regime_detector
+        self.use_mtf_features = use_mtf_features
+        self.use_kelly_sizing = use_kelly_sizing
 
         # Initialize components BEFORE super().__init__
         self.action_masker = ActionMasker(use_improved_actions) if use_action_masking else None
@@ -774,6 +798,18 @@ class EnhancedTradingEnv(SingleStockTradingEnv):
         # Diagnostics
         n_actions = len(ImprovedTradingAction) if use_improved_actions else len(TradingAction)
         self.diagnostics = TrainingDiagnostics(n_actions) if enable_diagnostics else None
+
+        # New improvements
+        self.risk_manager = RiskManager(
+            stop_loss_pct=stop_loss_pct,
+            trailing_stop_pct=trailing_stop_pct,
+            max_drawdown_pct=max_drawdown_pct,
+            enable_stops=use_risk_manager
+        ) if use_risk_manager else None
+
+        self.regime_detector = RegimeDetector() if use_regime_detector else None
+        self.mtf_features = MultiTimeframeFeatures() if use_mtf_features else None
+        self.kelly_sizer = KellyPositionSizer() if use_kelly_sizing else None
 
         # Initialize parent class WITHOUT reward_function
         # We'll override _calculate_reward instead
@@ -797,6 +833,145 @@ class EnhancedTradingEnv(SingleStockTradingEnv):
 
         # Track volatility for adaptive sizing
         self._recent_volatility = 0.02
+
+    def _define_observation_space(self):
+        """
+        Override parent to add regime and MTF features.
+
+        Base features (10):
+        - close, volume, cash_ratio, position_ratio, portfolio_value_change (5)
+        - RSI, MACD, MACD_Signal, Bollinger, Stochastic (5)
+
+        Trend features (3) - if include_trend_indicators:
+        - SMA_Trend, EMA_Crossover, Price_Momentum
+
+        Regime features (7) - if use_regime_detector:
+        - 4 regime one-hot (BULL, BEAR, SIDEWAYS, VOLATILE)
+        - trend_strength, trend_direction, volatility_regime
+
+        MTF features (6) - if use_mtf_features:
+        - weekly_slope, monthly_slope, support_dist, resistance_dist
+        - weekly_position, monthly_position
+        """
+        # Start with parent's feature count
+        num_features = 5  # base features
+
+        if self.include_technical_indicators:
+            num_features += 5  # technical indicators
+
+            if self.include_trend_indicators:
+                num_features += 3  # trend indicators
+
+        # Add regime features
+        if self.use_regime_detector:
+            num_features += 7  # 4 one-hot + 3 continuous
+
+        # Add MTF features
+        if self.use_mtf_features:
+            num_features += 6
+
+        self.observation_space = gym.spaces.Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=(self.lookback_window, num_features),
+            dtype=np.float32
+        )
+
+        logger.info(
+            f"Observation space: ({self.lookback_window}, {num_features}) - "
+            f"Base: 5, Tech: {5 if self.include_technical_indicators else 0}, "
+            f"Trend: {3 if self.include_trend_indicators else 0}, "
+            f"Regime: {7 if self.use_regime_detector else 0}, "
+            f"MTF: {6 if self.use_mtf_features else 0}"
+        )
+
+    def _get_observation(self) -> np.ndarray:
+        """
+        Override parent to add regime and MTF features.
+        """
+        # Get base observation from parent
+        base_obs = super()._get_observation()
+
+        # If no new features, return base
+        if not self.use_regime_detector and not self.use_mtf_features:
+            return base_obs
+
+        # Get data window
+        start_idx = self.current_step
+        end_idx = self.current_step + self.lookback_window
+
+        additional_features = []
+
+        # Add regime features
+        if self.use_regime_detector and self.regime_detector:
+            # Get price and volume data for regime detection
+            prices = self.original_close[start_idx:end_idx]
+            volumes = self.data['Volume'].iloc[start_idx:end_idx].values if 'Volume' in self.data.columns else None
+
+            # Detect regime for each timestep in window
+            regime_features_list = []
+            for i in range(len(prices)):
+                # Use all data up to this point for regime detection
+                regime, features = self.regime_detector.detect_regime(
+                    prices=self.original_close[max(0, start_idx + i - 50):start_idx + i + 1],
+                    volumes=self.data['Volume'].iloc[max(0, start_idx + i - 50):start_idx + i + 1].values if volumes is not None else None
+                )
+
+                # Extract features for this timestep (7 features total)
+                # Convert to float to ensure scalar values
+                regime_vec = [
+                    float(features['regime_one_hot'][0]),  # BULL
+                    float(features['regime_one_hot'][1]),  # BEAR
+                    float(features['regime_one_hot'][2]),  # SIDEWAYS
+                    float(features['regime_one_hot'][3]),  # VOLATILE
+                    float(features['trend_strength']),
+                    float(features['trend_direction']),
+                    float(features['volatility_regime'])
+                ]
+                regime_features_list.append(regime_vec)
+
+            # Stack regime features (lookback_window x 7)
+            regime_features_array = np.array(regime_features_list, dtype=np.float32)
+
+            # Split into individual feature arrays for stacking
+            for feat_idx in range(7):
+                additional_features.append(regime_features_array[:, feat_idx])
+
+        # Add MTF features
+        if self.use_mtf_features and self.mtf_features:
+            # Get price and volume data
+            prices = self.original_close[start_idx:end_idx]
+            volumes = self.data['Volume'].iloc[start_idx:end_idx].values if 'Volume' in self.data.columns else None
+
+            # Extract MTF features for each timestep
+            mtf_features_list = []
+            for i in range(len(prices)):
+                # Use all data up to this point
+                features = self.mtf_features.extract_features(
+                    prices=self.original_close[max(0, start_idx + i - 50):start_idx + i + 1],
+                    volumes=self.data['Volume'].iloc[max(0, start_idx + i - 50):start_idx + i + 1].values if volumes is not None else None
+                )
+                # Convert to list of floats to ensure proper array construction
+                mtf_features_list.append([float(f) for f in features])
+
+            # Stack MTF features (lookback_window x 6)
+            mtf_features_array = np.array(mtf_features_list, dtype=np.float32)
+
+            # Split into individual feature arrays
+            for feat_idx in range(6):
+                additional_features.append(mtf_features_array[:, feat_idx])
+
+        # Combine base observation with additional features
+        if additional_features:
+            # base_obs is (lookback_window, base_features)
+            # additional_features is list of (lookback_window,) arrays
+            all_features = [base_obs[:, i] for i in range(base_obs.shape[1])]
+            all_features.extend(additional_features)
+            observation = np.column_stack(all_features).astype(np.float32)
+        else:
+            observation = base_obs
+
+        return observation
 
     def _execute_action(self, action: int, current_price: float) -> Dict[str, float]:
         """
@@ -974,7 +1149,7 @@ class EnhancedTradingEnv(SingleStockTradingEnv):
         """
         Execute step with enhancements.
 
-        Adds action masking info to step info.
+        Adds action masking info, risk management, and Kelly sizing.
         """
         # Get action mask for diagnostics
         action_mask = self.get_action_mask()
@@ -984,12 +1159,72 @@ class EnhancedTradingEnv(SingleStockTradingEnv):
         if self.diagnostics:
             self.diagnostics.record_action(action, was_valid)
 
+        # Apply Kelly sizing to adjust action if enabled
+        original_action = action
+        if self.use_kelly_sizing and self.kelly_sizer:
+            action = self.kelly_sizer.adjust_action(action, self.use_improved_actions)
+            if action != original_action:
+                logger.debug(f"Kelly sizer adjusted action from {original_action} to {action}")
+
+        # Check risk manager BEFORE executing action
+        current_idx = self.current_step + self.lookback_window
+        current_price = self.original_close[current_idx]
+        portfolio_value = self._calculate_portfolio_value(current_price)
+
+        forced_exit = False
+        exit_reason = ""
+
+        if self.use_risk_manager and self.risk_manager and self.position > 0:
+            should_exit, reason = self.risk_manager.check_stop_loss(
+                current_price=current_price,
+                portfolio_value=portfolio_value,
+                position=self.position
+            )
+
+            if should_exit:
+                # Override action to SELL_ALL or SELL
+                if self.use_improved_actions:
+                    action = 5  # SELL_ALL
+                else:
+                    action = 0  # SELL
+                forced_exit = True
+                exit_reason = reason
+                logger.debug(f"Risk manager forced exit: {reason}")
+
         # Execute parent step
         observation, reward, terminated, truncated, info = super().step(action)
 
         # Add mask to info
         info['action_mask'] = action_mask
         info['action_was_valid'] = was_valid
+        info['risk_manager_forced_exit'] = forced_exit
+        if forced_exit:
+            info['exit_reason'] = exit_reason
+
+        # Update Kelly sizer BEFORE updating risk manager (to capture entry_price)
+        if self.use_kelly_sizing and self.kelly_sizer:
+            trade_info = info.get('trade_info', {})
+            shares_traded = trade_info.get('shares_traded', 0)
+
+            # If we sold shares and now have no position, record the trade
+            if shares_traded < 0 and self.position == 0:
+                # Use risk manager's entry price if available
+                if self.risk_manager and hasattr(self.risk_manager, 'entry_price') and self.risk_manager.entry_price is not None:
+                    entry_price = self.risk_manager.entry_price
+                    exit_price = current_price
+                    position_size = abs(shares_traded)
+                    self.kelly_sizer.record_trade(entry_price, exit_price, position_size)
+                    logger.debug(f"Recorded trade: entry={entry_price:.2f}, exit={exit_price:.2f}, size={position_size}")
+
+        # Update risk manager after recording Kelly trade
+        if self.use_risk_manager and self.risk_manager:
+            trade_info = info.get('trade_info', {})
+            shares_traded = trade_info.get('shares_traded', 0)
+
+            if shares_traded > 0:  # Bought shares
+                self.risk_manager.on_position_entry(current_price, portfolio_value)
+            elif shares_traded < 0:  # Sold shares
+                self.risk_manager.on_position_exit()
 
         # Update volatility estimate
         if len(self.portfolio_values) >= 20:
@@ -1017,6 +1252,10 @@ class EnhancedTradingEnv(SingleStockTradingEnv):
         # Reset enhanced reward function
         if self.enhanced_reward_fn:
             self.enhanced_reward_fn.reset()
+
+        # Reset risk manager
+        if self.risk_manager:
+            self.risk_manager.reset()
 
         # Apply curriculum learning if enabled
         if self.curriculum_manager:

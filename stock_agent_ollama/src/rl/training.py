@@ -62,6 +62,15 @@ class EnhancedTrainingConfig:
     enable_diagnostics: bool = _ENV_DEFAULTS['enable_diagnostics']
     use_lstm_policy: bool = False # New field to enable LSTM policy
 
+    # New improvements (Priority 1-5)
+    use_risk_manager: bool = True
+    use_regime_detector: bool = True
+    use_mtf_features: bool = True
+    use_kelly_sizing: bool = True
+    stop_loss_pct: float = 0.05
+    trailing_stop_pct: float = 0.03
+    max_drawdown_pct: float = 0.15
+
     # Position limits (from EnvConfig)
     max_position_size: int = _ENV_DEFAULTS['max_position_size']
     max_position_pct: float = _ENV_DEFAULTS['max_position_pct']
@@ -262,7 +271,15 @@ class EnhancedRLTrainer:
             use_improved_actions=self.config.use_improved_actions,
             reward_config=self.config.reward_config,
             curriculum_manager=self.curriculum_manager,
-            enable_diagnostics=self.config.enable_diagnostics
+            enable_diagnostics=self.config.enable_diagnostics,
+            # New improvements
+            use_risk_manager=self.config.use_risk_manager,
+            use_regime_detector=self.config.use_regime_detector,
+            use_mtf_features=self.config.use_mtf_features,
+            use_kelly_sizing=self.config.use_kelly_sizing,
+            stop_loss_pct=self.config.stop_loss_pct,
+            trailing_stop_pct=self.config.trailing_stop_pct,
+            max_drawdown_pct=self.config.max_drawdown_pct
         )
 
         # Create environment using shared factory
@@ -573,6 +590,15 @@ class EnhancedRLTrainer:
             'use_improved_actions': self.config.use_improved_actions,
             'use_curriculum_learning': self.config.use_curriculum_learning,
             'use_lstm_policy': self.config.use_lstm_policy,
+
+            # New improvement flags (Priority 1-5)
+            'use_risk_manager': getattr(self.config, 'use_risk_manager', True),
+            'use_regime_detector': getattr(self.config, 'use_regime_detector', True),
+            'use_mtf_features': getattr(self.config, 'use_mtf_features', True),
+            'use_kelly_sizing': getattr(self.config, 'use_kelly_sizing', True),
+            'stop_loss_pct': getattr(self.config, 'stop_loss_pct', 0.05),
+            'trailing_stop_pct': getattr(self.config, 'trailing_stop_pct', 0.03),
+            'max_drawdown_pct': getattr(self.config, 'max_drawdown_pct', 0.15),
 
             # Agent settings
             'agent_type': self.config.agent_type,
