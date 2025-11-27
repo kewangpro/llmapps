@@ -32,7 +32,7 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 *Stock analysis with interactive charts, technical indicators, and AI-powered insights*
 
 ### 🤖 Reinforcement Learning Trading
-- **Train RL Agents** using PPO, RecurrentPPO, A2C, SAC, and QRDQN with action masking
+- **Train RL Agents** using PPO, RecurrentPPO, and QRDQN with action masking
 - **6-Action Trading Space** (HOLD, BUY_SMALL, BUY_MEDIUM, BUY_LARGE, SELL_PARTIAL, SELL_ALL)
 - **RecurrentPPO** with LSTM memory for temporal pattern recognition
 - **Trend Indicators** for RecurrentPPO (SMA_Trend, EMA_Crossover, Price_Momentum)
@@ -54,7 +54,7 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 
 ### 🔴 Live Trading Simulation
 - **Paper Trading** with real-time market data (Yahoo Finance)
-- **Trained Agent Execution** using PPO, RecurrentPPO, A2C, SAC, or QRDQN models
+- **Trained Agent Execution** using PPO, RecurrentPPO, or QRDQN models
 - **Persistent Sessions** automatically save and resume
   - Portfolio state preserved
   - Trade history maintained
@@ -106,7 +106,7 @@ python src/main.py
 **RL Training:**
 - Click Trading → Configure agent → Start Training
 - Default: 300,000 steps (recommended)
-- PPO/A2C/SAC/QRDQN: 15-20 min (300k steps)
+- PPO/QRDQN: 15-20 min (300k steps)
 - RecurrentPPO: 25-35 min (LSTM needs more compute)
 - Run Backtest → Compare strategies and metrics
 
@@ -138,8 +138,8 @@ python src/main.py
 ┌──────────────────────────┐  ┌──────────────────────────────┐
 │   Analysis Engine        │  │   RL Engine                  │
 │   • Ollama AI            │  │   • Trading Environments     │
-│   • LSTM Ensemble        │  │   • PPO/RecurrentPPO/A2C/    │
-│   • Technical Indicators │  │     SAC/QRDQN Agents         │
+│   • LSTM Ensemble        │  │   • PPO/RecurrentPPO/QRDQN   │
+│   • Technical Indicators │  │     Agents                   │
 │   • Chart Generation     │  │   • Backtest Engine          │
 │                          │  │   • Baseline Strategies      │
 └──────────────────────────┘  └──────────────────────────────┘
@@ -157,7 +157,7 @@ python src/main.py
 **Technology Stack:**
 - **AI**: Ollama (gemma3:latest) with regex fallback
 - **ML**: TensorFlow LSTM ensemble (3 models per symbol)
-- **RL**: Stable-Baselines3 (PPO, A2C, SAC) + sb3-contrib (RecurrentPPO, QRDQN)
+- **RL**: Stable-Baselines3 (PPO) + sb3-contrib (RecurrentPPO, QRDQN)
 - **Data**: Yahoo Finance with intelligent caching
 - **UI**: Panel + Plotly, light theme, wide layouts
 
@@ -247,8 +247,6 @@ See [QUICK_START.md](docs/QUICK_START.md#troubleshooting) for more help
 **RL Agents:**
 - **PPO**: Stable baseline with strong penalties
 - **RecurrentPPO**: LSTM memory + trend indicators (13 features)
-- **A2C**: Synchronous actor-critic with native discrete actions
-- **SAC**: Maximum entropy off-policy with continuous-to-discrete wrapper
 - **QRDQN**: Distributional RL for risk-awareness
 - 6-action space with masking, adaptive sizing, algorithm-specific rewards
 
