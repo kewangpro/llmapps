@@ -534,8 +534,8 @@ class BacktestEngine:
                 continuous_val = action.item() if isinstance(action, np.ndarray) else action
                 continuous_val = np.clip(continuous_val, -1.0, 1.0)
 
-                # Use same bins and mapping as DiscreteToBoxWrapper
-                bin_edges = np.array([-1.0, -0.6, -0.2, 0.2, 0.5, 0.8, 1.0])
+                # Use same bins and mapping as DiscreteToBoxWrapper (equal-sized bins)
+                bin_edges = np.array([-1.0, -2/3, -1/3, 0.0, 1/3, 2/3, 1.0])
                 bin_map = {0: 5, 1: 4, 2: 0, 3: 1, 4: 2, 5: 3}
 
                 bin_idx = np.digitize(continuous_val, bin_edges) - 1

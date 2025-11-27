@@ -44,23 +44,25 @@ class DiscreteToBoxWrapper(gym.ActionWrapper):
         )
 
         # Define bin edges for discretization
-        # Custom bins to center HOLD (Action 0) around 0.0
+        # Equal-sized bins (each 16.67% of action space) to prevent action collapse
+        # HOLD is shifted to [-0.333, 0.0] so SAC's natural centering at 0
+        # will split between HOLD and BUY_SMALL, encouraging exploration
         # Mapping:
-        # [-1.0, -0.6] -> SELL_ALL (5)
-        # [-0.6, -0.2] -> SELL_PARTIAL (4)
-        # [-0.2,  0.2] -> HOLD (0)
-        # [ 0.2,  0.5] -> BUY_SMALL (1)
-        # [ 0.5,  0.8] -> BUY_MEDIUM (2)
-        # [ 0.8,  1.0] -> BUY_LARGE (3)
-        self.bin_edges = np.array([-1.0, -0.6, -0.2, 0.2, 0.5, 0.8, 1.0])
-        
+        # [-1.000, -0.667] -> SELL_ALL (5)
+        # [-0.667, -0.333] -> SELL_PARTIAL (4)
+        # [-0.333,  0.000] -> HOLD (0)
+        # [ 0.000,  0.333] -> BUY_SMALL (1)
+        # [ 0.333,  0.667] -> BUY_MEDIUM (2)
+        # [ 0.667,  1.000] -> BUY_LARGE (3)
+        self.bin_edges = np.array([-1.0, -2/3, -1/3, 0.0, 1/3, 2/3, 1.0])
+
         # Map bin index to discrete action
-        # bin 0: [-1.0, -0.6] -> SELL_ALL (5)
-        # bin 1: [-0.6, -0.2] -> SELL_PARTIAL (4)
-        # bin 2: [-0.2,  0.2] -> HOLD (0)
-        # bin 3: [ 0.2,  0.5] -> BUY_SMALL (1)
-        # bin 4: [ 0.5,  0.8] -> BUY_MEDIUM (2)
-        # bin 5: [ 0.8,  1.0] -> BUY_LARGE (3)
+        # bin 0: [-1.000, -0.667] -> SELL_ALL (5)
+        # bin 1: [-0.667, -0.333] -> SELL_PARTIAL (4)
+        # bin 2: [-0.333,  0.000] -> HOLD (0)
+        # bin 3: [ 0.000,  0.333] -> BUY_SMALL (1)
+        # bin 4: [ 0.333,  0.667] -> BUY_MEDIUM (2)
+        # bin 5: [ 0.667,  1.000] -> BUY_LARGE (3)
         self.bin_map = {
             0: 5, # SELL_ALL
             1: 4, # SELL_PARTIAL
