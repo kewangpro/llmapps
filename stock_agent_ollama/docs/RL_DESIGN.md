@@ -680,34 +680,179 @@ Then update `src/rl/model_utils.py` for loading.
 
 ---
 
-## Learning Objectives
+## Training Mechanics: Iterations and Rewards
 
-This RL trading system is designed as an educational platform for learning modern AI/ML concepts in finance:
+### What is an Iteration?
 
-### Stock Analysis & Prediction
-- **Technical Indicators**: Understanding RSI, MACD, Bollinger Bands, and their interpretation
-- **LSTM Neural Networks**: Time series forecasting with recurrent architectures
-- **Ensemble Modeling**: Combining multiple models for robust predictions
-- **AI-Assisted Analysis**: Using LLMs for natural language financial insights
+In PPO, RecurrentPPO, and A2C (on-policy algorithms), an **iteration** is one complete learning cycle consisting of two phases:
 
-### Reinforcement Learning Trading
-- **Policy Optimization**: Understanding PPO, actor-critic methods, and on-policy learning
-- **Recurrent Policies**: LSTM-based policies for temporal pattern recognition
-- **Distributional RL**: QRDQN and learning value distributions for risk-awareness
-- **Trading Environment Design**: Observation spaces, action spaces, and state representation
-- **Reward Engineering**: Designing reward functions to shape agent behavior
-- **Risk-Adjusted Metrics**: Sharpe ratio, Sortino ratio, maximum drawdown
-- **Strategy Comparison**: Benchmarking against baselines (Buy & Hold, Momentum)
-- **Action Space Design**: Discrete action spaces for trading decisions
-- **Action Masking**: Preventing invalid actions in constrained environments
+#### 1. Rollout Phase (Experience Collection)
+- Agent interacts with environment for `n_steps` (default: **2048 steps**)
+- Each step: agent observes → selects action → receives reward
+- Experience stored in rollout buffer: states, actions, rewards, values
 
-### Software Engineering
-- **Professional UX Design**: Light theme, wide layouts, responsive design patterns
-- **Real-Time Data Handling**: Caching strategies, live updates, efficient data fetching
-- **Model Registry**: Automatic model discovery, versioning, and organization
-- **Design Patterns**: Factory pattern, single source of truth, dataclass configuration
-- **Session Persistence**: State management, auto-save, resumable sessions
-- **Modular Architecture**: Clean separation of concerns, extensible design
+#### 2. Training Phase (Policy Update)
+- Sample mini-batches from the 2048 collected steps
+- Update policy network using those batches
+- Repeat for `n_epochs` (default: **10 epochs**)
+
+**Key Training Parameters:**
+```python
+n_steps = 2048       # Steps to collect before training
+batch_size = 128     # Samples processed together
+n_epochs = 10        # Training passes over collected data
+```
+
+**Understanding Training Logs:**
+```
+total_timesteps | 2048   ← 2048 steps collected
+iterations      | 1      ← Completed iteration #1
+ep_rew_mean     | 19.4   ← Average episode reward
+ep_len_mean     | 691    ← Average episode length
+```
+
+**Iteration Contains Multiple Episodes:**
+```
+Iteration 1 (2048 steps):
+├─ Episode 1: 691 steps → total_reward = 18.98
+├─ Episode 2: 691 steps → total_reward = 19.37
+└─ Episode 3: 666 steps → total_reward = 18.50 (partial)
+                         ─────────────────────────
+                         Total: 2048 steps collected → Train policy
+```
+
+### How Rewards are Calculated Per Step
+
+Each environment step calculates reward using **8 components** from `EnhancedRewardFunction`:
+
+#### Component Breakdown
+
+**1. Base Return (Primary Signal)**
+```python
+portfolio_return = (current_value - prev_value) / prev_value
+base_reward = portfolio_return * 100  # Scaled up (return_weight)
+```
+
+**2. Invalid Action Penalty**
+```python
+if action_is_masked:
+    reward -= 0.01  # -1% penalty for invalid action
+```
+
+**3. Excessive Trading Penalty**
+```python
+if action == prev_action and is_trading:
+    consecutive_count += 1
+    penalty = -0.005 * min(consecutive_count, 5)  # Progressive
+    reward += penalty  # Penalty is negative
+```
+
+**4. Transaction Costs**
+```python
+if is_buy or is_sell:
+    cost = trade_value * transaction_cost_rate  # 0.05%-0.2%
+    reward -= cost / portfolio_value
+```
+
+**5. Risk Penalties**
+```python
+volatility = std(recent_returns[-20:])
+reward -= volatility * 0.1  # Volatility penalty
+
+if len(returns) >= 5:
+    sharpe = mean_return / (volatility + 1e-8)
+    reward += sharpe * 0.05  # Sharpe bonus
+```
+
+**6. Drawdown Penalty**
+```python
+if drawdown > 5%:
+    reward -= drawdown * 0.5  # Penalize deep drawdowns
+```
+
+**7. Profitable Trade Bonus**
+```python
+if portfolio_return > 0:
+    reward += 0.001  # Small bonus for profitable steps
+```
+
+**8. Hold Incentives**
+```python
+if action == HOLD:
+    reward += 0.001  # Base hold incentive
+
+if action == HOLD and position > 0 and return > 0:
+    reward += 0.002  # Hold winning position bonus
+```
+
+#### Real Example Calculation
+
+**Scenario:** Bought stock yesterday, holding today, price up 0.5%
+
+```python
+# Step 1: Portfolio increased
+portfolio_return = 0.005  # +0.5%
+reward = 0.005 * 100 = 0.5  # Base reward
+
+# Step 2: Action = HOLD (valid, no trading)
+reward += 0.001  # Valid action bonus
+reward += 0.001  # Base hold incentive
+reward += 0.002  # Hold winning position bonus
+
+# Step 3: No transaction costs (HOLD doesn't trade)
+# cost = 0
+
+# Step 4: Low volatility
+volatility_penalty = -0.0001
+
+# Final Reward
+reward = 0.5 + 0.004 - 0.0001 ≈ 0.504
+```
+
+### Episode vs Iteration Rewards
+
+**Episode Reward:**
+- Sum of all step rewards in one episode
+- Episode = one complete trading period (e.g., 691 steps ≈ 3 years)
+
+```python
+episode_reward = sum(all_step_rewards)
+# Example: 691 steps × 0.028 avg reward/step ≈ 19.4
+```
+
+**Mean Reward (in Training Logs):**
+```python
+mean_reward = average(last_100_episodes)
+# From log: "ep_rew_mean: 19.4"
+```
+
+**Interpreting Mean Reward of 19.4:**
+- Average reward per step: 19.4 / 691 ≈ **0.028**
+- Since reward ≈ portfolio_return × 100
+- Average daily return ≈ **0.028%**
+- Annualized return ≈ **7%** (252 trading days)
+
+This indicates the agent is learning profitable, low-risk trading strategies with proper risk management.
+
+### Algorithm Differences
+
+| Algorithm | Learning Type | Steps/Update | Data Reuse |
+|-----------|--------------|--------------|------------|
+| **PPO** | On-policy | 2048 | 10 epochs |
+| **RecurrentPPO** | On-policy | 2048 | 10 epochs |
+| **A2C** | On-policy | 2048 | 1 epoch |
+| **SAC** | Off-policy | Continuous | Replay buffer |
+| **QRDQN** | Off-policy | Continuous | Replay buffer |
+
+**On-Policy (PPO, RecurrentPPO, A2C):**
+- Collect fresh experience each iteration
+- Old data becomes "stale" after policy updates
+- More stable but less sample-efficient
+
+**Off-Policy (SAC, QRDQN):**
+- Store experience in replay buffer
+- Can reuse data indefinitely
+- More sample-efficient but potentially less stable
 
 ---
 
