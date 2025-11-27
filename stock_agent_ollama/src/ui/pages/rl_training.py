@@ -61,11 +61,11 @@ class RLTrainingPanel(param.Parameterized):
             min_characters=1
         )
 
-        # Agent type - 5 separate algorithms
+        # Agent type - 3 algorithms
         self.agent_type = pn.widgets.RadioButtonGroup(
             name='Algorithm',
-            options=['PPO', 'RecurrentPPO', 'A2C', 'SAC', 'QRDQN'],
-            value='A2C',
+            options=['PPO', 'RecurrentPPO', 'QRDQN'],
+            value='PPO',
             button_type='primary',
             button_style='outline',
             width=350,
@@ -181,21 +181,17 @@ class RLTrainingPanel(param.Parameterized):
 
                 # Use default reward config
                 # EnhancedRLTrainer will automatically select:
-                # - EnhancedRewardConfig for QRDQN (light penalties)
-                # - SACRewardConfig for SAC (moderate penalties + HOLD incentive)
-                # - A2CRewardConfig for A2C (moderate penalties, native discrete)
-                # - PPORewardConfig for PPO (strong penalties to fight action collapse)
+                # - QRDQNRewardConfig for QRDQN (risk-encouraging to counter conservatism)
+                # - PPORewardConfig for PPO (stronger penalties to fight action collapse)
                 # - RecurrentPPORewardConfig for RecurrentPPO (trend-following)
                 reward_config = None  # Let trainer auto-select based on agent_type
 
                 # Convert UI agent type to training format
-                # UI: 'PPO', 'RecurrentPPO', 'A2C', 'SAC', 'QRDQN'
-                # Training: 'ppo', 'recurrent_ppo', 'a2c', 'sac', 'qrdqn'
+                # UI: 'PPO', 'RecurrentPPO', 'QRDQN'
+                # Training: 'ppo', 'recurrent_ppo', 'qrdqn'
                 agent_type_map = {
                     'PPO': 'ppo',
                     'RecurrentPPO': 'recurrent_ppo',
-                    'A2C': 'a2c',
-                    'SAC': 'sac',
                     'QRDQN': 'qrdqn'
                 }
                 agent_type = agent_type_map.get(self.agent_type.value, self.agent_type.value.lower())
@@ -494,7 +490,7 @@ class RLTrainingPanel(param.Parameterized):
                 loaded_models = []
 
                 # Find and load ALL available trained RL models for this symbol
-                for agent_type in ['ppo', 'recurrent_ppo', 'a2c', 'sac', 'qrdqn']:
+                for agent_type in ['ppo', 'recurrent_ppo', 'qrdqn']:
                     logger.info(f"Backtest: Searching for {agent_type.upper()} model for {symbol}")
                     model_info = self._find_latest_model(symbol, agent_type)
 
