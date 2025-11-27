@@ -18,21 +18,26 @@ This RL trading system provides advanced reinforcement learning capabilities for
 
 ### Key Features
 
-✅ **RL Agents**: PPO, RecurrentPPO, A2C, SAC, QRDQN via Stable-Baselines3 and sb3-contrib
-✅ **RecurrentPPO**: LSTM memory with trend indicators for temporal patterns
-✅ **Trend Indicators**: SMA_Trend, EMA_Crossover, Price_Momentum (RecurrentPPO only)
-✅ **Action Masking**: Prevents invalid trades
-✅ **6-Action Space**: HOLD, BUY_SMALL/MEDIUM/LARGE, SELL_PARTIAL/ALL
-✅ **Adaptive Position Sizing**: Adjusts to volatility and portfolio state
-✅ **Algorithm-Specific Rewards**: Optimized per algorithm
-✅ **Enhanced Rewards**: Multi-component with risk penalties, bonuses
-✅ **Trading Environment**: Gymnasium-based simulation
-✅ **Backtesting**: Comprehensive metrics and evaluation
-✅ **Action Analysis**: Distribution visualization
-✅ **Auto-Load Models**: Automatic type detection
-✅ **Baseline Strategies**: Buy & Hold and Momentum
-✅ **Interactive UI**: Panel-based training and backtesting
-✅ **Visualization**: Progress, equity curves, actions, drawdowns
+- ✅ **RL Agents**: PPO, RecurrentPPO, A2C, SAC, QRDQN via Stable-Baselines3 and sb3-contrib
+- ✅ **RecurrentPPO**: LSTM memory with trend indicators for temporal patterns
+- ✅ **Trend Indicators**: SMA_Trend, EMA_Crossover, Price_Momentum (RecurrentPPO only)
+- ✅ **Action Masking**: Prevents invalid trades
+- ✅ **6-Action Space**: HOLD, BUY_SMALL/MEDIUM/LARGE, SELL_PARTIAL/ALL
+- ✅ **Adaptive Position Sizing**: Adjusts to volatility and portfolio state
+- ✅ **Algorithm-Specific Rewards**: Optimized per algorithm
+- ✅ **Enhanced Rewards**: Multi-component with risk penalties, bonuses
+- ✅ **Advanced Risk Management**: Stop-loss, trailing stops, circuit breakers
+- ✅ **Market Regime Detection**: BULL, BEAR, SIDEWAYS, VOLATILE
+- ✅ **Multi-Timeframe Features**: Weekly/monthly trend analysis
+- ✅ **Kelly Position Sizing**: Optimal sizing based on edge
+- ✅ **Ensemble Agents**: Combine multiple algorithms
+- ✅ **Trading Environment**: Gymnasium-based simulation
+- ✅ **Backtesting**: Comprehensive metrics and evaluation
+- ✅ **Action Analysis**: Distribution visualization
+- ✅ **Auto-Load Models**: Automatic type detection
+- ✅ **Baseline Strategies**: Buy & Hold and Momentum
+- ✅ **Interactive UI**: Panel-based training and backtesting
+- ✅ **Visualization**: Progress, equity curves, actions, drawdowns
 
 ### Design Philosophy
 
@@ -856,14 +861,399 @@ This indicates the agent is learning profitable, low-risk trading strategies wit
 
 ---
 
+## Advanced Improvements
+
+The system includes comprehensive risk management and feature enhancements to improve trading performance and safety:
+
+### Priority Improvements Implementation
+
+**Status: All Implemented and Integrated**
+
+#### 1. Stop-Loss Integration
+
+**File**: `src/rl/improvements.py:1011-1128`
+**Class**: `RiskManager`
+
+Prevents catastrophic losses through automated risk controls:
+
+**Features**:
+- **5% stop-loss** per position (from entry price)
+- **3% trailing stop** (from peak price)
+- **15% portfolio circuit breaker** (from peak portfolio value)
+- Automatically forces SELL_ALL when triggered
+
+**Integration**:
+- Added to `EnhancedTradingEnv` with `use_risk_manager=True`
+- Checked in `step()` before action execution
+- Resets on episode reset
+
+**Impact**: Caps losses at -5% per trade, preventing large drawdowns
+
+---
+
+#### 2. Market Regime Detection
+
+**File**: `src/rl/improvements.py:1134-1287`
+**Class**: `RegimeDetector`
+
+Helps agents adapt to different market conditions:
+
+**Features**:
+- Detects 4 market regimes: BULL, BEAR, SIDEWAYS, VOLATILE
+- Uses ADX (Average Directional Index) for trend strength
+- Adds **7 new features** to observation space:
+  - 4 one-hot regime indicators
+  - 1 trend strength (ADX)
+  - 1 trend direction (+1/-1)
+  - 1 volatility regime
+
+**Integration**:
+- Added to `EnhancedTradingEnv` with `use_regime_detector=True`
+- Features computed in `_get_observation()`
+- Observation space expanded by 7 features
+
+**Impact**: Improves performance in varying market conditions
+
+---
+
+#### 3. Ensemble Agent
+
+**File**: `src/rl/ensemble.py`
+**Classes**: `EnsembleAgent`, `AdaptiveEnsembleAgent`
+
+Combines strengths of multiple algorithms:
+
+**Features**:
+- Weighted voting across multiple trained models
+- Confidence scoring (Herfindahl-Hirschman Index)
+- Support for both recurrent and non-recurrent agents
+- Optional adaptive weights based on recent performance
+
+**Usage Example**:
+```python
+from src.rl.ensemble import EnsembleAgent
+from stable_baselines3 import PPO
+from sb3_contrib import RecurrentPPO
+
+# Load trained models
+ppo = PPO.load("ppo_model.zip")
+rppo = RecurrentPPO.load("rppo_model.zip")
+
+# Create ensemble
+ensemble = EnsembleAgent([
+    (ppo, 0.35),   # Weight by validation Sharpe
+    (rppo, 0.45),  # Best in uptrends
+])
+
+# Predict
+action, confidence = ensemble.predict_with_confidence(obs)
+```
+
+**Impact**: Combines algorithm strengths for more robust trading
+
+---
+
+#### 4. Multi-Timeframe Features
+
+**File**: `src/rl/improvements.py:1293-1372`
+**Class**: `MultiTimeframeFeatures`
+
+Improves trend identification with multiple timeframes:
+
+**Features**:
+- Adds **6 new features** to observation space:
+  - Weekly trend slope (5-day SMA)
+  - Monthly trend slope (20-day SMA)
+  - Support distance (% to weekly low)
+  - Resistance distance (% to weekly high)
+  - Weekly price position (0-1)
+  - Monthly price position (0-1)
+
+**Integration**:
+- Added to `EnhancedTradingEnv` with `use_mtf_features=True`
+- Features computed in `_get_observation()`
+- Observation space expanded by 6 features
+
+**Impact**: Better trend identification across timeframes
+
+---
+
+#### 5. Kelly Position Sizing
+
+**File**: `src/rl/improvements.py:1378-1517`
+**Class**: `KellyPositionSizer`
+
+Optimizes position sizes based on win rate and edge:
+
+**Features**:
+- Kelly Criterion: `f = (p*W - q*L) / W`
+  - p = win probability
+  - W = average win
+  - q = loss probability (1-p)
+  - L = average loss
+- Half-Kelly for safety (max 50%)
+- Requires minimum 20 trades before activating
+- Adjusts BUY action sizes: BUY_SMALL → BUY_MEDIUM → BUY_LARGE
+
+**Integration**:
+- Added to `EnhancedTradingEnv` with `use_kelly_sizing=True`
+- Adjusts actions in `step()` before execution
+- Records trade results for edge calculation
+
+**Impact**: Optimal position sizing based on statistical edge
+
+---
+
+### Enhanced Observation Space
+
+The observation space expands based on enabled features:
+
+| Feature Group | Count | Enabled By |
+|--------------|-------|------------|
+| Base features | 5 | Always |
+| Technical indicators | 5 | `include_technical_indicators=True` (default) |
+| Trend indicators | 3 | `include_trend_indicators=True` (RecurrentPPO) |
+| Regime features | 7 | `use_regime_detector=True` |
+| Multi-timeframe | 6 | `use_mtf_features=True` |
+| **Total** | **26** | All enabled |
+
+**Observation shape**: `(lookback_window, num_features)` = `(60, 26)` when all features enabled
+
+---
+
+### Usage Example
+
+All improvements integrate into `EnhancedTradingEnv`:
+
+```python
+from src.rl.environments import EnhancedTradingEnv
+
+env = EnhancedTradingEnv(
+    symbol="AAPL",
+    start_date="2020-01-01",
+    end_date="2023-12-31",
+    # Risk management
+    use_risk_manager=True,
+    stop_loss_pct=0.05,           # 5% stop-loss
+    trailing_stop_pct=0.03,        # 3% trailing stop
+    max_drawdown_pct=0.15,         # 15% circuit breaker
+    # Enhanced features
+    use_regime_detector=True,      # Market regime detection
+    use_mtf_features=True,         # Multi-timeframe features
+    use_kelly_sizing=True,         # Kelly position sizing
+    # Existing improvements
+    use_action_masking=True,
+    use_enhanced_rewards=True,
+    use_adaptive_sizing=True,
+    use_improved_actions=True
+)
+```
+
+---
+
+## Developer Tools
+
+### CLI Utility: retrain_and_compare.py
+
+A command-line tool for automated training, backtesting, and comparison of all RL algorithms.
+
+**Location**: `retrain_and_compare.py` (project root)
+
+#### Purpose
+
+Automate the workflow of:
+1. Training all (or selected) RL algorithms on a symbol
+2. Running comprehensive backtests
+3. Comparing performance across algorithms and baseline strategies
+4. Detecting action collapse issues
+
+#### Usage
+
+**Basic Usage** (train all algorithms):
+```bash
+source .venv/bin/activate
+python retrain_and_compare.py --symbol AAPL
+```
+
+**Advanced Options**:
+```bash
+# Train specific algorithms only
+python retrain_and_compare.py --symbol TSLA --algorithms ppo,recurrent_ppo,qrdqn
+
+# Custom training duration
+python retrain_and_compare.py --symbol NVDA --timesteps 500000
+
+# Skip training, only backtest existing models
+python retrain_and_compare.py --symbol GOOGL --skip-training
+
+# Exclude baseline strategies
+python retrain_and_compare.py --symbol MSFT --no-baselines
+```
+
+#### Command-Line Arguments
+
+| Argument | Type | Default | Description |
+|----------|------|---------|-------------|
+| `--symbol` | string | **required** | Stock symbol to train on (e.g., AAPL, TSLA) |
+| `--algorithms` | string | `all` | Comma-separated list: `ppo,recurrent_ppo,a2c,sac,qrdqn` |
+| `--timesteps` | int | `300000` | Training timesteps per algorithm |
+| `--skip-training` | flag | `False` | Skip training, only backtest existing models |
+| `--no-baselines` | flag | `False` | Skip baseline strategies (Buy & Hold, Momentum) |
+
+#### What It Does
+
+**1. Training Phase** (unless `--skip-training`):
+- Trains each selected algorithm sequentially
+- Uses last 3 years of historical data (1095 days)
+- Saves models to `data/models/rl/{algorithm}_{symbol}_{timestamp}/`
+- Saves both `best_model.zip` (peak performance) and `final_model.zip`
+
+**2. Backtesting Phase**:
+- Automatically finds latest trained models for each algorithm
+- Tests on last 9 months of data (280 days)
+- Loads exact training configuration from saved models
+- Compares against Buy & Hold and Momentum strategies
+
+**3. Results Display**:
+```
+📊 BACKTEST COMPARISON
+====================
+Strategy          Return    Sharpe  Max DD   Win Rate  HOLD  BUY_S  BUY_M  BUY_L  SELL_P  SELL_A  Trades
+PPO Agent         +15.23%   1.45    -8.2%    65%       25%   15%    20%    18%    12%     10%     48
+RECURRENT PPO     +18.67%   1.78    -6.1%    72%       22%   18%    22%    16%    14%     8%      52
+A2C Agent         +2.45%    0.32    -12.5%   48%       5%    87%    3%     2%     2%      1%      65
+SAC Agent         +8.91%    0.88    -9.8%    58%       3%    2%     91%    1%     2%      1%      72
+QRDQN Agent       +22.35%   2.12    -5.4%    75%       20%   20%    25%    18%    10%     7%      56
+Buy & Hold        +12.50%   1.20    -10.0%   N/A       N/A   N/A    N/A    N/A    N/A     N/A     1
+Momentum          +10.15%   0.95    -11.2%   N/A       N/A   N/A    N/A    N/A    N/A     N/A     38
+```
+
+**4. Analysis**:
+- Identifies best performer by total return
+- Detects action collapse (>80% single action usage)
+- Provides actionable recommendations
+
+#### Example Output
+
+```bash
+$ python retrain_and_compare.py --symbol AAPL
+
+################################################################################
+#                                                                              #
+#                         RL MODEL RETRAINING                                  #
+#                                                                              #
+################################################################################
+
+Symbol: AAPL
+Timesteps: 300,000
+Algorithms: PPO, RECURRENT PPO, A2C, SAC, QRDQN
+
+================================================================================
+🚀 TRAINING PPO on AAPL
+================================================================================
+
+Training progress: 100%|████████████████| 300000/300000
+
+✅ PPO Training Complete!
+   Model saved to: data/models/rl/ppo_AAPL_20250126_143022/
+
+[... training continues for each algorithm ...]
+
+================================================================================
+📊 COMPREHENSIVE BACKTEST: AAPL
+================================================================================
+
+   ✅ PPO: +15.23%
+   ✅ RECURRENT PPO: +18.67%
+   ✅ A2C: +2.45%
+   ✅ SAC: +8.91%
+   ✅ QRDQN: +22.35%
+   ✅ Buy & Hold: +12.50%
+   ✅ Momentum: +10.15%
+
+[... results table ...]
+
+================================================================================
+🎯 ANALYSIS
+================================================================================
+
+🥇 Best Performer: QRDQN Agent
+   Return: +22.35%
+   Sharpe: 2.12
+
+📊 Action Distribution Analysis:
+   ⚠️  A2C Agent: ACTION COLLAPSE (87% single action)
+   ⚠️  SAC Agent: ACTION COLLAPSE (91% single action)
+   ✅ PPO Agent: Balanced actions (max 25%)
+   ✅ RECURRENT PPO: Balanced actions (max 22%)
+   ✅ QRDQN Agent: Balanced actions (max 25%)
+
+================================================================================
+✨ Complete!
+```
+
+#### Use Cases
+
+**1. Algorithm Selection**:
+```bash
+# Compare all algorithms to choose best for a symbol
+python retrain_and_compare.py --symbol TEAM
+```
+
+**2. Periodic Retraining**:
+```bash
+# Retrain models monthly with latest data
+python retrain_and_compare.py --symbol AAPL --algorithms ppo,recurrent_ppo,qrdqn
+```
+
+**3. Quick Performance Check**:
+```bash
+# Test existing models without retraining
+python retrain_and_compare.py --symbol NVDA --skip-training
+```
+
+**4. Debugging Action Collapse**:
+```bash
+# Train and check for action collapse issues
+python retrain_and_compare.py --symbol GOOGL --algorithms a2c,sac
+```
+
+#### Integration with Web UI
+
+Models trained via this CLI tool are **automatically available** in the web interface:
+- Training page: Select algorithm → models appear in dropdown
+- Live Trading page: Algorithm selection → auto-finds latest model
+- Models page: View all trained models
+
+#### Notes
+
+- **Training Time**: ~15-35 min per algorithm (300k steps)
+- **Data Requirements**: Minimum 3 years historical data
+- **Disk Space**: ~50-100MB per trained model
+- **Parallel Training**: Not supported (trains sequentially to avoid resource conflicts)
+- **Logging**: All training logs saved to `data/logs/`
+
+#### Troubleshooting
+
+**"No model found for {algorithm}"**:
+- Solution: Train the algorithm first (remove `--skip-training`)
+
+**"Insufficient data for symbol"**:
+- Solution: Use well-established stocks with >3 years of history
+
+**Training crashes/OOM**:
+- Solution: Reduce `--timesteps` to 100000 or close other applications
+
+---
+
 ## Conclusion
 
-This RL trading system provides a complete framework for training, evaluating, and deploying RL agents for algorithmic trading. Key strengths include modular architecture, realistic simulation, comprehensive metrics, and user-friendly interface.
+This RL trading system provides a complete framework for training, evaluating, and deploying RL agents for algorithmic trading. Key strengths include modular architecture, realistic simulation, comprehensive risk management, and advanced features for improved performance.
 
 **Next Steps**:
 1. Train your first agent (PPO, RecurrentPPO, or QRDQN recommended; A2C and SAC supported but may exhibit action collapse)
 2. Backtest and compare strategies
-3. Extend with custom reward functions
+3. Experiment with different improvement combinations
 4. Deploy to live paper trading
 
 ---

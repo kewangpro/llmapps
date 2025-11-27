@@ -282,6 +282,11 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 - ✅ **A2C** fast synchronous actor-critic
 - ✅ **SAC** maximum entropy exploration
 - ✅ **PPO** stable baseline for general trading
+- ✅ **Advanced Risk Management** (5% stop-loss, 3% trailing stop, 15% circuit breaker)
+- ✅ **Market Regime Detection** (BULL, BEAR, SIDEWAYS, VOLATILE)
+- ✅ **Multi-Timeframe Features** (weekly/monthly trend analysis)
+- ✅ **Kelly Position Sizing** (optimal sizing based on edge)
+- ✅ **Ensemble Agents** (combine multiple algorithms)
 - ✅ **Action Masking** prevents invalid trades
 - ✅ **6-Action Space** fine-grained position sizing
 - ✅ **Algorithm-Specific Rewards** optimized per algorithm
@@ -596,6 +601,7 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 - **Consistent Defaults**: Shared across training/backtesting/live trading
 - **No Train-Test Mismatch**: Auto-loads exact training config
 - **Conditional Features**: Trend indicators for RecurrentPPO only
+- **Advanced Improvements**: Risk management, regime detection, multi-timeframe features, Kelly sizing enabled by default
 
 ### Bug Fixes
 - **Short-Selling Prevention**: Fixed accidental short positions

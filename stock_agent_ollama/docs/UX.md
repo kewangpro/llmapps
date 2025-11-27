@@ -501,17 +501,24 @@ All cards follow consistent styling:
 - Model performance tracking (Final Loss, Val Loss)
 
 ### ✅ RL Trading Agents
-- 4 algorithms: PPO, RecurrentPPO, SAC, QRDQN
+- 5 algorithms: PPO, RecurrentPPO, A2C, SAC, QRDQN
 - RecurrentPPO with LSTM memory and trend indicators
+- Advanced risk management (stop-loss, trailing stops, circuit breakers)
+- Market regime detection (BULL, BEAR, SIDEWAYS, VOLATILE)
+- Multi-timeframe features (weekly/monthly trend analysis)
+- Kelly position sizing (optimal sizing based on edge)
+- Ensemble agents (combine multiple algorithms)
 - Live training progress with real-time metrics
 - Comprehensive backtesting engine
 - Strategy comparison (All RL agents vs Buy&Hold vs Momentum)
 
 ### ✅ Live Trading Simulation
 - Paper trading with real-time data
-- Trained agent execution (PPO/RecurrentPPO/SAC/QRDQN)
+- Trained agent execution (PPO/RecurrentPPO/A2C/SAC/QRDQN)
 - Real-time portfolio tracking
-- Risk management controls
+- Integrated risk management (stop-loss, trailing stops, circuit breakers)
+- Market regime awareness
+- Kelly position sizing
 - Live monitoring dashboard
 
 ### ✅ Technical Analysis

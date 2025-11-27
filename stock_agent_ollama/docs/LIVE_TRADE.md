@@ -214,6 +214,26 @@ class Position:
 
 **Purpose:** Protect capital with automated safety controls
 
+**Integrated Risk Features:**
+
+The trading environment includes advanced risk management components:
+
+**A. Stop-Loss Manager** (`RiskManager` in `improvements.py`)
+- **5% position stop-loss**: Exits if position down 5% from entry
+- **3% trailing stop**: Locks in profits as position moves up
+- **15% portfolio circuit breaker**: Halts trading if portfolio down 15%
+- Automatically forces SELL_ALL when triggered
+
+**B. Market Regime Detector** (`RegimeDetector` in `improvements.py`)
+- Detects 4 market regimes: BULL, BEAR, SIDEWAYS, VOLATILE
+- Adds 7 regime features to agent observations
+- Helps agent adapt to market conditions
+
+**C. Kelly Position Sizer** (`KellyPositionSizer` in `improvements.py`)
+- Optimizes position sizes based on win rate and edge
+- Uses Kelly Criterion for optimal sizing
+- Requires minimum 20 trades before activating
+
 ### 6. Session Persistence
 
 **Purpose:** To save and load the state of a live trading session, allowing it to be resumed across application restarts.
@@ -236,42 +256,49 @@ class Position:
 
 **Risk Controls:**
 
-**A. Stop-Loss Mechanisms:**
+**A. Integrated Risk Management** (from `improvements.py`)
+
+The environment includes built-in risk management via `RiskManager`, `RegimeDetector`, and `KellyPositionSizer`:
+
 ```python
-class StopLossManager:
-    # Per-Position Stop Loss
-    position_stop_loss: float = -5.0%  # Exit if position down 5%
+# RiskManager (integrated into EnhancedTradingEnv)
+use_risk_manager: bool = True
+stop_loss_pct: float = 0.05        # 5% stop-loss
+trailing_stop_pct: float = 0.03     # 3% trailing stop
+max_drawdown_pct: float = 0.15      # 15% portfolio circuit breaker
 
-    # Portfolio-Wide Stop Loss
-    portfolio_stop_loss: float = -10.0%  # Halt trading if down 10%
+# RegimeDetector (market condition awareness)
+use_regime_detector: bool = True
+# Detects: BULL, BEAR, SIDEWAYS, VOLATILE
 
-    # Trailing Stop Loss
-    trailing_stop: float = 3.0%  # Lock in profits
+# KellyPositionSizer (optimal position sizing)
+use_kelly_sizing: bool = True
+# Adjusts BUY sizes based on win rate and edge
 ```
 
-**B. Position Limits:**
+**Additional Safety Controls:**
+
+**Position Limits:**
 ```python
-class PositionLimits:
-    max_position_size: float = 0.80  # Max 80% of portfolio in one stock
-    max_total_exposure: float = 0.80  # Max 80% invested
-    min_cash_reserve: float = 0.20  # Keep 20% cash minimum
+max_position_size: float = 0.80  # Max 80% of portfolio in one stock
+max_total_exposure: float = 0.80  # Max 80% invested
+min_cash_reserve: float = 0.20   # Keep 20% cash minimum
 ```
 
-**C. Circuit Breakers:**
+**Circuit Breakers:**
 ```python
-class CircuitBreakers:
-    # Daily Loss Limit
-    daily_loss_limit: float = -5.0%  # Stop trading if down 5% today
+# Daily Loss Limit
+daily_loss_limit: float = -5.0%  # Stop trading if down 5% today
 
-    # Rapid Loss Protection
-    rapid_loss_threshold: float = -2.0%  # Trigger if loss > 2% in 5 min
-    rapid_loss_cooldown: int = 300  # Wait 5 min before resuming
+# Rapid Loss Protection
+rapid_loss_threshold: float = -2.0%  # Trigger if loss > 2% in 5 min
+rapid_loss_cooldown: int = 300  # Wait 5 min before resuming
 
-    # Volatility Filter
-    max_volatility: float = 0.05  # Skip trades if vol > 5%
+# Volatility Filter
+max_volatility: float = 0.05  # Skip trades if vol > 5%
 ```
 
-**D. Time-Based Controls:**
+**Time-Based Controls:**
 ```python
 class TradingHours:
     market_open: time = time(9, 30)  # 9:30 AM
