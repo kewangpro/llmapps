@@ -716,7 +716,7 @@ class EnhancedTradingEnv(SingleStockTradingEnv):
         transaction_cost_rate: float = 0.001,
         slippage_rate: float = 0.0,
         max_position_size: int = 1000,
-        max_position_pct: float = 40.0,
+        max_position_pct: float = 80.0,
         lookback_window: int = 60,
         include_technical_indicators: bool = True,
         include_trend_indicators: bool = False,  # RecurrentPPO only

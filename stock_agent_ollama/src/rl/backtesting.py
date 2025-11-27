@@ -530,13 +530,18 @@ class BacktestEngine:
 
             # Record action (convert to discrete for SAC)
             if is_sac_agent:
-                # SAC outputs continuous action, convert to discrete using same logic as wrapper
+                # SAC outputs continuous action, convert to discrete using EXACT wrapper logic
                 continuous_val = action.item() if isinstance(action, np.ndarray) else action
                 continuous_val = np.clip(continuous_val, -1.0, 1.0)
-                # Discretize using 6 equal bins in [-1, 1]
-                bin_edges = np.linspace(-1.0, 1.0, 7)  # 7 edges for 6 bins
-                discrete_action = np.digitize(continuous_val, bin_edges[1:-1])
-                discrete_action = np.clip(discrete_action, 0, 5)
+
+                # Use same bins and mapping as DiscreteToBoxWrapper
+                bin_edges = np.array([-1.0, -0.6, -0.2, 0.2, 0.5, 0.8, 1.0])
+                bin_map = {0: 5, 1: 4, 2: 0, 3: 1, 4: 2, 5: 3}
+
+                bin_idx = np.digitize(continuous_val, bin_edges) - 1
+                bin_idx = max(0, min(bin_idx, len(bin_map) - 1))
+                discrete_action = bin_map[bin_idx]
+
                 actions.append(int(discrete_action))
             else:
                 actions.append(int(action.item() if isinstance(action, np.ndarray) else action))

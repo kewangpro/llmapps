@@ -160,10 +160,18 @@ def load_env_config_from_model(model_path: Path) -> Dict:
     config_path = config_dir / "training_config.json"
 
     if not config_path.exists():
-        raise FileNotFoundError(
+        logger.warning(
             f"Training config not found: {config_path}\n"
-            f"Cannot load environment configuration from model."
+            f"Using default EnvConfig values. Model may have been trained with different settings."
         )
+        # Return default EnvConfig as dict
+        from .env_factory import EnvConfig
+        default_config = EnvConfig(
+            symbol="UNKNOWN",
+            start_date="2020-01-01",
+            end_date="2023-12-31"
+        )
+        return default_config.to_dict()
 
     with open(config_path, 'r') as f:
         config = json.load(f)

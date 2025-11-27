@@ -61,7 +61,7 @@ class ActionMasker:
         position: int,
         current_price: float,
         portfolio_value: float,
-        max_position_pct: float = 40.0
+        max_position_pct: float = 80.0
     ) -> np.ndarray:
         """
         Get binary mask of valid actions (1=valid, 0=invalid).
@@ -464,7 +464,7 @@ class EnhancedRewardFunction:
         position: float,
         price: float,
         prev_price: float,
-        max_position_pct: float = 40.0,
+        max_position_pct: float = 80.0,
         **kwargs
     ) -> float:
         """
