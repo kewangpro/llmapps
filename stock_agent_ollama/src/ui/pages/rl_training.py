@@ -576,8 +576,10 @@ class RLTrainingPanel(param.Parameterized):
                 results['Momentum'] = baseline_engine.run_strategy_backtest(momentum.get_action)
 
                 # Display results
+                # All modern models use improved actions (6-action space)
+                # Default to True since line 217 enforces this for all training
                 pn.state.execute(lambda: self._display_backtest_results(
-                    results, symbol, model_info.get('use_improved_actions', False) if model_info else False
+                    results, symbol, use_improved_actions=True
                 ))
                 pn.state.execute(lambda: pn.state.notifications.success("Backtest complete!", duration=3000))
 
