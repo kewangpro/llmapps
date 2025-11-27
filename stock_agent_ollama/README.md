@@ -36,6 +36,11 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 - **6-Action Trading Space** (HOLD, BUY_SMALL, BUY_MEDIUM, BUY_LARGE, SELL_PARTIAL, SELL_ALL)
 - **RecurrentPPO** with LSTM memory for temporal pattern recognition
 - **Trend Indicators** for RecurrentPPO (SMA_Trend, EMA_Crossover, Price_Momentum)
+- **Advanced Risk Management** (stop-loss, trailing stops, circuit breakers)
+- **Market Regime Detection** (BULL, BEAR, SIDEWAYS, VOLATILE)
+- **Multi-Timeframe Features** (weekly/monthly trend analysis)
+- **Kelly Position Sizing** (optimal position sizing based on edge)
+- **Ensemble Agents** (combine multiple algorithms)
 - **Adaptive Position Sizing** adjusts to market volatility
 - **Training Metrics** (Win Rate, Action Distribution, Episode Rewards, Explained Variance)
 - **Algorithm-Specific Rewards** optimized per algorithm
@@ -200,6 +205,9 @@ PANEL_PORT=5006                      # Web interface port
 RL_DEFAULT_INITIAL_BALANCE=100000.0  # Starting balance ($100k)
 RL_TRANSACTION_COST_RATE=0.0005      # 0.05% transaction cost
 RL_MAX_POSITION_PCT=80.0             # Max position size (80% of portfolio)
+RL_STOP_LOSS_PCT=0.05                # 5% stop-loss (default)
+RL_TRAILING_STOP_PCT=0.03            # 3% trailing stop (default)
+RL_MAX_DRAWDOWN_PCT=0.15             # 15% max drawdown (default)
 ```
 
 **Health Checks:**
@@ -231,9 +239,12 @@ See [QUICK_START.md](docs/QUICK_START.md#troubleshooting) for more help
 
 ## 📖 Key Features
 
-**LSTM**: 3-model ensemble, 30-day forecasts, auto-training
+**LSTM Predictions:**
+- 3-model ensemble for robustness
+- 30-day price forecasts
+- Auto-training on first analysis
 
-**RL Agents**:
+**RL Agents:**
 - **PPO**: Stable baseline with strong penalties
 - **RecurrentPPO**: LSTM memory + trend indicators (13 features)
 - **A2C**: Synchronous actor-critic with native discrete actions
@@ -241,7 +252,10 @@ See [QUICK_START.md](docs/QUICK_START.md#troubleshooting) for more help
 - **QRDQN**: Distributional RL for risk-awareness
 - 6-action space with masking, adaptive sizing, algorithm-specific rewards
 
-**Backtesting**: Auto-loads models, compares vs baselines, comprehensive metrics
+**Backtesting:**
+- Auto-loads models
+- Compares vs baselines (Buy & Hold, Momentum)
+- Comprehensive metrics (Sharpe, Max Drawdown, Win Rate)
 
 ---
 
