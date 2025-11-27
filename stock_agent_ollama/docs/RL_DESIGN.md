@@ -63,7 +63,9 @@ This RL trading system provides advanced reinforcement learning capabilities for
 
 **SAC Wrapper:**
 - `DiscreteToBoxWrapper` converts 6 discrete actions to continuous Box space for SAC
+- Uses equal-sized bins (16.67% each) to prevent action collapse
 - Bins continuous output [-1, 1] back to discrete actions [0-5]
+- HOLD shifted to [-0.333, 0.0] so SAC's natural centering at 0 splits between HOLD and BUY_SMALL
 - Transparent wrapping with `__getattr__` forwarding
 
 **Critical Bug Fixes:**
