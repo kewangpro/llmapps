@@ -310,48 +310,6 @@ class PPORewardConfig(EnhancedRewardConfig):
 
 
 @dataclass
-class SACRewardConfig(EnhancedRewardConfig):
-    """
-    Reward configuration optimized for SAC (Soft Actor-Critic).
-
-    SAC needs balanced penalties between base and PPO because:
-    - Off-policy learning with replay buffer (more sample efficient)
-    - Automatic entropy tuning can collapse to greedy policy
-    - Continuous→discrete conversion needs position holding incentive
-    - High trading frequency needs stronger transaction costs
-
-    Key fixes for SAC's performance issues (2025 update):
-    - Transaction costs apply to ALL trades (not just action changes) to prevent spam
-    - Base HOLD incentive to encourage exploration of HOLD action
-    - Action diversity bonus to prevent action collapse
-    - Progressive consecutive action penalty (scales up to 5x)
-    - Moderate risk penalties (stronger than base, lighter than PPO)
-    """
-    # Moderate transaction costs (between base 0.0005 and PPO 0.002)
-    transaction_cost_rate: float = 0.001  # 0.1% per trade
-
-    # Moderate penalties (stronger than base, lighter than PPO)
-    risk_penalty_weight: float = 0.05      # Reduced from 0.1 to encourage taking risk
-    drawdown_penalty_weight: float = 0.1   # Reduced from 0.2
-
-    # HOLD incentive during winning positions (prevent 0% HOLD collapse)
-    hold_winning_position_bonus: float = 0.2
-
-    # NEW: Base HOLD incentive (always reward HOLD to encourage exploration)
-    # EXTREME value needed to overcome SAC's entropy-seeking behavior
-    base_hold_incentive: float = 0.5  # Strong constant bonus for HOLD
-
-    # NEW: Action diversity bonus (prevent collapse to single action)
-    # PENALIZES low diversity instead of just rewarding high diversity
-    diversity_bonus: float = 0.5  # Reward for high diversity
-    diversity_penalty: float = -1.0  # NEW: Penalty for low diversity (<30%)
-
-    # Discourage excessive trading (now scales progressively)
-    # Reduced from -1.0 since we fixed the action mapping
-    excessive_trading_penalty: float = -0.5  # Base penalty (scales 1x-5x)
-
-
-@dataclass
 class RecurrentPPORewardConfig(PPORewardConfig):
     """
     Reward configuration optimized for RecurrentPPO.
@@ -381,33 +339,6 @@ class RecurrentPPORewardConfig(PPORewardConfig):
 
     # Minimal transaction costs
     transaction_cost_rate: float = 0.001  # Further reduced
-
-
-@dataclass
-class A2CRewardConfig(EnhancedRewardConfig):
-    """
-    Reward configuration optimized for A2C (Advantage Actor-Critic).
-
-    A2C is a synchronous, on-policy algorithm that:
-    - Natively supports discrete actions (no continuous→discrete conversion)
-    - Uses advantage estimation for stable learning
-    - Simpler architecture than PPO (more sensitive to reward tuning)
-
-    UPDATED (2025 v4 - AGGRESSIVE):
-    - v3 (Balanced) caused "Sell Panic" (87% SELL) because risk penalties were too high
-      for a bear market. Agent learned to hide in cash.
-    - v4 (Aggressive) reduces risk penalties significantly to force the agent to
-      engage with the market even in downtrends.
-    """
-    # REDUCED penalties to stop "Sell Panic" (hide in cash) behavior
-    risk_penalty_weight: float = 0.1       # Reduced from 0.2
-    drawdown_penalty_weight: float = 0.15  # Reduced from 0.35
-
-    # Balanced transaction costs
-    transaction_cost_rate: float = 0.0015  # 75% of PPO (0.002)
-
-    # Balanced action diversity bonus
-    action_diversity_bonus: float = 0.5    # Reduced from 0.75 to allow some trend following
 
 
 class EnhancedRewardFunction:

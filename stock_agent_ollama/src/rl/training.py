@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, Any
 import logging
 import json
-from stable_baselines3 import PPO, SAC, A2C
+from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from sb3_contrib import RecurrentPPO, QRDQN
 
@@ -25,9 +25,7 @@ from .environments import EnhancedTradingEnv
 from .improvements import (
     EnhancedRewardConfig,
     PPORewardConfig,
-    SACRewardConfig,
     RecurrentPPORewardConfig,
-    A2CRewardConfig,
     QRDQNRewardConfig,
     CurriculumManager,
     TrainingDiagnostics
@@ -82,7 +80,7 @@ class EnhancedTrainingConfig:
     reward_config: EnhancedRewardConfig = field(default_factory=EnhancedRewardConfig)
 
     # Agent settings
-    agent_type: str = "ppo"  # Options: 'ppo', 'recurrent_ppo', 'sac', 'qrdqn'
+    agent_type: str = "ppo"  # Options: 'ppo', 'recurrent_ppo', 'qrdqn'
     learning_rate: float = 3e-4
     gamma: float = 0.99
     # Entropy coefficient controls exploration vs exploitation
@@ -200,11 +198,9 @@ class EnhancedRLTrainer:
 
         # Select appropriate reward config based on agent type
         # Algorithm-specific reward configurations:
-        # - SAC: SACRewardConfig (moderate penalties, HOLD incentive, higher transaction costs)
         # - QRDQN: QRDQNRewardConfig (risk-encouraging to counter natural conservatism)
         # - PPO: PPORewardConfig (stronger penalties to fight action collapse)
         # - RecurrentPPO: RecurrentPPORewardConfig (reduced penalties for trend riding)
-        # - A2C: A2CRewardConfig (balanced penalties, native discrete support)
         if config.reward_config is None or isinstance(config.reward_config, EnhancedRewardConfig):
             if config.agent_type.lower() == 'recurrent_ppo':
                 logger.info(f"Using RecurrentPPORewardConfig for RecurrentPPO (HOLD incentive + momentum bonus)")
@@ -212,12 +208,6 @@ class EnhancedRLTrainer:
             elif config.agent_type.lower() == 'ppo':
                 logger.info(f"Using PPORewardConfig for PPO")
                 self.config.reward_config = PPORewardConfig()
-            elif config.agent_type.lower() == 'a2c':
-                logger.info(f"Using A2CRewardConfig for A2C (balanced penalties, native discrete actions)")
-                self.config.reward_config = A2CRewardConfig()
-            elif config.agent_type.lower() == 'sac':
-                logger.info(f"Using SACRewardConfig for SAC (moderate penalties, HOLD incentive, higher tx costs)")
-                self.config.reward_config = SACRewardConfig()
             elif config.agent_type.lower() == 'qrdqn':
                 logger.info(f"Using QRDQNRewardConfig for QRDQN (risk-encouraging to counter conservatism)")
                 self.config.reward_config = QRDQNRewardConfig()
@@ -309,24 +299,11 @@ class EnhancedRLTrainer:
         elif agent_type_lower == 'recurrent_ppo':
             agent_class = RecurrentPPO
             policy_type = 'MlpLstmPolicy'
-        elif agent_type_lower == 'a2c':
-            agent_class = A2C
-            policy_type = 'MlpPolicy'
-        elif agent_type_lower == 'sac':
-            # SAC requires continuous action space
-            # We'll use a wrapper to discretize continuous actions
-            from gymnasium import spaces
-            from .sac_discrete_wrapper import DiscreteToBoxWrapper
-
-            # Wrap environment for SAC
-            self.env = DiscreteToBoxWrapper(self.env, n_discrete_actions=6)
-            agent_class = SAC
-            policy_type = 'MlpPolicy'
         elif agent_type_lower == 'qrdqn':
             agent_class = QRDQN
             policy_type = 'MlpPolicy'
         else:
-            raise ValueError(f"Unsupported agent type: {self.config.agent_type}. Available: ppo, recurrent_ppo, a2c, sac, qrdqn")
+            raise ValueError(f"Unsupported agent type: {self.config.agent_type}. Available: ppo, recurrent_ppo, qrdqn")
 
         # Algorithm-specific parameters
         if agent_type_lower == 'ppo':
@@ -342,42 +319,6 @@ class EnhancedRLTrainer:
                 'batch_size': self.config.batch_size,
                 'n_epochs': self.config.n_epochs,
                 'ent_coef': self.config.ent_coef,
-            })
-        elif agent_type_lower == 'a2c':
-            # A2C-specific parameters optimized for stock trading
-            # A2C is synchronous actor-critic with advantage estimation
-            # - Native discrete action support (no wrapper needed)
-            # - Simpler architecture than PPO (more sensitive to hyperparameters)
-            #
-            # UPDATED (2025 v3 - BALANCED):
-            # v1: n_steps=5 → too short → 100% BUY_MEDIUM collapse
-            # v2: n_steps=256, strong penalties → 100% SELL_PARTIAL collapse
-            # v3: n_steps=512 (closer to PPO's 2048), balanced penalties, higher entropy
-            agent_params.update({
-                'n_steps': 512,                  # Longer rollout (closer to PPO, was 256)
-                'ent_coef': 0.02,                # Higher entropy for exploration (was 0.01)
-                'vf_coef': 0.5,                  # Value function coefficient
-                'max_grad_norm': 0.5,            # Gradient clipping
-                'rms_prop_eps': 1e-5,            # RMSprop epsilon
-                'use_rms_prop': True,            # Use RMSprop optimizer (A2C standard)
-                'gae_lambda': 1.0,               # GAE lambda
-                'normalize_advantage': True,     # Enable normalization (was False)
-            })
-        elif agent_type_lower == 'sac':
-            # SAC-specific parameters optimized for stock trading
-            # Fixed based on investigation of -3.55% return bug:
-            # - learning_starts increased to fill buffer with diverse experiences
-            # - train_freq reduced for temporal stability (stock data has autocorrelation)
-            # - gradient_steps increased for better sample efficiency
-            # - ent_coef increased to 0.3 for action diversity (0.2 caused 94% BUY_MEDIUM collapse)
-            agent_params.update({
-                'buffer_size': 100000,           # Large replay buffer
-                'learning_starts': 15000,        # Fill buffer before learning (was 5000 - too early)
-                'batch_size': self.config.batch_size,
-                'tau': 0.005,                    # Soft target network update
-                'train_freq': 8,                 # Less frequent updates for temporal stability (was 4 - too frequent)
-                'gradient_steps': 4,             # More learning per update (was 1 - insufficient)
-                'ent_coef': 0.3,                # Higher entropy for action diversity (was 0.2 - caused collapse)
             })
         elif agent_type_lower == 'qrdqn':
             # QRDQN-specific parameters (similar to DQN but with distributional RL)

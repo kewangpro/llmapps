@@ -481,7 +481,7 @@ class BacktestEngine:
 
     def run_agent_backtest(
         self,
-        agent: Any,  # Stable-Baselines3 agent (PPO, RecurrentPPO, SAC, QRDQN)
+        agent: Any,  # Stable-Baselines3 agent (PPO, RecurrentPPO, QRDQN)
         deterministic: bool = True
     ) -> BacktestResult:
         """
@@ -500,19 +500,8 @@ class BacktestEngine:
         if self.env is None:
             self.setup_environment()
 
-        # Check if agent is SAC and wrap environment if needed
-        from stable_baselines3 import SAC
-        env_to_use = self.env
-        is_sac_agent = isinstance(agent, SAC)
-
-        if is_sac_agent:
-            # SAC needs continuous action space, wrap the environment
-            from .sac_discrete_wrapper import DiscreteToBoxWrapper
-            env_to_use = DiscreteToBoxWrapper(self.env, n_discrete_actions=6)
-            logger.info("Wrapped environment for SAC backtesting")
-
         # Run episode
-        obs, _ = env_to_use.reset()
+        obs, _ = self.env.reset()
         done = False
 
         actions = []
@@ -525,26 +514,11 @@ class BacktestEngine:
             action, _ = agent.predict(obs, deterministic=deterministic)
 
             # Execute action
-            obs, reward, terminated, truncated, info = env_to_use.step(action)
+            obs, reward, terminated, truncated, info = self.env.step(action)
             done = terminated or truncated
 
-            # Record action (convert to discrete for SAC)
-            if is_sac_agent:
-                # SAC outputs continuous action, convert to discrete using EXACT wrapper logic
-                continuous_val = action.item() if isinstance(action, np.ndarray) else action
-                continuous_val = np.clip(continuous_val, -1.0, 1.0)
-
-                # Use same bins and mapping as DiscreteToBoxWrapper (equal-sized bins)
-                bin_edges = np.array([-1.0, -2/3, -1/3, 0.0, 1/3, 2/3, 1.0])
-                bin_map = {0: 5, 1: 4, 2: 0, 3: 1, 4: 2, 5: 3}
-
-                bin_idx = np.digitize(continuous_val, bin_edges) - 1
-                bin_idx = max(0, min(bin_idx, len(bin_map) - 1))
-                discrete_action = bin_map[bin_idx]
-
-                actions.append(int(discrete_action))
-            else:
-                actions.append(int(action.item() if isinstance(action, np.ndarray) else action))
+            # Record action
+            actions.append(int(action.item() if isinstance(action, np.ndarray) else action))
 
 
             # Record state
