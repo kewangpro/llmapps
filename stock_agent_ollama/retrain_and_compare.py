@@ -119,12 +119,15 @@ def find_latest_model(symbol: str, agent_type: str) -> Path:
     if not matching_dirs:
         return None
 
-    latest_dir = matching_dirs[0]
-    model_path = latest_dir / "best_model.zip"
-    if not model_path.exists():
-        model_path = latest_dir / "final_model.zip"
+    # Only use completed models (those with final_model.zip)
+    # This prevents loading models that are still training
+    for model_dir in matching_dirs:
+        final_model_path = model_dir / "final_model.zip"
+        if final_model_path.exists():
+            return final_model_path
 
-    return model_path if model_path.exists() else None
+    # No completed models found
+    return None
 
 
 def run_comprehensive_backtest(symbol: str, include_baselines: bool = True) -> dict:
