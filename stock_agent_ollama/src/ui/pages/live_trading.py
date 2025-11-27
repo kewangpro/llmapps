@@ -101,14 +101,16 @@ class LiveTradingPage(pn.viewable.Viewer):
         # Sort by modification time (most recent first)
         matching_dirs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
 
-        # Check if best_model.zip or final_model.zip exists in the most recent directory
-        latest_dir = matching_dirs[0]
-        model_path = latest_dir / "best_model.zip"
-
-        if not model_path.exists():
-            model_path = latest_dir / "final_model.zip"
-
-        if not model_path.exists():
+        # Only use completed models (those with final_model.zip)
+        # This prevents loading models that are still training
+        for model_dir in matching_dirs:
+            final_model_path = model_dir / "final_model.zip"
+            if final_model_path.exists():
+                latest_dir = model_dir
+                model_path = final_model_path
+                break
+        else:
+            # No completed models found
             return None
 
         # Extract agent type from directory name
