@@ -739,6 +739,8 @@ class LiveTradingEngine:
             use_enhanced_rewards=training_config.get('use_enhanced_rewards', True),
             use_adaptive_sizing=training_config.get('use_adaptive_sizing', True),
             use_improved_actions=training_config.get('use_improved_actions', True),
+            use_regime_detector=training_config.get('use_regime_detector', True),
+            use_mtf_features=training_config.get('use_mtf_features', True),
 
             # No curriculum or diagnostics in live trading
             curriculum_manager=None,
@@ -1115,6 +1117,69 @@ class LiveTradingEngine:
                 ema_crossover_norm = np.clip(ema_crossover_last_60, -0.2, 0.2) * 5
                 price_momentum_norm = np.clip(price_momentum_last_60, -0.1, 0.1) * 10
                 features.extend([sma_trend_norm, ema_crossover_norm, price_momentum_norm])
+
+            # --- Regime Features ---
+            if getattr(self.env, 'use_regime_detector', False):
+                from ..rl.improvements import RegimeDetector
+                detector = RegimeDetector()
+                regime_features_list = []
+                
+                # We need to loop over the last 60 steps
+                full_close = hist_data['Close'].values
+                full_volume = hist_data['Volume'].values if 'Volume' in hist_data.columns else None
+                start_idx_in_hist = len(full_close) - 60
+                
+                for i in range(60):
+                    current_slice_idx = start_idx_in_hist + i
+                    # Need at least 50 points for detection
+                    slice_start = max(0, current_slice_idx - 50)
+                    slice_end = current_slice_idx + 1
+                    
+                    p_slice = full_close[slice_start:slice_end]
+                    v_slice = full_volume[slice_start:slice_end] if full_volume is not None else None
+                    
+                    _, feats = detector.detect_regime(p_slice, v_slice)
+                    
+                    # Extract 7 features
+                    regime_vec = [
+                        float(feats['regime_one_hot'][0]),
+                        float(feats['regime_one_hot'][1]),
+                        float(feats['regime_one_hot'][2]),
+                        float(feats['regime_one_hot'][3]),
+                        float(feats['trend_strength']),
+                        float(feats['trend_direction']),
+                        float(feats['volatility_regime'])
+                    ]
+                    regime_features_list.append(regime_vec)
+                
+                regime_features_array = np.array(regime_features_list, dtype=np.float32)
+                for feat_idx in range(7):
+                    features.append(regime_features_array[:, feat_idx])
+
+            # --- MTF Features ---
+            if getattr(self.env, 'use_mtf_features', False):
+                from ..rl.improvements import MultiTimeframeFeatures
+                mtf_extractor = MultiTimeframeFeatures()
+                mtf_features_list = []
+                
+                full_close = hist_data['Close'].values
+                full_volume = hist_data['Volume'].values if 'Volume' in hist_data.columns else None
+                start_idx_in_hist = len(full_close) - 60
+                
+                for i in range(60):
+                    current_slice_idx = start_idx_in_hist + i
+                    slice_start = max(0, current_slice_idx - 50)
+                    slice_end = current_slice_idx + 1
+                    
+                    p_slice = full_close[slice_start:slice_end]
+                    v_slice = full_volume[slice_start:slice_end] if full_volume is not None else None
+                    
+                    feats = mtf_extractor.extract_features(p_slice, v_slice)
+                    mtf_features_list.append([float(f) for f in feats])
+                    
+                mtf_features_array = np.array(mtf_features_list, dtype=np.float32)
+                for feat_idx in range(6):
+                    features.append(mtf_features_array[:, feat_idx])
 
             observation = np.column_stack(features).astype(np.float32)
 
