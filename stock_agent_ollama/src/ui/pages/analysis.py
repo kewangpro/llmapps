@@ -105,7 +105,16 @@ class StockAnalysisApp(param.Parameterized):
         self.lstm_prediction_text = pn.pane.HTML("")
 
         # Quick action buttons - more compact
-        quick_stocks = ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META", "TEAM"]
+        try:
+            watchlist_stocks = portfolio_manager.load_portfolio("default")
+            if watchlist_stocks:
+                quick_stocks = watchlist_stocks
+            else:
+                quick_stocks = ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META", "TEAM"]
+        except Exception as e:
+            logger.warning(f"Failed to load watchlist for quick buttons: {e}")
+            quick_stocks = ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META", "TEAM"]
+
         self.quick_buttons = pn.Row(
             *[pn.widgets.Button(name=sym, button_type="light", width=70, height=30)
               for sym in quick_stocks],
