@@ -42,7 +42,7 @@ This document outlines the design for a **live trading simulation system** that 
 │   Stream     │    │   (Trained)  │    │   Manager    │
 │              │    │              │    │              │
 │ • Yahoo API  │    │ • PPO/RecurrentPPO/  │    │ • Positions  │
-│ • Real-time  │    │   SAC/QRDQN      │    │ • Cash       │
+│ • Real-time  │    │   DQN/QRDQN      │    │ • Cash       │
 │ • 1-min bars │    │ • Inference      │    │ • P&L        │
 └──────────────┘    └──────────────┘    └──────────────┘
          │                    │                    │
@@ -435,7 +435,7 @@ class TradingSession:
 class LiveTradingConfig:
     # Agent
     agent_path: str
-    agent_type: str  # 'ppo', 'recurrent_ppo', 'sac', or 'qrdqn'
+    agent_type: str  # 'ppo', 'recurrent_ppo', 'dqn', or 'qrdqn'
 
     # Portfolio
     initial_capital: float = 100000.0
@@ -604,7 +604,7 @@ class TradingEvent:
 - Agent-to-order translation
 
 **Testing:**
-- Test with all agent types (PPO, RecurrentPPO, SAC, QRDQN)
+- Test with all agent types (PPO, RecurrentPPO, DQN, QRDQN)
 - Validate observation construction
 - Compare backtest vs live predictions
 
@@ -973,7 +973,7 @@ educational purposes. No real trades are executed.
 **Via Web UI:**
 All configuration is done through the Live Trade page interface:
 - Symbol selection
-- Algorithm selection (PPO/RecurrentPPO/SAC/QRDQN)
+- Algorithm selection (PPO/RecurrentPPO/DQN/QRDQN)
 - Initial capital
 - Max position size
 - Stop loss percentage
@@ -993,7 +993,7 @@ Configuration is saved with the session state in:
 **Via Web UI (Recommended):**
 1. Launch the application: `python src/main.py`
 2. Navigate to **Live Trade** tab
-3. Configure settings and click "Start Trading"
+3. Configure settings (PPO/RecurrentPPO/DQN/QRDQN) and click "Start Trading"
 4. Sessions are automatically saved and can be resumed on restart
 
 **Session State:**

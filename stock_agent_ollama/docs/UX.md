@@ -198,7 +198,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 │ Configuration Panel                                     │
 │                                                         │
 │ Symbol: [AAPL ▼]  Algorithm: [PPO ▼]                  │
-│ Algorithms: PPO, RecurrentPPO, SAC, QRDQN              │
+│ Algorithms: PPO, RecurrentPPO, DQN, QRDQN              │
 │ Training Period: [========] 1095 days                  │
 │ Training Steps: [========] 300,000                     │
 │                                                         │
@@ -214,7 +214,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 
 **A. Configuration Panel**
 - Symbol input with autocomplete (accepts any valid ticker)
-- Algorithm: PPO, RecurrentPPO, SAC, or QRDQN
+- Algorithm: PPO, RecurrentPPO, DQN, or QRDQN
 - Training period slider (180-1095 days)
 - Training steps slider (50k-500k, default 300k)
 
@@ -282,7 +282,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 
 **A. Session Creation Panel**
 - Symbol input with autocomplete (accepts any valid ticker)
-- Algorithm selection (PPO/RecurrentPPO/SAC/QRDQN) - auto-finds latest trained model
+- Algorithm selection (PPO/RecurrentPPO/DQN/QRDQN) - auto-finds latest trained model
 - Initial capital input ($10,000-$1,000,000)
 - Max position % (percentage of portfolio, 5-100%, default 80%)
 - Stop-loss percentage (1-20%)
@@ -414,7 +414,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 - Training date for each model
 
 **RL Agents Tab:**
-- Lists all trained RL agents (PPO, RecurrentPPO, SAC, QRDQN)
+- Lists all trained RL agents (PPO, RecurrentPPO, DQN, QRDQN)
 - Shows agent type and symbol
 - Training date
 - Performance note: "Run backtest →" (metrics calculated on-demand)
@@ -501,7 +501,7 @@ All cards follow consistent styling:
 - Model performance tracking (Final Loss, Val Loss)
 
 ### ✅ RL Trading Agents
-- 5 algorithms: PPO, RecurrentPPO, A2C, SAC, QRDQN
+- 4 algorithms: PPO, RecurrentPPO, DQN, QRDQN
 - RecurrentPPO with LSTM memory and trend indicators
 - Advanced risk management (stop-loss, trailing stops, circuit breakers)
 - Market regime detection (BULL, BEAR, SIDEWAYS, VOLATILE)
@@ -514,7 +514,7 @@ All cards follow consistent styling:
 
 ### ✅ Live Trading Simulation
 - Paper trading with real-time data
-- Trained agent execution (PPO/RecurrentPPO/A2C/SAC/QRDQN)
+- Trained agent execution (PPO/RecurrentPPO/DQN/QRDQN)
 - Real-time portfolio tracking
 - Integrated risk management (stop-loss, trailing stops, circuit breakers)
 - Market regime awareness
@@ -556,7 +556,7 @@ Configure LSTM → Fetch data → Train ensemble (3 models)
                             → Display training history
 
 Configure RL   → Fetch data → Create trading environment
-                            → Train agent (PPO/RecurrentPPO/SAC/QRDQN)
+                            → Train agent (PPO/RecurrentPPO/DQN/QRDQN)
                             → Save model checkpoints
                             → Show progress and results
 ```

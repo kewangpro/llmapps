@@ -111,7 +111,7 @@ The platform features a professional light-theme interface with 6 main pages:
 1. Click **Trading** tab
 2. **Configure Agent**:
    - **Symbol**: Enter any valid ticker (e.g., AAPL, TSLA, NVDA)
-   - **Algorithm**: PPO (stable), RecurrentPPO (LSTM memory), A2C (fast), SAC (exploration), or QRDQN (risk-aware)
+   - **Algorithm**: PPO (stable), RecurrentPPO (LSTM memory), DQN (value-based), or QRDQN (risk-aware)
    - **Training Period**: 1095 days (3 years recommended)
    - **Training Steps**: 300,000 (recommended)
    - **Learning Rate**: Auto-set per algorithm
@@ -144,7 +144,7 @@ The platform features a professional light-theme interface with 6 main pages:
 
 **Automatic Model Loading:**
 - Automatically finds all trained models for selected symbol
-- Compares PPO, RecurrentPPO, A2C, SAC, QRDQN (if trained)
+- Compares PPO, RecurrentPPO, DQN, QRDQN (if trained)
 - All models included automatically
 
 **Backtest Results:**
@@ -168,7 +168,7 @@ The live trading session is **persistent**. You can stop the application and res
 1. Click **Live Trade** tab
 2. **Configure Settings**:
    - **Symbol**: Enter any valid ticker (e.g., AAPL, TSLA, NVDA)
-   - **Algorithm**: PPO, RecurrentPPO, A2C, SAC, or QRDQN (auto-loads trained model)
+   - **Algorithm**: PPO, RecurrentPPO, DQN, or QRDQN (auto-loads trained model)
    - **Initial Capital**: Starting balance ($100,000 default)
    - **Max Position %**: Maximum position (80% default)
    - **Stop Loss**: Auto stop-loss percentage (5% default)
@@ -225,7 +225,7 @@ The live trading session is **persistent**. You can stop the application and res
 
 **Tab 2: RL Agents**
 - Header: "RL Trading Agents / Reinforcement learning models"
-- Lists all trained PPO, RecurrentPPO, A2C, SAC, and QRDQN agents
+- Lists all trained PPO, RecurrentPPO, DQN, and QRDQN agents
 - Shows algorithm type, symbol, training date
 - Performance column shows "Run backtest →" hint
   - Performance calculated when you run backtests
@@ -276,11 +276,10 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 - ✅ Force retrain checkbox updates models with latest data
 
 ### RL Trading
-- ✅ **5 Algorithms**: PPO, RecurrentPPO, A2C, SAC, QRDQN
+- ✅ **4 Algorithms**: PPO, RecurrentPPO, DQN, QRDQN
 - ✅ **RecurrentPPO** uses LSTM memory with trend indicators
 - ✅ **QRDQN** for risk-aware decisions (distributional RL)
-- ✅ **A2C** fast synchronous actor-critic
-- ✅ **SAC** maximum entropy exploration
+- ✅ **DQN** value-based off-policy learning with replay buffer
 - ✅ **PPO** stable baseline for general trading
 - ✅ **Advanced Risk Management** (5% stop-loss, 3% trailing stop, 15% circuit breaker)
 - ✅ **Market Regime Detection** (BULL, BEAR, SIDEWAYS, VOLATILE)
@@ -328,7 +327,7 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 ```
 1. Click Trading tab
 2. Select symbol: NVDA
-3. Choose algorithm: PPO, RecurrentPPO, A2C, SAC, or QRDQN
+3. Choose algorithm: PPO, RecurrentPPO, DQN, or QRDQN
 4. Set training period: 1095 days (3 years)
 5. Set timesteps: 300,000 (recommended)
 6. Click "🚀 Start Training"
@@ -351,7 +350,7 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 ```
 1. Click Live Trade tab
 2. Select symbol: AAPL
-3. Choose algorithm: PPO, RecurrentPPO, A2C, SAC, or QRDQN
+3. Choose algorithm: PPO, RecurrentPPO, DQN, or QRDQN
 4. Set initial capital: $100,000
 5. Click "Create & Start Session"
 6. Monitor portfolio, positions, trades
@@ -436,17 +435,11 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 - Enhanced reward for trend-following
 - Good for: Markets with temporal dependencies
 
-**A2C (Advantage Actor-Critic)**
-- Synchronous actor-critic with native discrete actions
-- Faster training than PPO
-- Good for: Quick experimentation
-- Note: May exhibit action collapse
-
-**SAC (Soft Actor-Critic)**
-- Maximum entropy framework for exploration
-- Off-policy with replay buffer
-- Good for: Exploration and diverse strategies
-- Note: May exhibit action collapse
+**DQN (Deep Q-Network)**
+- Value-based off-policy learning
+- Replay buffer for sample efficiency
+- Epsilon-greedy exploration
+- Good for: Stable value-based learning
 
 **QRDQN (Quantile Regression DQN)**
 - Distributional RL for risk-awareness
@@ -454,7 +447,7 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 - Off-policy learning with replay
 - Good for: Risk-conscious strategies
 
-**Recommendation**: Train all algorithms and compare via backtesting. PPO, RecurrentPPO, and QRDQN are most reliable; A2C and SAC supported but may collapse to single actions.
+**Recommendation**: Train all algorithms and compare via backtesting. All 4 algorithms (PPO, RecurrentPPO, DQN, QRDQN) are reliable and well-tuned.
 
 ---
 
@@ -506,9 +499,8 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 **Expected Training Times (300k steps):**
 - PPO: ~15-20 minutes (efficient on-policy)
 - RecurrentPPO: ~25-35 minutes (LSTM requires more compute)
-- A2C: ~15-20 minutes (synchronous actor-critic)
-- SAC: ~15-20 minutes (off-policy with replay buffer)
-- QRDQN: ~15-20 minutes (off-policy DQN)
+- DQN: ~15-20 minutes (off-policy with replay buffer)
+- QRDQN: ~15-20 minutes (off-policy distributional RL)
 
 ### "Module not found" Error
 **Fix:**
@@ -587,12 +579,9 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
   - 13-feature observation (10 base + 3 trend)
 - **PPO**: Stable on-policy baseline
   - `PPORewardConfig`: Strong penalties prevent action collapse
-- **A2C**: Synchronous actor-critic
-  - `A2CRewardConfig`: Balanced penalties (60-70% of PPO strength)
-  - May exhibit action collapse despite tuning
-- **SAC**: Maximum entropy exploration
-  - `SACRewardConfig`: Extreme reward shaping to counter entropy bias
-  - May exhibit action collapse despite extreme tuning
+- **DQN**: Value-based off-policy learning
+  - `DQNRewardConfig`: Balanced rewards for stable Q-value learning
+  - Replay buffer for sample efficiency
 - **QRDQN**: Distributional RL for risk-awareness
   - `QRDQNRewardConfig`: Risk-encouraging to counter conservatism
 

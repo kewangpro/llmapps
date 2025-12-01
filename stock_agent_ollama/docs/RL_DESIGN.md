@@ -18,7 +18,7 @@ This RL trading system provides advanced reinforcement learning capabilities for
 
 ### Key Features
 
-- ✅ **RL Agents**: PPO, RecurrentPPO, A2C, SAC, QRDQN via Stable-Baselines3 and sb3-contrib
+- ✅ **RL Agents**: PPO, RecurrentPPO, DQN, QRDQN via Stable-Baselines3 and sb3-contrib
 - ✅ **RecurrentPPO**: LSTM memory with trend indicators for temporal patterns
 - ✅ **Trend Indicators**: SMA_Trend, EMA_Crossover, Price_Momentum (RecurrentPPO only)
 - ✅ **Action Masking**: Prevents invalid trades
@@ -57,16 +57,10 @@ This RL trading system provides advanced reinforcement learning capabilities for
 - Changing a default requires editing only one place: EnvConfig
 
 **Model Loading Utilities:**
-- `load_rl_agent()` automatically detects and loads PPO, RecurrentPPO, A2C, SAC, or QRDQN models
+- `load_rl_agent()` automatically detects and loads PPO, RecurrentPPO, DQN, or QRDQN models
 - `load_env_config_from_model()` loads exact training configuration from saved models
 - Live trading uses loaded config to match training environment exactly
 
-**SAC Wrapper:**
-- `DiscreteToBoxWrapper` converts 6 discrete actions to continuous Box space for SAC
-- Uses equal-sized bins (16.67% each) to prevent action collapse
-- Bins continuous output [-1, 1] back to discrete actions [0-5]
-- HOLD shifted to [-0.333, 0.0] so SAC's natural centering at 0 splits between HOLD and BUY_SMALL
-- Transparent wrapping with `__getattr__` forwarding
 
 **Critical Bug Fixes:**
 - **Short-Selling Prevention**: Checks position before sell calculations
@@ -84,7 +78,6 @@ src/rl/
 ├── __init__.py                 # Main RL module exports
 ├── env_factory.py              # Shared environment configuration (EnvConfig, create_enhanced_env)
 ├── model_utils.py              # Shared model loading utilities (load_rl_agent, load_env_config)
-├── sac_discrete_wrapper.py    # SAC continuous-to-discrete action wrapper
 ├── environments.py             # All trading environments (Base, SingleStock, Enhanced)
 ├── training.py                 # Training pipeline (EnhancedRLTrainer)
 ├── improvements.py             # Action masking, adaptive sizing, curriculum learning
@@ -107,9 +100,8 @@ src/config.py                   # RL configuration
   - `EnvConfig`: Unified configuration dataclass
   - `create_enhanced_env()`: Factory function for consistent environments
 - **model_utils.py**: Shared model loading utilities
-  - `load_rl_agent()`: Automatically loads PPO, RecurrentPPO, A2C, SAC, or QRDQN models
+  - `load_rl_agent()`: Automatically loads PPO, RecurrentPPO, DQN, or QRDQN models
   - `load_env_config_from_model()`: Loads environment config from trained model
-- **sac_discrete_wrapper.py**: DiscreteToBoxWrapper for SAC
 - **training.py**: `EnhancedRLTrainer` and `EnhancedTrainingConfig` using Stable-Baselines3
 
 ---
@@ -124,7 +116,7 @@ src/config.py                   # RL configuration
 
 **Shape**: `(lookback_window, num_features)`
 **Default**:
-- `(60, 10)` - PPO, A2C, SAC, QRDQN
+- `(60, 10)` - PPO, DQN, QRDQN
 - `(60, 13)` - RecurrentPPO with trend indicators
 
 **Base Features (10)**:
@@ -191,53 +183,26 @@ src/config.py                   # RL configuration
 
 **Reward Config**: `RecurrentPPORewardConfig` with momentum bonuses and hold winner rewards
 
-#### A2C (Advantage Actor-Critic)
+#### DQN (Deep Q-Network)
 
-**Implementation**: Stable-Baselines3 A2C
-
-**Strengths**:
-- Native discrete action support (no wrapper needed)
-- Synchronous updates with advantage estimation
-- Faster training than PPO
-- Simple architecture
-
-**Hyperparameters**:
-- Learning rate: `3e-4`
-- n_steps: `512`
-- Entropy coefficient: `0.02`
-- vf_coef: `0.5`
-- max_grad_norm: `0.5`
-- Use RMSprop: `True`
-- Normalize advantage: `True`
-
-**Reward Config**: `A2CRewardConfig` with balanced penalties (60-70% of PPO strength)
-
-**Note**: A2C has shown tendency toward action collapse in testing despite reward tuning attempts
-
-#### SAC (Soft Actor-Critic)
-
-**Implementation**: Stable-Baselines3 SAC with DiscreteToBoxWrapper
+**Implementation**: Stable-Baselines3 DQN
 
 **Strengths**:
-- Maximum entropy framework for exploration
-- Off-policy learning with replay buffer
-- Continuous action discretization
-
-**Wrapper**:
-- DiscreteToBoxWrapper converts Box[-1,1] to Discrete[0-5]
-- Bins continuous actions into 6 discrete buckets
+- Value-based off-policy learning
+- Experience replay for sample efficiency
+- Epsilon-greedy exploration
+- Stable Q-value learning
 
 **Hyperparameters**:
 - Learning rate: `3e-4`
 - Buffer size: `100000`
-- Learning starts: `15000`
-- Train freq: `8`
-- Gradient steps: `4`
-- Entropy coef: `0.3`
+- Learning starts: `10000`
+- Batch size: `64`
+- Train freq: `4`
+- Exploration fraction: `0.3`
+- Epsilon decay: `1.0` → `0.05`
 
-**Reward Config**: `SACRewardConfig` with extreme reward shaping to overcome entropy bias
-
-**Note**: SAC has shown tendency toward action collapse (100% BUY_MEDIUM) despite extreme reward shaping
+**Reward Config**: `DQNRewardConfig` with balanced rewards for stable value learning
 
 #### QRDQN (Quantile Regression DQN)
 
@@ -300,63 +265,28 @@ class PPORewardConfig(EnhancedRewardConfig):
     action_diversity_bonus: float = 1.0
 ```
 
-### A2CRewardConfig
+### DQNRewardConfig
 
-**Purpose**: Balanced penalties for synchronous actor-critic
+**Purpose**: Balanced rewards for stable Q-value learning
 
 **Key Features**:
-- **Balanced Penalties**: 60-70% of PPO strength (Goldilocks zone)
-- **Native Discrete Actions**: No continuous-to-discrete wrapper needed
-- **Higher Entropy**: Stronger exploration (0.02 vs PPO's 0.01)
-- **Longer Rollout**: n_steps=512 for better temporal context
+- **Moderate Risk Penalties**: Balanced approach to risk management
+- **Standard Transaction Costs**: Realistic trading costs
+- **Action Diversity Bonus**: Encourages balanced action selection
+- **Profitable Trade Bonus**: Rewards successful trades
 
 **Configuration**:
 ```python
 @dataclass
-class A2CRewardConfig(EnhancedRewardConfig):
-    risk_penalty_weight: float = 0.2       # 67% of PPO (0.3)
-    drawdown_penalty_weight: float = 0.35  # 70% of PPO (0.5)
-    transaction_cost_rate: float = 0.0015  # 75% of PPO (0.002)
-    action_diversity_bonus: float = 0.75   # 75% of PPO (1.0)
+class DQNRewardConfig(EnhancedRewardConfig):
+    risk_penalty_weight: float = 0.1
+    drawdown_penalty_weight: float = 0.15
+    transaction_cost_rate: float = 0.0005
+    action_diversity_bonus: float = 0.5
+    profitable_trade_bonus: float = 0.2
 ```
 
-**Empirical Results**:
-- v1 (weak penalties): 100% BUY_MEDIUM collapse
-- v2 (PPO-strength penalties): 100% SELL_PARTIAL collapse
-- v3 (balanced penalties): 100% BUY_SMALL collapse
-
-**Note**: Despite multiple tuning attempts, A2C consistently exhibits action collapse
-
-### SACRewardConfig
-
-**Purpose**: Extreme reward shaping to overcome SAC's entropy-seeking bias
-
-**Key Features**:
-- **Base HOLD Incentive**: +0.5 (10x stronger than original)
-- **Diversity Penalty**: -1.0 for <30% diversity (prevents ALL collapse types)
-- **Consecutive Penalty**: -1.0 base, scales to -5.0 max (immediate, no delay)
-- **Transaction Costs**: Applied on ALL trades
-
-**Configuration**:
-```python
-@dataclass
-class SACRewardConfig(EnhancedRewardConfig):
-    base_hold_incentive: float = 0.5
-    diversity_penalty_threshold: float = 0.3
-    diversity_penalty_weight: float = -1.0
-    diversity_reward_threshold: float = 0.5
-    diversity_reward_weight: float = 0.5
-    consecutive_action_penalty: float = -1.0
-    consecutive_action_max_penalty: float = -5.0
-    transaction_cost_rate: float = 0.002
-```
-
-**Verified Rewards**:
-- BUY spam (100%): -5.7 average reward
-- HOLD spam (100%): -0.3 average reward
-- Mixed actions (>50% diversity): +0.4 average reward
-
-**Note**: Despite extreme reward shaping, SAC still collapses to 100% BUY_MEDIUM
+**Results**: Stable Q-value learning with balanced action distribution
 
 ### QRDQNRewardConfig
 
@@ -412,7 +342,7 @@ class QRDQNRewardConfig(EnhancedRewardConfig):
 **Automatic Type Detection**:
 ```python
 def load_rl_agent(model_path, env=None):
-    # Attempts to load: PPO → RecurrentPPO → QRDQN
+    # Attempts to load: PPO → RecurrentPPO → DQN → QRDQN
     # Auto-detects correct algorithm type
     # Returns loaded agent with is_trained flag
 ```
@@ -511,7 +441,7 @@ data/live_sessions/
 **File**: `src/ui/pages/rl_training.py`
 
 **Features**:
-- Algorithm selection: PPO, RecurrentPPO, A2C, SAC, QRDQN
+- Algorithm selection: PPO, RecurrentPPO, DQN, QRDQN
 - Symbol input (accepts any valid ticker)
 - Training period configuration (default: 1095 days / 3 years)
 - Training steps (default: 300k)
@@ -615,7 +545,7 @@ config = EnhancedTrainingConfig(
     symbol="AAPL",
     start_date="2021-01-01",
     end_date="2024-01-01",
-    agent_type="ppo",  # or "recurrent_ppo", "a2c", "sac", "qrdqn"
+    agent_type="ppo",  # or "recurrent_ppo", "dqn", "qrdqn"
     total_timesteps=100000
 )
 
@@ -655,13 +585,12 @@ print(f"Sharpe Ratio: {result.metrics.sharpe_ratio:.2f}")
 **Optimal Configuration**:
 - **Training Period**: 1095 days (3 years)
 - **Training Steps**: 300,000 (recommended for all algorithms)
-- **Algorithms**: PPO, RecurrentPPO, A2C, SAC, QRDQN
+- **Algorithms**: PPO, RecurrentPPO, DQN, QRDQN
 
 **Training Times** (M1 Mac, 300k steps):
 - PPO: 15-20 minutes
 - RecurrentPPO: 25-35 minutes (LSTM requires more compute)
-- A2C: 15-20 minutes
-- SAC: 15-20 minutes
+- DQN: 15-20 minutes
 - QRDQN: 15-20 minutes
 
 **Model Saving**:
@@ -691,7 +620,7 @@ Then update `src/rl/model_utils.py` for loading.
 
 ### What is an Iteration?
 
-In PPO, RecurrentPPO, and A2C (on-policy algorithms), an **iteration** is one complete learning cycle consisting of two phases:
+In PPO and RecurrentPPO (on-policy algorithms), an **iteration** is one complete learning cycle consisting of two phases:
 
 #### 1. Rollout Phase (Experience Collection)
 - Agent interacts with environment for `n_steps` (default: **2048 steps**)
@@ -847,16 +776,15 @@ This indicates the agent is learning profitable, low-risk trading strategies wit
 |-----------|--------------|--------------|------------|
 | **PPO** | On-policy | 2048 | 10 epochs |
 | **RecurrentPPO** | On-policy | 2048 | 10 epochs |
-| **A2C** | On-policy | 2048 | 1 epoch |
-| **SAC** | Off-policy | Continuous | Replay buffer |
+| **DQN** | Off-policy | Continuous | Replay buffer |
 | **QRDQN** | Off-policy | Continuous | Replay buffer |
 
-**On-Policy (PPO, RecurrentPPO, A2C):**
+**On-Policy (PPO, RecurrentPPO):**
 - Collect fresh experience each iteration
 - Old data becomes "stale" after policy updates
 - More stable but less sample-efficient
 
-**Off-Policy (SAC, QRDQN):**
+**Off-Policy (DQN, QRDQN):**
 - Store experience in replay buffer
 - Can reuse data indefinitely
 - More sample-efficient but potentially less stable
@@ -1097,7 +1025,7 @@ python retrain_and_compare.py --symbol MSFT --no-baselines
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
 | `--symbol` | string | **required** | Stock symbol to train on (e.g., AAPL, TSLA) |
-| `--algorithms` | string | `all` | Comma-separated list: `ppo,recurrent_ppo,a2c,sac,qrdqn` |
+| `--algorithms` | string | `all` | Comma-separated list: `ppo,recurrent_ppo,dqn,qrdqn` |
 | `--timesteps` | int | `300000` | Training timesteps per algorithm |
 | `--skip-training` | flag | `False` | Skip training, only backtest existing models |
 | `--no-baselines` | flag | `False` | Skip baseline strategies (Buy & Hold, Momentum) |
@@ -1123,8 +1051,7 @@ python retrain_and_compare.py --symbol MSFT --no-baselines
 Strategy          Return    Sharpe  Max DD   Win Rate  HOLD  BUY_S  BUY_M  BUY_L  SELL_P  SELL_A  Trades
 PPO Agent         +15.23%   1.45    -8.2%    65%       25%   15%    20%    18%    12%     10%     48
 RECURRENT PPO     +18.67%   1.78    -6.1%    72%       22%   18%    22%    16%    14%     8%      52
-A2C Agent         +2.45%    0.32    -12.5%   48%       5%    87%    3%     2%     2%      1%      65
-SAC Agent         +8.91%    0.88    -9.8%    58%       3%    2%     91%    1%     2%      1%      72
+DQN Agent         +16.89%   1.52    -7.5%    68%       23%   17%    21%    19%    11%     9%      51
 QRDQN Agent       +22.35%   2.12    -5.4%    75%       20%   20%    25%    18%    10%     7%      56
 Buy & Hold        +12.50%   1.20    -10.0%   N/A       N/A   N/A    N/A    N/A    N/A     N/A     1
 Momentum          +10.15%   0.95    -11.2%   N/A       N/A   N/A    N/A    N/A    N/A     N/A     38
@@ -1148,7 +1075,7 @@ $ python retrain_and_compare.py --symbol AAPL
 
 Symbol: AAPL
 Timesteps: 300,000
-Algorithms: PPO, RECURRENT PPO, A2C, SAC, QRDQN
+Algorithms: PPO, RECURRENT PPO, DQN, QRDQN
 
 ================================================================================
 🚀 TRAINING PPO on AAPL
@@ -1167,8 +1094,7 @@ Training progress: 100%|████████████████| 300000
 
    ✅ PPO: +15.23%
    ✅ RECURRENT PPO: +18.67%
-   ✅ A2C: +2.45%
-   ✅ SAC: +8.91%
+   ✅ DQN: +16.89%
    ✅ QRDQN: +22.35%
    ✅ Buy & Hold: +12.50%
    ✅ Momentum: +10.15%
@@ -1184,10 +1110,9 @@ Training progress: 100%|████████████████| 300000
    Sharpe: 2.12
 
 📊 Action Distribution Analysis:
-   ⚠️  A2C Agent: ACTION COLLAPSE (87% single action)
-   ⚠️  SAC Agent: ACTION COLLAPSE (91% single action)
    ✅ PPO Agent: Balanced actions (max 25%)
    ✅ RECURRENT PPO: Balanced actions (max 22%)
+   ✅ DQN Agent: Balanced actions (max 23%)
    ✅ QRDQN Agent: Balanced actions (max 25%)
 
 ================================================================================
@@ -1214,10 +1139,10 @@ python retrain_and_compare.py --symbol AAPL --algorithms ppo,recurrent_ppo,qrdqn
 python retrain_and_compare.py --symbol NVDA --skip-training
 ```
 
-**4. Debugging Action Collapse**:
+**4. Algorithm Comparison**:
 ```bash
-# Train and check for action collapse issues
-python retrain_and_compare.py --symbol GOOGL --algorithms a2c,sac
+# Compare all 4 algorithms on a symbol
+python retrain_and_compare.py --symbol GOOGL
 ```
 
 #### Integration with Web UI
@@ -1253,7 +1178,7 @@ Models trained via this CLI tool are **automatically available** in the web inte
 This RL trading system provides a complete framework for training, evaluating, and deploying RL agents for algorithmic trading. Key strengths include modular architecture, realistic simulation, comprehensive risk management, and advanced features for improved performance.
 
 **Next Steps**:
-1. Train your first agent (PPO, RecurrentPPO, or QRDQN recommended; A2C and SAC supported but may exhibit action collapse)
+1. Train your first agent (all 4 algorithms recommended)
 2. Backtest and compare strategies
 3. Experiment with different improvement combinations
 4. Deploy to live paper trading
