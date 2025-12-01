@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, Any
 import logging
 import json
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.callbacks import BaseCallback
 from sb3_contrib import RecurrentPPO, QRDQN
 
@@ -26,6 +26,7 @@ from .improvements import (
     EnhancedRewardConfig,
     PPORewardConfig,
     RecurrentPPORewardConfig,
+    DQNRewardConfig,
     QRDQNRewardConfig,
     CurriculumManager,
     TrainingDiagnostics
@@ -80,7 +81,7 @@ class EnhancedTrainingConfig:
     reward_config: EnhancedRewardConfig = field(default_factory=EnhancedRewardConfig)
 
     # Agent settings
-    agent_type: str = "ppo"  # Options: 'ppo', 'recurrent_ppo', 'qrdqn'
+    agent_type: str = "ppo"  # Options: 'ppo', 'recurrent_ppo', 'dqn', 'qrdqn'
     learning_rate: float = 3e-4
     gamma: float = 0.99
     # Entropy coefficient controls exploration vs exploitation
@@ -198,6 +199,7 @@ class EnhancedRLTrainer:
 
         # Select appropriate reward config based on agent type
         # Algorithm-specific reward configurations:
+        # - DQN: DQNRewardConfig (balanced exploration-exploitation)
         # - QRDQN: QRDQNRewardConfig (risk-encouraging to counter natural conservatism)
         # - PPO: PPORewardConfig (stronger penalties to fight action collapse)
         # - RecurrentPPO: RecurrentPPORewardConfig (reduced penalties for trend riding)
@@ -208,6 +210,9 @@ class EnhancedRLTrainer:
             elif config.agent_type.lower() == 'ppo':
                 logger.info(f"Using PPORewardConfig for PPO")
                 self.config.reward_config = PPORewardConfig()
+            elif config.agent_type.lower() == 'dqn':
+                logger.info(f"Using DQNRewardConfig for DQN (balanced exploration-exploitation)")
+                self.config.reward_config = DQNRewardConfig()
             elif config.agent_type.lower() == 'qrdqn':
                 logger.info(f"Using QRDQNRewardConfig for QRDQN (risk-encouraging to counter conservatism)")
                 self.config.reward_config = QRDQNRewardConfig()
@@ -299,11 +304,14 @@ class EnhancedRLTrainer:
         elif agent_type_lower == 'recurrent_ppo':
             agent_class = RecurrentPPO
             policy_type = 'MlpLstmPolicy'
+        elif agent_type_lower == 'dqn':
+            agent_class = DQN
+            policy_type = 'MlpPolicy'
         elif agent_type_lower == 'qrdqn':
             agent_class = QRDQN
             policy_type = 'MlpPolicy'
         else:
-            raise ValueError(f"Unsupported agent type: {self.config.agent_type}. Available: ppo, recurrent_ppo, qrdqn")
+            raise ValueError(f"Unsupported agent type: {self.config.agent_type}. Available: ppo, recurrent_ppo, dqn, qrdqn")
 
         # Algorithm-specific parameters
         if agent_type_lower == 'ppo':
@@ -319,6 +327,20 @@ class EnhancedRLTrainer:
                 'batch_size': self.config.batch_size,
                 'n_epochs': self.config.n_epochs,
                 'ent_coef': self.config.ent_coef,
+            })
+        elif agent_type_lower == 'dqn':
+            # DQN-specific parameters (off-policy value-based learning)
+            agent_params.update({
+                'buffer_size': 100000,           # Large replay buffer for experience reuse
+                'learning_starts': 10000,        # Fill buffer before learning
+                'batch_size': self.config.batch_size,
+                'tau': 0.005,                    # Soft target network update
+                'train_freq': 4,                 # Update every 4 steps
+                'gradient_steps': 1,
+                'target_update_interval': 1000,  # Hard target update every 1000 steps
+                'exploration_fraction': 0.3,     # 30% of training for exploration
+                'exploration_initial_eps': 1.0,  # Start fully random
+                'exploration_final_eps': 0.05,   # End with 5% random actions
             })
         elif agent_type_lower == 'qrdqn':
             # QRDQN-specific parameters (similar to DQN but with distributional RL)

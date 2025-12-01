@@ -17,8 +17,8 @@ def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
     """
     Load RL agent with automatic type detection.
 
-    This function automatically detects the agent type (PPO, RecurrentPPO, QRDQN)
-    by reading the training config. It supports all 3 algorithms.
+    This function automatically detects the agent type (PPO, RecurrentPPO, DQN, QRDQN)
+    by reading the training config. It supports all 4 algorithms.
 
     Args:
         model_path: Path to model file (best_model.zip or final_model.zip)
@@ -31,7 +31,7 @@ def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
         FileNotFoundError: If model file not found
         ValueError: If model cannot be loaded with any supported agent type
     """
-    from stable_baselines3 import PPO
+    from stable_baselines3 import PPO, DQN
     from sb3_contrib import RecurrentPPO, QRDQN
 
     model_path = Path(model_path)
@@ -72,6 +72,16 @@ def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
             logger.error(f"Failed to load RecurrentPPO: {e}")
             raise
 
+    elif agent_type == 'dqn':
+        try:
+            agent = DQN.load(str(model_path), env=env)
+            agent.is_trained = True
+            logger.info(f"Successfully loaded DQN from {model_path}")
+            return agent
+        except Exception as e:
+            logger.error(f"Failed to load DQN: {e}")
+            raise
+
     elif agent_type == 'qrdqn':
         try:
             agent = QRDQN.load(str(model_path), env=env)
@@ -88,6 +98,7 @@ def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
         for agent_name, agent_class in [
             ('PPO', PPO),
             ('RecurrentPPO', RecurrentPPO),
+            ('DQN', DQN),
             ('QRDQN', QRDQN)
         ]:
             try:

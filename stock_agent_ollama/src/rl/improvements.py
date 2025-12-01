@@ -249,6 +249,37 @@ class EnhancedRewardConfig:
 
 
 @dataclass
+class DQNRewardConfig(EnhancedRewardConfig):
+    """
+    Reward configuration optimized for DQN (Deep Q-Network).
+
+    DQN is a value-based off-policy algorithm that:
+    - Uses replay buffer for sample efficiency
+    - Epsilon-greedy exploration for action selection
+    - Target network for stable learning
+    - Can be prone to overestimation bias
+
+    DESIGN: Balanced rewards for stable value learning:
+    - Moderate risk penalties (DQN needs guidance on risk)
+    - Standard transaction costs
+    - Balanced exploration-exploitation via epsilon decay
+    - Reward diversity to prevent Q-value collapse
+    """
+    # Moderate risk penalties (between PPO's strong and QRDQN's zero)
+    risk_penalty_weight: float = 0.1
+    drawdown_penalty_weight: float = 0.15
+
+    # Standard transaction costs
+    transaction_cost_rate: float = 0.0005
+
+    # Moderate diversity bonus to prevent Q-value collapse
+    action_diversity_bonus: float = 0.5
+
+    # Balanced profitable trade bonus
+    profitable_trade_bonus: float = 0.2
+
+
+@dataclass
 class QRDQNRewardConfig(EnhancedRewardConfig):
     """
     Reward configuration optimized for QRDQN (Quantile Regression DQN).
