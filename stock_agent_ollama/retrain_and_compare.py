@@ -8,7 +8,7 @@ Usage:
 Options:
     --symbol SYMBOL         Stock symbol to train on (required)
     --algorithms ALG1,ALG2  Comma-separated list of algorithms to train
-                           (options: ppo, recurrent_ppo, qrdqn)
+                           (options: ppo, recurrent_ppo, dqn, qrdqn)
                            (default: all)
     --timesteps N          Training timesteps (default: 300000)
     --skip-training        Skip training, only run backtest
@@ -18,8 +18,8 @@ Example:
     # Retrain all algorithms on TSLA
     python retrain_and_compare.py --symbol TSLA
 
-    # Retrain only QRDQN on AAPL
-    python retrain_and_compare.py --symbol AAPL --algorithms qrdqn
+    # Retrain DQN and QRDQN on AAPL
+    python retrain_and_compare.py --symbol AAPL --algorithms dqn,qrdqn
 
     # Only backtest existing models for NVDA
     python retrain_and_compare.py --symbol NVDA --skip-training
@@ -152,7 +152,7 @@ def run_comprehensive_backtest(symbol: str, include_baselines: bool = True) -> d
     results = {}
 
     # Test all algorithms
-    algorithms = ['ppo', 'recurrent_ppo', 'qrdqn']
+    algorithms = ['ppo', 'recurrent_ppo', 'dqn', 'qrdqn']
 
     for agent_type in algorithms:
         logger.info(f"Backtesting {agent_type.upper()}...")
@@ -382,7 +382,7 @@ def main():
 
     # Determine which algorithms to train
     if args.algorithms == 'all':
-        algorithms = ['ppo', 'recurrent_ppo', 'qrdqn']
+        algorithms = ['ppo', 'recurrent_ppo', 'dqn', 'qrdqn']
     else:
         algorithms = [a.strip().lower() for a in args.algorithms.split(',')]
 
