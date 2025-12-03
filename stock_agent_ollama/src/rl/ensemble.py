@@ -102,19 +102,16 @@ class EnsemblePPOAgent:
         # RecurrentPPO expects (60, 26) with trend indicators
         # PPO expects (60, 23) without trend indicators
 
-        # Check observation shape and prepare observations for each model
-        if len(observation.shape) == 2:
-            # Shape is (timesteps, features)
-            if observation.shape[1] == 26:
-                # Has trend indicators - use first 23 features for PPO, all 26 for RecurrentPPO
-                ppo_obs = observation[:, :23]  # Remove last 3 trend features
-                rppo_obs = observation  # Use all features
-            else:
-                # No trend indicators - both use same observation
-                ppo_obs = observation
-                rppo_obs = observation
+        # Check feature dimension (last dimension) to determine if slicing is needed
+        if observation.shape[-1] == 26:
+            # Has trend indicators (26 features)
+            # PPO needs (..., 23) - remove last 3 trend features
+            # RecurrentPPO needs (..., 26) - keep all features
+            ppo_obs = observation[..., :23]
+            rppo_obs = observation
         else:
-            # Single observation or other shape - use as is
+            # No trend indicators or other shape
+            # Assume both models can handle it or it matches PPO's expectation
             ppo_obs = observation
             rppo_obs = observation
 
