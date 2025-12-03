@@ -18,7 +18,7 @@ This RL trading system provides advanced reinforcement learning capabilities for
 
 ### Key Features
 
-- ✅ **RL Agents**: PPO, RecurrentPPO, DQN, QRDQN via Stable-Baselines3 and sb3-contrib
+- ✅ **RL Agents**: PPO, RecurrentPPO, Ensemble via Stable-Baselines3 and sb3-contrib
 - ✅ **RecurrentPPO**: LSTM memory with trend indicators for temporal patterns
 - ✅ **Trend Indicators**: SMA_Trend, EMA_Crossover, Price_Momentum (RecurrentPPO only)
 - ✅ **Action Masking**: Prevents invalid trades
@@ -57,7 +57,7 @@ This RL trading system provides advanced reinforcement learning capabilities for
 - Changing a default requires editing only one place: EnvConfig
 
 **Model Loading Utilities:**
-- `load_rl_agent()` automatically detects and loads PPO, RecurrentPPO, DQN, or QRDQN models
+- `load_rl_agent()` automatically detects and loads PPO, RecurrentPPO, or Ensemble models
 - `load_env_config_from_model()` loads exact training configuration from saved models
 - Live trading uses loaded config to match training environment exactly
 
@@ -100,7 +100,7 @@ src/config.py                   # RL configuration
   - `EnvConfig`: Unified configuration dataclass
   - `create_enhanced_env()`: Factory function for consistent environments
 - **model_utils.py**: Shared model loading utilities
-  - `load_rl_agent()`: Automatically loads PPO, RecurrentPPO, DQN, or QRDQN models
+  - `load_rl_agent()`: Automatically loads PPO, RecurrentPPO, or Ensemble models
   - `load_env_config_from_model()`: Loads environment config from trained model
 - **training.py**: `EnhancedRLTrainer` and `EnhancedTrainingConfig` using Stable-Baselines3
 
@@ -116,7 +116,7 @@ src/config.py                   # RL configuration
 
 **Shape**: `(lookback_window, num_features)`
 **Default**:
-- `(60, 10)` - PPO, DQN, QRDQN
+- `(60, 10)` - PPO, Ensemble (base features)
 - `(60, 13)` - RecurrentPPO with trend indicators
 
 **Base Features (10)**:
@@ -160,9 +160,10 @@ src/config.py                   # RL configuration
 
 **Hyperparameters**:
 - Learning rate: `3e-4`
-- Batch size: `64`
+- Batch size: `128`
 - n_steps: `2048`
 - n_epochs: `10`
+- Entropy coefficient: `0.2`
 
 **Reward Config**: `PPORewardConfig` with strong penalties and diversity bonuses
 
@@ -177,49 +178,42 @@ src/config.py                   # RL configuration
 - Momentum bonuses
 
 **Hyperparameters**:
-- Same as PPO
-- Uses MlpLstmPolicy
+- Learning rate: `3e-4`
+- Batch size: `128`
+- n_steps: `2048`
+- n_epochs: `10`
+- Entropy coefficient: `0.2`
+- Policy: `MlpLstmPolicy`
 - Requires 300k timesteps
 
 **Reward Config**: `RecurrentPPORewardConfig` with momentum bonuses and hold winner rewards
 
-#### DQN (Deep Q-Network)
+#### Ensemble (PPO + RecurrentPPO)
 
-**Implementation**: Stable-Baselines3 DQN
+**Implementation**: Custom `EnsemblePPOAgent` combining both policy gradient methods
 
-**Strengths**:
-- Value-based off-policy learning
-- Experience replay for sample efficiency
-- Epsilon-greedy exploration
-- Stable Q-value learning
+**Strategy**:
+- PPO (60% weight): Aggressive growth strategy
+- RecurrentPPO (40% weight): Risk-managed strategy with LSTM memory
 
-**Hyperparameters**:
-- Learning rate: `3e-4`
-- Buffer size: `100000`
-- Learning starts: `10000`
-- Batch size: `64`
-- Train freq: `4`
-- Exploration fraction: `0.3`
-- Epsilon decay: `1.0` → `0.05`
-
-**Reward Config**: `DQNRewardConfig` with balanced rewards for stable value learning
-
-#### QRDQN (Quantile Regression DQN)
-
-**Implementation**: sb3-contrib QRDQN
+**Decision Logic**:
+1. Get predictions from both PPO and RecurrentPPO
+2. If agents agree → Use that action
+3. If agents disagree → Weighted vote with confidence-based scoring
+4. Confidence weighting: Uses action probabilities to determine final decision
 
 **Strengths**:
-- Distributional RL learns value distribution
-- Risk-aware decision making
-- Off-policy learning with replay
+- Combines aggressive growth (PPO) with risk management (RecurrentPPO)
+- Weighted voting balances different strategies
+- Confidence-based decisions favor more certain predictions
+- Diversification across algorithm types
 
-**Hyperparameters**:
-- Learning rate: `1e-4`
-- Buffer size: `100000`
-- Train freq: `4`
-- Exploration: 0.3 fraction
+**Training**:
+- Trains both PPO and RecurrentPPO independently
+- Combines trained models with 60/40 weighting
+- Saves both component models plus ensemble metadata
 
-**Reward Config**: `QRDQNRewardConfig` with risk-encouraging rewards to counter natural conservatism
+**Reward Config**: Uses `PPORewardConfig` for PPO component and `RecurrentPPORewardConfig` for RecurrentPPO component
 
 ---
 
@@ -265,54 +259,6 @@ class PPORewardConfig(EnhancedRewardConfig):
     action_diversity_bonus: float = 1.0
 ```
 
-### DQNRewardConfig
-
-**Purpose**: Balanced rewards for stable Q-value learning
-
-**Key Features**:
-- **Moderate Risk Penalties**: Balanced approach to risk management
-- **Standard Transaction Costs**: Realistic trading costs
-- **Action Diversity Bonus**: Encourages balanced action selection
-- **Profitable Trade Bonus**: Rewards successful trades
-
-**Configuration**:
-```python
-@dataclass
-class DQNRewardConfig(EnhancedRewardConfig):
-    risk_penalty_weight: float = 0.1
-    drawdown_penalty_weight: float = 0.15
-    transaction_cost_rate: float = 0.0005
-    action_diversity_bonus: float = 0.5
-    profitable_trade_bonus: float = 0.2
-```
-
-**Results**: Stable Q-value learning with balanced action distribution
-
-### QRDQNRewardConfig
-
-**Purpose**: Risk-encouraging to counter QRDQN's natural conservatism
-
-**Key Features**:
-- **Zero Risk Penalties**: QRDQN learns risk naturally from distribution
-- **Lower Transaction Costs**: Encourages trading (0.0003 vs 0.0005)
-- **Large Position Bonus**: +0.2 bonus for aggressive sizing
-- **Excessive Selling Penalty**: -0.15 penalty to let winners run
-- **Higher Profitable Trade Bonus**: 3x stronger (0.3 vs 0.1)
-
-**Configuration**:
-```python
-@dataclass
-class QRDQNRewardConfig(EnhancedRewardConfig):
-    risk_penalty_weight: float = 0.0
-    drawdown_penalty_weight: float = 0.0
-    transaction_cost_rate: float = 0.0003
-    large_position_bonus: float = 0.2
-    excessive_selling_penalty: float = -0.15
-    profitable_trade_bonus: float = 0.3
-```
-
-**Results**: Improved QRDQN performance from +2.08% to +22.35% (10x improvement)
-
 ---
 
 ## Architecture & Design Patterns
@@ -342,7 +288,7 @@ class QRDQNRewardConfig(EnhancedRewardConfig):
 **Automatic Type Detection**:
 ```python
 def load_rl_agent(model_path, env=None):
-    # Attempts to load: PPO → RecurrentPPO → DQN → QRDQN
+    # Attempts to load: PPO → RecurrentPPO → Ensemble
     # Auto-detects correct algorithm type
     # Returns loaded agent with is_trained flag
 ```
@@ -441,7 +387,7 @@ data/live_sessions/
 **File**: `src/ui/pages/rl_training.py`
 
 **Features**:
-- Algorithm selection: PPO, RecurrentPPO, DQN, QRDQN
+- Algorithm selection: PPO, RecurrentPPO, Ensemble
 - Symbol input (accepts any valid ticker)
 - Training period configuration (default: 1095 days / 3 years)
 - Training steps (default: 300k)
@@ -585,13 +531,12 @@ print(f"Sharpe Ratio: {result.metrics.sharpe_ratio:.2f}")
 **Optimal Configuration**:
 - **Training Period**: 1095 days (3 years)
 - **Training Steps**: 300,000 (recommended for all algorithms)
-- **Algorithms**: PPO, RecurrentPPO, DQN, QRDQN
+- **Algorithms**: PPO, RecurrentPPO, Ensemble
 
 **Training Times** (M1 Mac, 300k steps):
 - PPO: 15-20 minutes
 - RecurrentPPO: 25-35 minutes (LSTM requires more compute)
-- DQN: 15-20 minutes
-- QRDQN: 15-20 minutes
+- Ensemble: 40-55 minutes (trains both PPO + RecurrentPPO)
 
 **Model Saving**:
 - `best_model.zip`: Peak mean reward (used for backtesting)
@@ -776,18 +721,13 @@ This indicates the agent is learning profitable, low-risk trading strategies wit
 |-----------|--------------|--------------|------------|
 | **PPO** | On-policy | 2048 | 10 epochs |
 | **RecurrentPPO** | On-policy | 2048 | 10 epochs |
-| **DQN** | Off-policy | Continuous | Replay buffer |
-| **QRDQN** | Off-policy | Continuous | Replay buffer |
+| **Ensemble** | On-policy | 2048 | 10 epochs (both components) |
 
-**On-Policy (PPO, RecurrentPPO):**
+**All Algorithms (PPO, RecurrentPPO, Ensemble):**
+- Use on-policy learning with policy gradients
 - Collect fresh experience each iteration
 - Old data becomes "stale" after policy updates
-- More stable but less sample-efficient
-
-**Off-Policy (DQN, QRDQN):**
-- Store experience in replay buffer
-- Can reuse data indefinitely
-- More sample-efficient but potentially less stable
+- More stable and proven effective for trading
 
 ---
 
@@ -1050,9 +990,8 @@ python retrain_and_compare.py --symbol MSFT --no-baselines
 ====================
 Strategy          Return    Sharpe  Max DD   Win Rate  HOLD  BUY_S  BUY_M  BUY_L  SELL_P  SELL_A  Trades
 PPO Agent         +15.23%   1.45    -8.2%    65%       25%   15%    20%    18%    12%     10%     48
-RECURRENT PPO     +18.67%   1.78    -6.1%    72%       22%   18%    22%    16%    14%     8%      52
-DQN Agent         +16.89%   1.52    -7.5%    68%       23%   17%    21%    19%    11%     9%      51
-QRDQN Agent       +22.35%   2.12    -5.4%    75%       20%   20%    25%    18%    10%     7%      56
+RecurrentPPO      +18.67%   1.78    -6.1%    72%       22%   18%    22%    16%    14%     8%      52
+Ensemble Agent    +19.85%   1.92    -5.8%    70%       24%   17%    21%    17%    13%     8%      50
 Buy & Hold        +12.50%   1.20    -10.0%   N/A       N/A   N/A    N/A    N/A    N/A     N/A     1
 Momentum          +10.15%   0.95    -11.2%   N/A       N/A   N/A    N/A    N/A    N/A     N/A     38
 ```
@@ -1075,7 +1014,7 @@ $ python retrain_and_compare.py --symbol AAPL
 
 Symbol: AAPL
 Timesteps: 300,000
-Algorithms: PPO, RECURRENT PPO, DQN, QRDQN
+Algorithms: PPO, RecurrentPPO, Ensemble
 
 ================================================================================
 🚀 TRAINING PPO on AAPL
@@ -1093,9 +1032,8 @@ Training progress: 100%|████████████████| 300000
 ================================================================================
 
    ✅ PPO: +15.23%
-   ✅ RECURRENT PPO: +18.67%
-   ✅ DQN: +16.89%
-   ✅ QRDQN: +22.35%
+   ✅ RecurrentPPO: +18.67%
+   ✅ Ensemble: +19.85%
    ✅ Buy & Hold: +12.50%
    ✅ Momentum: +10.15%
 
@@ -1105,15 +1043,14 @@ Training progress: 100%|████████████████| 300000
 🎯 ANALYSIS
 ================================================================================
 
-🥇 Best Performer: QRDQN Agent
-   Return: +22.35%
-   Sharpe: 2.12
+🥇 Best Performer: Ensemble Agent
+   Return: +19.85%
+   Sharpe: 1.92
 
 📊 Action Distribution Analysis:
    ✅ PPO Agent: Balanced actions (max 25%)
-   ✅ RECURRENT PPO: Balanced actions (max 22%)
-   ✅ DQN Agent: Balanced actions (max 23%)
-   ✅ QRDQN Agent: Balanced actions (max 25%)
+   ✅ RecurrentPPO: Balanced actions (max 22%)
+   ✅ Ensemble Agent: Balanced actions (max 24%)
 
 ================================================================================
 ✨ Complete!
@@ -1141,7 +1078,7 @@ python retrain_and_compare.py --symbol NVDA --skip-training
 
 **4. Algorithm Comparison**:
 ```bash
-# Compare all 4 algorithms on a symbol
+# Compare all 3 algorithms on a symbol
 python retrain_and_compare.py --symbol GOOGL
 ```
 
@@ -1178,7 +1115,7 @@ Models trained via this CLI tool are **automatically available** in the web inte
 This RL trading system provides a complete framework for training, evaluating, and deploying RL agents for algorithmic trading. Key strengths include modular architecture, realistic simulation, comprehensive risk management, and advanced features for improved performance.
 
 **Next Steps**:
-1. Train your first agent (all 4 algorithms recommended)
+1. Train your first agent (all 3 algorithms recommended)
 2. Backtest and compare strategies
 3. Experiment with different improvement combinations
 4. Deploy to live paper trading

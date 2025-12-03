@@ -111,7 +111,7 @@ The platform features a professional light-theme interface with 6 main pages:
 1. Click **Trading** tab
 2. **Configure Agent**:
    - **Symbol**: Enter any valid ticker (e.g., AAPL, TSLA, NVDA)
-   - **Algorithm**: PPO (stable), RecurrentPPO (LSTM memory), DQN (value-based), or QRDQN (risk-aware)
+   - **Algorithm**: PPO (stable), RecurrentPPO (LSTM memory), or Ensemble (combined)
    - **Training Period**: 1095 days (3 years recommended)
    - **Training Steps**: 300,000 (recommended)
    - **Learning Rate**: Auto-set per algorithm
@@ -144,7 +144,7 @@ The platform features a professional light-theme interface with 6 main pages:
 
 **Automatic Model Loading:**
 - Automatically finds all trained models for selected symbol
-- Compares PPO, RecurrentPPO, DQN, QRDQN (if trained)
+- Compares PPO, RecurrentPPO, Ensemble (if trained)
 - All models included automatically
 
 **Backtest Results:**
@@ -168,7 +168,7 @@ The live trading session is **persistent**. You can stop the application and res
 1. Click **Live Trade** tab
 2. **Configure Settings**:
    - **Symbol**: Enter any valid ticker (e.g., AAPL, TSLA, NVDA)
-   - **Algorithm**: PPO, RecurrentPPO, DQN, or QRDQN (auto-loads trained model)
+   - **Algorithm**: PPO, RecurrentPPO, or Ensemble (auto-loads trained model)
    - **Initial Capital**: Starting balance ($100,000 default)
    - **Max Position %**: Maximum position (80% default)
    - **Stop Loss**: Auto stop-loss percentage (5% default)
@@ -225,7 +225,7 @@ The live trading session is **persistent**. You can stop the application and res
 
 **Tab 2: RL Agents**
 - Header: "RL Trading Agents / Reinforcement learning models"
-- Lists all trained PPO, RecurrentPPO, DQN, and QRDQN agents
+- Lists all trained PPO, RecurrentPPO, and Ensemble agents
 - Shows algorithm type, symbol, training date
 - Performance column shows "Run backtest →" hint
   - Performance calculated when you run backtests
@@ -276,10 +276,9 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 - ✅ Force retrain checkbox updates models with latest data
 
 ### RL Trading
-- ✅ **4 Algorithms**: PPO, RecurrentPPO, DQN, QRDQN
+- ✅ **3 Algorithms**: PPO, RecurrentPPO, Ensemble
 - ✅ **RecurrentPPO** uses LSTM memory with trend indicators
-- ✅ **QRDQN** for risk-aware decisions (distributional RL)
-- ✅ **DQN** value-based off-policy learning with replay buffer
+- ✅ **Ensemble** combines PPO (aggressive) + RecurrentPPO (risk-managed) with weighted voting
 - ✅ **PPO** stable baseline for general trading
 - ✅ **Advanced Risk Management** (5% stop-loss, 3% trailing stop, 15% circuit breaker)
 - ✅ **Market Regime Detection** (BULL, BEAR, SIDEWAYS, VOLATILE)
@@ -327,7 +326,7 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 ```
 1. Click Trading tab
 2. Select symbol: NVDA
-3. Choose algorithm: PPO, RecurrentPPO, DQN, or QRDQN
+3. Choose algorithm: PPO, RecurrentPPO, or Ensemble
 4. Set training period: 1095 days (3 years)
 5. Set timesteps: 300,000 (recommended)
 6. Click "🚀 Start Training"
@@ -350,7 +349,7 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 ```
 1. Click Live Trade tab
 2. Select symbol: AAPL
-3. Choose algorithm: PPO, RecurrentPPO, DQN, or QRDQN
+3. Choose algorithm: PPO, RecurrentPPO, or Ensemble
 4. Set initial capital: $100,000
 5. Click "Create & Start Session"
 6. Monitor portfolio, positions, trades
@@ -435,19 +434,14 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 - Enhanced reward for trend-following
 - Good for: Markets with temporal dependencies
 
-**DQN (Deep Q-Network)**
-- Value-based off-policy learning
-- Replay buffer for sample efficiency
-- Epsilon-greedy exploration
-- Good for: Stable value-based learning
+**Ensemble (PPO + RecurrentPPO)**
+- Weighted voting system combining both algorithms
+- PPO (60%): Aggressive growth strategy
+- RecurrentPPO (40%): Risk-managed with LSTM memory
+- Confidence-based decisions
+- Good for: Balanced performance with diversification
 
-**QRDQN (Quantile Regression DQN)**
-- Distributional RL for risk-awareness
-- Learns value distribution vs expected value
-- Off-policy learning with replay
-- Good for: Risk-conscious strategies
-
-**Recommendation**: Train all algorithms and compare via backtesting. All 4 algorithms (PPO, RecurrentPPO, DQN, QRDQN) are reliable and well-tuned.
+**Recommendation**: Train all algorithms and compare via backtesting. All 3 algorithms (PPO, RecurrentPPO, Ensemble) are reliable and well-tuned.
 
 ---
 
@@ -499,8 +493,7 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 **Expected Training Times (300k steps):**
 - PPO: ~15-20 minutes (efficient on-policy)
 - RecurrentPPO: ~25-35 minutes (LSTM requires more compute)
-- DQN: ~15-20 minutes (off-policy with replay buffer)
-- QRDQN: ~15-20 minutes (off-policy distributional RL)
+- Ensemble: ~40-55 minutes (trains both PPO + RecurrentPPO)
 
 ### "Module not found" Error
 **Fix:**
@@ -579,11 +572,9 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
   - 13-feature observation (10 base + 3 trend)
 - **PPO**: Stable on-policy baseline
   - `PPORewardConfig`: Strong penalties prevent action collapse
-- **DQN**: Value-based off-policy learning
-  - `DQNRewardConfig`: Balanced rewards for stable Q-value learning
-  - Replay buffer for sample efficiency
-- **QRDQN**: Distributional RL for risk-awareness
-  - `QRDQNRewardConfig`: Risk-encouraging to counter conservatism
+- **Ensemble**: Combined strategy
+  - Uses both `PPORewardConfig` and `RecurrentPPORewardConfig`
+  - Weighted voting balances aggressive and risk-managed approaches
 
 ### Configuration System
 - **Single Source of Truth**: Centralized in `env_factory.py`
