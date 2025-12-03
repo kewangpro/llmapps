@@ -61,10 +61,10 @@ class RLTrainingPanel(param.Parameterized):
             min_characters=1
         )
 
-        # Agent type - 4 algorithms
+        # Agent type - 3 algorithms
         self.agent_type = pn.widgets.RadioButtonGroup(
             name='Algorithm',
-            options=['PPO', 'RecurrentPPO', 'DQN', 'QRDQN'],
+            options=['PPO', 'RecurrentPPO', 'Ensemble'],
             value='PPO',
             button_type='primary',
             button_style='outline',
@@ -181,20 +181,18 @@ class RLTrainingPanel(param.Parameterized):
 
                 # Use default reward config
                 # EnhancedRLTrainer will automatically select:
-                # - DQNRewardConfig for DQN (balanced exploration-exploitation)
-                # - QRDQNRewardConfig for QRDQN (risk-encouraging to counter conservatism)
                 # - PPORewardConfig for PPO (stronger penalties to fight action collapse)
                 # - RecurrentPPORewardConfig for RecurrentPPO (trend-following)
+                # - Ensemble uses both PPO and RecurrentPPO configs
                 reward_config = None  # Let trainer auto-select based on agent_type
 
                 # Convert UI agent type to training format
-                # UI: 'PPO', 'RecurrentPPO', 'DQN', 'QRDQN'
-                # Training: 'ppo', 'recurrent_ppo', 'dqn', 'qrdqn'
+                # UI: 'PPO', 'RecurrentPPO', 'Ensemble'
+                # Training: 'ppo', 'recurrent_ppo', 'ensemble'
                 agent_type_map = {
                     'PPO': 'ppo',
                     'RecurrentPPO': 'recurrent_ppo',
-                    'DQN': 'dqn',
-                    'QRDQN': 'qrdqn'
+                    'Ensemble': 'ensemble'
                 }
                 agent_type = agent_type_map.get(self.agent_type.value, self.agent_type.value.lower())
 
@@ -428,14 +426,23 @@ class RLTrainingPanel(param.Parameterized):
         # Sort by modification time (most recent first)
         matching_dirs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
 
-        # Only use completed models (those with final_model.zip)
+        # Only use completed models (those with final_model.zip or ensemble directory)
         # This prevents loading models that are still training
         for model_dir in matching_dirs:
-            final_model_path = model_dir / "final_model.zip"
-            if final_model_path.exists():
-                latest_dir = model_dir
-                model_path = final_model_path
-                break
+            # Check for ensemble structure
+            if agent_type.lower() == 'ensemble':
+                ensemble_subdir = model_dir / "ensemble"
+                if ensemble_subdir.exists() and (ensemble_subdir / "ppo_best_model.zip").exists():
+                    latest_dir = model_dir
+                    model_path = ensemble_subdir  # Point to ensemble subdirectory
+                    break
+            else:
+                # Standard model structure
+                final_model_path = model_dir / "final_model.zip"
+                if final_model_path.exists():
+                    latest_dir = model_dir
+                    model_path = final_model_path
+                    break
         else:
             # No completed models found
             return None
@@ -492,7 +499,7 @@ class RLTrainingPanel(param.Parameterized):
                 loaded_models = []
 
                 # Find and load ALL available trained RL models for this symbol
-                for agent_type in ['ppo', 'recurrent_ppo', 'dqn', 'qrdqn']:
+                for agent_type in ['ppo', 'recurrent_ppo', 'ensemble']:
                     logger.info(f"Backtest: Searching for {agent_type.upper()} model for {symbol}")
                     model_info = self._find_latest_model(symbol, agent_type)
 
@@ -503,10 +510,11 @@ class RLTrainingPanel(param.Parameterized):
 
                             # Determine include_trend_indicators
                             # RecurrentPPO ALWAYS uses trend indicators (13 features)
+                            # Ensemble ALSO needs trend indicators (for its RecurrentPPO component)
                             include_trend = training_config.get('include_trend_indicators', False)
-                            if agent_type == 'recurrent_ppo':
+                            if agent_type in ['recurrent_ppo', 'ensemble']:
                                 include_trend = True
-                                logger.info(f"RecurrentPPO detected - forcing include_trend_indicators=True")
+                                logger.info(f"{agent_type.upper()} detected - forcing include_trend_indicators=True")
 
                             # Create a specific backtest config for this agent
                             agent_backtest_config = BacktestConfig(
@@ -721,7 +729,7 @@ class RLTrainingPanel(param.Parameterized):
                 pn.Column(
                     pn.pane.HTML("<div style='font-size: 12px; color: #6b7280; margin-bottom: 5px; font-weight: 500;'>Algorithm</div>"),
                     self.agent_type,
-                    width=520  # Wider to accommodate all 4 algorithm buttons
+                    width=450  # Wider to accommodate all 3 algorithm buttons
                 ),
                 align='start',
                 sizing_mode="stretch_width"

@@ -80,8 +80,8 @@ class LiveTradingPage(pn.viewable.Viewer):
         matching_dirs = []
         if agent_type:
             # Convert UI format to file format
-            # UI: 'PPO', 'RecurrentPPO', 'DQN', 'QRDQN'
-            # Files: 'ppo_', 'recurrent_ppo_', 'dqn_', 'qrdqn_'
+            # UI: 'PPO', 'RecurrentPPO', 'Ensemble'
+            # Files: 'ppo_', 'recurrent_ppo_', 'ensemble_'
             agent_type_lower = agent_type.lower()
             if agent_type_lower == 'recurrentppo':
                 agent_type_lower = 'recurrent_ppo'
@@ -91,7 +91,7 @@ class LiveTradingPage(pn.viewable.Viewer):
             matching_dirs.extend(models_dir.glob(pattern))
         else:
             # Search for all agent types
-            for atype in ['ppo', 'recurrent_ppo', 'dqn', 'qrdqn']:
+            for atype in ['ppo', 'recurrent_ppo', 'ensemble']:
                 pattern = f"{atype}_{symbol}_*"
                 matching_dirs.extend(models_dir.glob(pattern))
 
@@ -101,31 +101,37 @@ class LiveTradingPage(pn.viewable.Viewer):
         # Sort by modification time (most recent first)
         matching_dirs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
 
-        # Only use completed models (those with final_model.zip)
+        # Only use completed models (those with final_model.zip or ensemble directory)
         # This prevents loading models that are still training
         for model_dir in matching_dirs:
-            final_model_path = model_dir / "final_model.zip"
-            if final_model_path.exists():
-                latest_dir = model_dir
-                model_path = final_model_path
-                break
+            # Extract agent type from directory name first
+            dir_name = model_dir.name
+            if dir_name.startswith('recurrent_ppo_'):
+                found_agent_type = 'recurrent_ppo'
+            elif dir_name.startswith('ppo_'):
+                found_agent_type = 'ppo'
+            elif dir_name.startswith('ensemble_'):
+                found_agent_type = 'ensemble'
+            else:
+                found_agent_type = 'unknown'
+
+            # Check for appropriate model structure
+            if found_agent_type == 'ensemble':
+                ensemble_subdir = model_dir / "ensemble"
+                if ensemble_subdir.exists() and (ensemble_subdir / "ppo_best_model.zip").exists():
+                    latest_dir = model_dir
+                    model_path = ensemble_subdir  # Point to ensemble subdirectory
+                    break
+            else:
+                # Standard model structure
+                final_model_path = model_dir / "final_model.zip"
+                if final_model_path.exists():
+                    latest_dir = model_dir
+                    model_path = final_model_path
+                    break
         else:
             # No completed models found
             return None
-
-        # Extract agent type from directory name
-        # Formats: ppo_, recurrent_ppo_, dqn_, qrdqn_
-        dir_name = latest_dir.name
-        if dir_name.startswith('recurrent_ppo_'):
-            found_agent_type = 'recurrent_ppo'
-        elif dir_name.startswith('ppo_'):
-            found_agent_type = 'ppo'
-        elif dir_name.startswith('dqn_'):
-            found_agent_type = 'dqn'
-        elif dir_name.startswith('qrdqn_'):
-            found_agent_type = 'qrdqn'
-        else:
-            found_agent_type = 'unknown'
 
         return {
             'path': model_path,
@@ -170,7 +176,7 @@ class LiveTradingPage(pn.viewable.Viewer):
         )
 
         self.agent_type = pn.widgets.RadioButtonGroup(
-            options=['PPO', 'RecurrentPPO', 'DQN', 'QRDQN'],
+            options=['PPO', 'RecurrentPPO', 'Ensemble'],
             value='PPO',
             button_type='primary',
             button_style='outline',
