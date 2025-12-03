@@ -248,13 +248,26 @@ See [QUICK_START.md](docs/QUICK_START.md#troubleshooting) for more help
 **RL Agents:**
 - **PPO**: Stable baseline with strong penalties
 - **RecurrentPPO**: LSTM memory + trend indicators (13 features)
-- **Ensemble**: Weighted voting combining PPO (60%) + RecurrentPPO (40%)
+- **Ensemble**: Weighted voting combining PPO (50%) + RecurrentPPO (50%)
 - 6-action space with masking, adaptive sizing, algorithm-specific rewards
 
 **Backtesting:**
 - Auto-loads models
 - Compares vs baselines (Buy & Hold, Momentum)
 - Comprehensive metrics (Sharpe, Max Drawdown, Win Rate)
+
+### 🛠️ Developer Tools
+
+**Automated Training & Comparison:**
+The `retrain_and_compare.py` CLI utility automates the entire workflow:
+```bash
+# Train all algorithms and compare results
+python retrain_and_compare.py --symbol AAPL
+
+# Compare existing models without retraining
+python retrain_and_compare.py --symbol MSFT --skip-training
+```
+It handles model management, backtesting, and strategy comparison in a single command.
 
 ---
 

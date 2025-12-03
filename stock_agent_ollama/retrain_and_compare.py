@@ -122,9 +122,14 @@ def find_latest_model(symbol: str, agent_type: str) -> Path:
     # Only use completed models (those with final_model.zip)
     # This prevents loading models that are still training
     for model_dir in matching_dirs:
-        final_model_path = model_dir / "final_model.zip"
-        if final_model_path.exists():
-            return final_model_path
+        if agent_type == 'ensemble':
+            # Ensemble saves config in a subdirectory
+            if (model_dir / "ensemble" / "ensemble_config.json").exists():
+                return model_dir / "ensemble"
+        else:
+            final_model_path = model_dir / "final_model.zip"
+            if final_model_path.exists():
+                return final_model_path
 
     # No completed models found
     return None
@@ -168,7 +173,7 @@ def run_comprehensive_backtest(symbol: str, include_baselines: bool = True) -> d
 
             # Determine include_trend_indicators
             include_trend = training_config.get('include_trend_indicators', False)
-            if agent_type == 'recurrent_ppo':
+            if agent_type == 'recurrent_ppo' or agent_type == 'ensemble':
                 include_trend = True
 
             # Create backtest config
