@@ -718,6 +718,36 @@ class LiveTradingEngine:
 
         logger.info(f"Initializing environment with data from {start_date} to {end_date}")
 
+        # Detect feature configuration from agent's observation space
+        include_trend_indicators = False
+        if self.agent is not None and hasattr(self.agent, 'observation_space'):
+            obs_shape = self.agent.observation_space.shape
+            lookback_window = obs_shape[0] if len(obs_shape) > 0 else 60
+            expected_features = obs_shape[1] if len(obs_shape) > 1 else 10
+
+            # Infer include_trend_indicators from feature count
+            # Base: 5, Tech: 5, Trend: 3, Regime: 7, MTF: 6
+            # With all enabled: 5 + 5 + 3 + 7 + 6 = 26
+            # Without trend: 5 + 5 + 7 + 6 = 23
+            use_regime = training_config.get('use_regime_detector', True)
+            use_mtf = training_config.get('use_mtf_features', True)
+
+            base_features = 5 + 5  # base + technical
+            if use_regime:
+                base_features += 7
+            if use_mtf:
+                base_features += 6
+
+            # If we have 3 more features than expected, trend indicators are enabled
+            if expected_features == base_features + 3:
+                include_trend_indicators = True
+                logger.info(f"Detected include_trend_indicators=True from observation shape {obs_shape}")
+            else:
+                logger.info(f"Detected include_trend_indicators=False from observation shape {obs_shape}")
+        else:
+            # Fall back to config
+            include_trend_indicators = training_config.get('include_trend_indicators', False)
+
         # Build env config matching training, with live date ranges
         env_config = EnvConfig(
             symbol=self.config.symbol,
@@ -732,7 +762,7 @@ class LiveTradingEngine:
             max_position_pct=training_config.get('max_position_pct', 80.0),
             lookback_window=training_config.get('lookback_window', 60),
             include_technical_indicators=training_config.get('include_technical_indicators', True),
-            include_trend_indicators=training_config.get('include_trend_indicators', False),
+            include_trend_indicators=include_trend_indicators,  # Use detected value
 
             # Load enhancement flags from training config
             use_action_masking=training_config.get('use_action_masking', True),
@@ -755,7 +785,8 @@ class LiveTradingEngine:
 
         logger.info(f"Environment initialized for live trading with training config: "
                    f"costs={env_config.transaction_cost_rate:.4f}, "
-                   f"max_pos={env_config.max_position_pct}%")
+                   f"max_pos={env_config.max_position_pct}%, "
+                   f"obs_shape={self.env.observation_space.shape}")
 
     def initialize_session_state(self, session_id: Optional[str] = None) -> TradingSession:
         """Initialize new trading session state"""
@@ -1007,7 +1038,17 @@ class LiveTradingEngine:
                 force_refresh=True  # Always fetch fresh data for live trading
             )
 
-            expected_features = 13 if self.env.include_trend_indicators else 10
+            # Calculate expected features based on environment config
+            expected_features = 5  # base features
+            if self.env.include_technical_indicators:
+                expected_features += 5  # technical indicators
+            if self.env.include_trend_indicators:
+                expected_features += 3  # trend indicators
+            if getattr(self.env, 'use_regime_detector', False):
+                expected_features += 7  # regime features
+            if getattr(self.env, 'use_mtf_features', False):
+                expected_features += 6  # MTF features
+
             if hist_data is None or len(hist_data) < 60:
                 logger.warning(f"{self.session.session_id} - Insufficient historical data for observation, using zeros")
                 return np.zeros((60, expected_features), dtype=np.float32)
@@ -1187,6 +1228,15 @@ class LiveTradingEngine:
 
         except Exception as e:
             logger.error(f"{self.session.session_id} - Error building observation: {e}")
-            # Return zeros as fallback
-            expected_features = 13 if hasattr(self, 'env') and self.env and self.env.include_trend_indicators else 10
+            # Return zeros as fallback - calculate expected features
+            expected_features = 5  # base features
+            if hasattr(self, 'env') and self.env:
+                if self.env.include_technical_indicators:
+                    expected_features += 5
+                if self.env.include_trend_indicators:
+                    expected_features += 3
+                if getattr(self.env, 'use_regime_detector', False):
+                    expected_features += 7
+                if getattr(self.env, 'use_mtf_features', False):
+                    expected_features += 6
             return np.zeros((60, expected_features), dtype=np.float32)

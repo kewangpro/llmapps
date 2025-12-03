@@ -68,6 +68,15 @@ class EnsemblePPOAgent:
 
         logger.info(f"Ensemble created: PPO={self.ppo_weight:.1%}, RecurrentPPO={self.recurrent_ppo_weight:.1%}")
 
+    @property
+    def observation_space(self):
+        """
+        Get observation space.
+        Returns the observation space of the component with the most features (RecurrentPPO),
+        which is the superset of required features.
+        """
+        return self.recurrent_ppo.observation_space
+
     def predict(
         self,
         observation: np.ndarray,
