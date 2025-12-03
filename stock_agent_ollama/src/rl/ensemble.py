@@ -1,402 +1,266 @@
 """
-Ensemble Agent for combining multiple trained RL models.
+Ensemble Agent - Combines PPO and RecurrentPPO
 
-This module implements weighted voting across multiple trained agents to combine
-their strengths. Addresses the issue where different algorithms excel in different
-market conditions (e.g., RecurrentPPO in uptrends, PPO in volatility).
+This module implements an ensemble trading agent that combines the strengths of:
+- PPO: Aggressive growth strategy
+- RecurrentPPO: Risk-managed strategy with LSTM memory
 
-Expected Impact: +8-12% returns by combining best of all algorithms
+The ensemble uses a weighted voting mechanism where both agents contribute to
+the final decision based on their respective strengths.
 """
 
-import logging
-from typing import List, Tuple, Dict, Any, Optional
 import numpy as np
-from collections import Counter
+from typing import Tuple, Optional, Dict, Any
+from pathlib import Path
+import logging
 
 logger = logging.getLogger(__name__)
 
 
-class EnsembleAgent:
+class EnsemblePPOAgent:
     """
-    Combines multiple trained agents using weighted voting.
+    Ensemble agent combining PPO and RecurrentPPO.
 
-    Strategy:
-    - Each agent votes for an action based on current observation
-    - Votes are weighted by agent performance (Sharpe ratio, returns, etc.)
-    - Final action is the weighted majority vote
-    - Confidence score indicates agreement level among agents
+    **Strategy**:
+    - PPO (60%): Aggressive growth, higher returns
+    - RecurrentPPO (40%): Risk management, better Sharpe ratio
 
-    Example Usage:
-        # Load trained models
-        ppo_agent = PPO.load("ppo_model.zip")
-        rppo_agent = RecurrentPPO.load("rppo_model.zip")
-        sac_agent = SAC.load("sac_model.zip")
-
-        # Create ensemble with weights based on validation performance
-        ensemble = EnsembleAgent([
-            (ppo_agent, 0.35),      # Weight by Sharpe ratio
-            (rppo_agent, 0.45),     # Best in uptrends
-            (sac_agent, 0.20)       # Adds diversity
-        ])
-
-        # Use ensemble for prediction
-        action, confidence = ensemble.predict_with_confidence(obs)
+    **Decision Logic**:
+    1. Get predictions from both agents
+    2. If agents agree: Use that action
+    3. If agents disagree: Use weighted vote (PPO 60%, RecurrentPPO 40%)
+    4. Confidence-based weighting: Higher confidence gets more weight
     """
 
     def __init__(
         self,
-        agents: List[Tuple[Any, float]],
-        confidence_threshold: float = 0.5,
-        normalize_weights: bool = True
+        ppo_model,
+        recurrent_ppo_model,
+        ppo_weight: float = 0.6,
+        recurrent_ppo_weight: float = 0.4,
+        use_confidence: bool = True
     ):
         """
         Initialize ensemble agent.
 
         Args:
-            agents: List of (agent, weight) tuples. Each agent must have a predict() method.
-            confidence_threshold: Minimum confidence for high-conviction trades (0.0-1.0)
-            normalize_weights: Whether to normalize weights to sum to 1.0
+            ppo_model: Trained PPO model
+            recurrent_ppo_model: Trained RecurrentPPO model
+            ppo_weight: Weight for PPO decisions (0-1)
+            recurrent_ppo_weight: Weight for RecurrentPPO decisions (0-1)
+            use_confidence: Whether to use action probabilities for weighting
         """
-        if not agents:
-            raise ValueError("Ensemble requires at least one agent")
+        self.ppo = ppo_model
+        self.recurrent_ppo = recurrent_ppo_model
+        self.ppo_weight = ppo_weight
+        self.recurrent_ppo_weight = recurrent_ppo_weight
+        self.use_confidence = use_confidence
 
-        self.agents = agents
-        self.confidence_threshold = confidence_threshold
+        # Normalize weights
+        total_weight = ppo_weight + recurrent_ppo_weight
+        self.ppo_weight /= total_weight
+        self.recurrent_ppo_weight /= total_weight
 
-        # Normalize weights if requested
-        if normalize_weights:
-            total_weight = sum(weight for _, weight in agents)
-            if total_weight <= 0:
-                raise ValueError("Total weight must be positive")
-            self.agents = [(agent, weight / total_weight) for agent, weight in agents]
-            logger.info(f"Normalized ensemble weights to sum to 1.0")
+        # Statistics
+        self.agreement_count = 0
+        self.disagreement_count = 0
+        self.predictions_count = 0
 
-        # Log ensemble configuration
-        logger.info(f"Created ensemble with {len(self.agents)} agents:")
-        for i, (agent, weight) in enumerate(self.agents):
-            agent_name = type(agent).__name__
-            logger.info(f"  Agent {i+1}: {agent_name} (weight={weight:.3f})")
-
-        # Track prediction statistics
-        self.prediction_count = 0
-        self.high_confidence_count = 0
-        self.action_distribution = Counter()
+        logger.info(f"Ensemble created: PPO={self.ppo_weight:.1%}, RecurrentPPO={self.recurrent_ppo_weight:.1%}")
 
     def predict(
         self,
         observation: np.ndarray,
-        state: Optional[Any] = None,
+        state: Optional[Tuple] = None,
         episode_start: Optional[np.ndarray] = None,
         deterministic: bool = True
-    ) -> Tuple[np.ndarray, Optional[Any]]:
+    ) -> Tuple[np.ndarray, Optional[Tuple]]:
         """
-        Get ensemble action via weighted voting.
+        Predict action using ensemble voting.
 
         Args:
             observation: Current environment observation
-            state: RNN states for recurrent agents (optional)
-            episode_start: Episode start flags for recurrent agents (optional)
-            deterministic: Whether to use deterministic predictions
+            state: RNN states (for RecurrentPPO)
+            episode_start: Episode start flags
+            deterministic: Whether to use deterministic prediction
 
         Returns:
-            action: Ensemble action as numpy array
-            state: Updated RNN states (None for non-recurrent ensemble)
+            Tuple of (action, state)
         """
-        action = self._predict_action(observation, state, episode_start, deterministic)
-        return np.array([action]), None
+        self.predictions_count += 1
 
-    def predict_with_confidence(
+        # Handle different observation spaces for each model
+        # RecurrentPPO expects (60, 26) with trend indicators
+        # PPO expects (60, 23) without trend indicators
+
+        # Check observation shape and prepare observations for each model
+        if len(observation.shape) == 2:
+            # Shape is (timesteps, features)
+            if observation.shape[1] == 26:
+                # Has trend indicators - use first 23 features for PPO, all 26 for RecurrentPPO
+                ppo_obs = observation[:, :23]  # Remove last 3 trend features
+                rppo_obs = observation  # Use all features
+            else:
+                # No trend indicators - both use same observation
+                ppo_obs = observation
+                rppo_obs = observation
+        else:
+            # Single observation or other shape - use as is
+            ppo_obs = observation
+            rppo_obs = observation
+
+        # Get PPO prediction (with reduced observation if needed)
+        ppo_action, _ = self.ppo.predict(
+            ppo_obs,
+            deterministic=deterministic
+        )
+
+        # Get RecurrentPPO prediction (with full observation)
+        rppo_action, new_state = self.recurrent_ppo.predict(
+            rppo_obs,
+            state=state,
+            episode_start=episode_start,
+            deterministic=deterministic
+        )
+
+        # Extract scalar actions
+        # Handle different numpy array shapes (scalar, 0-d, 1-d arrays)
+        if isinstance(ppo_action, np.ndarray):
+            ppo_action_val = int(ppo_action.item() if ppo_action.ndim == 0 else ppo_action[0])
+        else:
+            ppo_action_val = int(ppo_action)
+
+        if isinstance(rppo_action, np.ndarray):
+            rppo_action_val = int(rppo_action.item() if rppo_action.ndim == 0 else rppo_action[0])
+        else:
+            rppo_action_val = int(rppo_action)
+
+        # Check agreement
+        if ppo_action_val == rppo_action_val:
+            self.agreement_count += 1
+            final_action = ppo_action_val
+            logger.debug(f"Agreement: Both chose action {final_action}")
+        else:
+            self.disagreement_count += 1
+
+            if self.use_confidence:
+                # Get action probabilities (pass appropriate observations)
+                final_action = self._weighted_vote_with_confidence(
+                    ppo_obs, rppo_obs, ppo_action_val, rppo_action_val, state, episode_start
+                )
+            else:
+                # Simple weighted vote based on fixed weights
+                final_action = self._weighted_vote(ppo_action_val, rppo_action_val)
+
+            logger.debug(f"Disagreement: PPO={ppo_action_val}, RecurrentPPO={rppo_action_val}, Final={final_action}")
+
+        # Return action in same format as input
+        if isinstance(ppo_action, np.ndarray):
+            final_action = np.array([final_action])
+
+        return final_action, new_state
+
+    def _weighted_vote(self, ppo_action: int, rppo_action: int) -> int:
+        """Simple weighted vote using fixed weights."""
+        # Random selection based on weights
+        if np.random.random() < self.ppo_weight:
+            return ppo_action
+        else:
+            return rppo_action
+
+    def _weighted_vote_with_confidence(
         self,
-        observation: np.ndarray,
-        state: Optional[Any] = None,
-        episode_start: Optional[np.ndarray] = None,
-        deterministic: bool = True
-    ) -> Tuple[int, float]:
-        """
-        Get ensemble action with confidence score.
-
-        Args:
-            observation: Current environment observation
-            state: RNN states for recurrent agents (optional)
-            episode_start: Episode start flags for recurrent agents (optional)
-            deterministic: Whether to use deterministic predictions
-
-        Returns:
-            action: Ensemble action (integer)
-            confidence: Confidence score in range [0.0, 1.0]
-                       1.0 = all agents agree with maximum weight
-                       0.0 = maximum disagreement
-        """
-        action = self._predict_action(observation, state, episode_start, deterministic)
-        confidence = self._calculate_confidence()
-
-        # Update statistics
-        self.prediction_count += 1
-        if confidence >= self.confidence_threshold:
-            self.high_confidence_count += 1
-        self.action_distribution[action] += 1
-
-        # Log periodically
-        if self.prediction_count % 100 == 0:
-            high_conf_pct = 100.0 * self.high_confidence_count / self.prediction_count
-            logger.debug(
-                f"Ensemble stats: {self.prediction_count} predictions, "
-                f"{high_conf_pct:.1f}% high confidence (>{self.confidence_threshold})"
+        ppo_observation: np.ndarray,
+        rppo_observation: np.ndarray,
+        ppo_action: int,
+        rppo_action: int,
+        state: Optional[Tuple],
+        episode_start: Optional[np.ndarray]
+    ) -> int:
+        """Weighted vote using action probabilities as confidence."""
+        try:
+            # Get action probabilities from both models (with appropriate observations)
+            ppo_probs = self._get_action_probabilities(self.ppo, ppo_observation, None)
+            rppo_probs = self._get_action_probabilities(
+                self.recurrent_ppo, rppo_observation, state, episode_start
             )
 
-        return action, confidence
+            # Get confidence for each agent's chosen action
+            ppo_confidence = ppo_probs[ppo_action]
+            rppo_confidence = rppo_probs[rppo_action]
 
-    def _predict_action(
+            # Weight by base weight * confidence
+            ppo_score = self.ppo_weight * ppo_confidence
+            rppo_score = self.recurrent_ppo_weight * rppo_confidence
+
+            # Choose action with higher weighted confidence
+            if ppo_score > rppo_score:
+                logger.debug(f"PPO wins: {ppo_score:.3f} vs {rppo_score:.3f}")
+                return ppo_action
+            else:
+                logger.debug(f"RecurrentPPO wins: {rppo_score:.3f} vs {ppo_score:.3f}")
+                return rppo_action
+
+        except Exception as e:
+            logger.warning(f"Confidence calculation failed: {e}, using simple weighted vote")
+            return self._weighted_vote(ppo_action, rppo_action)
+
+    def _get_action_probabilities(
         self,
+        model,
         observation: np.ndarray,
-        state: Optional[Any],
-        episode_start: Optional[np.ndarray],
-        deterministic: bool
-    ) -> int:
-        """
-        Internal method to compute weighted voting action.
+        state: Optional[Tuple] = None,
+        episode_start: Optional[np.ndarray] = None
+    ) -> np.ndarray:
+        """Get action probability distribution from model."""
+        # Get policy distribution
+        obs = observation.reshape(1, -1) if len(observation.shape) == 1 else observation
 
-        Returns:
-            action: Integer action with highest weighted vote
-        """
-        # Collect votes from all agents
-        votes: Dict[int, float] = {}
+        # For RecurrentPPO
+        if hasattr(model.policy, 'lstm_actor'):
+            if state is None:
+                state = model.policy.lstm_actor.initial_state(1, model.device)
+            if episode_start is None:
+                episode_start = np.array([False])
 
-        for agent, weight in self.agents:
-            try:
-                # Get agent's prediction
-                # Handle both recurrent and non-recurrent agents
-                if state is not None and episode_start is not None:
-                    # Recurrent agent (e.g., RecurrentPPO)
-                    agent_action, _ = agent.predict(
-                        observation,
-                        state=state,
-                        episode_start=episode_start,
-                        deterministic=deterministic
-                    )
-                else:
-                    # Non-recurrent agent (e.g., PPO, SAC, A2C)
-                    agent_action, _ = agent.predict(
-                        observation,
-                        deterministic=deterministic
-                    )
+            distribution = model.policy.get_distribution(obs, state, episode_start)
+        else:
+            # For regular PPO
+            distribution = model.policy.get_distribution(obs)
 
-                # Extract action value (handle both array and scalar)
-                if isinstance(agent_action, np.ndarray):
-                    action_value = int(agent_action[0])
-                else:
-                    action_value = int(agent_action)
-
-                # Add weighted vote
-                votes[action_value] = votes.get(action_value, 0.0) + weight
-
-                logger.debug(
-                    f"{type(agent).__name__} voted for action {action_value} "
-                    f"(weight={weight:.3f})"
-                )
-
-            except Exception as e:
-                logger.warning(
-                    f"Agent {type(agent).__name__} prediction failed: {e}. Skipping."
-                )
-                continue
-
-        if not votes:
-            logger.warning("All agents failed to predict. Defaulting to HOLD (action 0)")
-            return 0
-
-        # Store votes for confidence calculation
-        self._last_votes = votes
-
-        # Return action with highest weighted vote
-        best_action = max(votes.items(), key=lambda x: x[1])[0]
-
-        logger.debug(
-            f"Ensemble decision: action {best_action} "
-            f"(votes: {dict(sorted(votes.items()))})"
-        )
-
-        return best_action
-
-    def _calculate_confidence(self) -> float:
-        """
-        Calculate confidence score based on vote distribution.
-
-        Confidence is calculated as:
-        - 1.0 if all weight concentrated in one action
-        - Lower as votes spread across multiple actions
-
-        Uses Herfindahl-Hirschman Index (HHI) normalized to [0, 1]:
-        HHI = sum(vote_weight^2 for each action)
-
-        Returns:
-            confidence: Float in range [0.0, 1.0]
-        """
-        if not hasattr(self, '_last_votes') or not self._last_votes:
-            return 0.0
-
-        votes = self._last_votes
-        total_weight = sum(votes.values())
-
-        if total_weight == 0:
-            return 0.0
-
-        # Calculate HHI (concentration index)
-        # Higher HHI = more concentrated = higher confidence
-        hhi = sum((weight / total_weight) ** 2 for weight in votes.values())
-
-        # HHI ranges from 1/n (uniform distribution) to 1.0 (all in one action)
-        # Normalize to [0, 1] range
-        n_actions = len(votes)
-        if n_actions == 1:
-            return 1.0
-
-        min_hhi = 1.0 / n_actions
-        normalized_confidence = (hhi - min_hhi) / (1.0 - min_hhi)
-
-        return max(0.0, min(1.0, normalized_confidence))
+        # Get probabilities
+        probs = distribution.distribution.probs.detach().cpu().numpy()[0]
+        return probs
 
     def get_statistics(self) -> Dict[str, Any]:
-        """
-        Get ensemble prediction statistics.
-
-        Returns:
-            stats: Dictionary with prediction statistics
-        """
-        if self.prediction_count == 0:
-            return {
-                'total_predictions': 0,
-                'high_confidence_count': 0,
-                'high_confidence_pct': 0.0,
-                'action_distribution': {}
-            }
-
-        high_conf_pct = 100.0 * self.high_confidence_count / self.prediction_count
-
-        # Convert Counter to regular dict with percentages
-        action_dist = {
-            f"action_{action}": count
-            for action, count in sorted(self.action_distribution.items())
-        }
-        action_dist_pct = {
-            f"action_{action}_pct": 100.0 * count / self.prediction_count
-            for action, count in sorted(self.action_distribution.items())
-        }
+        """Get ensemble statistics."""
+        total = self.agreement_count + self.disagreement_count
+        agreement_rate = self.agreement_count / total if total > 0 else 0
 
         return {
-            'total_predictions': self.prediction_count,
-            'high_confidence_count': self.high_confidence_count,
-            'high_confidence_pct': high_conf_pct,
-            'action_distribution': action_dist,
-            'action_distribution_pct': action_dist_pct,
-            'confidence_threshold': self.confidence_threshold
+            'predictions': self.predictions_count,
+            'agreements': self.agreement_count,
+            'disagreements': self.disagreement_count,
+            'agreement_rate': agreement_rate,
+            'ppo_weight': self.ppo_weight,
+            'recurrent_ppo_weight': self.recurrent_ppo_weight,
         }
 
-    def reset_statistics(self):
-        """Reset prediction statistics."""
-        self.prediction_count = 0
-        self.high_confidence_count = 0
-        self.action_distribution = Counter()
-        logger.info("Reset ensemble statistics")
+    def save(self, save_dir: Path):
+        """Save ensemble metadata."""
+        save_dir.mkdir(parents=True, exist_ok=True)
 
+        # Save ensemble configuration
+        import json
+        config = {
+            'ensemble_type': 'PPO_RecurrentPPO',
+            'ppo_weight': float(self.ppo_weight),
+            'recurrent_ppo_weight': float(self.recurrent_ppo_weight),
+            'use_confidence': self.use_confidence,
+            'statistics': self.get_statistics()
+        }
 
-class AdaptiveEnsembleAgent(EnsembleAgent):
-    """
-    Ensemble agent with adaptive weights based on recent performance.
+        with open(save_dir / 'ensemble_config.json', 'w') as f:
+            json.dump(config, f, indent=2)
 
-    Dynamically adjusts agent weights based on recent prediction accuracy
-    or portfolio performance. Useful when market conditions change and
-    different agents become more/less effective.
-
-    Example:
-        ensemble = AdaptiveEnsembleAgent(
-            agents=[(ppo_agent, 1.0), (rppo_agent, 1.0), (sac_agent, 1.0)],
-            adaptation_rate=0.1,
-            performance_window=50
-        )
-
-        # After each step, update weights based on performance
-        reward = env.step(action)
-        ensemble.update_weights(reward)
-    """
-
-    def __init__(
-        self,
-        agents: List[Tuple[Any, float]],
-        adaptation_rate: float = 0.1,
-        performance_window: int = 50,
-        **kwargs
-    ):
-        """
-        Initialize adaptive ensemble agent.
-
-        Args:
-            agents: List of (agent, initial_weight) tuples
-            adaptation_rate: How quickly to adapt weights (0.0-1.0)
-            performance_window: Number of recent predictions to consider
-            **kwargs: Additional arguments passed to EnsembleAgent
-        """
-        super().__init__(agents, normalize_weights=False, **kwargs)
-
-        self.adaptation_rate = adaptation_rate
-        self.performance_window = performance_window
-
-        # Track recent performance for each agent
-        self.agent_rewards = [[] for _ in agents]
-        self.agent_predictions = [[] for _ in agents]
-
-        logger.info(
-            f"Created adaptive ensemble with rate={adaptation_rate}, "
-            f"window={performance_window}"
-        )
-
-    def update_weights(self, reward: float):
-        """
-        Update agent weights based on recent performance.
-
-        Args:
-            reward: Reward received for the last ensemble prediction
-        """
-        if not hasattr(self, '_last_votes'):
-            return
-
-        # Record reward for agents that contributed to the decision
-        for i, (agent, _) in enumerate(self.agents):
-            # Simple approach: all agents get credit/blame for ensemble decision
-            # More sophisticated: weight by vote contribution
-            self.agent_rewards[i].append(reward)
-
-            # Keep only recent window
-            if len(self.agent_rewards[i]) > self.performance_window:
-                self.agent_rewards[i].pop(0)
-
-        # Update weights based on recent average rewards
-        if all(len(rewards) >= 10 for rewards in self.agent_rewards):
-            avg_rewards = [np.mean(rewards) for rewards in self.agent_rewards]
-
-            # Convert to positive weights (shift by min if needed)
-            min_reward = min(avg_rewards)
-            if min_reward < 0:
-                avg_rewards = [r - min_reward + 1e-6 for r in avg_rewards]
-
-            # Update weights using exponential moving average
-            new_weights = []
-            for i, (agent, old_weight) in enumerate(self.agents):
-                new_weight = (
-                    (1 - self.adaptation_rate) * old_weight +
-                    self.adaptation_rate * avg_rewards[i]
-                )
-                new_weights.append(new_weight)
-
-            # Normalize weights
-            total_weight = sum(new_weights)
-            if total_weight > 0:
-                self.agents = [
-                    (agent, weight / total_weight)
-                    for (agent, _), weight in zip(self.agents, new_weights)
-                ]
-
-                logger.debug(
-                    f"Updated ensemble weights: "
-                    f"{[f'{w:.3f}' for _, w in self.agents]}"
-                )
+        logger.info(f"Ensemble config saved to {save_dir}/ensemble_config.json")

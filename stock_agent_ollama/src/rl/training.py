@@ -17,17 +17,15 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, Any
 import logging
 import json
-from stable_baselines3 import PPO, DQN
+from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
-from sb3_contrib import RecurrentPPO, QRDQN
+from sb3_contrib import RecurrentPPO
 
 from .environments import EnhancedTradingEnv
 from .improvements import (
     EnhancedRewardConfig,
     PPORewardConfig,
     RecurrentPPORewardConfig,
-    DQNRewardConfig,
-    QRDQNRewardConfig,
     CurriculumManager,
     TrainingDiagnostics
 )
@@ -81,7 +79,7 @@ class EnhancedTrainingConfig:
     reward_config: EnhancedRewardConfig = field(default_factory=EnhancedRewardConfig)
 
     # Agent settings
-    agent_type: str = "ppo"  # Options: 'ppo', 'recurrent_ppo', 'dqn', 'qrdqn'
+    agent_type: str = "ppo"  # Options: 'ppo', 'recurrent_ppo', 'ensemble'
     learning_rate: float = 3e-4
     gamma: float = 0.99
     # Entropy coefficient controls exploration vs exploitation
@@ -286,6 +284,9 @@ class EnhancedRLTrainer:
         if self.env is None:
             self.setup_environment()
 
+        # Determine agent type for algorithm-specific settings
+        agent_type_lower = self.config.agent_type.lower()
+
         # Common agent parameters
         agent_params = {
             'learning_rate': self.config.learning_rate,
@@ -294,7 +295,6 @@ class EnhancedRLTrainer:
         }
 
         # Determine agent class and policy type
-        agent_type_lower = self.config.agent_type.lower()
         agent_class = None
         policy_type = 'MlpPolicy' # Default policy
 
@@ -304,66 +304,35 @@ class EnhancedRLTrainer:
         elif agent_type_lower == 'recurrent_ppo':
             agent_class = RecurrentPPO
             policy_type = 'MlpLstmPolicy'
-        elif agent_type_lower == 'dqn':
-            agent_class = DQN
-            policy_type = 'MlpPolicy'
-        elif agent_type_lower == 'qrdqn':
-            agent_class = QRDQN
-            policy_type = 'MlpPolicy'
+        elif agent_type_lower == 'ensemble':
+            # Ensemble will be handled separately after training both base models
+            agent_class = None
+            policy_type = None
         else:
-            raise ValueError(f"Unsupported agent type: {self.config.agent_type}. Available: ppo, recurrent_ppo, dqn, qrdqn")
+            raise ValueError(f"Unsupported agent type: {self.config.agent_type}. Available: ppo, recurrent_ppo, ensemble")
 
         # Algorithm-specific parameters
-        if agent_type_lower == 'ppo':
+        if agent_type_lower in ['ppo', 'recurrent_ppo']:
             agent_params.update({
                 'n_steps': self.config.n_steps,
                 'batch_size': self.config.batch_size,
                 'n_epochs': self.config.n_epochs,
                 'ent_coef': self.config.ent_coef,
             })
-        elif agent_type_lower == 'recurrent_ppo':
-            agent_params.update({
-                'n_steps': self.config.n_steps,
-                'batch_size': self.config.batch_size,
-                'n_epochs': self.config.n_epochs,
-                'ent_coef': self.config.ent_coef,
-            })
-        elif agent_type_lower == 'dqn':
-            # DQN-specific parameters (off-policy value-based learning)
-            agent_params.update({
-                'buffer_size': 100000,           # Large replay buffer for experience reuse
-                'learning_starts': 10000,        # Fill buffer before learning
-                'batch_size': self.config.batch_size,
-                'tau': 0.005,                    # Soft target network update
-                'train_freq': 4,                 # Update every 4 steps
-                'gradient_steps': 1,
-                'target_update_interval': 1000,  # Hard target update every 1000 steps
-                'exploration_fraction': 0.3,     # 30% of training for exploration
-                'exploration_initial_eps': 1.0,  # Start fully random
-                'exploration_final_eps': 0.05,   # End with 5% random actions
-            })
-        elif agent_type_lower == 'qrdqn':
-            # QRDQN-specific parameters (similar to DQN but with distributional RL)
-            agent_params.update({
-                'buffer_size': 100000,           # Large replay buffer for experience reuse
-                'learning_starts': 10000,        # Fill buffer before learning
-                'batch_size': self.config.batch_size,
-                'tau': 0.005,                    # Soft target network update
-                'train_freq': 4,                 # Update every 4 steps
-                'gradient_steps': 1,
-                'target_update_interval': 1000,  # Hard target update every 1000 steps
-                'exploration_fraction': 0.3,     # 30% of training for exploration
-                'exploration_initial_eps': 1.0,  # Start fully random
-                'exploration_final_eps': 0.05,   # End with 5% random actions
-            })
 
-        self.agent = agent_class(
-            policy_type,
-            self.env,
-            **agent_params
-        )
+        # Create agent (ensemble is handled in train() method)
+        if agent_type_lower != 'ensemble':
+            self.agent = agent_class(
+                policy_type,
+                self.env,
+                **agent_params
+            )
+            logger.info(f"Created {self.config.agent_type.upper()} agent with {policy_type}")
+        else:
+            # Ensemble: will train both PPO and RecurrentPPO, then combine
+            self.agent = None
+            logger.info("Ensemble mode: will train both PPO and RecurrentPPO")
 
-        logger.info(f"Created {self.config.agent_type.upper()} agent with {policy_type}")
         return self.agent
 
     def setup_callbacks(self):
@@ -408,6 +377,10 @@ class EnhancedRLTrainer:
 
         if self.env is None:
             self.setup_environment()
+
+        # Check if ensemble mode
+        if self.config.agent_type.lower() == 'ensemble':
+            return self._train_ensemble()
 
         if self.agent is None:
             self.setup_agent()
@@ -483,6 +456,114 @@ class EnhancedRLTrainer:
 
         return results
 
+    def _train_ensemble(self) -> Dict[str, Any]:
+        """Train ensemble by training both PPO and RecurrentPPO, then combining them."""
+        from .ensemble import EnsemblePPOAgent
+
+        print(f"\n{'='*70}")
+        print("🚀 ENSEMBLE TRAINING: PPO + RecurrentPPO")
+        print(f"{'='*70}")
+        print(f"Stock: {self.config.symbol}")
+        print(f"Period: {self.config.start_date} to {self.config.end_date}")
+        print(f"Total Timesteps per agent: {self.config.total_timesteps:,}")
+        print(f"\nStrategy:")
+        print(f"  1. Train PPO (aggressive growth)")
+        print(f"  2. Train RecurrentPPO (risk management)")
+        print(f"  3. Combine with 60/40 weighted voting")
+        print(f"{'='*70}\n")
+
+        ensemble_start_time = datetime.now()
+
+        # Train PPO
+        print("\n" + "="*70)
+        print("Step 1/2: Training PPO Agent")
+        print("="*70)
+
+        # Create a copy of config for PPO to avoid modifying the ensemble config
+        from dataclasses import replace
+        ppo_config = replace(self.config, agent_type='ppo')
+        ppo_trainer = EnhancedRLTrainer(ppo_config, progress_callback=self.progress_callback)
+        ppo_results = ppo_trainer.train()
+
+        ppo_model_path = ppo_results['final_model_path']
+        # Load without env to preserve the model's original observation space
+        ppo_model = PPO.load(ppo_model_path)
+
+        print(f"✅ PPO training complete: {ppo_results['training_time']:.1f}s")
+
+        # Train RecurrentPPO
+        print("\n" + "="*70)
+        print("Step 2/2: Training RecurrentPPO Agent")
+        print("="*70)
+
+        # Create a copy of config for RecurrentPPO to avoid modifying the ensemble config
+        rppo_config = replace(self.config, agent_type='recurrent_ppo')
+        rppo_trainer = EnhancedRLTrainer(rppo_config, progress_callback=self.progress_callback)
+        rppo_results = rppo_trainer.train()
+
+        rppo_model_path = rppo_results['final_model_path']
+        # Load without env to preserve the model's original observation space
+        rppo_model = RecurrentPPO.load(rppo_model_path)
+
+        print(f"✅ RecurrentPPO training complete: {rppo_results['training_time']:.1f}s")
+
+        # Create ensemble
+        print("\n" + "="*70)
+        print("Creating Ensemble Agent")
+        print("="*70)
+
+        ensemble = EnsemblePPOAgent(
+            ppo_model=ppo_model,
+            recurrent_ppo_model=rppo_model,
+            ppo_weight=0.6,
+            recurrent_ppo_weight=0.4
+        )
+
+        # Save ensemble models to ensemble directory
+        ensemble_dir = self.save_dir / "ensemble"
+        ensemble_dir.mkdir(parents=True, exist_ok=True)
+
+        # Copy models to ensemble directory
+        import shutil
+        shutil.copy(ppo_model_path, ensemble_dir / "ppo_best_model.zip")
+        shutil.copy(rppo_model_path, ensemble_dir / "recurrent_ppo_best_model.zip")
+
+        # Save ensemble config
+        ensemble.save(ensemble_dir)
+
+        total_training_time = (datetime.now() - ensemble_start_time).total_seconds()
+
+        print(f"\n✅ Ensemble created successfully!")
+        print(f"  PPO Weight: 60%")
+        print(f"  RecurrentPPO Weight: 40%")
+        print(f"  Total Training Time: {total_training_time:.1f}s")
+        print(f"  Saved to: {ensemble_dir}")
+
+        # Save ensemble configuration
+        self.save_config()
+
+        # Compile results
+        results = {
+            'success': True,
+            'training_time': total_training_time,
+            'total_timesteps': self.config.total_timesteps * 2,  # Both agents
+            'total_episodes': ppo_results.get('total_episodes', 0) + rppo_results.get('total_episodes', 0),
+            'ppo_results': ppo_results,
+            'recurrent_ppo_results': rppo_results,
+            'ensemble_dir': str(ensemble_dir),
+            'final_model_path': str(ensemble_dir),  # Point to ensemble directory for model loading
+            'ppo_model_path': str(ensemble_dir / "ppo_best_model.zip"),
+            'recurrent_ppo_model_path': str(ensemble_dir / "recurrent_ppo_best_model.zip"),
+            'improvements_used': {
+                'action_masking': self.config.use_action_masking,
+                'enhanced_rewards': self.config.use_enhanced_rewards,
+                'adaptive_sizing': self.config.use_adaptive_sizing,
+                'improved_actions': self.config.use_improved_actions,
+            }
+        }
+
+        return results
+
     def _print_training_info(self):
         """Print training configuration."""
         print(f"\n{'='*70}")
@@ -492,6 +573,7 @@ class EnhancedRLTrainer:
         print(f"Agent: {self.config.agent_type.upper()}")
         print(f"Period: {self.config.start_date} to {self.config.end_date}")
         print(f"Total Timesteps: {self.config.total_timesteps:,}")
+
         print(f"\n📈 Improvements Enabled:")
         print(f"  ✓ Action Masking: {self.config.use_action_masking}")
         print(f"  ✓ Enhanced Rewards: {self.config.use_enhanced_rewards}")

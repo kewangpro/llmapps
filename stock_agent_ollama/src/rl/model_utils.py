@@ -17,8 +17,8 @@ def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
     """
     Load RL agent with automatic type detection.
 
-    This function automatically detects the agent type (PPO, RecurrentPPO, DQN, QRDQN)
-    by reading the training config. It supports all 4 algorithms.
+    This function automatically detects the agent type (PPO, RecurrentPPO, Ensemble)
+    by reading the training config. It supports policy gradient methods only.
 
     Args:
         model_path: Path to model file (best_model.zip or final_model.zip)
@@ -31,8 +31,9 @@ def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
         FileNotFoundError: If model file not found
         ValueError: If model cannot be loaded with any supported agent type
     """
-    from stable_baselines3 import PPO, DQN
-    from sb3_contrib import RecurrentPPO, QRDQN
+    from stable_baselines3 import PPO
+    from sb3_contrib import RecurrentPPO
+    from .ensemble import EnsemblePPOAgent
 
     model_path = Path(model_path)
     if not model_path.exists():
@@ -72,24 +73,35 @@ def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
             logger.error(f"Failed to load RecurrentPPO: {e}")
             raise
 
-    elif agent_type == 'dqn':
+    elif agent_type == 'ensemble':
         try:
-            agent = DQN.load(str(model_path), env=env)
-            agent.is_trained = True
-            logger.info(f"Successfully loaded DQN from {model_path}")
-            return agent
-        except Exception as e:
-            logger.error(f"Failed to load DQN: {e}")
-            raise
+            # Load ensemble by loading both component models
+            # Expect model_path to be the ensemble directory containing both models
+            model_dir = model_path.parent if model_path.is_file() else model_path
 
-    elif agent_type == 'qrdqn':
-        try:
-            agent = QRDQN.load(str(model_path), env=env)
+            # Load PPO model
+            ppo_path = model_dir / "ppo_best_model.zip"
+            if not ppo_path.exists():
+                # Try alternate path
+                ppo_path = model_dir / "best_model_ppo.zip"
+
+            ppo_model = PPO.load(str(ppo_path), env=env)
+
+            # Load RecurrentPPO model
+            rppo_path = model_dir / "recurrent_ppo_best_model.zip"
+            if not rppo_path.exists():
+                # Try alternate path
+                rppo_path = model_dir / "best_model_recurrent_ppo.zip"
+
+            rppo_model = RecurrentPPO.load(str(rppo_path), env=env)
+
+            # Create ensemble
+            agent = EnsemblePPOAgent(ppo_model, rppo_model)
             agent.is_trained = True
-            logger.info(f"Successfully loaded QRDQN from {model_path}")
+            logger.info(f"Successfully loaded Ensemble from {model_dir}")
             return agent
         except Exception as e:
-            logger.error(f"Failed to load QRDQN: {e}")
+            logger.error(f"Failed to load Ensemble: {e}")
             raise
 
     else:
@@ -97,9 +109,7 @@ def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
         logger.warning("Agent type not specified, attempting auto-detection...")
         for agent_name, agent_class in [
             ('PPO', PPO),
-            ('RecurrentPPO', RecurrentPPO),
-            ('DQN', DQN),
-            ('QRDQN', QRDQN)
+            ('RecurrentPPO', RecurrentPPO)
         ]:
             try:
                 agent = agent_class.load(str(model_path), env=env)

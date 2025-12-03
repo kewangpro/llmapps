@@ -249,75 +249,6 @@ class EnhancedRewardConfig:
 
 
 @dataclass
-class DQNRewardConfig(EnhancedRewardConfig):
-    """
-    Reward configuration optimized for DQN (Deep Q-Network).
-
-    DQN is a value-based off-policy algorithm that:
-    - Uses replay buffer for sample efficiency
-    - Epsilon-greedy exploration for action selection
-    - Target network for stable learning
-    - Can be prone to overestimation bias
-
-    DESIGN: Balanced rewards for stable value learning:
-    - Moderate risk penalties (DQN needs guidance on risk)
-    - Standard transaction costs
-    - Balanced exploration-exploitation via epsilon decay
-    - Reward diversity to prevent Q-value collapse
-    """
-    # Moderate risk penalties (between PPO's strong and QRDQN's zero)
-    risk_penalty_weight: float = 0.1
-    drawdown_penalty_weight: float = 0.15
-
-    # Standard transaction costs
-    transaction_cost_rate: float = 0.0005
-
-    # Moderate diversity bonus to prevent Q-value collapse
-    action_diversity_bonus: float = 0.5
-
-    # Balanced profitable trade bonus
-    profitable_trade_bonus: float = 0.2
-
-
-@dataclass
-class QRDQNRewardConfig(EnhancedRewardConfig):
-    """
-    Reward configuration optimized for QRDQN (Quantile Regression DQN).
-
-    QRDQN is a distributional RL algorithm that:
-    - Learns entire value distribution (not just expected value)
-    - Naturally risk-aware due to variance sensitivity
-    - Tends to prefer low-variance actions (conservative)
-
-    PROBLEM: QRDQN became TOO conservative on TSLA:
-    - Only 1% BUY_LARGE (vs PPO's 36%)
-    - 31% SELL_PARTIAL (selling winners too early)
-    - Result: +2.08% return vs PPO's +34.74%
-
-    SOLUTION: Risk-encouraging rewards to counter natural conservatism:
-    - Zero risk penalties (QRDQN already risk-aware via distribution)
-    - Bonus for aggressive position sizing (BUY_LARGE)
-    - Penalty for excessive selling (holding winners)
-    - Lower transaction costs to encourage trading
-    """
-    # ZERO risk penalties (QRDQN learns risk naturally from distribution)
-    risk_penalty_weight: float = 0.0       # Was 0.01 (no penalty needed)
-    drawdown_penalty_weight: float = 0.0   # Was 0.05 (no penalty needed)
-
-    # Lower transaction costs to encourage trading
-    transaction_cost_rate: float = 0.0003  # Was 0.0005 (reduce by 40%)
-
-    # BONUS for aggressive position sizing (counter conservatism)
-    large_position_bonus: float = 0.2      # NEW: Reward BUY_LARGE actions
-
-    # PENALTY for excessive selling (let winners run)
-    excessive_selling_penalty: float = -0.15  # NEW: Discourage SELL_PARTIAL spam
-
-    # Higher profitable trade bonus
-    profitable_trade_bonus: float = 0.3    # Was 0.1 (3x stronger)
-
-
-@dataclass
 class PPORewardConfig(EnhancedRewardConfig):
     """
     Reward configuration optimized for PPO.
@@ -607,15 +538,15 @@ class EnhancedRewardFunction:
                 logger.debug(f"Momentum trend bonus applied: +{self.config.momentum_trend_bonus}")
 
         # === 9. ACTION DIVERSITY REWARD/PENALTY ===
-        # FIX v3: PENALIZE low diversity aggressively, reward high diversity
+        # FIX v5: Smaller, more reactive window to catch collapse early
         if hasattr(self.config, 'diversity_bonus'):
-            # Track recent actions
+            # Track recent actions (smaller window for immediate feedback)
             self.recent_actions.append(action)
-            if len(self.recent_actions) > 10:  # Keep last 10 actions
+            if len(self.recent_actions) > 20:  # Keep last 20 actions for balance
                 self.recent_actions.pop(0)
 
-            # Calculate diversity ratio
-            if len(self.recent_actions) >= 5:
+            # Calculate diversity ratio (very early check to prevent initial collapse)
+            if len(self.recent_actions) >= 5:  # Check after just 5 actions
                 unique_actions = len(set(self.recent_actions))
                 diversity_ratio = unique_actions / len(self.recent_actions)
 
@@ -625,14 +556,14 @@ class EnhancedRewardFunction:
                     if hasattr(self.config, 'diversity_penalty'):
                         diversity_punishment = self.config.diversity_penalty * (1.0 - diversity_ratio)
                         reward += diversity_punishment  # diversity_penalty is negative
-                        logger.debug(f"LOW diversity penalty: {diversity_punishment:.4f} "
-                                   f"({unique_actions}/{len(self.recent_actions)} = {diversity_ratio:.1%})")
+                        logger.warning(f"⚠️  ACTION COLLAPSE DETECTED: {diversity_punishment:.4f} penalty "
+                                      f"({unique_actions}/{len(self.recent_actions)} = {diversity_ratio:.1%})")
                 elif diversity_ratio > 0.5:
                     # Reward good diversity
                     diversity_reward = self.config.diversity_bonus * diversity_ratio
                     reward += diversity_reward
-                    logger.debug(f"Action diversity reward: +{diversity_reward:.4f} "
-                               f"({unique_actions}/{len(self.recent_actions)} unique actions)")
+                    logger.debug(f"✅ Action diversity reward: +{diversity_reward:.4f} "
+                               f"({unique_actions}/{len(self.recent_actions)} = {diversity_ratio:.1%} unique)")
 
         # Update state
         self.prev_portfolio_value = portfolio_value
