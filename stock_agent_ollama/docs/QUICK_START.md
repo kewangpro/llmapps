@@ -226,11 +226,18 @@ The live trading session is **persistent**. You can stop the application and res
 **Tab 2: RL Agents**
 - Header: "RL Trading Agents / Reinforcement learning models"
 - Lists all trained PPO, RecurrentPPO, and Ensemble agents
+- Checkbox selection for batch backtesting
 - Shows algorithm type, symbol, training date
+- Backtest button appears when models are selected
 - Performance column shows "Run backtest →" hint
   - Performance calculated when you run backtests
   - Not stored with models
-- Click "Load" to use in backtesting (if enabled)
+
+**Batch Backtesting:**
+- Check boxes next to models you want to backtest
+- Backtest button dynamically shows count of selected models
+- Run comprehensive backtests on multiple models simultaneously
+- View unified performance comparison across all selected models
 
 **Features:**
 - Header dynamically updates when switching between tabs

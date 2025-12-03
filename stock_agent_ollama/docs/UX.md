@@ -414,10 +414,18 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 - Training date for each model
 
 **RL Agents Tab:**
-- Lists all trained RL agents (PPO, RecurrentPPO, DQN, QRDQN)
+- Lists all trained RL agents (PPO, RecurrentPPO, Ensemble)
+- Checkbox selection for batch backtesting
 - Shows agent type and symbol
 - Training date
+- Backtest button appears when models are selected
 - Performance note: "Run backtest →" (metrics calculated on-demand)
+
+**Batch Backtesting:**
+- Select multiple models using checkboxes
+- Backtest button shows count of selected models
+- Run comprehensive backtests on multiple models and symbols simultaneously
+- Compare performance across all selected models
 
 *Note: RL performance data is generated during backtesting, not stored with models*
 
