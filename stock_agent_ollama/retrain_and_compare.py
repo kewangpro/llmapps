@@ -8,7 +8,7 @@ Usage:
 Options:
     --symbol SYMBOL         Stock symbol to train on (required)
     --algorithms ALG1,ALG2  Comma-separated list of algorithms to train
-                           (options: ppo, recurrent_ppo, dqn, qrdqn)
+                           (options: ppo, recurrent_ppo, ensemble)
                            (default: all)
     --timesteps N          Training timesteps (default: 300000)
     --skip-training        Skip training, only run backtest
@@ -18,8 +18,8 @@ Example:
     # Retrain all algorithms on TSLA
     python retrain_and_compare.py --symbol TSLA
 
-    # Retrain DQN and QRDQN on AAPL
-    python retrain_and_compare.py --symbol AAPL --algorithms dqn,qrdqn
+    # Retrain PPO and Ensemble on AAPL
+    python retrain_and_compare.py --symbol AAPL --algorithms ppo,ensemble
 
     # Only backtest existing models for NVDA
     python retrain_and_compare.py --symbol NVDA --skip-training
@@ -54,7 +54,7 @@ def train_model(symbol: str, agent_type: str, total_timesteps: int = 300000) -> 
 
     Args:
         symbol: Stock symbol
-        agent_type: Algorithm type (ppo, recurrent_ppo, a2c, sac, qrdqn)
+        agent_type: Algorithm type (ppo, recurrent_ppo, ensemble)
         total_timesteps: Total training timesteps
 
     Returns:
@@ -152,7 +152,7 @@ def run_comprehensive_backtest(symbol: str, include_baselines: bool = True) -> d
     results = {}
 
     # Test all algorithms
-    algorithms = ['ppo', 'recurrent_ppo', 'dqn', 'qrdqn']
+    algorithms = ['ppo', 'recurrent_ppo', 'ensemble']
 
     for agent_type in algorithms:
         logger.info(f"Backtesting {agent_type.upper()}...")
@@ -380,11 +380,23 @@ def main():
     print(f"Symbol: {args.symbol}")
     print(f"Timesteps: {args.timesteps:,}")
 
+    # Define supported algorithms
+    SUPPORTED_ALGORITHMS = ['ppo', 'recurrent_ppo', 'ensemble']
+
     # Determine which algorithms to train
     if args.algorithms == 'all':
-        algorithms = ['ppo', 'recurrent_ppo', 'dqn', 'qrdqn']
+        algorithms = SUPPORTED_ALGORITHMS.copy()
     else:
         algorithms = [a.strip().lower() for a in args.algorithms.split(',')]
+
+        # Validate algorithms
+        invalid_algorithms = [a for a in algorithms if a not in SUPPORTED_ALGORITHMS]
+        if invalid_algorithms:
+            print(f"❌ ERROR: Invalid algorithm(s): {', '.join(invalid_algorithms)}")
+            print(f"   Supported algorithms: {', '.join(SUPPORTED_ALGORITHMS)}")
+            print(f"\n   Note: DQN and QRDQN have been removed from this project.")
+            print(f"   Use PPO, RecurrentPPO, or Ensemble instead.")
+            sys.exit(1)
 
     print(f"Algorithms: {', '.join([a.upper() for a in algorithms])}")
     print()

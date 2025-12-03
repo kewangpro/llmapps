@@ -32,7 +32,7 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 *Stock analysis with interactive charts, technical indicators, and AI-powered insights*
 
 ### 🤖 Reinforcement Learning Trading
-- **Train RL Agents** using PPO, RecurrentPPO, DQN, and QRDQN with action masking
+- **Train RL Agents** using PPO, RecurrentPPO, and Ensemble with action masking
 - **6-Action Trading Space** (HOLD, BUY_SMALL, BUY_MEDIUM, BUY_LARGE, SELL_PARTIAL, SELL_ALL)
 - **RecurrentPPO** with LSTM memory for temporal pattern recognition
 - **Trend Indicators** for RecurrentPPO (SMA_Trend, EMA_Crossover, Price_Momentum)
@@ -54,7 +54,7 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 
 ### 🔴 Live Trading Simulation
 - **Paper Trading** with real-time market data (Yahoo Finance)
-- **Trained Agent Execution** using PPO, RecurrentPPO, DQN, or QRDQN models
+- **Trained Agent Execution** using PPO, RecurrentPPO, or Ensemble models
 - **Persistent Sessions** automatically save and resume
   - Portfolio state preserved
   - Trade history maintained
@@ -106,8 +106,9 @@ python src/main.py
 **RL Training:**
 - Click Trading → Configure agent → Start Training
 - Default: 300,000 steps (recommended)
-- PPO/DQN/QRDQN: 15-20 min (300k steps)
+- PPO: 15-20 min (300k steps)
 - RecurrentPPO: 25-35 min (LSTM needs more compute)
+- Ensemble: 40-55 min (trains both PPO + RecurrentPPO)
 - Run Backtest → Compare strategies and metrics
 
 **Live Trading:**
@@ -138,8 +139,8 @@ python src/main.py
 ┌──────────────────────────┐  ┌──────────────────────────────┐
 │   Analysis Engine        │  │   RL Engine                  │
 │   • Ollama AI            │  │   • Trading Environments     │
-│   • LSTM Ensemble        │  │   • PPO/RecurrentPPO/DQN/    │
-│   • Technical Indicators │  │     QRDQN Agents             │
+│   • LSTM Ensemble        │  │   • PPO/RecurrentPPO/        │
+│   • Technical Indicators │  │     Ensemble Agents          │
 │   • Chart Generation     │  │   • Backtest Engine          │
 │                          │  │   • Baseline Strategies      │
 └──────────────────────────┘  └──────────────────────────────┘
@@ -157,7 +158,7 @@ python src/main.py
 **Technology Stack:**
 - **AI**: Ollama (gemma3:latest) with regex fallback
 - **ML**: TensorFlow LSTM ensemble (3 models per symbol)
-- **RL**: Stable-Baselines3 (PPO, DQN) + sb3-contrib (RecurrentPPO, QRDQN)
+- **RL**: Stable-Baselines3 (PPO) + sb3-contrib (RecurrentPPO) + Custom Ensemble
 - **Data**: Yahoo Finance with intelligent caching
 - **UI**: Panel + Plotly, light theme, wide layouts
 
@@ -247,8 +248,7 @@ See [QUICK_START.md](docs/QUICK_START.md#troubleshooting) for more help
 **RL Agents:**
 - **PPO**: Stable baseline with strong penalties
 - **RecurrentPPO**: LSTM memory + trend indicators (13 features)
-- **DQN**: Value-based off-policy learning with replay buffer
-- **QRDQN**: Distributional RL for risk-awareness
+- **Ensemble**: Weighted voting combining PPO (60%) + RecurrentPPO (40%)
 - 6-action space with masking, adaptive sizing, algorithm-specific rewards
 
 **Backtesting:**
