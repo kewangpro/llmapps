@@ -214,6 +214,14 @@ src/config.py                   # RL configuration
 - Combines trained models with balanced weighting (default 50/50)
 - Saves both component models plus ensemble metadata
 
+**Observation Space Handling**:
+- PPO expects `(60, 23)` features (base + technical + regime + MTF)
+- RecurrentPPO expects `(60, 26)` features (base + technical + trend + regime + MTF)
+- Ensemble intelligently routes observations:
+  - When receiving 26 features: strips last 3 (trend indicators) for PPO, keeps all 26 for RecurrentPPO
+  - When receiving 23 features: passes same observation to both models
+- This allows heterogeneous observation spaces within a single ensemble
+
 **Reward Config**: Uses `PPORewardConfig` for PPO component and `RecurrentPPORewardConfig` for RecurrentPPO component
 
 ---
@@ -931,14 +939,14 @@ A command-line tool for automated training, backtesting, and comparison of all R
 #### Purpose
 
 Automate the workflow of:
-1. Training all (or selected) RL algorithms on a symbol
+1. Training all (or selected) RL algorithms on one or multiple symbols
 2. Running comprehensive backtests
 3. Comparing performance across algorithms and baseline strategies
 4. Detecting action collapse issues
 
 #### Usage
 
-**Basic Usage** (train all algorithms):
+**Basic Usage** (train all algorithms on a single stock):
 ```bash
 source .venv/bin/activate
 python retrain_and_compare.py --symbol AAPL
@@ -946,8 +954,14 @@ python retrain_and_compare.py --symbol AAPL
 
 **Advanced Options**:
 ```bash
+# Train on multiple stocks
+python retrain_and_compare.py --symbol AMZN,AAPL,META --algorithms ensemble
+
 # Train specific algorithms only
-python retrain_and_compare.py --symbol TSLA --algorithms ppo,recurrent_ppo,qrdqn
+python retrain_and_compare.py --symbol TSLA --algorithms ppo,recurrent_ppo
+
+# Train only PPO and Ensemble
+python retrain_and_compare.py --symbol NVDA --algorithms ppo,ensemble
 
 # Custom training duration
 python retrain_and_compare.py --symbol NVDA --timesteps 500000
@@ -963,7 +977,7 @@ python retrain_and_compare.py --symbol MSFT --no-baselines
 
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
-| `--symbol` | string | **required** | Stock symbol to train on (e.g., AAPL, TSLA) |
+| `--symbol` | string | **required** | Stock symbol(s) to train on - single or comma-separated (e.g., AAPL or AAPL,TSLA,NVDA) |
 | `--algorithms` | string | `all` | Comma-separated list: `ppo,recurrent_ppo,ensemble` |
 | `--timesteps` | int | `300000` | Training timesteps per algorithm |
 | `--skip-training` | flag | `False` | Skip training, only backtest existing models |
@@ -1063,19 +1077,25 @@ Training progress: 100%|████████████████| 300000
 python retrain_and_compare.py --symbol TEAM
 ```
 
-**2. Periodic Retraining**:
+**2. Multi-Stock Training**:
 ```bash
-# Retrain models monthly with latest data
-python retrain_and_compare.py --symbol AAPL --algorithms ppo,recurrent_ppo,qrdqn
+# Train ensemble on multiple stocks simultaneously
+python retrain_and_compare.py --symbol AMZN,AAPL,META --algorithms ensemble
 ```
 
-**3. Quick Performance Check**:
+**3. Periodic Retraining**:
+```bash
+# Retrain models monthly with latest data
+python retrain_and_compare.py --symbol AAPL --algorithms ppo,recurrent_ppo,ensemble
+```
+
+**4. Quick Performance Check**:
 ```bash
 # Test existing models without retraining
 python retrain_and_compare.py --symbol NVDA --skip-training
 ```
 
-**4. Algorithm Comparison**:
+**5. Algorithm Comparison**:
 ```bash
 # Compare all 3 algorithms on a symbol
 python retrain_and_compare.py --symbol GOOGL
@@ -1091,7 +1111,8 @@ Models trained via this CLI tool are **automatically available** in the web inte
 #### Notes
 
 - **Training Time**: ~15-35 min per algorithm (300k steps)
-- **Data Requirements**: Minimum 3 years historical data
+- **Multi-Symbol Processing**: Trains each symbol sequentially when multiple provided
+- **Data Requirements**: Minimum 3 years historical data per symbol
 - **Disk Space**: ~50-100MB per trained model
 - **Parallel Training**: Not supported (trains sequentially to avoid resource conflicts)
 - **Logging**: All training logs saved to `data/logs/`

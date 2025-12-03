@@ -41,9 +41,9 @@ This document outlines the design for a **live trading simulation system** that 
 │ Market Data  │    │   RL Agent   │    │  Portfolio   │
 │   Stream     │    │   (Trained)  │    │   Manager    │
 │              │    │              │    │              │
-│ • Yahoo API  │    │ • PPO/RecurrentPPO/  │    │ • Positions  │
-│ • Real-time  │    │   DQN/QRDQN      │    │ • Cash       │
-│ • 1-min bars │    │ • Inference      │    │ • P&L        │
+│ • Yahoo API  │    │ • PPO/RPPO/  │    │ • Positions  │
+│ • Real-time  │    │   Ensemble   │    │ • Cash       │
+│ • 1-min bars │    │ • Inference  │    │ • P&L        │
 └──────────────┘    └──────────────┘    └──────────────┘
          │                    │                    │
          └────────────────────┴────────────────────┘
