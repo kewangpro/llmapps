@@ -193,8 +193,9 @@ src/config.py                   # RL configuration
 **Implementation**: Custom `EnsemblePPOAgent` combining both policy gradient methods
 
 **Strategy**:
-- PPO (60% weight): Aggressive growth strategy
-- RecurrentPPO (40% weight): Risk-managed strategy with LSTM memory
+- PPO (50% weight): Aggressive growth strategy
+- RecurrentPPO (50% weight): Risk-managed strategy with LSTM memory
+- *Weights are configurable via `ensemble_config.json`*
 
 **Decision Logic**:
 1. Get predictions from both PPO and RecurrentPPO
@@ -210,7 +211,7 @@ src/config.py                   # RL configuration
 
 **Training**:
 - Trains both PPO and RecurrentPPO independently
-- Combines trained models with 60/40 weighting
+- Combines trained models with balanced weighting (default 50/50)
 - Saves both component models plus ensemble metadata
 
 **Reward Config**: Uses `PPORewardConfig` for PPO component and `RecurrentPPORewardConfig` for RecurrentPPO component
@@ -491,7 +492,7 @@ config = EnhancedTrainingConfig(
     symbol="AAPL",
     start_date="2021-01-01",
     end_date="2024-01-01",
-    agent_type="ppo",  # or "recurrent_ppo", "dqn", "qrdqn"
+    agent_type="ppo",  # or "recurrent_ppo", "ensemble"
     total_timesteps=100000
 )
 
@@ -504,10 +505,8 @@ results = trainer.train()
 ```python
 from src.rl import BacktestEngine, BacktestConfig, EnhancedRLTrainer
 
-agent = EnhancedRLTrainer.load_agent(
-    model_path="data/models/rl/qrdqn_AAPL_20240101/best_model.zip",
-    agent_type="qrdqn"
-)
+# Load trained agent
+agent = load_rl_agent("data/models/rl/ppo_AAPL_20240101/best_model.zip")
 
 config = BacktestConfig(
     symbol="AAPL",
@@ -965,7 +964,7 @@ python retrain_and_compare.py --symbol MSFT --no-baselines
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
 | `--symbol` | string | **required** | Stock symbol to train on (e.g., AAPL, TSLA) |
-| `--algorithms` | string | `all` | Comma-separated list: `ppo,recurrent_ppo,dqn,qrdqn` |
+| `--algorithms` | string | `all` | Comma-separated list: `ppo,recurrent_ppo,ensemble` |
 | `--timesteps` | int | `300000` | Training timesteps per algorithm |
 | `--skip-training` | flag | `False` | Skip training, only backtest existing models |
 | `--no-baselines` | flag | `False` | Skip baseline strategies (Buy & Hold, Momentum) |
