@@ -5,9 +5,12 @@ Models Page - LSTM and RL Model Registry
 import panel as pn
 import param
 import logging
+import threading
+import numpy as np
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict
+from collections import Counter
 
 from src.ui.design_system import Colors, HTMLComponents, TableStyles
 
@@ -16,6 +19,9 @@ logger = logging.getLogger(__name__)
 
 class ModelsPage(param.Parameterized):
     """Model registry and management"""
+
+    # Reactive parameter to track selected models
+    selected_models = param.List(default=[])
 
     def __init__(self, **params):
         super().__init__(**params)
@@ -27,8 +33,25 @@ class ModelsPage(param.Parameterized):
         self.lstm_panel = pn.Column(sizing_mode="stretch_width")
         self.rl_panel = pn.Column(sizing_mode="stretch_width")
 
+        # Backtest button (initially hidden) - same style as Training page
+        self.backtest_button = pn.widgets.Button(
+            name="📊 Run Backtest",
+            button_type="primary",
+            width=None, # Changed from 150 to None for dynamic sizing
+            height=40,
+            visible=False
+        )
+        self.backtest_button.on_click(self._run_batch_backtest)
+
+        # Backtest results panel
+        self.backtest_results_panel = pn.Column(sizing_mode="stretch_width")
+
+        # Store checkboxes and model info for RL models
+        self.rl_checkboxes = {}
+        self.rl_model_data = []
+
         # Create dynamic header that changes with tab selection
-        self.header_pane = pn.pane.HTML("", sizing_mode="stretch_width")
+        self.header_pane = pn.Column(sizing_mode="stretch_width")
         self._update_header(0)  # Set initial header for LSTM tab
 
         # Create tabs
@@ -56,21 +79,32 @@ class ModelsPage(param.Parameterized):
         """Create RL agents tab"""
         return pn.Column(
             self.rl_panel,
+            self.backtest_results_panel,
             sizing_mode="stretch_width"
         )
 
     def _update_header(self, tab_index):
         """Update header based on active tab"""
         if tab_index == 0:
-            self.header_pane.object = HTMLComponents.page_header(
+            self.header_pane.clear()
+            self.header_pane.append(pn.pane.HTML(HTMLComponents.page_header(
                 "LSTM Models",
                 "Trained prediction models"
-            )
+            )))
         else:
-            self.header_pane.object = HTMLComponents.page_header(
-                "RL Trading Agents",
-                "Reinforcement learning models"
-            )
+            # For RL tab, show header with button - use same style as LSTM tab
+            self.header_pane.clear()
+            self.header_pane.append(pn.Row(
+                pn.pane.HTML(HTMLComponents.page_header(
+                    "RL Trading Agents",
+                    "Reinforcement learning models"
+                )),
+                pn.Spacer(width=20),
+                self.backtest_button,
+                pn.Spacer(sizing_mode="stretch_width"),
+                sizing_mode="stretch_width",
+                align='center'
+            ))
 
     def _on_tab_change(self, event):
         """Handle tab change event"""
@@ -118,36 +152,94 @@ class ModelsPage(param.Parameterized):
             """))
 
     def _load_rl_models(self):
-        """Load RL models into tab"""
+        """Load RL models into tab with checkboxes"""
         self.rl_panel.clear()
+        self.rl_checkboxes = {}
+        self.rl_model_data = self._get_rl_models()
 
-        rl_models = self._get_rl_models()
+        if self.rl_model_data:
+            # Create header row component using pn.Row to match the data rows' structure
+            header_grid_content = pn.pane.HTML(f"""
+                <div style='display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 15px; padding: 15px 20px 15px 5px; font-weight: 600; color: {Colors.TEXT_PRIMARY}; font-size: 13px; align-items: center;'>
+                    <div style='text-align: left;'>Agent Name</div>
+                    <div style='text-align: left;'>Symbol</div>
+                    <div style='text-align: center;'>Algorithm</div>
+                    <div style='text-align: left;'>Trained</div>
+                </div>
+            """, sizing_mode="stretch_width", margin=(0,0,0,0))
 
-        if rl_models:
-            headers = ["Agent Name", "Symbol", "Algorithm", "Trained", "Performance", "Actions"]
-            rows = []
+            header_row = pn.Row(
+                pn.Spacer(width=45), # Spacer to match checkbox width + margin
+                header_grid_content,
+                sizing_mode="stretch_width",
+                margin=(0, 0, 0, 0), # Ensure no external margins on the Row itself
+                styles={
+                    'background': '#F3F4F6', # Header background
+                    'border-bottom': f'2px solid {Colors.BORDER_SUBTLE}',
+                    'align-items': 'center'
+                }
+            )
 
-            for model in rl_models:
-                perf_value = model.get('return', 'N/A')
-                # Check if return is a number and set color accordingly
-                if isinstance(perf_value, (int, float)):
-                    perf_color = Colors.SUCCESS_GREEN if perf_value >= 0 else Colors.DANGER_RED
-                    perf_display = f'{perf_value:+.2f}%'
-                else:
-                    perf_color = Colors.TEXT_SECONDARY
-                    perf_display = '<span style="font-size: 0.7rem;">Run backtest →</span>'
+            # Create table rows with integrated checkboxes using Row layout
+            rows = [header_row] # First item is now the Panel row header
 
-                rows.append([
-                    model['name'],
-                    model['symbol'],
-                    model['algorithm'],
-                    model['trained'],
-                    f'<span style="color: {perf_color};">{perf_display}</span>',
-                    f'<button style="background: {Colors.ACCENT_PURPLE}; color: white; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 0.75rem;">Load</button>'
-                ])
+            for i, model in enumerate(self.rl_model_data):
+                # Create row background
+                row_bg = Colors.BG_PRIMARY if i % 2 == 0 else 'white'
 
-            table_html = TableStyles.generate_table(headers, rows)
-            self.rl_panel.append(pn.pane.HTML(table_html))
+                # Create a single row with checkbox and all columns in one grid
+                checkbox = pn.widgets.Checkbox(
+                    name="",
+                    value=False,
+                    width=25,
+                    height=25,
+                    margin=(15, 0, 15, 20),
+                    align='center'
+                )
+                checkbox.param.watch(self._on_checkbox_change, 'value')
+                self.rl_checkboxes[i] = checkbox
+
+                # HTML for the entire row (aligned with header grid)
+                info_html = pn.pane.HTML(f"""
+                <div style='display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 15px; padding: 15px 20px 15px 5px; align-items: center;'>
+                    <div style='font-weight: 500; color: {Colors.TEXT_PRIMARY}; font-size: 13px; line-height: 1.5; text-align: left;'>{model['name']}</div>
+                    <div style='color: {Colors.TEXT_PRIMARY}; font-size: 13px; text-align: left;'>{model['symbol']}</div>
+                    <div style='text-align: center;'>
+                        <span style='background: {Colors.ACCENT_PURPLE}; color: white; padding: 5px 12px; border-radius: 4px; font-size: 11px; font-weight: 600; display: inline-block;'>
+                            {model['algorithm'].replace('_', ' ')}
+                        </span>
+                    </div>
+                    <div style='color: {Colors.TEXT_SECONDARY}; font-size: 13px; text-align: left;'>{model['trained']}</div>
+                </div>
+                """, sizing_mode="stretch_width", margin=(0, 0, 0, 0))
+
+                # Create row with checkbox + info
+                row = pn.Row(
+                    checkbox,
+                    info_html,
+                    sizing_mode="stretch_width",
+                    margin=(0, 0, 0, 0),
+                    styles={
+                        'background': row_bg,
+                        'border-bottom': f'1px solid {Colors.BORDER_SUBTLE}',
+                        'align-items': 'center'
+                    }
+                )
+                rows.append(row)
+
+            # Assemble table
+            table = pn.Column(
+                *rows,
+                sizing_mode="stretch_width",
+                styles={
+                    'background': 'white',
+                    'border': f'1px solid {Colors.BORDER_SUBTLE}',
+                    'border-radius': '8px',
+                    'overflow': 'hidden'
+                }
+            )
+
+            self.rl_panel.append(table)
         else:
             self.rl_panel.append(pn.pane.HTML(f"""
                 <div style='background: {Colors.BG_SECONDARY};
@@ -244,14 +336,26 @@ class ModelsPage(param.Parameterized):
             for model_dir in models_dir.iterdir():
                 if model_dir.is_dir():
                     model_file = model_dir / "final_model.zip"
-                    if model_file.exists():
-                        # Extract info from directory name (format: ppo_AAPL_20231114_120000)
+                    ensemble_config = model_dir / "ensemble" / "ensemble_config.json"
+
+                    # Check for either regular model or ensemble model
+                    if model_file.exists() or ensemble_config.exists():
+                        # Extract info from directory name
+                        # Format: algorithm_SYMBOL_YYYYMMDD_HHMMSS
+                        # Examples: ppo_AAPL_20231114_120000, recurrent_ppo_TEAM_20251202_193237
                         parts = model_dir.name.split('_')
-                        algorithm = parts[0].upper() if parts else "Unknown"
-                        symbol = parts[1].upper() if len(parts) > 1 else "Unknown"
+
+                        # For recurrent_ppo, the algorithm is the first two parts
+                        if len(parts) >= 2 and parts[0] == 'recurrent' and parts[1] == 'ppo':
+                            algorithm = 'RECURRENT_PPO'
+                            symbol = parts[2].upper() if len(parts) > 2 else "Unknown"
+                        else:
+                            algorithm = parts[0].upper() if parts else "Unknown"
+                            symbol = parts[1].upper() if len(parts) > 1 else "Unknown"
 
                         model_info = {
                             'name': model_dir.name,
+                            'directory': model_dir,
                             'symbol': symbol,
                             'algorithm': algorithm,
                             'trained': datetime.fromtimestamp(model_dir.stat().st_mtime).strftime('%Y-%m-%d'),
@@ -263,6 +367,387 @@ class ModelsPage(param.Parameterized):
             logger.error(f"Error loading RL models: {e}")
 
         return models
+
+    def _on_checkbox_change(self, event):
+        """Handle checkbox state change"""
+        # Count selected models
+        selected_count = sum(1 for cb in self.rl_checkboxes.values() if cb.value)
+
+        # Show/hide backtest button based on selection
+        self.backtest_button.visible = selected_count > 0
+
+        # Update button text
+        if selected_count > 0:
+            self.backtest_button.name = f"Run Backtest ({selected_count} model{'s' if selected_count > 1 else ''} selected)"
+        else:
+            self.backtest_button.name = "Run Backtest"
+
+    def _run_batch_backtest(self, event):
+        """Run backtest for all selected models (supports multiple symbols)"""
+        # Get selected models
+        selected_indices = [i for i, cb in self.rl_checkboxes.items() if cb.value]
+
+        if not selected_indices:
+            pn.state.notifications.warning("No models selected", duration=3000)
+            return
+
+        selected_models = [self.rl_model_data[i] for i in selected_indices]
+
+        # Group by symbol
+        symbols_dict = {}
+        for model in selected_models:
+            symbol = model['symbol']
+            if symbol not in symbols_dict:
+                symbols_dict[symbol] = []
+            symbols_dict[symbol].append(model)
+
+        # Clear results and show loading
+        self.backtest_results_panel.clear()
+        self.backtest_results_panel.append(pn.indicators.LoadingSpinner(value=True, size=50))
+
+        # Info about selected models
+        total_models = len(selected_models)
+        total_symbols = len(symbols_dict)
+        pn.state.notifications.info(
+            f"Running backtest on {total_models} model(s) across {total_symbols} symbol(s)...",
+            duration=3000
+        )
+
+        def backtest_thread():
+            try:
+                from src.rl import BacktestEngine, BacktestConfig
+                from src.rl.training import EnhancedRLTrainer
+                from src.rl.baselines import BuyHoldStrategy, MomentumStrategy
+                from src.rl.model_utils import load_env_config_from_model
+
+                # Setup dates (last 6 months + lookback buffer)
+                end_date = datetime.now().strftime("%Y-%m-%d")
+                start_date = (datetime.now() - timedelta(days=280)).strftime("%Y-%m-%d")
+
+                # Store results per symbol
+                all_results = {}
+
+                # Process each symbol separately
+                for symbol, models_for_symbol in symbols_dict.items():
+                    logger.info(f"Backtesting {len(models_for_symbol)} models for {symbol}")
+                    results = {}
+
+                    # Run backtest for each model in this symbol
+                    for model in models_for_symbol:
+                        model_dir = model['directory']
+                        # Convert algorithm name to internal format
+                        # RECURRENT_PPO -> recurrent_ppo, PPO -> ppo, ENSEMBLE -> ensemble
+                        agent_type = model['algorithm'].lower()
+
+                        # Find model path
+                        model_file = model_dir / "final_model.zip"
+                        ensemble_config = model_dir / "ensemble" / "ensemble_config.json"
+
+                        if ensemble_config.exists():
+                            model_path = model_dir / "ensemble"
+                            agent_type = 'ensemble'
+                        elif model_file.exists():
+                            model_path = model_file
+                        else:
+                            logger.warning(f"No model file found for {model['name']}")
+                            continue
+
+                        try:
+                            # Load training config
+                            training_config = load_env_config_from_model(model_path)
+
+                            # Determine include_trend_indicators
+                            include_trend = training_config.get('include_trend_indicators', False)
+                            if agent_type in ['recurrent_ppo', 'ensemble']:
+                                include_trend = True
+
+                            # Create backtest config
+                            agent_backtest_config = BacktestConfig(
+                                symbol=symbol,
+                                start_date=start_date,
+                                end_date=end_date,
+                                use_improved_actions=training_config.get('use_improved_actions', True),
+                                include_trend_indicators=include_trend
+                            )
+
+                            # Create engine
+                            engine = BacktestEngine(agent_backtest_config)
+
+                            # Load agent
+                            agent = EnhancedRLTrainer.load_agent(
+                                model_path=model_path,
+                                agent_type=agent_type,
+                                env=None
+                            )
+
+                            # Run backtest
+                            # Use symbol prefix for multi-symbol support
+                            agent_name = f"[{symbol}] {model['algorithm'].replace('_', ' ')}"
+                            result = engine.run_agent_backtest(agent, deterministic=True)
+                            results[agent_name] = result
+
+                            logger.info(f"Successfully backtested {agent_name}")
+
+                        except Exception as e:
+                            logger.error(f"Error backtesting {model['name']}: {e}", exc_info=True)
+
+                    # Store results for this symbol (no baselines for batch backtest)
+                    all_results[symbol] = results
+
+                # Display all results
+                pn.state.execute(lambda: self._display_multi_symbol_backtest_results(all_results, list(symbols_dict.keys())))
+
+                # Show notification separately
+                pn.state.execute(lambda: pn.state.notifications.success(
+                    "✅ Backtest Complete! Results are displayed below.",
+                    duration=5000
+                ))
+
+            except Exception as e:
+                logger.error(f"Batch backtest error: {e}", exc_info=True)
+                pn.state.execute(lambda: self.backtest_results_panel.clear())
+                pn.state.execute(lambda: pn.state.notifications.error(
+                    f"Backtest failed: {str(e)}", duration=5000
+                ))
+
+        thread = threading.Thread(target=backtest_thread)
+        thread.daemon = True
+        thread.start()
+
+    def _display_batch_backtest_results(self, results: Dict, symbol: str):
+        """Display batch backtest results with charts"""
+        self.backtest_results_panel.clear()
+
+        # Header with scroll target ID
+        header_html = f"""
+        <div style='background: {Colors.BG_SECONDARY};
+                    border: 1px solid {Colors.BORDER_SUBTLE};
+                    border-left: 4px solid {Colors.ACCENT_PURPLE};
+                    padding: 15px;
+                    border-radius: 8px;
+                    margin: 20px 0 15px 0;
+                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);'>
+            <h3 style='margin: 0; color: {Colors.TEXT_PRIMARY};'>📊 Backtest Results: {symbol}</h3>
+            <p style='margin: 5px 0 0 0; color: {Colors.TEXT_SECONDARY}; font-size: 13px;'>
+                Last 6 months performance comparison
+            </p>
+        </div>
+        """
+        self.backtest_results_panel.append(pn.pane.HTML(header_html))
+
+        # Action names (assume improved actions)
+        action_names = {
+            0: 'HOLD', 1: 'BUY_S', 2: 'BUY_M', 3: 'BUY_L', 4: 'SELL_P', 5: 'SELL_A'
+        }
+        action_order = ['HOLD', 'BUY_S', 'BUY_M', 'BUY_L', 'SELL_P', 'SELL_A']
+
+        # Combined metrics and action distribution table
+        combined_html = f"<div style='overflow-x: auto; margin-bottom: 20px;'><table style='width: 100%; border-collapse: collapse; font-size: 13px; background: white; border: 1px solid {Colors.BORDER_SUBTLE}; border-radius: 8px;'>"
+        combined_html += "<thead><tr style='background: #F3F4F6;'>"
+        combined_html += f"<th style='padding: 10px; text-align: left; border: 1px solid {Colors.BORDER_SUBTLE};'>Strategy</th>"
+        combined_html += f"<th style='padding: 10px; text-align: right; border: 1px solid {Colors.BORDER_SUBTLE};'>Return</th>"
+        combined_html += f"<th style='padding: 10px; text-align: right; border: 1px solid {Colors.BORDER_SUBTLE};'>Sharpe</th>"
+        combined_html += f"<th style='padding: 10px; text-align: right; border: 1px solid {Colors.BORDER_SUBTLE};'>Max DD</th>"
+        combined_html += f"<th style='padding: 10px; text-align: right; border: 1px solid {Colors.BORDER_SUBTLE};'>Win Rate</th>"
+
+        # Add action columns
+        for action_name in action_order:
+            combined_html += f"<th style='padding: 10px; text-align: center; border: 1px solid {Colors.BORDER_SUBTLE};'>{action_name}</th>"
+
+        combined_html += f"<th style='padding: 10px; text-align: center; border: 1px solid {Colors.BORDER_SUBTLE};'>Executed</th>"
+        combined_html += "</tr></thead><tbody>"
+
+        for name, result in results.items():
+            m = result.metrics
+            return_color = Colors.SUCCESS_GREEN if m.total_return_pct >= 0 else Colors.DANGER_RED
+
+            # Count actions
+            action_counts = {action_name: 0 for action_name in action_order}
+            for action in result.actions:
+                if isinstance(action, (np.ndarray, np.generic)):
+                    action_scalar = int(action.item())
+                else:
+                    action_scalar = int(action)
+
+                action_name = action_names.get(action_scalar, f'A{action_scalar}')
+                if action_name in action_counts:
+                    action_counts[action_name] += 1
+
+            total_actions = sum(action_counts.values())
+            total_trades = len(result.trades)
+
+            combined_html += f"<tr style='border: 1px solid {Colors.BORDER_SUBTLE};'>"
+            combined_html += f"<td style='padding: 10px; font-weight: bold;'>{name}</td>"
+            combined_html += f"<td style='padding: 10px; text-align: right; color: {return_color}; font-weight: bold;'>{m.total_return_pct:+.2f}%</td>"
+            combined_html += f"<td style='padding: 10px; text-align: right;'>{m.sharpe_ratio:.2f}</td>"
+            combined_html += f"<td style='padding: 10px; text-align: right; color: {Colors.DANGER_RED};'>{abs(m.max_drawdown)*100:.2f}%</td>"
+            combined_html += f"<td style='padding: 10px; text-align: right;'>{m.win_rate*100:.0f}%</td>"
+
+            # Add action counts with colors
+            for action_name in action_order:
+                count = action_counts[action_name]
+                pct = (count / total_actions * 100) if total_actions > 0 else 0
+
+                # Color based on action type
+                if 'SELL' in action_name:
+                    color = Colors.DANGER_RED
+                elif 'HOLD' in action_name:
+                    color = Colors.TEXT_SECONDARY
+                else:  # BUY variants
+                    color = Colors.ACCENT_PURPLE
+
+                combined_html += f"<td style='padding: 10px; text-align: center;'>"
+                combined_html += f"<span style='color: {color}; font-weight: bold;'>{count}</span> "
+                combined_html += f"<span style='color: {Colors.TEXT_MUTED}; font-size: 11px;'>({pct:.0f}%)</span>"
+                combined_html += "</td>"
+
+            combined_html += f"<td style='padding: 10px; text-align: center; font-weight: bold; color: {Colors.SUCCESS_GREEN};'>{total_trades}</td>"
+            combined_html += "</tr>"
+
+        combined_html += "</tbody></table></div>"
+        self.backtest_results_panel.append(pn.pane.HTML(combined_html))
+
+        # Charts
+        try:
+            from src.rl import RLVisualizer
+
+            # Strategy comparison
+            fig = RLVisualizer.plot_strategy_comparison(results, title=f"Performance Comparison - {symbol}")
+            self.backtest_results_panel.append(pn.pane.Plotly(fig, sizing_mode="stretch_width", height=350))
+
+            # Action comparison
+            fig_actions = RLVisualizer.plot_action_comparison(results, title="Action Distribution Comparison")
+            self.backtest_results_panel.append(pn.pane.Plotly(fig_actions, sizing_mode="stretch_width", height=400))
+
+            # Metrics comparison
+            fig2 = RLVisualizer.plot_metrics_comparison(results, title="Key Metrics")
+            self.backtest_results_panel.append(pn.pane.Plotly(fig2, sizing_mode="stretch_width", height=300))
+
+        except Exception as e:
+            logger.error(f"Error creating charts: {e}", exc_info=True)
+
+    def _display_multi_symbol_backtest_results(self, all_results: Dict[str, Dict], symbols: List[str]):
+        """Display combined backtest results for multiple symbols"""
+        self.backtest_results_panel.clear()
+
+        # Header with scroll target ID
+        symbols_str = ", ".join(symbols)
+        header_html = f"""
+        <div style='background: {Colors.BG_SECONDARY};
+                    border: 1px solid {Colors.BORDER_SUBTLE};
+                    border-left: 4px solid {Colors.ACCENT_PURPLE};
+                    padding: 15px;
+                    border-radius: 8px;
+                    margin: 20px 0 15px 0;
+                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);'>
+            <h3 style='margin: 0; color: {Colors.TEXT_PRIMARY};'>📊 Backtest Results: {symbols_str}</h3>
+            <p style='margin: 5px 0 0 0; color: {Colors.TEXT_SECONDARY}; font-size: 13px;'>
+                Last 6 months performance comparison across {len(symbols)} symbol(s)
+            </p>
+        </div>
+        """
+        self.backtest_results_panel.append(pn.pane.HTML(header_html))
+
+        # Combine all results into a single dictionary
+        combined_results = {}
+        for symbol, results in all_results.items():
+            combined_results.update(results)
+
+        # Display unified results
+        self._display_unified_results(combined_results)
+
+    def _display_unified_results(self, results: Dict):
+        """Display unified results table and charts for all models"""
+        # Action names (assume improved actions)
+        action_names = {
+            0: 'HOLD', 1: 'BUY_S', 2: 'BUY_M', 3: 'BUY_L', 4: 'SELL_P', 5: 'SELL_A'
+        }
+        action_order = ['HOLD', 'BUY_S', 'BUY_M', 'BUY_L', 'SELL_P', 'SELL_A']
+
+        # Combined metrics and action distribution table
+        combined_html = f"<div style='overflow-x: auto; margin-bottom: 20px;'><table style='width: 100%; border-collapse: collapse; font-size: 13px; background: white; border: 1px solid {Colors.BORDER_SUBTLE}; border-radius: 8px;'>"
+        combined_html += "<thead><tr style='background: #F3F4F6;'>"
+        combined_html += f"<th style='padding: 10px; text-align: left; border: 1px solid {Colors.BORDER_SUBTLE};'>Model</th>"
+        combined_html += f"<th style='padding: 10px; text-align: right; border: 1px solid {Colors.BORDER_SUBTLE};'>Return</th>"
+        combined_html += f"<th style='padding: 10px; text-align: right; border: 1px solid {Colors.BORDER_SUBTLE};'>Sharpe</th>"
+        combined_html += f"<th style='padding: 10px; text-align: right; border: 1px solid {Colors.BORDER_SUBTLE};'>Max DD</th>"
+        combined_html += f"<th style='padding: 10px; text-align: right; border: 1px solid {Colors.BORDER_SUBTLE};'>Win Rate</th>"
+
+        # Add action columns
+        for action_name in action_order:
+            combined_html += f"<th style='padding: 10px; text-align: center; border: 1px solid {Colors.BORDER_SUBTLE};'>{action_name}</th>"
+
+        combined_html += f"<th style='padding: 10px; text-align: center; border: 1px solid {Colors.BORDER_SUBTLE};'>Executed</th>"
+        combined_html += "</tr></thead><tbody>"
+
+        for name, result in results.items():
+            m = result.metrics
+            return_color = Colors.SUCCESS_GREEN if m.total_return_pct >= 0 else Colors.DANGER_RED
+
+            # Count actions
+            action_counts = {action_name: 0 for action_name in action_order}
+            for action in result.actions:
+                if isinstance(action, (np.ndarray, np.generic)):
+                    action_scalar = int(action.item())
+                else:
+                    action_scalar = int(action)
+
+                action_name = action_names.get(action_scalar, f'A{action_scalar}')
+                if action_name in action_counts:
+                    action_counts[action_name] += 1
+
+            total_actions = sum(action_counts.values())
+            total_trades = len(result.trades)
+
+            combined_html += f"<tr style='border: 1px solid {Colors.BORDER_SUBTLE};'>"
+            combined_html += f"<td style='padding: 10px; font-weight: bold;'>{name}</td>"
+            combined_html += f"<td style='padding: 10px; text-align: right; color: {return_color}; font-weight: bold;'>{m.total_return_pct:+.2f}%</td>"
+            combined_html += f"<td style='padding: 10px; text-align: right;'>{m.sharpe_ratio:.2f}</td>"
+            combined_html += f"<td style='padding: 10px; text-align: right; color: {Colors.DANGER_RED};'>{abs(m.max_drawdown)*100:.2f}%</td>"
+            combined_html += f"<td style='padding: 10px; text-align: right;'>{m.win_rate*100:.0f}%</td>"
+
+            # Add action counts with colors
+            for action_name in action_order:
+                count = action_counts[action_name]
+                pct = (count / total_actions * 100) if total_actions > 0 else 0
+
+                # Color based on action type
+                if 'SELL' in action_name:
+                    color = Colors.DANGER_RED
+                elif 'HOLD' in action_name:
+                    color = Colors.TEXT_SECONDARY
+                else:  # BUY variants
+                    color = Colors.ACCENT_PURPLE
+
+                combined_html += f"<td style='padding: 10px; text-align: center;'>"
+                combined_html += f"<span style='color: {color}; font-weight: bold;'>{count}</span> "
+                combined_html += f"<span style='color: {Colors.TEXT_MUTED}; font-size: 11px;'>({pct:.0f}%)</span>"
+                combined_html += "</td>"
+
+            combined_html += f"<td style='padding: 10px; text-align: center; font-weight: bold; color: {Colors.SUCCESS_GREEN};'>{total_trades}</td>"
+            combined_html += "</tr>"
+
+        combined_html += "</tbody></table></div>"
+        self.backtest_results_panel.append(pn.pane.HTML(combined_html))
+
+        # Unified charts for all models
+        try:
+            from src.rl import RLVisualizer
+
+            # Strategy comparison
+            fig = RLVisualizer.plot_strategy_comparison(results, title="Performance Comparison - All Models")
+            self.backtest_results_panel.append(pn.pane.Plotly(fig, sizing_mode="stretch_width", height=400))
+
+            # Action comparison
+            fig_actions = RLVisualizer.plot_action_comparison(results, title="Action Distribution - All Models")
+            self.backtest_results_panel.append(pn.pane.Plotly(fig_actions, sizing_mode="stretch_width", height=450))
+
+            # Metrics comparison
+            fig2 = RLVisualizer.plot_metrics_comparison(results, title="Key Metrics - All Models")
+            self.backtest_results_panel.append(pn.pane.Plotly(fig2, sizing_mode="stretch_width", height=350))
+
+        except Exception as e:
+            logger.error(f"Error creating charts: {e}", exc_info=True)
 
     def get_view(self):
         """Get the models view"""

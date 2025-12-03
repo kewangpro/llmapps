@@ -581,13 +581,14 @@ class RLTrainingPanel(param.Parameterized):
                 momentum = MomentumStrategy()
                 results['Momentum'] = baseline_engine.run_strategy_backtest(momentum.get_action)
 
-                # Display results
-                # All modern models use improved actions (6-action space)
-                # Default to True since line 217 enforces this for all training
-                pn.state.execute(lambda: self._display_backtest_results(
-                    results, symbol, use_improved_actions=True
-                ))
-                pn.state.execute(lambda: pn.state.notifications.success("Backtest complete!", duration=3000))
+                # Display results and show notification
+                def show_results():
+                    # All modern models use improved actions (6-action space)
+                    # Default to True since line 217 enforces this for all training
+                    self._display_backtest_results(results, symbol, use_improved_actions=True)
+                    pn.state.notifications.success("✅ Backtest Complete! Results are displayed below.", duration=5000)
+                
+                pn.state.execute(show_results)
 
             except Exception as e:
                 logger.error(f"Backtest error: {e}", exc_info=True)
