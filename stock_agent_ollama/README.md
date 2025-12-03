@@ -261,13 +261,30 @@ See [QUICK_START.md](docs/QUICK_START.md#troubleshooting) for more help
 **Automated Training & Comparison:**
 The `retrain_and_compare.py` CLI utility automates the entire workflow:
 ```bash
-# Train all algorithms and compare results
+# Train all algorithms on a single stock
 python retrain_and_compare.py --symbol AAPL
+
+# Train specific algorithms on multiple stocks
+python retrain_and_compare.py --symbol AMZN,AAPL,META --algorithms ensemble
+
+# Train only PPO and Ensemble
+python retrain_and_compare.py --symbol TSLA --algorithms ppo,ensemble
 
 # Compare existing models without retraining
 python retrain_and_compare.py --symbol MSFT --skip-training
+
+# Skip baseline strategies in comparison
+python retrain_and_compare.py --symbol NVDA --no-baselines
 ```
-It handles model management, backtesting, and strategy comparison in a single command.
+
+**Options:**
+- `--symbol`: Single stock or comma-separated list (e.g., `AAPL` or `AAPL,TSLA,NVDA`)
+- `--algorithms`: Comma-separated list of `ppo`, `recurrent_ppo`, `ensemble` (default: all)
+- `--timesteps`: Training steps (default: 300,000)
+- `--skip-training`: Only run backtest on existing models
+- `--no-baselines`: Skip Buy & Hold and Momentum strategies
+
+The tool handles model training, backtesting, and comprehensive strategy comparison automatically.
 
 ---
 

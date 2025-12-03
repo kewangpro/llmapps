@@ -6,7 +6,7 @@ Usage:
     python retrain_and_compare.py --symbol SYMBOL [options]
 
 Options:
-    --symbol SYMBOL         Stock symbol to train on (required)
+    --symbol SYMBOL         Stock symbol(s) to train on - single or comma-separated list (required)
     --algorithms ALG1,ALG2  Comma-separated list of algorithms to train
                            (options: ppo, recurrent_ppo, ensemble)
                            (default: all)
@@ -14,12 +14,15 @@ Options:
     --skip-training        Skip training, only run backtest
     --no-baselines         Skip baseline strategies in backtest
 
-Example:
+Examples:
     # Retrain all algorithms on TSLA
     python retrain_and_compare.py --symbol TSLA
 
     # Retrain PPO and Ensemble on AAPL
     python retrain_and_compare.py --symbol AAPL --algorithms ppo,ensemble
+
+    # Retrain ensemble on multiple stocks
+    python retrain_and_compare.py --symbol AMZN,AAPL,META --algorithms ensemble
 
     # Only backtest existing models for NVDA
     python retrain_and_compare.py --symbol NVDA --skip-training
@@ -340,7 +343,7 @@ def parse_arguments():
         '--symbol',
         type=str,
         required=True,
-        help='Stock symbol to train on (required)'
+        help='Stock symbol(s) to train on - single symbol or comma-separated list (e.g., AAPL or AAPL,TSLA,NVDA)'
     )
 
     parser.add_argument(
@@ -382,7 +385,10 @@ def main():
     print("#" + " "*78 + "#")
     print(f"{'#'*80}\n")
 
-    print(f"Symbol: {args.symbol}")
+    # Parse symbols (support comma-separated list)
+    symbols = [s.strip().upper() for s in args.symbol.split(',')]
+
+    print(f"Symbol(s): {', '.join(symbols)}")
     print(f"Timesteps: {args.timesteps:,}")
 
     # Define supported algorithms
@@ -406,30 +412,37 @@ def main():
     print(f"Algorithms: {', '.join([a.upper() for a in algorithms])}")
     print()
 
-    # Training phase
-    if not args.skip_training:
-        for i, agent_type in enumerate(algorithms, 1):
-            print(f"\n📌 Step {i}/{len(algorithms)}: Training {agent_type.upper()}")
-            try:
-                train_model(args.symbol, agent_type, args.timesteps)
-            except Exception as e:
-                logger.error(f"Skipping {agent_type} due to error: {e}")
-                continue
-    else:
-        print("⏭️  Skipping training phase")
+    # Training and backtesting for each symbol
+    for symbol in symbols:
+        if len(symbols) > 1:
+            print(f"\n{'='*80}")
+            print(f"  PROCESSING SYMBOL: {symbol}")
+            print(f"{'='*80}\n")
 
-    # Backtesting phase
-    print(f"\n📌 Running Comprehensive Backtest")
-    results = run_comprehensive_backtest(
-        args.symbol,
-        include_baselines=not args.no_baselines
-    )
+        # Training phase
+        if not args.skip_training:
+            for i, agent_type in enumerate(algorithms, 1):
+                print(f"\n📌 Step {i}/{len(algorithms)}: Training {agent_type.upper()} on {symbol}")
+                try:
+                    train_model(symbol, agent_type, args.timesteps)
+                except Exception as e:
+                    logger.error(f"Skipping {agent_type} for {symbol} due to error: {e}")
+                    continue
+        else:
+            print(f"⏭️  Skipping training phase for {symbol}")
 
-    # Display and analyze results
-    display_results(results)
-    analyze_results(results)
+        # Backtesting phase
+        print(f"\n📌 Running Comprehensive Backtest for {symbol}")
+        results = run_comprehensive_backtest(
+            symbol,
+            include_baselines=not args.no_baselines
+        )
 
-    print("✨ Complete!")
+        # Display and analyze results
+        display_results(results)
+        analyze_results(results)
+
+    print("\n✨ Complete!")
     print("=" * 80)
 
 
