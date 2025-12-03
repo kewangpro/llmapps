@@ -76,7 +76,7 @@ def main():
                 display: none !important;
             }}
         """)
-        pn.extension('plotly')
+        pn.extension('plotly', notifications=True)
 
         # Defer creating the Panel application to the server (callable).
         # Passing the `create_app` callable to `pn.serve` makes Panel call it
