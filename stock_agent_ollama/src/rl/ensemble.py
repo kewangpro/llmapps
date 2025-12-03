@@ -213,20 +213,57 @@ class EnsemblePPOAgent:
         episode_start: Optional[np.ndarray] = None
     ) -> np.ndarray:
         """Get action probability distribution from model."""
-        # Get policy distribution
-        obs = observation.reshape(1, -1) if len(observation.shape) == 1 else observation
+        from stable_baselines3.common.utils import obs_as_tensor
+        import torch
+
+        # Ensure batch dimension exists
+        # If observation matches the single observation space, add batch dim
+        if observation.shape == model.observation_space.shape:
+            observation = observation.reshape(1, *observation.shape)
+        
+        # Convert to tensor
+        obs_tensor = obs_as_tensor(observation, model.device)
 
         # For RecurrentPPO
         if hasattr(model.policy, 'lstm_actor'):
             if state is None:
-                state = model.policy.lstm_actor.initial_state(1, model.device)
+                # Initialize zero state if not provided
+                if hasattr(model.policy, 'lstm_hidden_state_shape'):
+                    shape = model.policy.lstm_hidden_state_shape
+                    # LSTM needs tuple of (hidden, cell)
+                    hidden = torch.zeros(shape).to(model.device)
+                    cell = torch.zeros(shape).to(model.device)
+                    state = (hidden, cell)
+                else:
+                    # Fallback if shape attribute missing (shouldn't happen in newer sb3-contrib)
+                    # Assuming standard (1, 1, 256)
+                    hidden = torch.zeros((1, 1, 256)).to(model.device)
+                    cell = torch.zeros((1, 1, 256)).to(model.device)
+                    state = (hidden, cell)
+            
+            # Check if state is numpy (from predict return) and convert to tensor
+            elif isinstance(state, tuple) and isinstance(state[0], np.ndarray):
+                hidden = torch.as_tensor(state[0]).to(model.device)
+                cell = torch.as_tensor(state[1]).to(model.device)
+                state = (hidden, cell)
+
+            
             if episode_start is None:
                 episode_start = np.array([False])
 
-            distribution = model.policy.get_distribution(obs, state, episode_start)
+            # Convert episode_start to tensor (float) as expected by RecurrentPPO policy
+            episode_start_tensor = torch.as_tensor(episode_start).float().to(model.device)
+
+            dist_result = model.policy.get_distribution(obs_tensor, state, episode_start_tensor)
+            
+            # Handle tuple return (distribution, new_states) if applicable
+            if isinstance(dist_result, tuple):
+                distribution = dist_result[0]
+            else:
+                distribution = dist_result
         else:
             # For regular PPO
-            distribution = model.policy.get_distribution(obs)
+            distribution = model.policy.get_distribution(obs_tensor)
 
         # Get probabilities
         probs = distribution.distribution.probs.detach().cpu().numpy()[0]

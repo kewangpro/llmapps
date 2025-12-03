@@ -95,8 +95,28 @@ def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
 
             rppo_model = RecurrentPPO.load(str(rppo_path), env=env)
 
+            # Load ensemble config if available
+            ensemble_config_path = model_dir / "ensemble_config.json"
+            ppo_weight = 0.5
+            rppo_weight = 0.5
+            
+            if ensemble_config_path.exists():
+                try:
+                    with open(ensemble_config_path, 'r') as f:
+                        ens_config = json.load(f)
+                        ppo_weight = ens_config.get('ppo_weight', 0.5)
+                        rppo_weight = ens_config.get('recurrent_ppo_weight', 0.5)
+                        logger.info(f"Loaded ensemble weights: PPO={ppo_weight}, RPPO={rppo_weight}")
+                except Exception as e:
+                    logger.warning(f"Failed to load ensemble config: {e}")
+
             # Create ensemble
-            agent = EnsemblePPOAgent(ppo_model, rppo_model)
+            agent = EnsemblePPOAgent(
+                ppo_model, 
+                rppo_model,
+                ppo_weight=ppo_weight,
+                recurrent_ppo_weight=rppo_weight
+            )
             agent.is_trained = True
             logger.info(f"Successfully loaded Ensemble from {model_dir}")
             return agent
@@ -149,18 +169,24 @@ def load_env_config_from_model(model_path: Path) -> Dict:
     config_path = config_dir / "training_config.json"
 
     if not config_path.exists():
-        logger.warning(
-            f"Training config not found: {config_path}\n"
-            f"Using default EnvConfig values. Model may have been trained with different settings."
-        )
-        # Return default EnvConfig as dict
-        from .env_factory import EnvConfig
-        default_config = EnvConfig(
-            symbol="UNKNOWN",
-            start_date="2020-01-01",
-            end_date="2023-12-31"
-        )
-        return default_config.to_dict()
+        # Try parent directory (common for ensemble where model is in subdirectory)
+        parent_config_path = config_dir.parent / "training_config.json"
+        if parent_config_path.exists():
+            config_path = parent_config_path
+        else:
+            logger.warning(
+                f"Training config not found: {config_path}\n"
+                f"Using default EnvConfig values. Model may have been trained with different settings."
+            )
+            # Return default EnvConfig as dict
+            from .env_factory import EnvConfig
+            default_config = EnvConfig(
+                symbol="UNKNOWN",
+                start_date="2020-01-01",
+                end_date="2023-12-31"
+            )
+            return default_config.to_dict()
+
 
     with open(config_path, 'r') as f:
         config = json.load(f)
