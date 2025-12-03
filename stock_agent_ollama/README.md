@@ -70,6 +70,7 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 ### 🗂️ Model Registry
 - **LSTM Models** with performance metrics (Final Loss, Val Loss)
 - **RL Agents** with training dates and algorithm types
+- **Batch Backtesting** with checkbox selection for multiple models
 - **Model Management** with automatic discovery and organization
 
 ---
