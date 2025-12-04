@@ -158,88 +158,119 @@ class ModelsPage(param.Parameterized):
         self.rl_model_data = self._get_rl_models()
 
         if self.rl_model_data:
-            # Create header row component using pn.Row to match the data rows' structure
-            header_grid_content = pn.pane.HTML(f"""
-                <div style='display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 15px; padding: 15px 20px 15px 5px; font-weight: 600; color: {Colors.TEXT_PRIMARY}; font-size: 13px; align-items: center;'>
-                    <div style='text-align: left;'>Agent Name</div>
-                    <div style='text-align: left;'>Symbol</div>
-                    <div style='text-align: center;'>Algorithm</div>
-                    <div style='text-align: left;'>Trained</div>
-                </div>
-            """, sizing_mode="stretch_width", margin=(0,0,0,0))
+            # Create table with checkboxes using Row layout like LSTM table
+            # Header row
+            header_html = f"""
+            <style>
+            .rl-table-header {{
+                width: 100%;
+                display: table;
+                border-collapse: collapse;
+                background: #F3F4F6;
+                border: 1px solid {Colors.BORDER_SUBTLE};
+                border-bottom: 2px solid {Colors.BORDER_SUBTLE};
+                table-layout: fixed;
+            }}
+            .rl-table-header th {{
+                text-align: left;
+                padding: 12px 16px;
+                font-weight: 600;
+                color: {Colors.TEXT_PRIMARY};
+                text-transform: uppercase;
+                font-size: 11px;
+                letter-spacing: 0.05em;
+            }}
+            .rl-table-header th:first-child {{
+                width: 40px;
+                text-align: center;
+            }}
+            .rl-table-header th:nth-child(2) {{
+                width: 30%;
+            }}
+            .rl-table-header th:nth-child(3) {{
+                width: 8%;
+            }}
+            .rl-table-header th:nth-child(4) {{
+                width: 15%;
+            }}
+            .rl-table-header th:nth-child(5) {{
+                width: 12%;
+            }}
+            .rl-table-header th:nth-child(6) {{
+                width: 10%;
+            }}
+            .rl-table-header th:nth-child(7) {{
+                width: 12%;
+            }}
+            .rl-table-header th:nth-child(8) {{
+                width: 10%;
+            }}
+            </style>
+            <table class="rl-table-header">
+                <tr>
+                    <th></th>
+                    <th>Agent Name</th>
+                    <th>Symbol</th>
+                    <th>Algorithm</th>
+                    <th>Trained</th>
+                    <th>Timesteps</th>
+                    <th>Learn Rate</th>
+                    <th>Size</th>
+                </tr>
+            </table>
+            """
 
-            header_row = pn.Row(
-                pn.Spacer(width=45), # Spacer to match checkbox width + margin
-                header_grid_content,
-                sizing_mode="stretch_width",
-                margin=(0, 0, 0, 0), # Ensure no external margins on the Row itself
-                styles={
-                    'background': '#F3F4F6', # Header background
-                    'border-bottom': f'2px solid {Colors.BORDER_SUBTLE}',
-                    'align-items': 'center'
-                }
-            )
+            self.rl_panel.append(pn.pane.HTML(header_html, sizing_mode="stretch_width", margin=(0,0,0,0)))
 
-            # Create table rows with integrated checkboxes using Row layout
-            rows = [header_row] # First item is now the Panel row header
-
+            # Create rows using Panel Row components
             for i, model in enumerate(self.rl_model_data):
-                # Create row background
-                row_bg = Colors.BG_PRIMARY if i % 2 == 0 else 'white'
-
-                # Create a single row with checkbox and all columns in one grid
+                # Create checkbox
                 checkbox = pn.widgets.Checkbox(
                     name="",
                     value=False,
-                    width=25,
-                    height=25,
-                    margin=(15, 0, 15, 20),
+                    width=30,
+                    height=30,
+                    margin=(10, 0, 10, 10),
                     align='center'
                 )
                 checkbox.param.watch(self._on_checkbox_change, 'value')
                 self.rl_checkboxes[i] = checkbox
 
-                # HTML for the entire row (aligned with header grid)
-                info_html = pn.pane.HTML(f"""
-                <div style='display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 15px; padding: 15px 20px 15px 5px; align-items: center;'>
-                    <div style='font-weight: 500; color: {Colors.TEXT_PRIMARY}; font-size: 13px; line-height: 1.5; text-align: left;'>{model['name']}</div>
-                    <div style='color: {Colors.TEXT_PRIMARY}; font-size: 13px; text-align: left;'>{model['symbol']}</div>
-                    <div style='text-align: center;'>
-                        <span style='background: {Colors.ACCENT_PURPLE}; color: white; padding: 5px 12px; border-radius: 4px; font-size: 11px; font-weight: 600; display: inline-block;'>
-                            {model['algorithm'].replace('_', ' ')}
-                        </span>
-                    </div>
-                    <div style='color: {Colors.TEXT_SECONDARY}; font-size: 13px; text-align: left;'>{model['trained']}</div>
-                </div>
-                """, sizing_mode="stretch_width", margin=(0, 0, 0, 0))
+                # Create row content
+                algo_badge = f'<span style="background: {Colors.ACCENT_PURPLE}; color: white; padding: 4px 12px; border-radius: 4px; font-size: 11px; font-weight: 600; display: inline-block;">{model["algorithm"].replace("_", " ")}</span>'
 
-                # Create row with checkbox + info
+                row_html = f"""
+                <div style="display: flex; align-items: center; width: 100%;">
+                    <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
+                        <tr>
+                            <td style="width: 30%; padding: 12px 8px; font-weight: 500; color: {Colors.TEXT_PRIMARY}; font-size: 13px; word-wrap: break-word;">{model['name']}</td>
+                            <td style="width: 8%; padding: 12px 8px; color: {Colors.TEXT_PRIMARY}; font-size: 13px;">{model['symbol']}</td>
+                            <td style="width: 15%; padding: 12px 8px; font-size: 13px;">{algo_badge}</td>
+                            <td style="width: 12%; padding: 12px 8px; color: {Colors.TEXT_SECONDARY}; font-size: 13px;">{model['trained']}</td>
+                            <td style="width: 10%; padding: 12px 8px; color: {Colors.TEXT_PRIMARY}; font-size: 13px;">{model['timesteps']}</td>
+                            <td style="width: 12%; padding: 12px 8px; color: {Colors.TEXT_PRIMARY}; font-size: 13px;">{model['learning_rate']}</td>
+                            <td style="width: 10%; padding: 12px 8px; color: {Colors.TEXT_SECONDARY}; font-size: 13px;">{model['size']}</td>
+                        </tr>
+                    </table>
+                </div>
+                """
+
                 row = pn.Row(
                     checkbox,
-                    info_html,
+                    pn.pane.HTML(row_html, sizing_mode="stretch_width", margin=(0,0,0,0)),
                     sizing_mode="stretch_width",
                     margin=(0, 0, 0, 0),
                     styles={
-                        'background': row_bg,
+                        'background': 'white',
+                        'border-left': f'1px solid {Colors.BORDER_SUBTLE}',
+                        'border-right': f'1px solid {Colors.BORDER_SUBTLE}',
                         'border-bottom': f'1px solid {Colors.BORDER_SUBTLE}',
-                        'align-items': 'center'
+                        'display': 'flex',
+                        'align-items': 'center',
                     }
                 )
-                rows.append(row)
+                self.rl_panel.append(row)
 
-            # Assemble table
-            table = pn.Column(
-                *rows,
-                sizing_mode="stretch_width",
-                styles={
-                    'background': 'white',
-                    'border': f'1px solid {Colors.BORDER_SUBTLE}',
-                    'border-radius': '8px',
-                    'overflow': 'hidden'
-                }
-            )
-
-            self.rl_panel.append(table)
         else:
             self.rl_panel.append(pn.pane.HTML(f"""
                 <div style='background: {Colors.BG_SECONDARY};
@@ -333,6 +364,9 @@ class ModelsPage(param.Parameterized):
             return models
 
         try:
+            import json
+            import os
+
             for model_dir in models_dir.iterdir():
                 if model_dir.is_dir():
                     model_file = model_dir / "final_model.zip"
@@ -353,12 +387,79 @@ class ModelsPage(param.Parameterized):
                             algorithm = parts[0].upper() if parts else "Unknown"
                             symbol = parts[1].upper() if len(parts) > 1 else "Unknown"
 
+                        # Initialize metrics
+                        timesteps = 'N/A'
+                        learning_rate = 'N/A'
+                        size = 'N/A'
+
+                        # Try to load training config
+                        training_config = model_dir / "training_config.json"
+                        if training_config.exists():
+                            try:
+                                with open(training_config, 'r') as f:
+                                    config_data = json.load(f)
+                                    # Get total_timesteps
+                                    if 'total_timesteps' in config_data:
+                                        total_steps = config_data['total_timesteps']
+                                        if total_steps >= 1_000_000:
+                                            timesteps = f"{total_steps / 1_000_000:.1f}M"
+                                        elif total_steps >= 1_000:
+                                            timesteps = f"{total_steps / 1_000:.0f}K"
+                                        else:
+                                            timesteps = str(total_steps)
+                                    # Get learning_rate
+                                    if 'learning_rate' in config_data:
+                                        lr = config_data['learning_rate']
+                                        learning_rate = f"{lr:.4f}"
+                            except Exception as e:
+                                logger.debug(f"Could not load training config for {model_dir.name}: {e}")
+
+                        # Try to load training log for timesteps if not found
+                        training_log = model_dir / "training_log.json"
+                        if training_log.exists() and timesteps == 'N/A':
+                            try:
+                                with open(training_log, 'r') as f:
+                                    log_data = json.load(f)
+                                    # Check for timesteps if not already found
+                                    if 'timesteps' in log_data:
+                                        total_steps = log_data['timesteps']
+                                        if total_steps >= 1_000_000:
+                                            timesteps = f"{total_steps / 1_000_000:.1f}M"
+                                        elif total_steps >= 1_000:
+                                            timesteps = f"{total_steps / 1_000:.0f}K"
+                                        else:
+                                            timesteps = str(total_steps)
+                            except Exception as e:
+                                logger.debug(f"Could not load training log for {model_dir.name}: {e}")
+
+                        # Calculate model size
+                        try:
+                            if ensemble_config.exists():
+                                # For ensemble, sum sizes of both models
+                                ensemble_dir = model_dir / "ensemble"
+                                ppo_model = ensemble_dir / "ppo_model.zip"
+                                recurrent_model = ensemble_dir / "recurrent_ppo_model.zip"
+                                total_size = 0
+                                if ppo_model.exists():
+                                    total_size += ppo_model.stat().st_size
+                                if recurrent_model.exists():
+                                    total_size += recurrent_model.stat().st_size
+                                size = f"{total_size / (1024 * 1024):.1f} MB"
+                            elif model_file.exists():
+                                file_size = model_file.stat().st_size
+                                size = f"{file_size / (1024 * 1024):.1f} MB"
+                        except Exception as e:
+                            logger.debug(f"Could not calculate size for {model_dir.name}: {e}")
+
                         model_info = {
                             'name': model_dir.name,
                             'directory': model_dir,
                             'symbol': symbol,
                             'algorithm': algorithm,
                             'trained': datetime.fromtimestamp(model_dir.stat().st_mtime).strftime('%Y-%m-%d'),
+                            'timesteps': timesteps,
+                            'learning_rate': learning_rate,
+                            'size': size,
                             'return': 'N/A'  # Would need backtest results
                         }
                         models.append(model_info)
