@@ -92,19 +92,12 @@ class ModelsPage(param.Parameterized):
                 "Trained prediction models"
             )))
         else:
-            # For RL tab, show header with button - use same style as LSTM tab
+            # For RL tab, show header without button
             self.header_pane.clear()
-            self.header_pane.append(pn.Row(
-                pn.pane.HTML(HTMLComponents.page_header(
-                    "RL Trading Agents",
-                    "Reinforcement learning models"
-                )),
-                pn.Spacer(width=20),
-                self.backtest_button,
-                pn.Spacer(sizing_mode="stretch_width"),
-                sizing_mode="stretch_width",
-                align='center'
-            ))
+            self.header_pane.append(pn.pane.HTML(HTMLComponents.page_header(
+                "RL Trading Agents",
+                "Reinforcement learning models"
+            )))
 
     def _on_tab_change(self, event):
         """Handle tab change event"""
@@ -270,6 +263,13 @@ class ModelsPage(param.Parameterized):
                     }
                 )
                 self.rl_panel.append(row)
+
+            # Add backtest button at the bottom of the table
+            self.rl_panel.append(pn.Row(
+                self.backtest_button,
+                sizing_mode="stretch_width",
+                margin=(15, 0, 0, 0)
+            ))
 
         else:
             self.rl_panel.append(pn.pane.HTML(f"""
