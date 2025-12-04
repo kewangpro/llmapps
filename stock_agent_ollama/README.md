@@ -73,6 +73,9 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 - **Batch Backtesting** with checkbox selection for multiple models
 - **Model Management** with automatic discovery and organization
 
+![Model Registry Screenshot](docs/screenshots/models.png)
+*Model registry with LSTM and RL agent listings, batch backtesting with checkbox selection*
+
 ---
 
 ## 🚀 Quick Start
