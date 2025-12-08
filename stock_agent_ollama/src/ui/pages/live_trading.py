@@ -22,6 +22,7 @@ from src.rl.live_trading import (
 )
 
 from src.ui.design_system import Colors, HTMLComponents, Typography
+from src.tools.portfolio_manager import portfolio_manager
 
 logger = logging.getLogger(__name__)
 
@@ -163,14 +164,20 @@ class LiveTradingPage(pn.viewable.Viewer):
 
     def _create_new_session_form(self):
         """Create form for new session creation"""
+        # Load watchlist symbols dynamically
+        watchlist_symbols = portfolio_manager.load_portfolio("default")
+
+        # Fallback symbols if watchlist is empty
+        if not watchlist_symbols:
+            watchlist_symbols = ['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'AMZN', 'NVDA', 'META']
+
         # Session configuration inputs
         self.symbol_input = pn.widgets.AutocompleteInput(
-            value='AAPL',
-            options=['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'AMZN', 'NVDA', 'META', 'TEAM',
-                     'NFLX', 'AMD', 'INTC', 'QCOM', 'CRM', 'ADBE', 'PYPL'],
+            value=watchlist_symbols[0] if watchlist_symbols else 'AAPL',
+            options=watchlist_symbols,
             placeholder='Enter symbol...',
             case_sensitive=False,
-            restrict=False,  # Allow any symbol, not just predefined ones
+            restrict=False,  # Allow any symbol, not just from watchlist
             width=100,
             min_characters=1
         )

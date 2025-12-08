@@ -24,6 +24,7 @@ import logging
 import threading
 
 from src.ui.design_system import HTMLComponents
+from src.tools.portfolio_manager import portfolio_manager
 
 logger = logging.getLogger(__name__)
 
@@ -47,15 +48,21 @@ class RLTrainingPanel(param.Parameterized):
 
     def _create_ui(self):
         """Create UI components."""
-        # Symbol input with autocomplete
+        # Load watchlist symbols dynamically
+        watchlist_symbols = portfolio_manager.load_portfolio("default")
+
+        # Fallback symbols if watchlist is empty
+        if not watchlist_symbols:
+            watchlist_symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA']
+
+        # Symbol input with autocomplete from watchlist
         self.symbol_input = pn.widgets.AutocompleteInput(
             name='',
-            value='GOOGL',
-            options=['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'ORCL',
-                     'TEAM', 'NFLX', 'AMD', 'INTC', 'QCOM', 'CRM', 'ADBE', 'PYPL'],
+            value=watchlist_symbols[0] if watchlist_symbols else 'GOOGL',
+            options=watchlist_symbols,
             placeholder='Enter symbol...',
             case_sensitive=False,
-            restrict=False,  # Allow any symbol, not just predefined ones
+            restrict=False,  # Allow any symbol, not just from watchlist
             width=120,
             height=35,
             min_characters=1
