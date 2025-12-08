@@ -22,22 +22,28 @@ class EnsemblePPOAgent:
     Ensemble agent combining PPO and RecurrentPPO.
 
     **Strategy**:
-    - PPO (60%): Aggressive growth, higher returns
-    - RecurrentPPO (40%): Risk management, better Sharpe ratio
+    - PPO (30%): Aggressive growth for opportunistic trades
+    - RecurrentPPO (70%): Primary strategy with LSTM memory and trend-following
 
     **Decision Logic**:
     1. Get predictions from both agents
     2. If agents agree: Use that action
-    3. If agents disagree: Use weighted vote (PPO 60%, RecurrentPPO 40%)
+    3. If agents disagree: Use weighted vote (PPO 30%, RecurrentPPO 70%)
     4. Confidence-based weighting: Higher confidence gets more weight
+
+    **Rationale for 30/70 weighting**:
+    - RecurrentPPO shows superior risk-adjusted returns (better Sharpe ratios)
+    - LSTM memory handles volatility better than standard PPO
+    - 70% weight prevents "sell amplification" when both agents vote to sell
+    - 30% PPO weight still provides growth focus when conditions are right
     """
 
     def __init__(
         self,
         ppo_model,
         recurrent_ppo_model,
-        ppo_weight: float = 0.6,
-        recurrent_ppo_weight: float = 0.4,
+        ppo_weight: float = 0.3,
+        recurrent_ppo_weight: float = 0.7,
         use_confidence: bool = True
     ):
         """

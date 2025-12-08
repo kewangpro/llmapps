@@ -515,8 +515,8 @@ class EnhancedRLTrainer:
         ensemble = EnsemblePPOAgent(
             ppo_model=ppo_model,
             recurrent_ppo_model=rppo_model,
-            ppo_weight=0.6,
-            recurrent_ppo_weight=0.4
+            ppo_weight=0.3,
+            recurrent_ppo_weight=0.7
         )
 
         # Save ensemble models to ensemble directory
