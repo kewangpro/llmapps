@@ -443,10 +443,10 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 
 **Ensemble (PPO + RecurrentPPO)**
 - Weighted voting system combining both algorithms
-- PPO (60%): Aggressive growth strategy
-- RecurrentPPO (40%): Risk-managed with LSTM memory
-- Confidence-based decisions
-- Good for: Balanced performance with diversification
+- PPO (30%): Opportunistic growth strategy
+- RecurrentPPO (70%): Primary strategy with LSTM memory and trend-following
+- Confidence-based decisions with RecurrentPPO as primary
+- Good for: Balanced performance with superior risk-adjusted returns
 
 **Recommendation**: Train all algorithms and compare via backtesting. All 3 algorithms (PPO, RecurrentPPO, Ensemble) are reliable and well-tuned.
 

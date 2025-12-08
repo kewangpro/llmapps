@@ -193,8 +193,8 @@ src/config.py                   # RL configuration
 **Implementation**: Custom `EnsemblePPOAgent` combining both policy gradient methods
 
 **Strategy**:
-- PPO (50% weight): Aggressive growth strategy
-- RecurrentPPO (50% weight): Risk-managed strategy with LSTM memory
+- PPO (30% weight): Opportunistic growth for tactical trades
+- RecurrentPPO (70% weight): Primary strategy with LSTM memory and trend-following
 - *Weights are configurable via `ensemble_config.json`*
 
 **Decision Logic**:
@@ -204,14 +204,15 @@ src/config.py                   # RL configuration
 4. Confidence weighting: Uses action probabilities to determine final decision
 
 **Strengths**:
-- Combines aggressive growth (PPO) with risk management (RecurrentPPO)
-- Weighted voting balances different strategies
+- Leverages RecurrentPPO's superior risk-adjusted returns as primary strategy
+- LSTM memory handles volatility and temporal patterns effectively
+- PPO provides opportunistic growth when market conditions favor aggressive trading
 - Confidence-based decisions favor more certain predictions
-- Diversification across algorithm types
+- Weighted voting prevents excessive selling behavior
 
 **Training**:
 - Trains both PPO and RecurrentPPO independently
-- Combines trained models with balanced weighting (default 50/50)
+- Combines trained models with optimized 30/70 weighting
 - Saves both component models plus ensemble metadata
 
 **Observation Space Handling**:
