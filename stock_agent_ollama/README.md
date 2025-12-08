@@ -250,9 +250,9 @@ See [QUICK_START.md](docs/QUICK_START.md#troubleshooting) for more help
 - Auto-training on first analysis
 
 **RL Agents:**
-- **PPO**: Stable baseline with strong penalties
-- **RecurrentPPO**: LSTM memory + trend indicators (13 features)
-- **Ensemble**: Weighted voting combining PPO (50%) + RecurrentPPO (50%)
+- **PPO**: Stable baseline with balanced risk management
+- **RecurrentPPO**: LSTM memory + trend indicators for temporal pattern recognition
+- **Ensemble**: Weighted voting combining PPO (30%) + RecurrentPPO (70%)
 - 6-action space with masking, adaptive sizing, algorithm-specific rewards
 
 **Backtesting:**
