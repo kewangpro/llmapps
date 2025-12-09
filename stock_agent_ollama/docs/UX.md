@@ -417,12 +417,14 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 - Shows training performance (Final Loss, Validation Loss)
 - Displays number of models in ensemble
 - Training date for each model
+- Models sorted by training date (newest first)
 
 **RL Agents Tab:**
 - Lists all trained RL agents (PPO, RecurrentPPO, Ensemble)
 - Checkbox selection for batch backtesting
 - Shows agent type and symbol
 - Training date
+- Models sorted by training date (newest first)
 - Backtest button appears when models are selected
 - Performance note: "Run backtest →" (metrics calculated on-demand)
 

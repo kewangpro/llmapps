@@ -230,6 +230,7 @@ The live trading session is **persistent**. You can stop the application and res
 - Lists all LSTM ensemble models (3 models per symbol)
 - Shows performance metrics: Final Loss, Validation Loss
 - Training date and model size
+- Models sorted by training date (newest first)
 - Click "View" to see details (if enabled)
 
 **Tab 2: RL Agents**
@@ -237,6 +238,7 @@ The live trading session is **persistent**. You can stop the application and res
 - Lists all trained PPO, RecurrentPPO, and Ensemble agents
 - Checkbox selection for batch backtesting
 - Shows algorithm type, symbol, training date
+- Models sorted by training date (newest first)
 - Backtest button appears when models are selected
 - Performance column shows "Run backtest →" hint
   - Performance calculated when you run backtests
@@ -252,6 +254,7 @@ The live trading session is **persistent**. You can stop the application and res
 - Header dynamically updates when switching between tabs
 - Clean tabbed interface for better organization
 - Auto-loads models on page visit
+- Chronological ordering (newest first) for easy access to recent models
 
 ---
 
