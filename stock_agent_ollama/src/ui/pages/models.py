@@ -344,6 +344,7 @@ class ModelsPage(param.Parameterized):
                     'name': f"{symbol} LSTM Ensemble",
                     'symbol': symbol.upper(),
                     'trained': trained_date,
+                    'trained_timestamp': metadata_file.stat().st_mtime,  # For sorting
                     'final_loss': final_loss,
                     'val_loss': val_loss,
                     'size': f'{len(keras_files)} models'
@@ -352,6 +353,9 @@ class ModelsPage(param.Parameterized):
 
         except Exception as e:
             logger.error(f"Error loading LSTM models: {e}")
+
+        # Sort by trained time (newest first)
+        models.sort(key=lambda x: x.get('trained_timestamp', 0), reverse=True)
 
         return models
 
@@ -457,6 +461,7 @@ class ModelsPage(param.Parameterized):
                             'symbol': symbol,
                             'algorithm': algorithm,
                             'trained': datetime.fromtimestamp(model_dir.stat().st_mtime).strftime('%Y-%m-%d'),
+                            'trained_timestamp': model_dir.stat().st_mtime,  # For sorting
                             'timesteps': timesteps,
                             'learning_rate': learning_rate,
                             'size': size,
@@ -466,6 +471,9 @@ class ModelsPage(param.Parameterized):
 
         except Exception as e:
             logger.error(f"Error loading RL models: {e}")
+
+        # Sort by trained time (newest first)
+        models.sort(key=lambda x: x.get('trained_timestamp', 0), reverse=True)
 
         return models
 
