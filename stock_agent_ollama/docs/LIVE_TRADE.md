@@ -322,7 +322,9 @@ class TradingHours:
 
 1. **Position Monitoring**: When position reaches 0 (fully sold), system evaluates rotation opportunity
 2. **Rotation Cooldown**: Waits minimum 10 cycles or 10 minutes before considering rotation (prevents premature switching)
-3. **Stock Evaluation**: Analyzes all watchlist stocks including current symbol for recent performance (5-day return %)
+3. **Stock Evaluation**: Analyzes all watchlist stocks including current symbol for performance:
+   - Prioritizes agent backtest performance (total_return_pct from backtest_results.json)
+   - Falls back to 5-day price performance if no backtest results available
 4. **Model Selection**: Uses intelligent composite scoring to find best model per stock:
    - Algorithm preference: RecurrentPPO (100 pts) > PPO (80 pts) > Ensemble (60 pts)
    - Model recency: Up to 20 points for recent models (decreases by 1 pt/day)

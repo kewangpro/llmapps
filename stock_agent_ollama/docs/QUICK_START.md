@@ -175,8 +175,8 @@ The live trading session is **persistent**. You can stop the application and res
    - **Auto Select Stock**: Enable to dynamically rotate between watchlist stocks
      - When enabled, Symbol and Algorithm inputs are disabled
      - System evaluates watchlist stocks when position reaches 0
-     - Automatically selects best performing stock (5-day return %)
-     - Chooses optimal algorithm (prefers Ensemble > RecurrentPPO > PPO)
+     - Automatically selects best performing stock (prioritizes backtest performance, falls back to 5-day price return)
+     - Chooses optimal algorithm (prefers RecurrentPPO > PPO > Ensemble)
      - Maximizes capital efficiency by trading strongest performers
 3. Click **"Create & Start Session"**
 4. Monitor real-time updates

@@ -289,7 +289,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 - Stop-loss percentage (1-20%)
 - Auto Select Stock checkbox - enables dynamic stock rotation
   - When checked: Symbol and Algorithm inputs become disabled
-  - System automatically selects best performing watchlist stocks
+  - System automatically selects best performing watchlist stocks (prioritizes backtest performance, falls back to 5-day price return)
   - Creates session ID: SESSION_AUTO_YYYYMMDD_HHMMSS
 - Manual mode creates session ID: SESSION_SYMBOL_YYYYMMDD_HHMMSS
 
