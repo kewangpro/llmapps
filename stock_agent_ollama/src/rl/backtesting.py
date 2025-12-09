@@ -4,6 +4,8 @@ Backtesting engine for evaluating trading strategies.
 This module contains the backtest engine and metrics calculator.
 """
 import logging
+import json
+from pathlib import Path
 from .environments import EnhancedTradingEnv
 from .improvements import EnhancedRewardConfig
 from .env_factory import EnvConfig
@@ -433,6 +435,60 @@ class BacktestResult:
             'trades': self.trades,
             'dates': [d.isoformat() for d in self.dates],
         }
+
+    def save_to_model_dir(self, model_path: Path, agent_type: str):
+        """
+        Save backtest results to model directory for auto-select feature.
+
+        Args:
+            model_path: Path to model file or directory
+            agent_type: Algorithm type (ppo, recurrent_ppo, ensemble)
+        """
+        try:
+            # Determine the directory to save to
+            if agent_type == 'ensemble':
+                # For ensemble, model_path could be the ensemble subdirectory or parent
+                if model_path.name == 'ensemble':
+                    save_dir = model_path.parent
+                elif (model_path / 'ensemble').exists():
+                    save_dir = model_path
+                else:
+                    save_dir = model_path
+            else:
+                # For PPO/RecurrentPPO, model_path could be .zip file or directory
+                save_dir = model_path.parent if model_path.is_file() else model_path
+
+            # Create backtest results JSON
+            backtest_data = {
+                'agent_type': agent_type,
+                'backtest_date': datetime.now().isoformat(),
+                'backtest_period': {
+                    'start_date': self.config.start_date,
+                    'end_date': self.config.end_date
+                },
+                'total_return_pct': self.metrics.total_return_pct,
+                'sharpe_ratio': self.metrics.sharpe_ratio,
+                'sortino_ratio': self.metrics.sortino_ratio,
+                'calmar_ratio': self.metrics.calmar_ratio,
+                'max_drawdown': self.metrics.max_drawdown,
+                'win_rate': self.metrics.win_rate,
+                'total_trades': self.metrics.total_trades,
+                'winning_trades': self.metrics.winning_trades,
+                'losing_trades': self.metrics.losing_trades,
+                'avg_win': self.metrics.avg_win,
+                'avg_loss': self.metrics.avg_loss,
+                'profit_factor': self.metrics.profit_factor
+            }
+
+            # Save to model directory
+            backtest_file = save_dir / "backtest_results.json"
+            with open(backtest_file, 'w') as f:
+                json.dump(backtest_data, f, indent=2)
+
+            logger.info(f"Saved backtest results to {backtest_file}")
+
+        except Exception as e:
+            logger.warning(f"Failed to save backtest results for {agent_type}: {e}")
 
 
 class BacktestEngine:
