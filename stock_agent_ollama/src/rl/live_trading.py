@@ -209,7 +209,7 @@ class LiveTradingConfig:
     max_daily_loss_pct: float = 10.0  # 10% max daily loss (circuit breaker)
     update_interval: int = 60  # Seconds between updates
     enforce_trading_hours: bool = True
-    allow_extended_hours: bool = False  # Default to False as requested
+    auto_select_stock: bool = False  # Dynamically select stocks to maximize returns
     commission_per_trade: float = 0.0  # Commission per trade
     session_id: Optional[str] = None
 
@@ -353,19 +353,15 @@ class MarketDataStream:
             raise
 
     def is_market_open(self) -> bool:
-        """Check if market is currently open"""
+        """Check if market is currently open (regular hours only)"""
         try:
             # Create a fresh ticker to get the most up-to-date info
             ticker = yf.Ticker(self.symbol)
             info = ticker.info
             market_state = info.get('marketState', 'CLOSED').upper()
-            
-            if self.config.allow_extended_hours:
-                # Valid states for extended hours trading
-                return market_state in ['REGULAR', 'PRE', 'POST', 'PREPRE', 'POSTPOST']
-            else:
-                # Regular hours only
-                return market_state == 'REGULAR'
+
+            # Regular hours only
+            return market_state == 'REGULAR'
 
         except Exception as e:
             logger.warning(f"Could not fetch market state from yfinance: {e}. Falling back to time-based check.")
@@ -383,16 +379,7 @@ class MarketDataStream:
                 # Regular market hours: 9:30 AM to 4:00 PM ET
                 market_open = time(9, 30) <= now_et.time() < time(16, 0)
 
-                if not self.config.allow_extended_hours:
-                    return market_open
-
-                # Extended hours (pre-market and post-market)
-                # Pre-market: 4:00 AM to 9:30 AM ET
-                pre_market = time(4, 0) <= now_et.time() < time(9, 30)
-                # Post-market: 4:00 PM to 8:00 PM ET
-                post_market = time(16, 0) <= now_et.time() < time(20, 0)
-
-                return market_open or pre_market or post_market
+                return market_open
 
             except ImportError:
                 logger.warning("zoneinfo not available (requires Python 3.9+). Falling back to simplified time check.")
@@ -791,7 +778,11 @@ class LiveTradingEngine:
     def initialize_session_state(self, session_id: Optional[str] = None) -> TradingSession:
         """Initialize new trading session state"""
         if session_id is None:
-            session_id = f"SESSION_{self.config.symbol}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            # Differentiate auto-select sessions with SESSION_AUTO_ prefix
+            if self.config.auto_select_stock:
+                session_id = f"SESSION_AUTO_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            else:
+                session_id = f"SESSION_{self.config.symbol}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
         self.session = TradingSession(
             session_id=session_id,
@@ -815,6 +806,153 @@ class LiveTradingEngine:
 
             self._is_running = False
             logger.info(f"{self.session.session_id} - Stopped trading session")
+
+    def _evaluate_stock_performance(self, symbol: str, days: int = 5) -> Optional[float]:
+        """Evaluate recent stock performance (return %)"""
+        try:
+            from ..tools.stock_fetcher import StockFetcher
+            from datetime import datetime, timedelta
+
+            fetcher = StockFetcher()
+            end_date = datetime.now().strftime("%Y-%m-%d")
+            start_date = (datetime.now() - timedelta(days=days * 2)).strftime("%Y-%m-%d")  # Extra buffer
+
+            data = fetcher.fetch_stock_data(
+                symbol=symbol,
+                start_date=start_date,
+                end_date=end_date,
+                interval='1d',
+                force_refresh=True
+            )
+
+            if data is None or len(data) < 2:
+                return None
+
+            # Calculate recent return (last N days)
+            recent_data = data.tail(min(days, len(data)))
+            if len(recent_data) < 2:
+                return None
+
+            start_price = recent_data.iloc[0]['Close']
+            end_price = recent_data.iloc[-1]['Close']
+            return_pct = ((end_price - start_price) / start_price) * 100
+
+            return return_pct
+
+        except Exception as e:
+            logger.warning(f"Failed to evaluate {symbol} performance: {e}")
+            return None
+
+    def _find_best_model_for_symbol(self, symbol: str) -> Optional[Tuple[str, str]]:
+        """Find best performing model (algorithm + path) for a symbol"""
+        from pathlib import Path
+
+        models_dir = Path("data/models/rl")
+        if not models_dir.exists():
+            return None
+
+        # Check for all algorithm types
+        best_model = None
+        best_score = -float('inf')
+
+        for agent_type in ['ensemble', 'recurrent_ppo', 'ppo']:
+            agent_type_lower = agent_type.lower()
+            pattern = f"{agent_type_lower}_{symbol}_*"
+            matching_dirs = list(models_dir.glob(pattern))
+
+            if matching_dirs:
+                # Sort by modification time (most recent first)
+                matching_dirs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                latest = matching_dirs[0]
+
+                # Prefer ensemble > recurrent_ppo > ppo
+                score_map = {'ensemble': 3, 'recurrent_ppo': 2, 'ppo': 1}
+                score = score_map.get(agent_type_lower, 0)
+
+                if score > best_score:
+                    best_score = score
+                    best_model = (agent_type, str(latest))
+
+        return best_model
+
+    def _select_best_stock(self) -> Optional[Tuple[str, str]]:
+        """Select best stock from watchlist based on recent performance
+        Returns: (symbol, agent_path) or None
+        """
+        try:
+            from ..tools.portfolio_manager import portfolio_manager
+
+            watchlist = portfolio_manager.load_portfolio("default")
+            if not watchlist:
+                logger.warning("No stocks in watchlist for auto-selection")
+                return None
+
+            # Evaluate all watchlist stocks
+            stock_scores = []
+            for symbol in watchlist:
+                # Skip current symbol to rotate
+                if symbol == self.config.symbol:
+                    continue
+
+                # Check if model exists
+                model_info = self._find_best_model_for_symbol(symbol)
+                if not model_info:
+                    continue
+
+                # Evaluate recent performance
+                performance = self._evaluate_stock_performance(symbol, days=5)
+                if performance is None:
+                    continue
+
+                stock_scores.append({
+                    'symbol': symbol,
+                    'algorithm': model_info[0],
+                    'agent_path': model_info[1],
+                    'performance': performance
+                })
+
+            if not stock_scores:
+                logger.warning("No suitable stocks found for auto-selection")
+                return None
+
+            # Sort by performance (descending)
+            stock_scores.sort(key=lambda x: x['performance'], reverse=True)
+            best_stock = stock_scores[0]
+
+            logger.info(f"Auto-select: {best_stock['symbol']} ({best_stock['algorithm']}) with {best_stock['performance']:.2f}% recent return")
+
+            return (best_stock['symbol'], best_stock['agent_path'])
+
+        except Exception as e:
+            logger.error(f"Error selecting best stock: {e}")
+            return None
+
+    def _rotate_to_stock(self, symbol: str, agent_path: str):
+        """Rotate to a new stock by updating config and reloading agent"""
+        try:
+            logger.info(f"{self.session.session_id} - Rotating from {self.config.symbol} to {symbol}")
+
+            # Update config
+            self.config.symbol = symbol
+            self.config.agent_path = agent_path
+
+            # Reload agent
+            self.load_agent(agent_path)
+
+            # Reset environment (will be re-initialized on next cycle)
+            self.env = None
+
+            # Reinitialize market stream
+            self.market_stream = MarketDataStream(self.config)
+
+            # Add event
+            self.session.add_event("STOCK_ROTATION", f"Rotated to {symbol}")
+
+            logger.info(f"{self.session.session_id} - Successfully rotated to {symbol}")
+
+        except Exception as e:
+            logger.error(f"Failed to rotate to {symbol}: {e}")
+            self.session.add_event("ROTATION_FAILED", f"Failed to rotate to {symbol}: {str(e)}")
 
     def trading_cycle(self) -> Dict:
         """Single iteration of trading logic"""
@@ -869,6 +1007,25 @@ class LiveTradingEngine:
             # Get current position for action masking
             current_position = self.portfolio.positions.get(self.config.symbol)
             current_shares = current_position.shares if current_position else 0
+
+            # Auto-select stock rotation: if enabled and position is 0, consider rotating to better stock
+            if self.config.auto_select_stock and current_shares == 0:
+                logger.info(f"{self.session.session_id} - Auto-select mode: Position is 0, checking for better stock...")
+                best_stock = self._select_best_stock()
+
+                if best_stock:
+                    new_symbol, new_agent_path = best_stock
+                    if new_symbol != self.config.symbol:
+                        # Rotate to new stock
+                        self._rotate_to_stock(new_symbol, new_agent_path)
+
+                        # Return early to allow next cycle to trade the new stock
+                        return {
+                            "status": "stock_rotated",
+                            "new_symbol": new_symbol,
+                            "portfolio_value": self.portfolio.total_value,
+                            "timestamp": tick.timestamp.isoformat()
+                        }
 
             # Get action mask from environment
             action_mask = self.env.action_masker.get_action_mask(

@@ -407,7 +407,8 @@ class LiveSessionManager:
                 "num_trades": len(portfolio.trades),
                 "start_time": session.start_time.isoformat() if session.start_time else None,
                 "display_order": getattr(session, 'display_order', 0),
-                "agent_path": engine.config.agent_path
+                "agent_path": engine.config.agent_path,
+                "auto_select": engine.config.auto_select_stock
             })
 
         # Sort by display order
