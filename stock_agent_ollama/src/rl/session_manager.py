@@ -411,8 +411,8 @@ class LiveSessionManager:
                 "auto_select": engine.config.auto_select_stock
             })
 
-        # Sort by display order
-        summaries.sort(key=lambda x: x['display_order'])
+        # Sort by creation time (newest first)
+        summaries.sort(key=lambda x: x['start_time'] or '', reverse=True)
 
         return summaries
 

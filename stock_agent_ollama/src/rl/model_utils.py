@@ -40,7 +40,16 @@ def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
         raise FileNotFoundError(f"Model not found: {model_path}")
 
     # Load training config to determine agent type
-    config_path = model_path.parent / "training_config.json"
+    # Config is always in the top-level model directory, not in subdirectories
+    if model_path.is_dir():
+        # Check if config is in current dir
+        config_path = model_path / "training_config.json"
+        if not config_path.exists():
+            # If not, check parent (might be in a subdirectory like 'ensemble')
+            config_path = model_path.parent / "training_config.json"
+    else:
+        config_path = model_path.parent / "training_config.json"
+
     agent_type = None
 
     if config_path.exists():
@@ -78,6 +87,12 @@ def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
             # Load ensemble by loading both component models
             # Expect model_path to be the ensemble directory containing both models
             model_dir = model_path.parent if model_path.is_file() else model_path
+
+            # Check if models are in an 'ensemble' subdirectory (but not if we're already in it)
+            if model_dir.name != 'ensemble':
+                ensemble_subdir = model_dir / "ensemble"
+                if ensemble_subdir.exists():
+                    model_dir = ensemble_subdir
 
             # Load PPO model
             ppo_path = model_dir / "ppo_best_model.zip"

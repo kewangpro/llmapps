@@ -241,6 +241,9 @@ class TradingSession:
     tags: List[str] = field(default_factory=list)
     color: str = "#7C3AED"
     display_order: int = 0
+    # Track last stock rotation time (for auto-select cooldown)
+    last_rotation_time: Optional[datetime] = None
+    cycles_since_rotation: int = 0
 
     def add_event(self, event_type: str, message: str):
         """Add event to session log"""
@@ -263,11 +266,14 @@ class TradingSession:
             "description": self.description,
             "tags": self.tags,
             "color": self.color,
-            "display_order": self.display_order
+            "display_order": self.display_order,
+            "last_rotation_time": self.last_rotation_time.isoformat() if self.last_rotation_time else None,
+            "cycles_since_rotation": self.cycles_since_rotation
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "TradingSession":
+        last_rotation_time = data.get("last_rotation_time")
         return cls(
             session_id=data["session_id"],
             config=LiveTradingConfig.from_dict(data["config"]),
@@ -280,7 +286,9 @@ class TradingSession:
             description=data.get("description", ""),
             tags=data.get("tags", []),
             color=data.get("color", "#7C3AED"),
-            display_order=data.get("display_order", 0)
+            display_order=data.get("display_order", 0),
+            last_rotation_time=datetime.fromisoformat(last_rotation_time) if last_rotation_time else None,
+            cycles_since_rotation=data.get("cycles_since_rotation", 0)
         )
 
 
@@ -622,6 +630,13 @@ class LiveTradingEngine:
         self._is_running = False
         self.env = None  # Will be initialized when needed
 
+    def _add_event(self, event_type: str, message: str):
+        """Add event to session log with symbol prefix for auto-select sessions"""
+        if self.config.auto_select_stock:
+            # Prefix message with symbol for auto-select sessions
+            message = f"[{self.config.symbol}] {message}"
+        self.session.add_event(event_type, message)
+
     def save_state(self, file_path: Path):
         """Save the current trading session state to a file"""
         if not self.session:
@@ -800,7 +815,7 @@ class LiveTradingEngine:
         if self.session:
             self.session.status = TradingStatus.STOPPED
             self.session.end_time = datetime.now()
-            self.session.add_event("SESSION_END", f"Ended session. Final P&L: ${self.portfolio.total_pnl:.2f}")
+            self._add_event("SESSION_END", f"Ended session. Final P&L: ${self.portfolio.total_pnl:.2f}")
 
 
 
@@ -844,16 +859,17 @@ class LiveTradingEngine:
             return None
 
     def _find_best_model_for_symbol(self, symbol: str) -> Optional[Tuple[str, str]]:
-        """Find best performing model (algorithm + path) for a symbol"""
+        """Find best performing model (algorithm + path) for a symbol using intelligent heuristics"""
         from pathlib import Path
+        import json
+        from datetime import datetime
 
         models_dir = Path("data/models/rl")
         if not models_dir.exists():
             return None
 
-        # Check for all algorithm types
-        best_model = None
-        best_score = -float('inf')
+        # Collect all available models with scoring
+        model_candidates = []
 
         for agent_type in ['ensemble', 'recurrent_ppo', 'ppo']:
             agent_type_lower = agent_type.lower()
@@ -865,15 +881,55 @@ class LiveTradingEngine:
                 matching_dirs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
                 latest = matching_dirs[0]
 
-                # Prefer ensemble > recurrent_ppo > ppo
-                score_map = {'ensemble': 3, 'recurrent_ppo': 2, 'ppo': 1}
-                score = score_map.get(agent_type_lower, 0)
+                # Calculate composite score based on multiple factors
+                score = 0.0
 
-                if score > best_score:
-                    best_score = score
-                    best_model = (agent_type, str(latest))
+                # Factor 1: Algorithm preference (RecurrentPPO > PPO > Ensemble)
+                # Based on typical performance, RecurrentPPO often performs best
+                algo_scores = {
+                    'recurrent_ppo': 100,  # Prefer RecurrentPPO (LSTM memory)
+                    'ppo': 80,              # PPO is solid baseline
+                    'ensemble': 60          # Ensemble can be inconsistent
+                }
+                score += algo_scores.get(agent_type_lower, 0)
 
-        return best_model
+                # Factor 2: Model recency (newer models may have better training)
+                model_age_days = (datetime.now() - datetime.fromtimestamp(latest.stat().st_mtime)).days
+                recency_score = max(0, 20 - model_age_days)  # Up to 20 points for recent models
+                score += recency_score
+
+                # Factor 3: Training quality (more timesteps = better training)
+                training_config_file = latest / "training_config.json"
+                if training_config_file.exists():
+                    try:
+                        with open(training_config_file, 'r') as f:
+                            config = json.load(f)
+                            timesteps = config.get('total_timesteps', 0)
+                            # Give points for longer training (up to 20 points)
+                            if timesteps >= 300000:
+                                score += 20
+                            elif timesteps >= 100000:
+                                score += 10
+                            elif timesteps >= 50000:
+                                score += 5
+                    except Exception as e:
+                        logger.debug(f"Could not load training config for {latest.name}: {e}")
+
+                model_candidates.append({
+                    'agent_type': agent_type,
+                    'path': str(latest),
+                    'score': score,
+                    'age_days': model_age_days
+                })
+
+        if not model_candidates:
+            return None
+
+        # Select model with highest composite score
+        best_candidate = max(model_candidates, key=lambda x: x['score'])
+        logger.info(f"Selected {best_candidate['agent_type']} for {symbol} (score: {best_candidate['score']:.0f}, age: {best_candidate['age_days']}d)")
+
+        return (best_candidate['agent_type'], best_candidate['path'])
 
     def _select_best_stock(self) -> Optional[Tuple[str, str]]:
         """Select best stock from watchlist based on recent performance
@@ -882,18 +938,19 @@ class LiveTradingEngine:
         try:
             from ..tools.portfolio_manager import portfolio_manager
 
+            # Minimum performance improvement required to justify rotation (2%)
+            MIN_PERFORMANCE_IMPROVEMENT_PCT = 2.0
+
             watchlist = portfolio_manager.load_portfolio("default")
             if not watchlist:
                 logger.warning("No stocks in watchlist for auto-selection")
                 return None
 
-            # Evaluate all watchlist stocks
+            # Evaluate all watchlist stocks (including current symbol)
             stock_scores = []
-            for symbol in watchlist:
-                # Skip current symbol to rotate
-                if symbol == self.config.symbol:
-                    continue
+            current_symbol_performance = None
 
+            for symbol in watchlist:
                 # Check if model exists
                 model_info = self._find_best_model_for_symbol(symbol)
                 if not model_info:
@@ -911,6 +968,10 @@ class LiveTradingEngine:
                     'performance': performance
                 })
 
+                # Track current symbol's performance
+                if symbol == self.config.symbol:
+                    current_symbol_performance = performance
+
             if not stock_scores:
                 logger.warning("No suitable stocks found for auto-selection")
                 return None
@@ -918,6 +979,19 @@ class LiveTradingEngine:
             # Sort by performance (descending)
             stock_scores.sort(key=lambda x: x['performance'], reverse=True)
             best_stock = stock_scores[0]
+
+            # Only rotate if the best stock is significantly better than current stock
+            if current_symbol_performance is not None:
+                performance_diff = best_stock['performance'] - current_symbol_performance
+
+                if best_stock['symbol'] == self.config.symbol:
+                    # Current stock is still the best, no rotation needed
+                    logger.info(f"Auto-select: {self.config.symbol} remains the best with {current_symbol_performance:.2f}% recent return")
+                    return None
+                elif performance_diff < MIN_PERFORMANCE_IMPROVEMENT_PCT:
+                    # Not enough improvement to justify rotation
+                    logger.info(f"Auto-select: {best_stock['symbol']} is only {performance_diff:.2f}% better than {self.config.symbol} (threshold: {MIN_PERFORMANCE_IMPROVEMENT_PCT}%), staying with current stock")
+                    return None
 
             logger.info(f"Auto-select: {best_stock['symbol']} ({best_stock['algorithm']}) with {best_stock['performance']:.2f}% recent return")
 
@@ -932,6 +1006,15 @@ class LiveTradingEngine:
         try:
             logger.info(f"{self.session.session_id} - Rotating from {self.config.symbol} to {symbol}")
 
+            # Extract model name from agent_path
+            from pathlib import Path
+            agent_path_obj = Path(agent_path)
+            # Handle different path formats
+            if agent_path_obj.is_file() or agent_path_obj.name in ['ensemble', 'ppo', 'recurrent_ppo']:
+                model_name = agent_path_obj.parent.name
+            else:
+                model_name = agent_path_obj.name
+
             # Update config
             self.config.symbol = symbol
             self.config.agent_path = agent_path
@@ -945,14 +1028,18 @@ class LiveTradingEngine:
             # Reinitialize market stream
             self.market_stream = MarketDataStream(self.config)
 
-            # Add event
-            self.session.add_event("STOCK_ROTATION", f"Rotated to {symbol}")
+            # Update rotation tracking
+            self.session.last_rotation_time = datetime.now()
+            self.session.cycles_since_rotation = 0
 
-            logger.info(f"{self.session.session_id} - Successfully rotated to {symbol}")
+            # Add event with model name (don't use _add_event here as we want the NEW symbol shown)
+            self.session.add_event("STOCK_ROTATION", f"Rotated to {symbol} ({model_name})")
+
+            logger.info(f"{self.session.session_id} - Successfully rotated to {symbol} with {model_name}")
 
         except Exception as e:
             logger.error(f"Failed to rotate to {symbol}: {e}")
-            self.session.add_event("ROTATION_FAILED", f"Failed to rotate to {symbol}: {str(e)}")
+            self._add_event("ROTATION_FAILED", f"Failed to rotate to {symbol}: {str(e)}")
 
     def trading_cycle(self) -> Dict:
         """Single iteration of trading logic"""
@@ -981,7 +1068,7 @@ class LiveTradingEngine:
 
             if risk_status.halt:
                 self.session.status = TradingStatus.HALTED
-                self.session.add_event("HALT", risk_status.reason)
+                self._add_event("HALT", risk_status.reason)
                 self._is_running = False
                 logger.error(f"{self.session.session_id} - {risk_status.reason}")
                 return {
@@ -1009,23 +1096,46 @@ class LiveTradingEngine:
             current_shares = current_position.shares if current_position else 0
 
             # Auto-select stock rotation: if enabled and position is 0, consider rotating to better stock
+            # Only rotate after giving current stock enough time (minimum 10 cycles or 10 minutes)
+            MIN_CYCLES_BEFORE_ROTATION = 10
+            MIN_MINUTES_BEFORE_ROTATION = 10
+
             if self.config.auto_select_stock and current_shares == 0:
-                logger.info(f"{self.session.session_id} - Auto-select mode: Position is 0, checking for better stock...")
-                best_stock = self._select_best_stock()
+                # Increment cycle counter
+                self.session.cycles_since_rotation += 1
 
-                if best_stock:
-                    new_symbol, new_agent_path = best_stock
-                    if new_symbol != self.config.symbol:
-                        # Rotate to new stock
-                        self._rotate_to_stock(new_symbol, new_agent_path)
+                # Check if enough time has passed
+                cycles_elapsed = self.session.cycles_since_rotation
+                time_elapsed_minutes = 0
+                if self.session.last_rotation_time:
+                    time_elapsed_minutes = (datetime.now() - self.session.last_rotation_time).total_seconds() / 60
 
-                        # Return early to allow next cycle to trade the new stock
-                        return {
-                            "status": "stock_rotated",
-                            "new_symbol": new_symbol,
-                            "portfolio_value": self.portfolio.total_value,
-                            "timestamp": tick.timestamp.isoformat()
-                        }
+                can_rotate = (cycles_elapsed >= MIN_CYCLES_BEFORE_ROTATION or
+                             time_elapsed_minutes >= MIN_MINUTES_BEFORE_ROTATION)
+
+                if can_rotate:
+                    logger.info(f"{self.session.session_id} - Auto-select mode: Position is 0 for {cycles_elapsed} cycles, checking for better stock...")
+                    best_stock = self._select_best_stock()
+
+                    if best_stock:
+                        new_symbol, new_agent_path = best_stock
+                        if new_symbol != self.config.symbol:
+                            # Rotate to new stock
+                            self._rotate_to_stock(new_symbol, new_agent_path)
+
+                            # Return early to allow next cycle to trade the new stock
+                            return {
+                                "status": "stock_rotated",
+                                "new_symbol": new_symbol,
+                                "portfolio_value": self.portfolio.total_value,
+                                "timestamp": tick.timestamp.isoformat()
+                            }
+                else:
+                    logger.debug(f"{self.session.session_id} - Auto-select: Position is 0 but only {cycles_elapsed} cycles since rotation, waiting...")
+            else:
+                # Reset counter if we have a position
+                if current_shares > 0:
+                    self.session.cycles_since_rotation = 0
 
             # Get action mask from environment
             action_mask = self.env.action_masker.get_action_mask(
@@ -1057,7 +1167,7 @@ class LiveTradingEngine:
             # Check if predicted action is valid according to mask
             if action_mask[int(action)] == 0.0:
                 logger.warning(f"{self.session.session_id} - Agent predicted invalid action: {action_name}, defaulting to HOLD")
-                self.session.add_event("ACTION_MASKED", f"Agent predicted {action_name} but action is invalid, using HOLD")
+                self._add_event("ACTION_MASKED", f"Agent predicted {action_name} but action is invalid, using HOLD")
                 action = ImprovedTradingAction.HOLD
                 action_name = 'HOLD'
 
@@ -1109,7 +1219,7 @@ class LiveTradingEngine:
                 # Skip if no shares to trade
                 if shares == 0:
                     reason = f"Calculated trade size is 0 shares for {action_name}"
-                    self.session.add_event("ORDER_SKIPPED", reason)
+                    self._add_event("ORDER_SKIPPED", reason)
                     logger.info(f"{self.session.session_id} - ⚠️ Order skipped: {reason}")
                     return {
                         "status": "no_trade",
@@ -1138,7 +1248,7 @@ class LiveTradingEngine:
 
                 if order_risk_status.approved and self.order_executor.validate(order, self.portfolio):
                     trade = self.order_executor.execute(order, self.portfolio)
-                    self.session.add_event("TRADE", f"{trade.action.name} {trade.shares} @ ${trade.price:.2f}")
+                    self._add_event("TRADE", f"{trade.action.name} {trade.shares} @ ${trade.price:.2f}")
                     logger.info(f"{self.session.session_id} - ✅ Trade executed: {trade.action.name} {trade.shares} shares @ ${trade.price:.2f}, P&L: ${trade.pnl:+.2f}")
 
                     return {
@@ -1149,7 +1259,7 @@ class LiveTradingEngine:
                     }
                 else:
                     reason = order_risk_status.reason or "Order validation failed"
-                    self.session.add_event("ORDER_REJECTED", reason)
+                    self._add_event("ORDER_REJECTED", reason)
                     logger.warning(f"{self.session.session_id} - ❌ Order rejected: {reason}")
                     return {
                         "status": "order_rejected",
@@ -1168,7 +1278,7 @@ class LiveTradingEngine:
 
         except Exception as e:
             logger.error(f"{self.session.session_id} - Error in trading cycle: {e}")
-            self.session.add_event("ERROR", str(e))
+            self._add_event("ERROR", str(e))
             return {"status": "error", "message": str(e)}
 
     def _build_observation(self, tick: MarketTick) -> np.ndarray:
