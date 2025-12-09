@@ -55,6 +55,11 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 ### 🔴 Live Trading Simulation
 - **Paper Trading** with real-time market data (Yahoo Finance)
 - **Trained Agent Execution** using PPO, RecurrentPPO, or Ensemble models
+- **Auto Stock Selection** dynamically rotates to best performing stocks
+  - Evaluates watchlist stocks when position is 0
+  - Selects highest recent return percentage
+  - Automatically chooses best algorithm for each stock
+  - Maximizes capital efficiency across portfolio
 - **Persistent Sessions** automatically save and resume
   - Portfolio state preserved
   - Trade history maintained
