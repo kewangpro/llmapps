@@ -71,6 +71,14 @@ class LiveTradingPage(pn.viewable.Viewer):
                 session_id = self.session_manager.get_session_summary()[selected_index]['session_id']
                 self._select_session(session_id)
 
+    def _on_auto_select_toggle(self, event):
+        """Handle Auto Select Stock checkbox toggle - disable/enable Symbol and Algorithm inputs."""
+        auto_select_enabled = event.new
+        # When auto-select is enabled, disable Symbol and Algorithm inputs
+        # When disabled, enable them back
+        self.symbol_input.disabled = auto_select_enabled
+        self.agent_type.disabled = auto_select_enabled
+
     def _find_latest_model(self, symbol: str, agent_type: str = None) -> Optional[Dict[str, Any]]:
         """Find the most recently trained model for a symbol and agent type."""
         models_dir = Path("data/models/rl")
@@ -215,10 +223,11 @@ class LiveTradingPage(pn.viewable.Viewer):
             width=120
         )
 
-        self.allow_extended_hours_input = pn.widgets.Checkbox(
-            name='Allow Extended Hours',
+        self.auto_select_stock_input = pn.widgets.Checkbox(
+            name='Auto Select Stock (rotate stocks for max returns)',
             value=False
         )
+        self.auto_select_stock_input.param.watch(self._on_auto_select_toggle, 'value')
 
         # Create button
         self.create_session_btn = pn.widgets.Button(
@@ -261,7 +270,7 @@ class LiveTradingPage(pn.viewable.Viewer):
                 sizing_mode='stretch_width'
             ),
             pn.Row(
-                self.allow_extended_hours_input,
+                self.auto_select_stock_input,
                 pn.Spacer(width=20),
                 self.create_session_btn,
                 margin=(10, 0, 0, 0)
@@ -301,7 +310,7 @@ class LiveTradingPage(pn.viewable.Viewer):
                 max_position_size=self.max_position_input.value,
                 stop_loss_pct=self.stop_loss_input.value,
                 update_interval=60,
-                allow_extended_hours=self.allow_extended_hours_input.value
+                auto_select_stock=self.auto_select_stock_input.value
             )
 
             # Create session via manager (session_id is auto-generated)
@@ -871,9 +880,17 @@ class LiveTradingPage(pn.viewable.Viewer):
 
                 button_row = pn.Row(view_btn, action_btn, sizing_mode='fixed')
 
+                # Add auto-select indicator
+                auto_select = summary.get('auto_select', False)
+                mode_badge = ""
+                if auto_select:
+                    mode_badge = f"<span style='background: {Colors.ACCENT_CYAN}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 6px;'>AUTO</span>"
+
+                symbol_html = f"<div>{summary['symbol']}{mode_badge}</div>"
+
                 rows.append(pn.Row(
                     pn.pane.HTML(f"<div>{summary['session_id']}</div>", width=250),
-                    pn.pane.HTML(f"<div>{summary['symbol']}</div>", width=80),
+                    pn.pane.HTML(symbol_html, width=100),
                     pn.pane.HTML(f"<div>{model_name}</div>", width=300),
                     pn.pane.HTML(f"<div>{summary['status']}</div>", width=100),
                     button_row,
@@ -883,7 +900,7 @@ class LiveTradingPage(pn.viewable.Viewer):
 
             header = pn.Row(
                 pn.pane.HTML("<b>Session ID</b>", width=250),
-                pn.pane.HTML("<b>Symbol</b>", width=80),
+                pn.pane.HTML("<b>Symbol</b>", width=100),
                 pn.pane.HTML("<b>Model Name</b>", width=300),
                 pn.pane.HTML("<b>Status</b>", width=100),
                 pn.pane.HTML("<b>Actions</b>", width=180, align='center'),
