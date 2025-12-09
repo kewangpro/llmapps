@@ -56,17 +56,20 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 - **Paper Trading** with real-time market data (Yahoo Finance)
 - **Trained Agent Execution** using PPO, RecurrentPPO, or Ensemble models
 - **Auto Stock Selection** dynamically rotates to best performing stocks
-  - Evaluates watchlist stocks when position is 0
-  - Selects highest recent return percentage
-  - Automatically chooses best algorithm for each stock
+  - Intelligent model selection using composite scoring (algorithm type, recency, training quality)
+  - Evaluates watchlist stocks based on 5-day performance
+  - Rotation cooldown (10 cycles/10 minutes) to allow fair trading opportunities
+  - Performance threshold (2% improvement) to prevent unnecessary rotation
+  - Automatically selects best-performing algorithm per stock (prioritizes RecurrentPPO)
   - Maximizes capital efficiency across portfolio
 - **Persistent Sessions** automatically save and resume
   - Portfolio state preserved
   - Trade history maintained
   - Configuration retained
+  - Sessions sorted by creation time (newest first)
 - **Real-time Portfolio Tracking** with live P&L updates
 - **Risk Management** (stop-loss, position limits, circuit breakers)
-- **Live Monitoring** with status, positions, and event log
+- **Live Monitoring** with status, positions, and event log showing symbol-prefixed events
 - **Educational Platform** for safe strategy testing
 
 ![Live Trading Screenshot](docs/screenshots/live_trade.png)
