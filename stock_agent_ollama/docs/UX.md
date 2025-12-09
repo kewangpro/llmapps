@@ -242,19 +242,20 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 │ Create New Session                                              │
 │ Symbol: [AAPL ▼] Algorithm: [PPO ▼]                           │
 │ Capital: [$100,000] Max Pos: [80%] Stop Loss: [5%]            │
-│ [☐ Allow Extended Hours]  [Create & Start Session]            │
+│ [☐ Auto Select Stock (rotate stocks for max returns)]         │
+│ [Create & Start Session]                                       │
 └─────────────────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────────────────┐
 │ Dashboard Card (Purple Gradient Header)                         │
-│ Total Sessions: 3    Running: 1                                │
+│ Total Sessions: 3    Running: 2                                │
 │ Total Portfolio Value: $350,278.57                             │
 │ Aggregate P&L: $+278.57 (+0.08%)                               │
 ├─────────────────────────────────────────────────────────────────┤
 │ Sessions Table                                                  │
-│ Session ID         Symbol  Model Name      Status   Actions    │
-│ SESSION_AAPL_...   AAPL    ppo_AAPL_...    running  [View][Stop]│
-│ SESSION_GOOGL_...  GOOGL   ppo_GOOGL_...   stopped  [View][Start]│
-│ SESSION_TEAM_...   TEAM    ppo_TEAM_...    stopped  [View][Start]│
+│ Session ID           Symbol      Model Name      Status Actions│
+│ SESSION_AUTO_...     NVDA AUTO   ens_NVDA_...    running [View][Stop]│
+│ SESSION_AAPL_...     AAPL        ppo_AAPL_...    running [View][Stop]│
+│ SESSION_GOOGL_...    GOOGL       ppo_GOOGL_...   stopped [View][Start]│
 └─────────────────────────────────────────────────────────────────┘
 ─────────────────────────────────────────────────────────────────
 ┌─────────────────────────────────────────────────────────────────┐
@@ -281,13 +282,16 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 **Features:**
 
 **A. Session Creation Panel**
-- Symbol input with autocomplete (accepts any valid ticker)
-- Algorithm selection (PPO/RecurrentPPO/DQN/QRDQN) - auto-finds latest trained model
+- Symbol input with autocomplete (accepts any valid ticker, disabled when auto-select enabled)
+- Algorithm selection (PPO/RecurrentPPO/Ensemble, disabled when auto-select enabled)
 - Initial capital input ($10,000-$1,000,000)
 - Max position % (percentage of portfolio, 5-100%, default 80%)
 - Stop-loss percentage (1-20%)
-- Extended hours trading toggle
-- Creates timestamped session (SESSION_SYMBOL_YYYYMMDD_HHMMSS)
+- Auto Select Stock checkbox - enables dynamic stock rotation
+  - When checked: Symbol and Algorithm inputs become disabled
+  - System automatically selects best performing watchlist stocks
+  - Creates session ID: SESSION_AUTO_YYYYMMDD_HHMMSS
+- Manual mode creates session ID: SESSION_SYMBOL_YYYYMMDD_HHMMSS
 
 **B. Dashboard Card** (Multi-Session Overview)
 - **Aggregate Metrics** (purple gradient header):
@@ -296,7 +300,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
   - Combined portfolio value across all sessions
   - Aggregate P&L (sum of all sessions)
 - **Sessions Table**:
-  - Session ID, Symbol, Model name
+  - Session ID, Symbol (with cyan "AUTO" badge for auto-select sessions), Model name
   - Status (running/stopped/paused)
   - View/Start/Stop buttons per session
 - **Updates every 5 seconds** with live prices
@@ -307,7 +311,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 - **Portfolio Card**: Total value, cash, trades count, P&L with live updates
 - **Positions Table**: Current holdings with real-time prices and unrealized P&L
 - **Recent Trades**: Last 10 trades with timestamps, actions, prices, P&L
-- **Event Log**: Last 15 events (SESSION_START, TRADE, HOLD, ORDER_REJECTED, SESSION_END)
+- **Event Log**: Last 15 events (SESSION_START, TRADE, HOLD, ORDER_REJECTED, STOCK_ROTATION, SESSION_END)
 
 **D. Real-Time Updates**
 - Position prices update every 5 seconds with current market data

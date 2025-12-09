@@ -172,6 +172,12 @@ The live trading session is **persistent**. You can stop the application and res
    - **Initial Capital**: Starting balance ($100,000 default)
    - **Max Position %**: Maximum position (80% default)
    - **Stop Loss**: Auto stop-loss percentage (5% default)
+   - **Auto Select Stock**: Enable to dynamically rotate between watchlist stocks
+     - When enabled, Symbol and Algorithm inputs are disabled
+     - System evaluates watchlist stocks when position reaches 0
+     - Automatically selects best performing stock (5-day return %)
+     - Chooses optimal algorithm (prefers Ensemble > RecurrentPPO > PPO)
+     - Maximizes capital efficiency by trading strongest performers
 3. Click **"Create & Start Session"**
 4. Monitor real-time updates
 
@@ -186,7 +192,7 @@ The live trading session is **persistent**. You can stop the application and res
 - **Portfolio Summary**: Total value, cash, invested, P&L
 - **Current Positions**: Holdings with unrealized P&L
 - **Recent Trades**: Trade history with agent decisions
-- **Event Log**: System events and notifications
+- **Event Log**: System events and notifications (includes stock rotation events for auto-select sessions)
 
 **Controls:**
 - **Pause**: Suspend trading (keep positions open)
@@ -202,9 +208,11 @@ The live trading session is **persistent**. You can stop the application and res
 - ⚠️ **Paper trading only** - No real money involved
 - Uses real-time Yahoo Finance data (1-minute delayed)
 - Trading cycle runs every 60 seconds
-- Requires trained RL model for the selected symbol
+- Requires trained RL model for the selected symbol (or watchlist stocks for auto-select mode)
 - Sessions auto-save every 5 minutes and on stop
 - Session state persists across application restarts
+- Session IDs: `SESSION_AUTO_*` for auto-select, `SESSION_SYMBOL_*` for manual
+- Auto-select sessions display cyan "AUTO" badge next to symbol in session table
 - Educational purpose only
 
 ---

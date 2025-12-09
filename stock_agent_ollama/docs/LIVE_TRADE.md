@@ -247,11 +247,14 @@ The trading environment includes advanced risk management components:
 - When the application starts, it checks for saved session files and loads them if found.
 
 **State Files:**
-- Location: `data/live_sessions/SESSION_SYMBOL_YYYYMMDD_HHMMSS.json`
+- Location: `data/live_sessions/SESSION_*.json`
+- Session ID formats:
+  - Manual mode: `SESSION_SYMBOL_YYYYMMDD_HHMMSS.json` (e.g., `SESSION_AAPL_20251208_210831.json`)
+  - Auto-select mode: `SESSION_AUTO_YYYYMMDD_HHMMSS.json` (e.g., `SESSION_AUTO_20251208_211108.json`)
 - Format: JSON with complete session state including:
-  - Configuration (symbol, algorithm, position limits, stop loss)
+  - Configuration (symbol, algorithm, position limits, stop loss, auto_select_stock flag)
   - Portfolio (cash, positions, trades history)
-  - Session metadata (start time, status, events)
+  - Session metadata (start time, status, events including stock rotations)
 - Multi-session support: Multiple sessions can be saved and resumed independently
 
 **Risk Controls:**
@@ -304,13 +307,48 @@ class TradingHours:
     market_open: time = time(9, 30)  # 9:30 AM
     market_close: time = time(16, 0)  # 4:00 PM
 
-    # Avoid first/last minutes
-    avoid_first_minutes: int = 15
-    avoid_last_minutes: int = 15
-
     # Trading days only
     trading_days: List[str] = ['MON', 'TUE', 'WED', 'THU', 'FRI']
 ```
+
+---
+
+## Auto Stock Selection
+
+**Purpose:** Dynamically rotate trading between watchlist stocks to maximize capital efficiency
+
+**How It Works:**
+
+1. **Position Monitoring**: When position reaches 0 (fully sold), system evaluates rotation opportunity
+2. **Stock Evaluation**: Analyzes all watchlist stocks for recent performance (5-day return %)
+3. **Model Selection**: Finds best available trained model for each stock (prefers Ensemble > RecurrentPPO > PPO)
+4. **Rotation Decision**: Selects stock with highest recent return percentage
+5. **Agent Reload**: Automatically loads new stock's best model and reinitializes environment
+6. **Event Logging**: Records rotation in session event log
+
+**Configuration:**
+```python
+config = LiveTradingConfig(
+    auto_select_stock=True,  # Enable auto-rotation
+    # Symbol and agent_path are dynamically updated
+)
+```
+
+**Session Identification:**
+- Auto-select sessions use ID format: `SESSION_AUTO_YYYYMMDD_HHMMSS`
+- Manual sessions use format: `SESSION_SYMBOL_YYYYMMDD_HHMMSS`
+- Auto-select sessions display cyan "AUTO" badge in session table
+
+**Benefits:**
+- Maximizes capital efficiency by always trading strongest performers
+- No manual intervention required
+- Automatically adapts to changing market conditions
+- Leverages entire watchlist for opportunities
+
+**Requirements:**
+- Trained models must exist for watchlist stocks
+- Watchlist must contain at least 2 stocks
+- Regular market hours only (9:30 AM - 4:00 PM ET)
 
 ---
 
@@ -434,8 +472,8 @@ class TradingSession:
 @dataclass
 class LiveTradingConfig:
     # Agent
+    symbol: str
     agent_path: str
-    agent_type: str  # 'ppo', 'recurrent_ppo', 'dqn', or 'qrdqn'
 
     # Portfolio
     initial_capital: float = 100000.0
@@ -444,19 +482,18 @@ class LiveTradingConfig:
 
     # Execution
     poll_interval: int = 60  # seconds
-    market_hours_only: bool = True
+    enforce_trading_hours: bool = True
+    auto_select_stock: bool = False  # Dynamically rotate between best stocks
 
     # Risk Management
-    position_stop_loss: float = -0.05
-    portfolio_stop_loss: float = -0.10
-    max_position_size: float = 0.80
-    max_exposure: float = 0.80
-    min_cash: float = 0.20
+    stop_loss_pct: float = 5.0  # 5% stop loss
+    max_position_size: float = 80.0  # Max 80% of portfolio
+    max_portfolio_risk_pct: float = 2.0  # Max 2% portfolio risk per trade
+    max_daily_loss_pct: float = 10.0  # 10% max daily loss (circuit breaker)
 
-    # Circuit Breakers
-    daily_loss_limit: float = -0.05
-    rapid_loss_threshold: float = -0.02
-    cooldown_period: int = 300
+    # Session
+    session_id: Optional[str] = None
+    commission_per_trade: float = 0.0
 ```
 
 ### 3. Trade Record
