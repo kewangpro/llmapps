@@ -188,11 +188,11 @@ The live trading session is **persistent**. You can stop the application and res
 4. You can continue trading or stop the session
 
 **Live Trading Dashboard:**
-- **Trading Status**: Session status, runtime, last update
+- **Trading Status**: Session status with AUTO badge for auto-select mode, runtime, last update
 - **Portfolio Summary**: Total value, cash, invested, P&L
 - **Current Positions**: Holdings with unrealized P&L
 - **Recent Trades**: Trade history with agent decisions
-- **Event Log**: System events and notifications (includes stock rotation events for auto-select sessions)
+- **Event Log**: System events with symbol prefixes for auto-select (e.g., `[HOOD] Agent predicted SELL_ALL...`), includes rotation events with model names (e.g., `Rotated to HOOD (recurrent_ppo_HOOD_20251203_103214)`)
 
 **Controls:**
 - **Pause**: Suspend trading (keep positions open)
@@ -211,6 +211,7 @@ The live trading session is **persistent**. You can stop the application and res
 - Requires trained RL model for the selected symbol (or watchlist stocks for auto-select mode)
 - Sessions auto-save every 5 minutes and on stop
 - Session state persists across application restarts
+- Sessions displayed in chronological order (newest first) for easy access
 - Session IDs: `SESSION_AUTO_*` for auto-select, `SESSION_SYMBOL_*` for manual
 - Auto-select sessions display cyan "AUTO" badge next to symbol in session table
 - Educational purpose only

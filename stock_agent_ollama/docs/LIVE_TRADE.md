@@ -256,6 +256,7 @@ The trading environment includes advanced risk management components:
   - Portfolio (cash, positions, trades history)
   - Session metadata (start time, status, events including stock rotations)
 - Multi-session support: Multiple sessions can be saved and resumed independently
+- Session display: Sessions sorted by creation time (newest first) in UI
 
 **Risk Controls:**
 
@@ -320,11 +321,15 @@ class TradingHours:
 **How It Works:**
 
 1. **Position Monitoring**: When position reaches 0 (fully sold), system evaluates rotation opportunity
-2. **Stock Evaluation**: Analyzes all watchlist stocks for recent performance (5-day return %)
-3. **Model Selection**: Finds best available trained model for each stock (prefers Ensemble > RecurrentPPO > PPO)
-4. **Rotation Decision**: Selects stock with highest recent return percentage
-5. **Agent Reload**: Automatically loads new stock's best model and reinitializes environment
-6. **Event Logging**: Records rotation in session event log
+2. **Rotation Cooldown**: Waits minimum 10 cycles or 10 minutes before considering rotation (prevents premature switching)
+3. **Stock Evaluation**: Analyzes all watchlist stocks including current symbol for recent performance (5-day return %)
+4. **Model Selection**: Uses intelligent composite scoring to find best model per stock:
+   - Algorithm preference: RecurrentPPO (100 pts) > PPO (80 pts) > Ensemble (60 pts)
+   - Model recency: Up to 20 points for recent models (decreases by 1 pt/day)
+   - Training quality: Up to 20 points based on timesteps (300k+ = 20 pts, 100k+ = 10 pts)
+5. **Rotation Decision**: Only rotates if new stock is 2% better than current (prevents ping-pong effect)
+6. **Agent Reload**: Automatically loads new stock's best model and reinitializes environment
+7. **Event Logging**: Records rotation with model name in session event log
 
 **Configuration:**
 ```python
@@ -344,11 +349,19 @@ config = LiveTradingConfig(
 - No manual intervention required
 - Automatically adapts to changing market conditions
 - Leverages entire watchlist for opportunities
+- Intelligent cooldown prevents excessive rotation
+- Performance threshold ensures meaningful switches
+- Prioritizes RecurrentPPO models for better temporal pattern recognition
 
 **Requirements:**
 - Trained models must exist for watchlist stocks
 - Watchlist must contain at least 2 stocks
 - Regular market hours only (9:30 AM - 4:00 PM ET)
+
+**Event Logging:**
+- All events prefixed with symbol name (e.g., `[HOOD] Agent predicted SELL_ALL...`)
+- Rotation events show model name (e.g., `Rotated to HOOD (recurrent_ppo_HOOD_20251203_103214)`)
+- Provides clear audit trail for multi-stock trading
 
 ---
 

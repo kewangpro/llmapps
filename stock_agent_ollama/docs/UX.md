@@ -302,16 +302,17 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 - **Sessions Table**:
   - Session ID, Symbol (with cyan "AUTO" badge for auto-select sessions), Model name
   - Status (running/stopped/paused)
+  - Sessions sorted by creation time (newest first)
   - View/Start/Stop buttons per session
 - **Updates every 5 seconds** with live prices
 - **Smart updates** on button clicks (no page refresh/scroll)
 
 **C. Active Session Details** (Below Dashboard)
-- **Session Status Card**: Status, symbol, runtime, session ID
+- **Session Status Card**: Status, symbol with AUTO badge for auto-select mode, runtime, session ID
 - **Portfolio Card**: Total value, cash, trades count, P&L with live updates
 - **Positions Table**: Current holdings with real-time prices and unrealized P&L
 - **Recent Trades**: Last 10 trades with timestamps, actions, prices, P&L
-- **Event Log**: Last 15 events (SESSION_START, TRADE, HOLD, ORDER_REJECTED, STOCK_ROTATION, SESSION_END)
+- **Event Log**: Last 15 events with symbol prefixes for auto-select sessions, rotation events include model names (SESSION_START, TRADE, HOLD, ORDER_REJECTED, STOCK_ROTATION, SESSION_END)
 
 **D. Real-Time Updates**
 - Position prices update every 5 seconds with current market data
