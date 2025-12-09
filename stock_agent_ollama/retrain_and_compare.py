@@ -106,6 +106,8 @@ def train_model(symbol: str, agent_type: str, total_timesteps: int = 300000) -> 
         raise
 
 
+
+
 def find_latest_model(symbol: str, agent_type: str) -> Path:
     """
     Find the most recently trained model.
@@ -150,7 +152,7 @@ def find_latest_model(symbol: str, agent_type: str) -> Path:
 
 def run_comprehensive_backtest(symbol: str, include_baselines: bool = True) -> dict:
     """
-    Run backtest on all available models.
+    Run backtest on all available models and save results.
 
     Args:
         symbol: Stock symbol
@@ -207,6 +209,9 @@ def run_comprehensive_backtest(symbol: str, include_baselines: bool = True) -> d
             # Store result
             display_name = agent_type.upper().replace('_', ' ')
             results[f"{display_name} Agent"] = result
+
+            # Save backtest results to model directory for auto-select to use
+            result.save_to_model_dir(model_path, agent_type)
 
             print(f"   ✅ {display_name}: {result.metrics.total_return_pct:+.2f}%")
 
