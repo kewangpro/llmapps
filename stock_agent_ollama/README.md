@@ -57,7 +57,7 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 - **Trained Agent Execution** using PPO, RecurrentPPO, or Ensemble models
 - **Auto Stock Selection** dynamically rotates to best performing stocks
   - Intelligent model selection using composite scoring (algorithm type, recency, training quality)
-  - Evaluates watchlist stocks based on 5-day performance
+  - Prioritizes agent backtest performance, falls back to 5-day price performance
   - Rotation cooldown (10 cycles/10 minutes) to allow fair trading opportunities
   - Performance threshold (2% improvement) to prevent unnecessary rotation
   - Automatically selects best-performing algorithm per stock (prioritizes RecurrentPPO)
@@ -280,6 +280,12 @@ python retrain_and_compare.py --symbol AAPL
 # Train specific algorithms on multiple stocks
 python retrain_and_compare.py --symbol AMZN,AAPL,META --algorithms ensemble
 
+# Train all algorithms on watchlist stocks
+python retrain_and_compare.py --watchlist
+
+# Train only Ensemble on watchlist
+python retrain_and_compare.py --watchlist --algorithms ensemble
+
 # Train only PPO and Ensemble
 python retrain_and_compare.py --symbol TSLA --algorithms ppo,ensemble
 
@@ -292,6 +298,7 @@ python retrain_and_compare.py --symbol NVDA --no-baselines
 
 **Options:**
 - `--symbol`: Single stock or comma-separated list (e.g., `AAPL` or `AAPL,TSLA,NVDA`)
+- `--watchlist`: Train on all symbols from default watchlist (mutually exclusive with `--symbol`)
 - `--algorithms`: Comma-separated list of `ppo`, `recurrent_ppo`, `ensemble` (default: all)
 - `--timesteps`: Training steps (default: 300,000)
 - `--skip-training`: Only run backtest on existing models

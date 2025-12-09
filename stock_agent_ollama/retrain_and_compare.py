@@ -3,16 +3,19 @@
 RL Model Retraining and Comparison Script
 
 Usage:
-    python retrain_and_compare.py --symbol SYMBOL [options]
+    python retrain_and_compare.py (--symbol SYMBOL | --watchlist) [options]
 
 Options:
-    --symbol SYMBOL         Stock symbol(s) to train on - single or comma-separated list (required)
+    --symbol SYMBOL         Stock symbol(s) to train on - single or comma-separated list
+    --watchlist             Train on all symbols from default watchlist
     --algorithms ALG1,ALG2  Comma-separated list of algorithms to train
                            (options: ppo, recurrent_ppo, ensemble)
                            (default: all)
     --timesteps N          Training timesteps (default: 300000)
     --skip-training        Skip training, only run backtest
     --no-baselines         Skip baseline strategies in backtest
+
+Note: Either --symbol or --watchlist is required
 
 Examples:
     # Retrain all algorithms on TSLA
@@ -23,6 +26,12 @@ Examples:
 
     # Retrain ensemble on multiple stocks
     python retrain_and_compare.py --symbol AMZN,AAPL,META --algorithms ensemble
+
+    # Retrain all watchlist symbols with all algorithms
+    python retrain_and_compare.py --watchlist
+
+    # Retrain watchlist with ensemble only
+    python retrain_and_compare.py --watchlist --algorithms ensemble
 
     # Only backtest existing models for NVDA
     python retrain_and_compare.py --symbol NVDA --skip-training
@@ -42,6 +51,7 @@ from src.rl import EnhancedRLTrainer, EnhancedTrainingConfig
 from src.rl import BacktestEngine, BacktestConfig
 from src.rl.baselines import BuyHoldStrategy, MomentumStrategy
 from src.rl.model_utils import load_rl_agent, load_env_config_from_model
+from src.tools.portfolio_manager import portfolio_manager
 import pandas as pd
 
 logging.basicConfig(
@@ -339,11 +349,19 @@ def parse_arguments():
         epilog=__doc__
     )
 
-    parser.add_argument(
+    # Create mutually exclusive group for symbol/watchlist
+    symbol_group = parser.add_mutually_exclusive_group(required=True)
+
+    symbol_group.add_argument(
         '--symbol',
         type=str,
-        required=True,
         help='Stock symbol(s) to train on - single symbol or comma-separated list (e.g., AAPL or AAPL,TSLA,NVDA)'
+    )
+
+    symbol_group.add_argument(
+        '--watchlist',
+        action='store_true',
+        help='Train on all symbols from default watchlist (data/portfolios/default.json)'
     )
 
     parser.add_argument(
@@ -385,10 +403,19 @@ def main():
     print("#" + " "*78 + "#")
     print(f"{'#'*80}\n")
 
-    # Parse symbols (support comma-separated list)
-    symbols = [s.strip().upper() for s in args.symbol.split(',')]
+    # Determine symbols to process
+    if args.watchlist:
+        # Load symbols from watchlist
+        symbols = portfolio_manager.load_portfolio("default")
+        if not symbols:
+            print("❌ Error: Watchlist is empty or not found")
+            sys.exit(1)
+        print(f"Using watchlist symbols: {', '.join(symbols)}")
+    else:
+        # Parse symbols from --symbol argument (support comma-separated list)
+        symbols = [s.strip().upper() for s in args.symbol.split(',')]
+        print(f"Symbol(s): {', '.join(symbols)}")
 
-    print(f"Symbol(s): {', '.join(symbols)}")
     print(f"Timesteps: {args.timesteps:,}")
 
     # Define supported algorithms
