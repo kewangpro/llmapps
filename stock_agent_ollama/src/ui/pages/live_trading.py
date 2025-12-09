@@ -576,6 +576,7 @@ class LiveTradingPage(pn.viewable.Viewer):
                     <p style='color: {Colors.TEXT_MUTED}; font-size: 12px; margin-bottom: 5px;'>Symbol</p>
                     <p style='color: {Colors.TEXT_PRIMARY}; font-size: 18px; font-weight: 600; margin: 0; font-family: {Typography.FONT_PRIMARY};'>
                         {engine.config.symbol}
+                        {'<span style="background: ' + Colors.ACCENT_CYAN + '; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 8px;">AUTO</span>' if engine.config.auto_select_stock else ''}
                     </p>
                 </div>
                 <div>
@@ -863,8 +864,14 @@ class LiveTradingPage(pn.viewable.Viewer):
                 model_name = "N/A"
                 if 'agent_path' in summary and summary['agent_path']:
                     agent_path = Path(summary['agent_path'])
-                    # Get parent directory name (e.g., "ppo_AAPL_20251107")
-                    model_name = agent_path.parent.name
+                    # Handle different path formats:
+                    # - File: .../ppo_SYMBOL_DATE/final_model.zip -> use parent name
+                    # - Ensemble subdir: .../ensemble_SYMBOL_DATE/ensemble -> use parent name
+                    # - Directory: .../ppo_SYMBOL_DATE -> use directory name
+                    if agent_path.is_file() or agent_path.name in ['ensemble', 'ppo', 'recurrent_ppo']:
+                        model_name = agent_path.parent.name
+                    else:
+                        model_name = agent_path.name
                 elif 'model_name' in summary:
                     model_name = summary['model_name']
 
