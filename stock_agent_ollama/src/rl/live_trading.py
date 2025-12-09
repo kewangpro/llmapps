@@ -932,11 +932,13 @@ class LiveTradingEngine:
         return (best_candidate['agent_type'], best_candidate['path'])
 
     def _select_best_stock(self) -> Optional[Tuple[str, str]]:
-        """Select best stock from watchlist based on recent performance
+        """Select best stock from watchlist based on agent backtest performance (prioritized) or stock price performance (fallback)
         Returns: (symbol, agent_path) or None
         """
         try:
             from ..tools.portfolio_manager import portfolio_manager
+            from pathlib import Path
+            import json
 
             # Minimum performance improvement required to justify rotation (2%)
             MIN_PERFORMANCE_IMPROVEMENT_PCT = 2.0
@@ -956,21 +958,43 @@ class LiveTradingEngine:
                 if not model_info:
                     continue
 
-                # Evaluate recent performance
-                performance = self._evaluate_stock_performance(symbol, days=5)
-                if performance is None:
-                    continue
+                agent_type, agent_path = model_info
+
+                # Try to load backtest results (prioritized)
+                backtest_performance = None
+                backtest_file = Path(agent_path) / "backtest_results.json"
+
+                if backtest_file.exists():
+                    try:
+                        with open(backtest_file, 'r') as f:
+                            backtest_data = json.load(f)
+                            # Use total return as performance metric
+                            backtest_performance = backtest_data.get('total_return_pct', None)
+                            if backtest_performance is not None:
+                                logger.debug(f"Loaded backtest performance for {symbol}: {backtest_performance:.2f}%")
+                    except Exception as e:
+                        logger.debug(f"Could not load backtest results for {symbol}: {e}")
+
+                # Fallback to stock price performance if no backtest
+                if backtest_performance is None:
+                    backtest_performance = self._evaluate_stock_performance(symbol, days=5)
+                    if backtest_performance is None:
+                        continue
+                    logger.debug(f"Using 5-day price performance for {symbol}: {backtest_performance:.2f}%")
+                else:
+                    logger.debug(f"Using backtest performance for {symbol}: {backtest_performance:.2f}%")
 
                 stock_scores.append({
                     'symbol': symbol,
-                    'algorithm': model_info[0],
-                    'agent_path': model_info[1],
-                    'performance': performance
+                    'algorithm': agent_type,
+                    'agent_path': agent_path,
+                    'performance': backtest_performance,
+                    'using_backtest': backtest_file.exists()
                 })
 
                 # Track current symbol's performance
                 if symbol == self.config.symbol:
-                    current_symbol_performance = performance
+                    current_symbol_performance = backtest_performance
 
             if not stock_scores:
                 logger.warning("No suitable stocks found for auto-selection")
@@ -986,14 +1010,16 @@ class LiveTradingEngine:
 
                 if best_stock['symbol'] == self.config.symbol:
                     # Current stock is still the best, no rotation needed
-                    logger.info(f"Auto-select: {self.config.symbol} remains the best with {current_symbol_performance:.2f}% recent return")
+                    perf_type = "backtest" if best_stock['using_backtest'] else "5-day"
+                    logger.info(f"Auto-select: {self.config.symbol} remains the best with {current_symbol_performance:.2f}% {perf_type} performance")
                     return None
                 elif performance_diff < MIN_PERFORMANCE_IMPROVEMENT_PCT:
                     # Not enough improvement to justify rotation
                     logger.info(f"Auto-select: {best_stock['symbol']} is only {performance_diff:.2f}% better than {self.config.symbol} (threshold: {MIN_PERFORMANCE_IMPROVEMENT_PCT}%), staying with current stock")
                     return None
 
-            logger.info(f"Auto-select: {best_stock['symbol']} ({best_stock['algorithm']}) with {best_stock['performance']:.2f}% recent return")
+            perf_type = "backtest" if best_stock['using_backtest'] else "5-day"
+            logger.info(f"Auto-select: {best_stock['symbol']} ({best_stock['algorithm']}) with {best_stock['performance']:.2f}% {perf_type} performance")
 
             return (best_stock['symbol'], best_stock['agent_path'])
 
