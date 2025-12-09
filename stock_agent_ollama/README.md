@@ -80,6 +80,7 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 - **RL Agents** with training dates and algorithm types
 - **Batch Backtesting** with checkbox selection for multiple models
 - **Model Management** with automatic discovery and organization
+- **Chronological Ordering** with newest models displayed first for both LSTM and RL agents
 
 ![Model Registry Screenshot](docs/screenshots/models.png)
 *Model registry with LSTM and RL agent listings, batch backtesting with checkbox selection*
