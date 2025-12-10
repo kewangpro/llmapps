@@ -21,7 +21,7 @@ This RL trading system provides advanced reinforcement learning capabilities for
 - ✅ **RL Agents**: PPO, RecurrentPPO, Ensemble via Stable-Baselines3 and sb3-contrib
 - ✅ **RecurrentPPO**: LSTM memory with trend indicators for temporal patterns
 - ✅ **Trend Indicators**: SMA_Trend, EMA_Crossover, Price_Momentum (RecurrentPPO only)
-- ✅ **Action Masking**: Prevents invalid trades
+- ✅ **Action Masking**: Prevents invalid trades with penalty-based learning
 - ✅ **6-Action Space**: HOLD, BUY_SMALL/MEDIUM/LARGE, SELL_PARTIAL/ALL
 - ✅ **Adaptive Position Sizing**: Adjusts to volatility and portfolio state
 - ✅ **Algorithm-Specific Rewards**: Optimized per algorithm
@@ -116,21 +116,29 @@ src/config.py                   # RL configuration
 
 **Shape**: `(lookback_window, num_features)`
 **Default**:
-- `(60, 10)` - PPO, Ensemble (base features)
+- `(60, 10)` - PPO, Ensemble (base + technical)
 - `(60, 13)` - RecurrentPPO with trend indicators
+- `(60, 26)` - EnhancedTradingEnv with improved actions + regime + MTF
 
-**Base Features (10)**:
+**Base Features (5)**:
 - Price (normalized)
 - Volume (normalized)
 - Cash ratio
 - Position ratio
 - Portfolio value change
-- Technical indicators: RSI, MACD, MACD Signal, Bollinger Bands, Stochastic
+
+**Technical Indicators (5)**:
+- RSI, MACD, MACD Signal, Bollinger Bands, Stochastic
 
 **Trend Indicators (3 - RecurrentPPO only)**:
 - SMA_Trend: 5-day slope of 20-period SMA
 - EMA_Crossover: (EMA12 - EMA26) / EMA26
 - Price_Momentum: 5-day rate of change
+
+**Invalid Action Handling**:
+- Agents are penalized for predicting invalid actions (e.g., BUY with no cash)
+- Strong penalty (-0.1 reward) encourages learning constraints naturally
+- Action masking is applied during execution to prevent invalid trades, but masks are NOT included in the observation space to avoid feature bloat
 
 #### Action Space
 
@@ -216,11 +224,11 @@ src/config.py                   # RL configuration
 - Saves both component models plus ensemble metadata
 
 **Observation Space Handling**:
-- PPO expects `(60, 23)` features (base + technical + regime + MTF)
-- RecurrentPPO expects `(60, 26)` features (base + technical + trend + regime + MTF)
+- PPO expects base features (e.g., base + technical + regime + MTF)
+- RecurrentPPO expects base features + trend indicators
 - Ensemble intelligently routes observations:
-  - When receiving 26 features: strips last 3 (trend indicators) for PPO, keeps all 26 for RecurrentPPO
-  - When receiving 23 features: passes same observation to both models
+  - When receiving observations with trend indicators: strips them for PPO, keeps them for RecurrentPPO
+  - When receiving base observations: passes same observation to both models
 - This allows heterogeneous observation spaces within a single ensemble
 
 **Reward Config**: Uses `PPORewardConfig` for PPO component and `RecurrentPPORewardConfig` for RecurrentPPO component

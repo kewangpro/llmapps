@@ -351,8 +351,16 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 
 **Purpose: Simple stock price tracker**
 
+**Layout:**
+1. **Top Movers Suggestions**: Horizontal scrollable list of 8 high-momentum stocks (30-day max returns)
+2. **Watchlist Table**: Real-time price tracking table
+
 **Single Table View:**
 ```
+┌─────────────────────────────────────────────────────────────────┐
+│ 🔥 Top Movers (30-Day)                                          │
+│ [NVDA +15%] [MSTR +12%] [COIN +8%] ...                          │
+└─────────────────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────────────────┐
 │ [Enter symbol...                    ] [+ Add to Watchlist]      │
 ├──────┬──────┬────────┬────────────────┬─────────┬──────┬────────┤
@@ -365,6 +373,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 ```
 
 **Features:**
+- **Smart Suggestions**: Automatically finds top 8 performers from popular stocks (30-day return)
 - Add symbols using input field
 - Remove symbols with "×" button
 - Real-time price updates

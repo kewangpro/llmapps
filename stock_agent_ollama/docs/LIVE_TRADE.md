@@ -117,15 +117,17 @@ class ObservationBuilder:
         - Price features (normalized returns, volatility)
         - Technical indicators (RSI, MACD, BB)
         - Position info (holdings, cash ratio)
-        - LSTM features (if enabled)
+        - LSTM features (if enabled for RecurrentPPO)
         """
 ```
 
-**Action Mapping:**
-- **0:** SELL (liquidate position)
-- **1:** HOLD (maintain current position)
-- **2:** BUY_SMALL (invest 10% of capital)
-- **3:** BUY_LARGE (invest 30% of capital)
+**Action Mapping (6-Action Space):**
+- **0:** HOLD (maintain current position)
+- **1:** BUY_SMALL (invest ~15% of capital)
+- **2:** BUY_MEDIUM (invest ~30% of capital)
+- **3:** BUY_LARGE (invest ~50% of capital)
+- **4:** SELL_PARTIAL (sell 50% of position)
+- **5:** SELL_ALL (liquidate entire position)
 
 ---
 

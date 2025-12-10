@@ -131,8 +131,9 @@ The platform features a professional light-theme interface with 6 main pages:
   - `final_model.zip`: End-of-training
 
 **Always Enabled:**
-- Action Masking: Prevents invalid trades
+- Action Masking: Prevents invalid trades via penalty-based learning
 - 6-Action Space: HOLD, BUY_SMALL/MEDIUM/LARGE, SELL_PARTIAL/ALL
+- Agents see which actions are valid in real-time for smarter decision-making
 
 ### Running Backtests
 
@@ -260,7 +261,13 @@ The live trading session is **persistent**. You can stop the application and res
 
 ## 📋 Watchlist Page
 
-**Purpose**: Simple stock price tracker
+**Purpose**: Simple stock price tracker with smart suggestions
+
+**Features:**
+- **Top Movers Suggestions**: Automatically finds and displays 8 high-momentum stocks (30-day max returns) above the watchlist
+- **Real-time Tracking**: Monitor current prices, daily changes, and volume
+- **Compact Table**: View key metrics (Price, Change, 52W Range, Market Cap)
+- **Easy Management**: Add/remove symbols with a single click
 
 **Single Table View:**
 - Compact table with Symbol, Price, Change, 52W Range, Volume, Market Cap
