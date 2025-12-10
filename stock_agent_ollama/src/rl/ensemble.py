@@ -83,6 +83,78 @@ class EnsemblePPOAgent:
         """
         return self.recurrent_ppo.observation_space
 
+    def _adjust_observation_for_ppo(self, observation: np.ndarray) -> np.ndarray:
+        """
+        Adjust observation for PPO model if it expects fewer features (e.g. no trend indicators or masks).
+        """
+        if not hasattr(self.ppo, 'observation_space'):
+            return observation
+            
+        ppo_features = self.ppo.observation_space.shape[-1]
+        input_features = observation.shape[-1]
+        
+        if input_features == ppo_features:
+            return observation
+            
+        # Case 1: Input has Trend(3) but PPO doesn't want it (32 -> 29)
+        if input_features == ppo_features + 3:
+            try:
+                if observation.ndim > 1:
+                    return np.concatenate([observation[..., :10], observation[..., 13:]], axis=-1)
+                else:
+                    return np.concatenate([observation[:10], observation[13:]])
+            except Exception as e:
+                logger.warning(f"Error slicing observation for PPO (Case 1): {e}")
+
+        # Case 2: Input has Trend(3) + Mask(6) but PPO wants neither (32 -> 23)
+        if input_features == 32 and ppo_features == 23:
+            try:
+                if observation.ndim > 1:
+                    return np.concatenate([observation[..., :10], observation[..., 13:26]], axis=-1)
+                else:
+                    return np.concatenate([observation[:10], observation[13:26]])
+            except Exception as e:
+                logger.warning(f"Error slicing observation for PPO (Case 2): {e}")
+
+        # Case 3: Input has Mask(6) but PPO doesn't want it (29 -> 23 or 32 -> 26 if Trend matched)
+        if input_features == ppo_features + 6:
+            try:
+                if observation.ndim > 1:
+                    return observation[..., :-6]
+                else:
+                    return observation[:-6]
+            except Exception as e:
+                logger.warning(f"Error slicing observation for PPO (Case 3): {e}")
+
+        logger.warning(f"PPO Obs shape mismatch: Input {observation.shape}, Expects {self.ppo.observation_space.shape}. Using full.")
+        return observation
+
+    def _adjust_observation_for_recurrent_ppo(self, observation: np.ndarray) -> np.ndarray:
+        """
+        Adjust observation for RecurrentPPO model if it expects fewer features (e.g. no masks).
+        """
+        if not hasattr(self.recurrent_ppo, 'observation_space'):
+            return observation
+            
+        rppo_features = self.recurrent_ppo.observation_space.shape[-1]
+        input_features = observation.shape[-1]
+        
+        if input_features == rppo_features:
+            return observation
+            
+        # Case 1: Input has Mask(6) but RPPO doesn't want it (e.g., 32 -> 26)
+        if input_features == rppo_features + 6:
+            try:
+                if observation.ndim > 1:
+                    return observation[..., :-6]
+                else:
+                    return observation[:-6]
+            except Exception as e:
+                logger.warning(f"Error slicing observation for RPPO (Case 1): {e}")
+
+        logger.warning(f"RPPO Obs shape mismatch: Input {observation.shape}, Expects {self.recurrent_ppo.observation_space.shape}. Using full.")
+        return observation
+
     def predict(
         self,
         observation: np.ndarray,
@@ -104,30 +176,17 @@ class EnsemblePPOAgent:
         """
         self.predictions_count += 1
 
-        # Handle different observation spaces for each model
-        # RecurrentPPO expects (60, 26) with trend indicators
-        # PPO expects (60, 23) without trend indicators
+        # Adjust observations for each model's expected input space
+        rppo_obs = self._adjust_observation_for_recurrent_ppo(observation)
+        ppo_obs = self._adjust_observation_for_ppo(observation)
 
-        # Check feature dimension (last dimension) to determine if slicing is needed
-        if observation.shape[-1] == 26:
-            # Has trend indicators (26 features)
-            # PPO needs (..., 23) - remove last 3 trend features
-            # RecurrentPPO needs (..., 26) - keep all features
-            ppo_obs = observation[..., :23]
-            rppo_obs = observation
-        else:
-            # No trend indicators or other shape
-            # Assume both models can handle it or it matches PPO's expectation
-            ppo_obs = observation
-            rppo_obs = observation
-
-        # Get PPO prediction (with reduced observation if needed)
+        # Get PPO prediction
         ppo_action, _ = self.ppo.predict(
             ppo_obs,
             deterministic=deterministic
         )
 
-        # Get RecurrentPPO prediction (with full observation)
+        # Get RecurrentPPO prediction
         rppo_action, new_state = self.recurrent_ppo.predict(
             rppo_obs,
             state=state,
@@ -136,7 +195,6 @@ class EnsemblePPOAgent:
         )
 
         # Extract scalar actions
-        # Handle different numpy array shapes (scalar, 0-d, 1-d arrays)
         if isinstance(ppo_action, np.ndarray):
             ppo_action_val = int(ppo_action.item() if ppo_action.ndim == 0 else ppo_action[0])
         else:

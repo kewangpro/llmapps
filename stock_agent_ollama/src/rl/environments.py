@@ -588,6 +588,54 @@ class SingleStockTradingEnv(BaseTradingEnv):
 
         return observation
 
+    def _calculate_action_mask(self, current_price: float, portfolio_value: float, max_position_pct: float = 80.0) -> np.ndarray:
+        """
+        Calculate binary mask of valid actions (1=valid, 0=invalid).
+
+        Args:
+            current_price: Current stock price
+            portfolio_value: Total portfolio value
+            max_position_pct: Max position as % of portfolio value
+
+        Returns:
+            Binary mask array [SELL, HOLD, BUY_SMALL, BUY_LARGE]
+        """
+        mask = np.ones(len(TradingAction), dtype=np.float32)
+
+        # Can't sell if no position
+        if self.position == 0:
+            mask[TradingAction.SELL] = 0.0
+
+        # Check if can buy at least 1 share
+        min_buy_cost = current_price * 1.01  # Include small buffer for costs
+
+        # BUY_SMALL (10% of cash)
+        buy_small_amount = self.cash * 0.1
+        if buy_small_amount < min_buy_cost:
+            mask[TradingAction.BUY_SMALL] = 0.0
+        else:
+            # Check percentage limit
+            shares_small = int(buy_small_amount / current_price)
+            new_position_value = (self.position + shares_small) * current_price
+            if (new_position_value / portfolio_value * 100) > max_position_pct:
+                mask[TradingAction.BUY_SMALL] = 0.0
+
+        # BUY_LARGE (30% of cash)
+        buy_large_amount = self.cash * 0.3
+        if buy_large_amount < min_buy_cost:
+            mask[TradingAction.BUY_LARGE] = 0.0
+        else:
+            # Check percentage limit
+            shares_large = int(buy_large_amount / current_price)
+            new_position_value = (self.position + shares_large) * current_price
+            if (new_position_value / portfolio_value * 100) > max_position_pct:
+                mask[TradingAction.BUY_LARGE] = 0.0
+
+        # Ensure at least HOLD is always valid
+        mask[TradingAction.HOLD] = 1.0
+
+        return mask
+
     def _get_info(self) -> Dict[str, Any]:
         """Get additional info for the current step."""
         current_idx = self.current_step + self.lookback_window
@@ -618,6 +666,24 @@ class SingleStockTradingEnv(BaseTradingEnv):
         current_price = self.original_close[current_idx]
         prev_price = self.original_close[current_idx - 1] if current_idx > 0 else current_price
 
+        # Check if action was valid (for penalty)
+        portfolio_value = self._calculate_portfolio_value(current_price)
+
+        # Use appropriate action mask (handle both 4-action and 6-action spaces)
+        # For EnhancedTradingEnv with improved actions, action_masker will be used
+        if hasattr(self, 'action_masker') and self.action_masker is not None:
+            action_mask = self.action_masker.get_action_mask(
+                cash=self.cash,
+                position=self.position,
+                current_price=current_price,
+                portfolio_value=portfolio_value,
+                max_position_pct=80.0
+            )
+        else:
+            action_mask = self._calculate_action_mask(current_price, portfolio_value)
+
+        action_was_invalid = (action_mask[action] == 0.0)
+
         # Execute action
         trade_info = self._execute_action(action, current_price)
 
@@ -640,6 +706,10 @@ class SingleStockTradingEnv(BaseTradingEnv):
             price=current_price,
             prev_price=prev_price
         )
+
+        # Penalty for predicting invalid actions to teach agent to use action masks
+        if action_was_invalid:
+            reward -= 0.1  # Stronger penalty (-10%) to force agent to respect constraints
 
         # Record action
         self.actions_taken.append(action)
@@ -887,18 +957,18 @@ class EnhancedTradingEnv(SingleStockTradingEnv):
 
     def _get_observation(self) -> np.ndarray:
         """
-        Override parent to add regime and MTF features.
+        Override parent to add regime, MTF, and action mask features.
         """
-        # Get base observation from parent
+        # Get base observation from parent (already includes action mask for standard actions)
         base_obs = super()._get_observation()
-
-        # If no new features, return base
-        if not self.use_regime_detector and not self.use_mtf_features:
-            return base_obs
 
         # Get data window
         start_idx = self.current_step
         end_idx = self.current_step + self.lookback_window
+
+        # Get current portfolio state for action masking
+        current_price = self.original_close[end_idx - 1]
+        portfolio_value = self._calculate_portfolio_value(current_price)
 
         additional_features = []
 

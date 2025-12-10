@@ -6,11 +6,116 @@ and live trading.
 """
 
 from pathlib import Path
-from typing import Any, Optional, Dict
+from typing import Any, Optional, Dict, Tuple
 import json
 import logging
+import numpy as np
 
 logger = logging.getLogger(__name__)
+
+
+class CompatibilityAgent:
+    """
+    Wrapper for SB3 agents to handle observation mismatches (e.g., extra features like masks/trend).
+    Dynamically slices input observations to match the agent's expected observation space.
+    """
+    def __init__(self, agent: Any):
+        self.agent = agent
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.agent, name)
+
+    def predict(
+        self,
+        observation: np.ndarray,
+        state: Optional[Tuple[np.ndarray, ...]] = None,
+        episode_start: Optional[np.ndarray] = None,
+        deterministic: bool = False,
+    ) -> Tuple[np.ndarray, Optional[Tuple[np.ndarray, ...]]]:
+        """
+        Predict action with observation adjustment.
+        """
+        if hasattr(self.agent, 'observation_space'):
+            expected_features = self.agent.observation_space.shape[-1]
+            input_features = observation.shape[-1]
+
+            if input_features > expected_features:
+                # Slicing logic (matches EnsemblePPOAgent logic)
+                
+                # Case 1: Input has Trend(3) but Agent doesn't want it (e.g., 32 -> 29)
+                if input_features == expected_features + 3:
+                    try:
+                        if observation.ndim > 1:
+                            observation = np.concatenate([observation[..., :10], observation[..., 13:]], axis=-1)
+                        else:
+                            observation = np.concatenate([observation[:10], observation[13:]])
+                    except Exception:
+                        pass # Fallback to full obs if slice fails
+
+                # Case 2: Input has Trend(3) + Mask(6) but Agent wants neither (32 -> 23)
+                elif input_features == 32 and expected_features == 23:
+                    try:
+                        if observation.ndim > 1:
+                            observation = np.concatenate([observation[..., :10], observation[..., 13:26]], axis=-1)
+                        else:
+                            observation = np.concatenate([observation[:10], observation[13:26]])
+                    except Exception:
+                        pass
+
+                # Case 3: Input has Mask(6) but Agent doesn't want it (e.g., 29 -> 23 or 32 -> 26)
+                elif input_features == expected_features + 6:
+                    try:
+                        if observation.ndim > 1:
+                            observation = observation[..., :-6]
+                        else:
+                            observation = observation[:-6]
+                    except Exception:
+                        pass
+        
+        return self.agent.predict(observation, state, episode_start, deterministic)
+
+
+def load_vec_normalize(model_path: Path, env: Any) -> Any:
+    """
+    Load VecNormalize statistics and wrap environment if available.
+
+    Args:
+        model_path: Path to model file or directory
+        env: The environment to wrap
+
+    Returns:
+        Wrapped environment (VecNormalize) or original environment
+    """
+    from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
+
+    model_path = Path(model_path)
+    if model_path.is_file():
+        model_dir = model_path.parent
+    else:
+        model_dir = model_path
+
+    # Check for vec_normalize.pkl
+    vec_path = model_dir / "vec_normalize.pkl"
+    
+    # Check in parent if not found (for ensemble subdirs)
+    if not vec_path.exists():
+        vec_path = model_dir.parent / "vec_normalize.pkl"
+
+    if vec_path.exists():
+        try:
+            # VecNormalize requires a VecEnv
+            if not hasattr(env, 'reset'): # Basic check, ideally isinstance(env, VecEnv)
+                 # If it's a Gym env, wrap in DummyVecEnv
+                 env = DummyVecEnv([lambda: env])
+            
+            env = VecNormalize.load(str(vec_path), env)
+            env.training = False  # Disable updating stats during inference
+            env.norm_reward = False  # Disable reward normalization during inference
+            logger.info(f"Loaded VecNormalize stats from {vec_path}")
+        except Exception as e:
+            logger.warning(f"Failed to load VecNormalize stats: {e}")
+    
+    return env
 
 
 def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
@@ -39,16 +144,22 @@ def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
     if not model_path.exists():
         raise FileNotFoundError(f"Model not found: {model_path}")
 
+    # Determine model directory
+    if model_path.is_file():
+        model_dir = model_path.parent
+    else:
+        model_dir = model_path
+
+    # Load VecNormalize stats if available and env provided
+    if env is not None:
+        env = load_vec_normalize(model_path, env)
+
     # Load training config to determine agent type
     # Config is always in the top-level model directory, not in subdirectories
-    if model_path.is_dir():
-        # Check if config is in current dir
-        config_path = model_path / "training_config.json"
-        if not config_path.exists():
-            # If not, check parent (might be in a subdirectory like 'ensemble')
-            config_path = model_path.parent / "training_config.json"
-    else:
-        config_path = model_path.parent / "training_config.json"
+    config_path = model_dir / "training_config.json"
+    if not config_path.exists():
+        # If not, check parent (might be in a subdirectory like 'ensemble')
+        config_path = model_dir.parent / "training_config.json"
 
     agent_type = None
 
@@ -65,6 +176,7 @@ def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
     if agent_type == 'ppo':
         try:
             agent = PPO.load(str(model_path), env=env)
+            agent = CompatibilityAgent(agent)  # Wrap for observation compatibility
             agent.is_trained = True
             logger.info(f"Successfully loaded PPO from {model_path}")
             return agent
@@ -75,6 +187,7 @@ def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
     elif agent_type == 'recurrent_ppo':
         try:
             agent = RecurrentPPO.load(str(model_path), env=env)
+            agent = CompatibilityAgent(agent)  # Wrap for observation compatibility
             agent.is_trained = True
             logger.info(f"Successfully loaded RecurrentPPO from {model_path}")
             return agent
@@ -86,8 +199,7 @@ def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
         try:
             # Load ensemble by loading both component models
             # Expect model_path to be the ensemble directory containing both models
-            model_dir = model_path.parent if model_path.is_file() else model_path
-
+            
             # Check if models are in an 'ensemble' subdirectory (but not if we're already in it)
             if model_dir.name != 'ensemble':
                 ensemble_subdir = model_dir / "ensemble"
@@ -148,6 +260,7 @@ def load_rl_agent(model_path: Path, env: Optional[Any] = None) -> Any:
         ]:
             try:
                 agent = agent_class.load(str(model_path), env=env)
+                agent = CompatibilityAgent(agent)  # Wrap for compatibility
                 agent.is_trained = True
                 logger.info(f"Successfully auto-detected and loaded {agent_name}")
                 return agent

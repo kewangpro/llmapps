@@ -19,6 +19,7 @@ import logging
 import json
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
 from sb3_contrib import RecurrentPPO
 
 from .environments import EnhancedTradingEnv
@@ -197,8 +198,6 @@ class EnhancedRLTrainer:
 
         # Select appropriate reward config based on agent type
         # Algorithm-specific reward configurations:
-        # - DQN: DQNRewardConfig (balanced exploration-exploitation)
-        # - QRDQN: QRDQNRewardConfig (risk-encouraging to counter natural conservatism)
         # - PPO: PPORewardConfig (stronger penalties to fight action collapse)
         # - RecurrentPPO: RecurrentPPORewardConfig (reduced penalties for trend riding)
         if config.reward_config is None or isinstance(config.reward_config, EnhancedRewardConfig):
@@ -208,13 +207,7 @@ class EnhancedRLTrainer:
             elif config.agent_type.lower() == 'ppo':
                 logger.info(f"Using PPORewardConfig for PPO")
                 self.config.reward_config = PPORewardConfig()
-            elif config.agent_type.lower() == 'dqn':
-                logger.info(f"Using DQNRewardConfig for DQN (balanced exploration-exploitation)")
-                self.config.reward_config = DQNRewardConfig()
-            elif config.agent_type.lower() == 'qrdqn':
-                logger.info(f"Using QRDQNRewardConfig for QRDQN (risk-encouraging to counter conservatism)")
-                self.config.reward_config = QRDQNRewardConfig()
-            else:  # Unknown agent type
+            else:  # Unknown agent type or ensemble
                 logger.info(f"Using EnhancedRewardConfig for {config.agent_type.upper()}")
                 if config.reward_config is None:
                     self.config.reward_config = EnhancedRewardConfig()
@@ -283,6 +276,27 @@ class EnhancedRLTrainer:
         """Create RL agent."""
         if self.env is None:
             self.setup_environment()
+
+        # Wrap environment in DummyVecEnv and then VecNormalize
+        # This is crucial for PPO and RecurrentPPO
+        # Only do this if not already wrapped
+        if not isinstance(self.env, DummyVecEnv) and self.config.agent_type.lower() != 'ensemble':
+            env = self.env  # Capture env for lambda
+            self.env = DummyVecEnv([lambda: env]) # Wrap in DummyVecEnv first
+            self.env = VecNormalize(
+                self.env,
+                norm_obs=True,
+                norm_reward=True,
+                clip_obs=10.0,
+                clip_reward=10.0,
+                gamma=self.config.gamma
+            )
+            logger.info("Wrapped environment with DummyVecEnv and VecNormalize (norm_obs=True, norm_reward=True)")
+        elif self.config.agent_type.lower() == 'ensemble':
+            # For ensemble, the individual PPO/RPPO trainers will handle their own VecNormalize
+            # The env for the main trainer will remain unwrapped if not a single agent
+            logger.info("Ensemble mode: Skipping VecNormalize wrapping for main env. Sub-trainers will handle.")
+
 
         # Determine agent type for algorithm-specific settings
         agent_type_lower = self.config.agent_type.lower()
@@ -364,10 +378,19 @@ class EnhancedRLTrainer:
                 verbose=self.config.verbose
             ))
 
-        # Diagnostics
+        # Diagnostics (only works if env has print_diagnostics method)
+        # Note: VecNormalize wraps the env, so we need to access the underlying env
         if self.config.enable_diagnostics:
+            # Unpack env if wrapped
+            actual_env = self.env
+            if isinstance(actual_env, VecNormalize):
+                actual_env = actual_env.venv
+            # DummyVecEnv wraps the actual env
+            if hasattr(actual_env, 'envs'):
+                actual_env = actual_env.envs[0]
+            
             self.callbacks.append(DiagnosticsCallback(
-                env=self.env,
+                env=actual_env,
                 report_freq=10000,
                 verbose=self.config.verbose
             ))
@@ -405,12 +428,27 @@ class EnhancedRLTrainer:
         # Save final model
         final_model_path = self.save_dir / "final_model.zip"
         self.agent.save(str(final_model_path))
+        
+        # Save VecNormalize statistics if used
+        if isinstance(self.env, VecNormalize):
+            vec_normalize_path = self.save_dir / "vec_normalize.pkl"
+            self.env.save(str(vec_normalize_path))
+            logger.info(f"Saved VecNormalize statistics to {vec_normalize_path}")
 
         # Save configuration
         self.save_config()
 
-        # Get diagnostics
-        diagnostics = self.env.get_diagnostics_summary() if self.config.enable_diagnostics else {}
+        # Get diagnostics (access underlying env)
+        diagnostics = {}
+        if self.config.enable_diagnostics:
+            actual_env = self.env
+            if isinstance(actual_env, VecNormalize):
+                actual_env = actual_env.venv
+            if hasattr(actual_env, 'envs'):
+                actual_env = actual_env.envs[0]
+            
+            if hasattr(actual_env, 'get_diagnostics_summary'):
+                diagnostics = actual_env.get_diagnostics_summary()
 
         # Get training stats from progress callback
         progress_callback = None
@@ -448,6 +486,7 @@ class EnhancedRLTrainer:
                 'adaptive_sizing': self.config.use_adaptive_sizing,
                 'improved_actions': self.config.use_improved_actions,
                 'curriculum_learning': self.config.use_curriculum_learning,
+                'vec_normalize': isinstance(self.env, VecNormalize)
             }
         }
 
@@ -487,6 +526,7 @@ class EnhancedRLTrainer:
 
         ppo_model_path = ppo_results['final_model_path']
         # Load without env to preserve the model's original observation space
+        # Note: We need to handle VecNormalize separately for ensemble
         ppo_model = PPO.load(ppo_model_path)
 
         print(f"✅ PPO training complete: {ppo_results['training_time']:.1f}s")
@@ -523,10 +563,19 @@ class EnhancedRLTrainer:
         ensemble_dir = self.save_dir / "ensemble"
         ensemble_dir.mkdir(parents=True, exist_ok=True)
 
-        # Copy models to ensemble directory
+        # Copy models AND VecNormalize stats to ensemble directory
         import shutil
         shutil.copy(ppo_model_path, ensemble_dir / "ppo_best_model.zip")
         shutil.copy(rppo_model_path, ensemble_dir / "recurrent_ppo_best_model.zip")
+        
+        # Copy vec_normalize stats if they exist
+        ppo_vec_path = Path(ppo_results['save_dir']) / "vec_normalize.pkl"
+        if ppo_vec_path.exists():
+            shutil.copy(ppo_vec_path, ensemble_dir / "ppo_vec_normalize.pkl")
+            
+        rppo_vec_path = Path(rppo_results['save_dir']) / "vec_normalize.pkl"
+        if rppo_vec_path.exists():
+            shutil.copy(rppo_vec_path, ensemble_dir / "recurrent_ppo_vec_normalize.pkl")
 
         # Save ensemble config
         ensemble.save(ensemble_dir)
@@ -534,8 +583,8 @@ class EnhancedRLTrainer:
         total_training_time = (datetime.now() - ensemble_start_time).total_seconds()
 
         print(f"\n✅ Ensemble created successfully!")
-        print(f"  PPO Weight: 60%")
-        print(f"  RecurrentPPO Weight: 40%")
+        print(f"  PPO Weight: 30%")
+        print(f"  RecurrentPPO Weight: 70%")
         print(f"  Total Training Time: {total_training_time:.1f}s")
         print(f"  Saved to: {ensemble_dir}")
 
@@ -559,6 +608,7 @@ class EnhancedRLTrainer:
                 'enhanced_rewards': self.config.use_enhanced_rewards,
                 'adaptive_sizing': self.config.use_adaptive_sizing,
                 'improved_actions': self.config.use_improved_actions,
+                'vec_normalize': True
             }
         }
 
@@ -581,6 +631,7 @@ class EnhancedRLTrainer:
         print(f"  ✓ Improved Actions (6-action): {self.config.use_improved_actions}")
         print(f"  ✓ Curriculum Learning: {self.config.use_curriculum_learning}")
         print(f"  ✓ Training Diagnostics: {self.config.enable_diagnostics}")
+        print(f"  ✓ VecNormalize: True (Obs & Reward)")
 
         if self.config.use_curriculum_learning:
             print(f"\n🎓 Curriculum Stages:")
@@ -635,6 +686,7 @@ class EnhancedRLTrainer:
             'use_improved_actions': self.config.use_improved_actions,
             'use_curriculum_learning': self.config.use_curriculum_learning,
             'use_lstm_policy': self.config.use_lstm_policy,
+            'use_vec_normalize': True, # Record usage of VecNormalize
 
             # New improvement flags (Priority 1-5)
             'use_risk_manager': getattr(self.config, 'use_risk_manager', True),

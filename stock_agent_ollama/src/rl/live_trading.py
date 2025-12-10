@@ -686,7 +686,9 @@ class LiveTradingEngine:
             if not agent_path.exists():
                 raise FileNotFoundError(f"Agent not found: {agent_path}")
 
-            # Use centralized loader that handles PPO, RecurrentPPO, SAC, QRDQN
+            # Use centralized loader that handles PPO, RecurrentPPO, Ensemble
+            # Note: We pass None for env here because env is not created yet
+            # We will handle VecNormalize wrapping in setup_environment
             self.agent = load_rl_agent(agent_path, env=None)
             logger.info(f"Successfully loaded agent from {agent_path}")
 
@@ -705,6 +707,7 @@ class LiveTradingEngine:
         from .env_factory import EnvConfig, create_enhanced_env
         from .improvements import EnhancedRewardConfig
         from datetime import datetime, timedelta
+        from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
 
         # Load config from trained model to match training environment
         try:
@@ -727,25 +730,36 @@ class LiveTradingEngine:
             lookback_window = obs_shape[0] if len(obs_shape) > 0 else 60
             expected_features = obs_shape[1] if len(obs_shape) > 1 else 10
 
-            # Infer include_trend_indicators from feature count
-            # Base: 5, Tech: 5, Trend: 3, Regime: 7, MTF: 6
-            # With all enabled: 5 + 5 + 3 + 7 + 6 = 26
-            # Without trend: 5 + 5 + 7 + 6 = 23
+            # Infer configuration from feature count
+            # Feature breakdown:
+            # - Base: 5, Tech: 5, Trend: 3 (optional)
+            # - Regime: 7 (optional), MTF: 6 (optional)
+            # - ActionMask: 4 (old models) or 6 (new models with improved actions)
+
             use_regime = training_config.get('use_regime_detector', True)
             use_mtf = training_config.get('use_mtf_features', True)
+            use_improved = training_config.get('use_improved_actions', True)
 
+            # Calculate expected features based on config
             base_features = 5 + 5  # base + technical
             if use_regime:
                 base_features += 7
             if use_mtf:
                 base_features += 6
 
-            # If we have 3 more features than expected, trend indicators are enabled
-            if expected_features == base_features + 3:
-                include_trend_indicators = True
-                logger.info(f"Detected include_trend_indicators=True from observation shape {obs_shape}")
-            else:
-                logger.info(f"Detected include_trend_indicators=False from observation shape {obs_shape}")
+            # Detect trend indicators from feature count
+            trend_features = 0
+            if use_regime and use_mtf:
+                trend_features = 3
+                if expected_features == base_features + 3:
+                    include_trend_indicators = True
+                    logger.info(f"Detected include_trend_indicators=True from observation shape {obs_shape}")
+                elif expected_features == base_features:
+                    include_trend_indicators = False
+                    logger.info(f"Detected include_trend_indicators=False from observation shape {obs_shape}")
+                else:
+                    logger.warning(f"Unexpected feature count {expected_features}, using config defaults")
+                    include_trend_indicators = training_config.get('include_trend_indicators', False)
         else:
             # Fall back to config
             include_trend_indicators = training_config.get('include_trend_indicators', False)
@@ -784,6 +798,29 @@ class LiveTradingEngine:
 
         # Create environment using shared factory
         self.env = create_enhanced_env(env_config)
+
+        # Wrap with VecNormalize if stats exist
+        # This is critical if the model was trained with normalized observations
+        model_path = Path(self.config.agent_path)
+        if model_path.is_file():
+            model_dir = model_path.parent
+        else:
+            model_dir = model_path
+            
+        vec_path = model_dir / "vec_normalize.pkl"
+        if not vec_path.exists():
+            vec_path = model_dir.parent / "vec_normalize.pkl"
+            
+        if vec_path.exists():
+            try:
+                # Wrap env in DummyVecEnv as required by VecNormalize
+                self.env = DummyVecEnv([lambda: self.env])
+                self.env = VecNormalize.load(str(vec_path), self.env)
+                self.env.training = False  # Critical: Do not update stats during inference
+                self.env.norm_reward = False  # Critical: Do not normalize rewards
+                logger.info(f"Loaded VecNormalize stats from {vec_path}")
+            except Exception as e:
+                logger.warning(f"Failed to load VecNormalize stats: {e}")
 
         logger.info(f"Environment initialized for live trading with training config: "
                    f"costs={env_config.transaction_cost_rate:.4f}, "
@@ -1109,6 +1146,15 @@ class LiveTradingEngine:
 
             # Build observation for agent (simplified - would need proper feature engineering)
             observation = self._build_observation(tick)
+            
+            # Apply VecNormalize if env is wrapped
+            # VecNormalize expects (N, features) and returns (N, features)
+            from stable_baselines3.common.vec_env import VecNormalize
+            if isinstance(self.env, VecNormalize):
+                # Ensure batch dim
+                obs_batch = observation.reshape(1, *observation.shape)
+                norm_obs_batch = self.env.normalize_obs(obs_batch)
+                observation = norm_obs_batch[0] # Remove batch dim
 
             # Initialize environment if not already done
             if self.env is None:
@@ -1163,14 +1209,26 @@ class LiveTradingEngine:
                 if current_shares > 0:
                     self.session.cycles_since_rotation = 0
 
+            # Access underlying environment if wrapped (VecNormalize -> DummyVecEnv -> Env)
+            actual_env = self.env
+            from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
+            if isinstance(actual_env, VecNormalize):
+                actual_env = actual_env.venv
+            if isinstance(actual_env, DummyVecEnv) or hasattr(actual_env, 'envs'):
+                actual_env = actual_env.envs[0]
+
             # Get action mask from environment
-            action_mask = self.env.action_masker.get_action_mask(
-                cash=self.portfolio.cash,
-                position=current_shares,
-                current_price=tick.price,
-                portfolio_value=self.portfolio.total_value,
-                max_position_pct=self.config.max_position_size
-            )
+            if hasattr(actual_env, 'action_masker'):
+                action_mask = actual_env.action_masker.get_action_mask(
+                    cash=self.portfolio.cash,
+                    position=current_shares,
+                    current_price=tick.price,
+                    portfolio_value=self.portfolio.total_value,
+                    max_position_pct=self.config.max_position_size
+                )
+            else:
+                # Fallback to default calculation
+                action_mask = np.ones(6 if getattr(actual_env, 'use_improved_actions', True) else 4)
 
             # Get action from agent
             action, _states = self.agent.predict(observation, deterministic=True)
@@ -1203,11 +1261,14 @@ class LiveTradingEngine:
             if int(action) != ImprovedTradingAction.HOLD:
                 # Calculate shares using adaptive sizing from environment
                 shares = 0
+                
+                # Access adaptive sizer from underlying env
+                adaptive_sizer = getattr(actual_env, 'adaptive_sizer', None)
 
                 if int(action) in [ImprovedTradingAction.BUY_SMALL, ImprovedTradingAction.BUY_MEDIUM, ImprovedTradingAction.BUY_LARGE]:
                     # Use environment's adaptive sizer
-                    if self.env and self.env.adaptive_sizer:
-                        shares = self.env.adaptive_sizer.get_buy_size(
+                    if adaptive_sizer:
+                        shares = adaptive_sizer.get_buy_size(
                             action=int(action),
                             cash=self.portfolio.cash,
                             price=tick.price,
@@ -1220,8 +1281,8 @@ class LiveTradingEngine:
 
                 elif int(action) == ImprovedTradingAction.SELL_PARTIAL:
                     # Sell 50% of position (use environment's logic)
-                    if self.env and self.env.adaptive_sizer:
-                        sell_shares = self.env.adaptive_sizer.get_sell_size(
+                    if adaptive_sizer:
+                        sell_shares = adaptive_sizer.get_sell_size(
                             action=int(action),
                             position=current_shares,
                             use_improved_actions=True
@@ -1232,8 +1293,8 @@ class LiveTradingEngine:
 
                 elif int(action) == ImprovedTradingAction.SELL_ALL:
                     # Sell all (use environment's logic)
-                    if self.env and self.env.adaptive_sizer:
-                        sell_shares = self.env.adaptive_sizer.get_sell_size(
+                    if adaptive_sizer:
+                        sell_shares = adaptive_sizer.get_sell_size(
                             action=int(action),
                             position=current_shares,
                             use_improved_actions=True
@@ -1317,6 +1378,14 @@ class LiveTradingEngine:
             # Initialize environment if not already done to access config
             if self.env is None:
                 self.setup_environment()
+                
+            # Access underlying env configuration if wrapped
+            actual_env = self.env
+            from stable_baselines3.common.vec_env import VecNormalize
+            if isinstance(actual_env, VecNormalize):
+                actual_env = actual_env.venv
+            if hasattr(actual_env, 'envs'):
+                actual_env = actual_env.envs[0]
 
             # Fetch 90 days of historical data to ensure we have enough after calculating indicators
             end_date = datetime.now().strftime("%Y-%m-%d")
@@ -1333,13 +1402,13 @@ class LiveTradingEngine:
 
             # Calculate expected features based on environment config
             expected_features = 5  # base features
-            if self.env.include_technical_indicators:
+            if actual_env.include_technical_indicators:
                 expected_features += 5  # technical indicators
-            if self.env.include_trend_indicators:
+            if actual_env.include_trend_indicators:
                 expected_features += 3  # trend indicators
-            if getattr(self.env, 'use_regime_detector', False):
+            if getattr(actual_env, 'use_regime_detector', False):
                 expected_features += 7  # regime features
-            if getattr(self.env, 'use_mtf_features', False):
+            if getattr(actual_env, 'use_mtf_features', False):
                 expected_features += 6  # MTF features
 
             if hist_data is None or len(hist_data) < 60:
@@ -1369,7 +1438,7 @@ class LiveTradingEngine:
             stochastic = stoch_indicators['stoch_k']
 
             # --- Trend Indicators (for LSTM models) ---
-            if self.env.include_trend_indicators:
+            if actual_env.include_trend_indicators:
                 sma_20 = TechnicalAnalysis.calculate_sma(close, 20)
                 ema_12 = TechnicalAnalysis.calculate_ema(close, 12)
                 ema_26 = TechnicalAnalysis.calculate_ema(close, 26)
@@ -1386,7 +1455,7 @@ class LiveTradingEngine:
             bb_upper = bb_upper.bfill().ffill()
             bb_lower = bb_lower.bfill().ffill()
             stochastic = stochastic.bfill().ffill()
-            if self.env.include_trend_indicators:
+            if actual_env.include_trend_indicators:
                 sma_trend = sma_trend.bfill().ffill()
                 ema_crossover = ema_crossover.bfill().ffill()
                 price_momentum = price_momentum.bfill().ffill()
@@ -1400,7 +1469,7 @@ class LiveTradingEngine:
             bb_upper_last_60 = bb_upper.iloc[-60:].values
             bb_lower_last_60 = bb_lower.iloc[-60:].values
             stochastic_last_60 = stochastic.iloc[-60:].values
-            if self.env.include_trend_indicators:
+            if actual_env.include_trend_indicators:
                 sma_trend_last_60 = sma_trend.iloc[-60:].values
                 ema_crossover_last_60 = ema_crossover.iloc[-60:].values
                 price_momentum_last_60 = price_momentum.iloc[-60:].values
@@ -1446,14 +1515,14 @@ class LiveTradingEngine:
                 stochastic_norm
             ]
 
-            if self.env.include_trend_indicators:
+            if actual_env.include_trend_indicators:
                 sma_trend_norm = np.clip(sma_trend_last_60, -0.1, 0.1) * 10
                 ema_crossover_norm = np.clip(ema_crossover_last_60, -0.2, 0.2) * 5
                 price_momentum_norm = np.clip(price_momentum_last_60, -0.1, 0.1) * 10
                 features.extend([sma_trend_norm, ema_crossover_norm, price_momentum_norm])
 
             # --- Regime Features ---
-            if getattr(self.env, 'use_regime_detector', False):
+            if getattr(actual_env, 'use_regime_detector', False):
                 from ..rl.improvements import RegimeDetector
                 detector = RegimeDetector()
                 regime_features_list = []
@@ -1491,7 +1560,7 @@ class LiveTradingEngine:
                     features.append(regime_features_array[:, feat_idx])
 
             # --- MTF Features ---
-            if getattr(self.env, 'use_mtf_features', False):
+            if getattr(actual_env, 'use_mtf_features', False):
                 from ..rl.improvements import MultiTimeframeFeatures
                 mtf_extractor = MultiTimeframeFeatures()
                 mtf_features_list = []
@@ -1523,13 +1592,23 @@ class LiveTradingEngine:
             logger.error(f"{self.session.session_id} - Error building observation: {e}")
             # Return zeros as fallback - calculate expected features
             expected_features = 5  # base features
-            if hasattr(self, 'env') and self.env:
-                if self.env.include_technical_indicators:
+            
+            # Access underlying env configuration if wrapped
+            actual_env = self.env
+            if self.env:
+                from stable_baselines3.common.vec_env import VecNormalize
+                if isinstance(self.env, VecNormalize):
+                    actual_env = self.env.venv
+                if hasattr(actual_env, 'envs'):
+                    actual_env = actual_env.envs[0]
+            
+            if actual_env:
+                if actual_env.include_technical_indicators:
                     expected_features += 5
-                if self.env.include_trend_indicators:
+                if actual_env.include_trend_indicators:
                     expected_features += 3
-                if getattr(self.env, 'use_regime_detector', False):
+                if getattr(actual_env, 'use_regime_detector', False):
                     expected_features += 7
-                if getattr(self.env, 'use_mtf_features', False):
+                if getattr(actual_env, 'use_mtf_features', False):
                     expected_features += 6
             return np.zeros((60, expected_features), dtype=np.float32)

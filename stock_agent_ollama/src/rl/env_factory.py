@@ -39,7 +39,7 @@ class EnvConfig:
     include_trend_indicators: bool = False  # Trend indicators for RecurrentPPO (SMA_Trend, EMA_Crossover, Price_Momentum)
 
     # Enhancement flags
-    use_action_masking: bool = True
+    use_action_masking: bool = True  # Mask invalid actions (does NOT add to observations)
     use_enhanced_rewards: bool = True
     use_adaptive_sizing: bool = True
     use_improved_actions: bool = True
