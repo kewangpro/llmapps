@@ -10,6 +10,8 @@ import param
 import logging
 import asyncio
 import numpy as np
+import yfinance as yf
+import pandas as pd
 from datetime import datetime, timedelta
 
 from src.tools.portfolio_manager import portfolio_manager
@@ -17,6 +19,13 @@ from src.tools.stock_fetcher import StockFetcher
 from src.ui.design_system import Colors, HTMLComponents, Typography
 
 logger = logging.getLogger(__name__)
+
+# Popular stocks to scan for suggestions
+SUGGESTION_UNIVERSE = [
+    'NVDA', 'MSTR', 'COIN', 'TSLA', 'SMCI', 'PLTR', 'ARM', 'AMD', 'META', 'NFLX',
+    'AVGO', 'CRWD', 'PANW', 'HOOD', 'DKNG', 'AMZN', 'GOOGL', 'MSFT', 'AAPL', 'QQQ',
+    'MARA', 'CLSK', 'CVNA', 'NET', 'DDOG', 'SNOW', 'UBER', 'ABNB', 'SOFI', 'RBLX'
+]
 
 def format_market_cap(mc):
     if mc is None:
@@ -93,9 +102,13 @@ class PortfolioPage(param.Parameterized):
             sizing_mode="stretch_width"
         )
 
+        # Suggestions container
+        self.suggestions_container = pn.Column(sizing_mode="stretch_width")
+
         return pn.Column(
             pn.Column(
                 input_row,
+                self.suggestions_container,
                 self.quick_view_container,
                 styles=dict(
                     background=Colors.BG_SECONDARY,
@@ -106,6 +119,139 @@ class PortfolioPage(param.Parameterized):
             ),
             sizing_mode="stretch_width"
         )
+
+    async def _update_suggestions(self):
+        """Fetch and display suggested high-momentum stocks"""
+        self.suggestions_container.clear()
+        
+        # Show loading state
+        self.suggestions_container.append(
+            pn.pane.HTML("<div style='color: gray; font-style: italic; margin-top: 10px; margin-bottom: 10px;'>Scanning market for top performers...</div>")
+        )
+        
+        try:
+            # Fetch data for universe
+            tickers = " ".join(SUGGESTION_UNIVERSE)
+            
+            # Fetch 1 month of history to calculate momentum
+            # Use threads to avoid blocking UI
+            data = await asyncio.to_thread(
+                yf.download, 
+                tickers=tickers, 
+                period="1mo", 
+                interval="1d", 
+                group_by='ticker', 
+                progress=False,
+                threads=True
+            )
+            
+            performance = []
+            
+            for symbol in SUGGESTION_UNIVERSE:
+                try:
+                    # Handle multi-index columns from yfinance
+                    if len(SUGGESTION_UNIVERSE) > 1:
+                        df = data[symbol]
+                    else:
+                        df = data
+                        
+                    if df.empty or len(df) < 2:
+                        continue
+                    
+                    # Get Close column only
+                    if 'Close' in df.columns:
+                        closes = df['Close']
+                    else:
+                        continue
+
+                    start_price = float(closes.iloc[0])
+                    end_price = float(closes.iloc[-1])
+                    
+                    if start_price > 0:
+                        pct_change = ((end_price - start_price) / start_price) * 100
+                        performance.append({
+                            'symbol': symbol,
+                            'return': pct_change,
+                            'price': end_price
+                        })
+                except Exception as e:
+                    logger.debug(f"Error processing {symbol}: {e}")
+                    continue
+            
+            # Sort by return (descending) and take top 8
+            performance.sort(key=lambda x: x['return'], reverse=True)
+            top_performers = performance[:8]
+            
+            # Build UI
+            cards = []
+            for item in top_performers:
+                symbol = item['symbol']
+                ret = item['return']
+                price = item['price']
+                
+                # Check if already in watchlist
+                is_added = symbol in self.quick_view_symbols
+                
+                # Create a small card
+                # Note: We use a closure for the callback to capture the loop variable correctly
+                btn = pn.widgets.Button(
+                    name="Add" if not is_added else "Added",
+                    button_type="primary" if not is_added else "light", 
+                    sizing_mode="stretch_width",
+                    height=30,
+                    disabled=is_added
+                )
+                
+                # Bind click event
+                def make_handler(s):
+                    return lambda e: self._add_suggestion_to_watchlist(s)
+                
+                btn.on_click(make_handler(symbol))
+
+                card = pn.Column(
+                    pn.pane.HTML(f"""
+                        <div style='text-align: center;'>
+                            <div style='font-weight: bold; color: {Colors.ACCENT_PURPLE};'>{symbol}</div>
+                            <div style='font-size: 0.8rem; color: {Colors.TEXT_PRIMARY};'>${price:.2f}</div>
+                            <div style='color: {Colors.SUCCESS_GREEN}; font-weight: bold; font-size: 0.8rem;'>+{ret:.1f}%</div>
+                        </div>
+                    """),
+                    btn,
+                    styles=dict(
+                        background="white", 
+                        border=f"1px solid {Colors.BORDER_SUBTLE}",
+                        border_radius="6px",
+                        padding="8px",
+                        box_shadow="0 2px 4px rgba(0,0,0,0.05)"
+                    ),
+                    width=110,
+                    margin=(0, 10, 10, 0)
+                )
+                cards.append(card)
+            
+            # Update container
+            self.suggestions_container.clear()
+            
+            header = pn.pane.HTML(f"""
+                <div style='margin-top: 15px; margin-bottom: 10px; color: {Colors.TEXT_SECONDARY}; font-weight: 600; font-size: 0.9rem;'>
+                    🔥 Top Movers (30-Day) &mdash; Potential High Returns
+                </div>
+            """)
+            
+            # Add horizontal scroll container
+            self.suggestions_container.append(header)
+            self.suggestions_container.append(pn.Row(*cards, scroll=True, sizing_mode="stretch_width", height=110, margin=(0,0,20,0)))
+            
+        except Exception as e:
+            logger.error(f"Error fetching suggestions: {e}")
+            self.suggestions_container.clear()
+
+    def _add_suggestion_to_watchlist(self, symbol):
+        """Add a suggested stock to watchlist"""
+        self.quick_view_input.value = symbol
+        self._add_to_quick_view(None)
+        # Refresh suggestions UI to update button state
+        asyncio.create_task(self._update_suggestions())
 
     async def _refresh_quick_view(self):
         """Refresh quick view with real-time data"""
@@ -281,6 +427,7 @@ class PortfolioPage(param.Parameterized):
     async def _initial_load(self):
         """Initial load of watchlist"""
         await self._refresh_quick_view()
+        await self._update_suggestions()
 
     def get_view(self):
         """Get the watchlist view."""
