@@ -4,7 +4,7 @@ import time
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union
 import logging
 
 from src.config import Config
@@ -114,9 +114,9 @@ class StockFetcher:
 
             # Use start/end dates if provided, otherwise use period
             if start_date and end_date:
-                data = ticker.history(start=start_date, end=end_date, interval=interval)
+                data = ticker.history(start=start_date, end=end_date, interval=interval, auto_adjust=True)
             else:
-                data = ticker.history(period=period, interval=interval)
+                data = ticker.history(period=period, interval=interval, auto_adjust=True)
             
             if data.empty:
                 raise ValueError(f"No data found for symbol {validated_symbol}")
@@ -139,33 +139,137 @@ class StockFetcher:
             raise
     
     def get_real_time_price(self, symbol: str) -> Dict[str, Any]:
-        """Get current price and basic info"""
+        """Get current price and basic info, bypassing cache for real-time data"""
         try:
             # Validate and sanitize the symbol
             validated_symbol = self._validate_symbol(symbol)
 
+            # Create a fresh ticker instance to bypass yfinance caching
             ticker = yf.Ticker(validated_symbol)
-            info = ticker.info
 
-            current_price = info.get('currentPrice') or info.get('regularMarketPrice')
-            if current_price is None:
-                # Fallback to latest close from history
-                data = self.fetch_stock_data(validated_symbol, period="5d", interval="1d")
-                current_price = data['Close'].iloc[-1] if not data.empty else None
+            # Use history with 1-minute interval for most recent data
+            # This is more reliable than .info which caches heavily
+            hist = ticker.history(period='1d', interval='1m', auto_adjust=True)
+
+            if hist.empty:
+                # Fallback to daily data
+                hist = ticker.history(period='1d', interval='1d', auto_adjust=True)
+
+            if hist.empty:
+                 # Fallback to info if history is empty (though unlikely if symbol is valid)
+                 info = ticker.info
+                 current_price = info.get('currentPrice') or info.get('regularMarketPrice')
+                 volume = info.get('volume')
+                 timestamp = datetime.now()
+            else:
+                # Get the most recent row
+                latest = hist.iloc[-1]
+                current_price = float(latest['Close'])
+                volume = int(latest['Volume']) if 'Volume' in latest else 0
+                timestamp = latest.name  # Get the timestamp from the index
+
+                # Try to get bid/ask from fast_info
+                try:
+                    fast_info = ticker.fast_info
+                    if hasattr(fast_info, 'last_price'):
+                        # Update price if fast_info has newer data
+                        if fast_info.last_price and fast_info.last_price > 0:
+                            current_price = float(fast_info.last_price)
+                except:
+                    pass
+
+            # Gather additional info if available
+            try:
+                info = ticker.info
+                market_cap = info.get('marketCap')
+                previous_close = info.get('previousClose')
+            except:
+                market_cap = None
+                previous_close = None
 
             return {
                 'symbol': validated_symbol,
                 'current_price': current_price,
-                'market_cap': info.get('marketCap'),
-                'volume': info.get('volume'),
-                'previous_close': info.get('previousClose'),
-                'timestamp': datetime.now().isoformat()
+                'market_cap': market_cap,
+                'volume': volume,
+                'previous_close': previous_close,
+                'timestamp': timestamp if isinstance(timestamp, str) else timestamp.isoformat()
             }
 
         except Exception as e:
             logger.error(f"Failed to get real-time price for {symbol}: {e}")
             raise
-    
+
+    def is_market_open(self, symbol: str) -> bool:
+        """Check if market is currently open (regular hours only)"""
+        try:
+            validated_symbol = self._validate_symbol(symbol)
+            # Create a fresh ticker to get the most up-to-date info
+            ticker = yf.Ticker(validated_symbol)
+            info = ticker.info
+            market_state = info.get('marketState', 'CLOSED').upper()
+
+            # Regular hours only
+            return market_state == 'REGULAR'
+
+        except Exception as e:
+            logger.warning(f"Could not fetch market state from yfinance: {e}. Falling back to time-based check.")
+            # Default to checking trading hours (e.g., 9:30 AM - 4:00 PM ET)
+            try:
+                from zoneinfo import ZoneInfo
+                from datetime import datetime, time
+
+                et_zone = ZoneInfo('US/Eastern')
+                now_et = datetime.now(et_zone)
+
+                if now_et.weekday() >= 5:  # Weekend
+                    return False
+
+                # Regular market hours: 9:30 AM to 4:00 PM ET
+                market_open = time(9, 30) <= now_et.time() < time(16, 0)
+
+                return market_open
+
+            except ImportError:
+                 # Fallback for older Python
+                now = datetime.now()
+                if now.weekday() >= 5:  # Weekend
+                    return False
+                hour = now.hour
+                # This is a rough approximation and assumes server time is close to ET.
+                return 9 <= hour < 16
+
+    def fetch_bulk_data(
+        self, 
+        symbols: Union[str, List[str]], 
+        period: str = "1mo", 
+        interval: str = "1d", 
+        group_by: str = 'ticker',
+        progress: bool = False,
+        threads: bool = True
+    ) -> pd.DataFrame:
+        """
+        Fetch bulk data for multiple symbols using yf.download.
+        Useful for efficiently getting data for watchlists.
+        """
+        if isinstance(symbols, list):
+            tickers = " ".join(symbols)
+        else:
+            tickers = symbols
+        
+        logger.info(f"Fetching bulk data for {len(tickers.split())} symbols")
+        
+        data = yf.download(
+            tickers=tickers,
+            period=period,
+            interval=interval,
+            group_by=group_by,
+            auto_adjust=True,
+            progress=progress,
+            threads=threads
+        )
+        return data
+
     def get_multiple_stocks(self, symbols: List[str], period: str = "1y") -> Dict[str, pd.DataFrame]:
         """Fetch data for multiple stocks"""
         results = {}
