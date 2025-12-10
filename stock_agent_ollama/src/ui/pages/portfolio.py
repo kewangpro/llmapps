@@ -10,7 +10,6 @@ import param
 import logging
 import asyncio
 import numpy as np
-import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 
@@ -136,8 +135,8 @@ class PortfolioPage(param.Parameterized):
             # Fetch 1 month of history to calculate momentum
             # Use threads to avoid blocking UI
             data = await asyncio.to_thread(
-                yf.download, 
-                tickers=tickers, 
+                self.stock_fetcher.fetch_bulk_data, 
+                symbols=tickers, 
                 period="1mo", 
                 interval="1d", 
                 group_by='ticker', 
