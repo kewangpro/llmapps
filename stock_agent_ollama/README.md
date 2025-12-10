@@ -14,6 +14,7 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 ### 📊 Professional Dashboard
 - **Market Overview** with live major indices (S&P 500, NASDAQ, Dow Jones, Russell 2000)
 - **Interactive Watchlist** in sidebar with clickable stock cards
+  - **Top Movers Suggestions**: Automatically finds 8 high-momentum stocks (30-day max returns) to potential opportunities
   - Real-time prices and daily changes
   - Live position tracking from active trading sessions
   - Click any stock to instantly navigate to Analysis page
@@ -32,10 +33,10 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 *Stock analysis with interactive charts, technical indicators, and AI-powered insights*
 
 ### 🤖 Reinforcement Learning Trading
-- **Train RL Agents** using PPO, RecurrentPPO, and Ensemble with action masking
+- **Train RL Agents** using PPO, RecurrentPPO, and Ensemble
+- **Invalid Action Penalties** training penalizes invalid predictions to improve decision quality
 - **6-Action Trading Space** (HOLD, BUY_SMALL, BUY_MEDIUM, BUY_LARGE, SELL_PARTIAL, SELL_ALL)
 - **RecurrentPPO** with LSTM memory for temporal pattern recognition
-- **Trend Indicators** for RecurrentPPO (SMA_Trend, EMA_Crossover, Price_Momentum)
 - **Advanced Risk Management** (stop-loss, trailing stops, circuit breakers)
 - **Market Regime Detection** (BULL, BEAR, SIDEWAYS, VOLATILE)
 - **Multi-Timeframe Features** (weekly/monthly trend analysis)
@@ -262,7 +263,8 @@ See [QUICK_START.md](docs/QUICK_START.md#troubleshooting) for more help
 - **PPO**: Stable baseline with balanced risk management
 - **RecurrentPPO**: LSTM memory + trend indicators for temporal pattern recognition
 - **Ensemble**: Weighted voting combining PPO (30%) + RecurrentPPO (70%)
-- 6-action space with masking, adaptive sizing, algorithm-specific rewards
+- Agents learn to predict only valid actions through reward shaping
+- 6-action space with adaptive sizing and algorithm-specific rewards
 
 **Backtesting:**
 - Auto-loads models

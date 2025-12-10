@@ -202,7 +202,32 @@ def run_comprehensive_backtest(symbol: str, include_baselines: bool = True) -> d
 
             # Create engine and run backtest
             engine = BacktestEngine(backtest_config)
+
+            # Load agent first to check observation space
             agent = load_rl_agent(model_path, env=None)
+
+            # Setup environment to verify observation space compatibility
+            env = engine.setup_environment()
+            expected_obs_shape = env.observation_space.shape
+
+            # Get model's expected observation space
+            if hasattr(agent, 'observation_space'):
+                model_obs_shape = agent.observation_space.shape
+            elif hasattr(agent, 'policy') and hasattr(agent.policy, 'observation_space'):
+                model_obs_shape = agent.policy.observation_space.shape
+            else:
+                # Can't determine model obs shape, skip validation
+                logger.warning(f"Cannot determine observation space for {agent_type}, attempting backtest anyway")
+                model_obs_shape = expected_obs_shape
+
+            # Check if observation spaces match
+            if model_obs_shape != expected_obs_shape:
+                logger.warning(
+                    f"Skipping {agent_type}: observation space mismatch. "
+                    f"Model expects {model_obs_shape}, environment provides {expected_obs_shape}. "
+                    f"This model was trained before action masks were added. Please retrain."
+                )
+                continue
 
             result = engine.run_agent_backtest(agent, deterministic=True)
 
@@ -452,6 +477,7 @@ def main():
             print(f"{'='*80}\n")
 
         # Training phase
+        training_errors = False
         if not args.skip_training:
             for i, agent_type in enumerate(algorithms, 1):
                 print(f"\n📌 Step {i}/{len(algorithms)}: Training {agent_type.upper()} on {symbol}")
@@ -459,9 +485,14 @@ def main():
                     train_model(symbol, agent_type, args.timesteps)
                 except Exception as e:
                     logger.error(f"Skipping {agent_type} for {symbol} due to error: {e}")
+                    training_errors = True
                     continue
         else:
             print(f"⏭️  Skipping training phase for {symbol}")
+
+        if training_errors:
+            print(f"\n⚠️ Training failed for one or more algorithms. Skipping backtest for {symbol}.")
+            continue
 
         # Backtesting phase
         print(f"\n📌 Running Comprehensive Backtest for {symbol}")
