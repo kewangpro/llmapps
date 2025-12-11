@@ -53,12 +53,15 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 ![RL Training Screenshot](docs/screenshots/training.png)
 *Train and backtest RL agents with comprehensive performance metrics and strategy comparison*
 
-### 🔴 Live Trading Simulation
+### 🔴 Live Trading Simulation (Paper Trading)
 - **Paper Trading** with real-time market data (Yahoo Finance)
 - **Trained Agent Execution** using PPO, RecurrentPPO, or Ensemble models
 - **Auto Stock Selection** dynamically rotates to best performing stocks
   - Dynamic scoring based on backtest performance (Sharpe ratio + returns)
   - Prioritizes agent backtest metrics, falls back to 5-day price performance
+  - Intelligent idle detection: automatically rotates away from stocks where agent refuses to trade
+  - **Active Signal Scan & Idle Detection**: Prevents capital stagnation by actively scanning for BUY signals when the current agent is idle
+  - **Recency Penalty**: Prevents rapid "ping-pong" rotation by penalizing stocks rotated away from within the last 30 minutes
   - Rotation cooldown (10 cycles/10 minutes) to allow fair trading opportunities
   - Performance threshold (2% improvement) to prevent unnecessary rotation
   - Automatically closes positions before rotation for optimal opportunity capture
