@@ -732,6 +732,7 @@ class LiveTradingPage(pn.viewable.Viewer):
                 rows += f"""
                 <tr style='border-bottom: 1px solid {Colors.BORDER_SUBTLE};'>
                     <td style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 12px; font-family: {Typography.FONT_MONO};'>{time_str}</td>
+                    <td style='padding: 10px; color: {Colors.ACCENT_CYAN}; font-weight: 600; font-family: {Typography.FONT_MONO};'>{trade.symbol}</td>
                     <td style='padding: 10px; color: {action_color}; font-weight: 600;'>{trade.action.name}</td>
                     <td style='padding: 10px; color: {Colors.TEXT_SECONDARY}; text-align: right;'>{trade.shares}</td>
                     <td style='padding: 10px; color: {Colors.TEXT_SECONDARY}; text-align: right; font-family: {Typography.FONT_MONO};'>${trade.price:.2f}</td>
@@ -749,6 +750,7 @@ class LiveTradingPage(pn.viewable.Viewer):
                         <thead style='position: sticky; top: 0; background: {Colors.BG_SECONDARY};'>
                             <tr style='border-bottom: 2px solid {Colors.BORDER_SUBTLE};'>
                                 <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: left;'>TIME</th>
+                                <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: left;'>SYMBOL</th>
                                 <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: left;'>ACTION</th>
                                 <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: right;'>SHARES</th>
                                 <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: right;'>PRICE</th>
