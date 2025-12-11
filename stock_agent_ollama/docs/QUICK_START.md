@@ -178,6 +178,9 @@ The live trading session is **persistent**. You can stop the application and res
      - System continuously evaluates rotation opportunities after cooldown
      - Automatically selects best performing stock (prioritizes backtest performance, falls back to 5-day price return)
      - Chooses optimal algorithm using dynamic scoring based on Sharpe ratio and returns
+     - Idle detection: Applies -50% penalty after 20 idle cycles to force rotation from inactive stocks
+     - Shadow mode: When >50% cash and idle for 3+ cycles, actively scans for live BUY signals
+     - Recency penalty: Applies -30% penalty to stocks rotated away from within last 30 minutes
      - Automatically closes positions before rotation to capture better opportunities
      - Single AUTO session policy prevents duplicate sessions
      - Maximizes capital efficiency by trading strongest performers

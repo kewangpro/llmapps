@@ -324,18 +324,31 @@ class TradingHours:
 
 1. **Continuous Monitoring**: System evaluates rotation opportunities every cycle after cooldown expires
 2. **Rotation Cooldown**: Waits minimum 10 cycles or 10 minutes before considering rotation (prevents premature switching)
-3. **Stock Evaluation**: Analyzes all watchlist stocks including current symbol for performance:
+3. **Idle Detection**: Tracks consecutive cycles where agent refuses to trade:
+   - After 20 idle cycles, applies -50% penalty to current stock's performance score
+   - Forces rotation to more active opportunities when agent signals disinterest
+   - Prevents capital sitting idle while better trading opportunities exist
+4. **Recency Penalty**: Prevents rapid "ping-pong" rotation between stocks:
+   - Tracks when a stock was rotated away from
+   - Applies -30% penalty to stocks visited within the last 30 minutes
+   - Ensures rotation seeks fresh opportunities rather than cycling between two dormant stocks
+5. **Shadow Mode Signal Scanning**: When portfolio is >50% cash and idle for 3+ cycles:
+   - Actively checks top watchlist candidates for live BUY signals
+   - Loads candidate models temporarily to test real-time trading intent
+   - Rotates immediately to stocks showing active buying interest
+   - Prioritizes actual agent signals over static historical metrics
+6. **Stock Evaluation**: Analyzes all watchlist stocks including current symbol for performance:
    - Prioritizes agent backtest performance (total_return_pct from backtest_results.json)
    - Falls back to 5-day price performance if no backtest results available
-4. **Model Selection**: Uses dynamic backtest-based scoring to find best model per stock:
+7. **Model Selection**: Uses dynamic backtest-based scoring to find best model per stock:
    - Primary: Sharpe ratio × 20 + Return % × 2 (e.g., 2.5 Sharpe + 20% return = 90 points)
    - Fallback: Conservative algorithm preference (20-30 pts) + recency bonus (up to 10 pts) when no backtest
    - Training quality: Up to 20 points based on timesteps (300k+ = 20 pts, 100k+ = 10 pts)
-5. **Position Closure**: Automatically closes current position before rotation to capture better opportunities
-6. **Rotation Decision**: Only rotates if new stock is 2% better than current (prevents ping-pong effect)
-7. **Single Session Policy**: Creating new AUTO session automatically stops existing AUTO sessions
-8. **Agent Reload**: Automatically loads new stock's best model and reinitializes environment
-9. **Event Logging**: Records force close and rotation with PnL in session event log
+8. **Position Closure**: Automatically closes current position before rotation to capture better opportunities
+9. **Rotation Decision**: Only rotates if new stock is 2% better than current (prevents ping-pong effect)
+10. **Single Session Policy**: Creating new AUTO session automatically stops existing AUTO sessions
+11. **Agent Reload**: Automatically loads new stock's best model and reinitializes environment
+12. **Event Logging**: Records force close and rotation with PnL in session event log
 
 **Configuration:**
 ```python
@@ -355,6 +368,9 @@ config = LiveTradingConfig(
 - No manual intervention required
 - Automatically adapts to changing market conditions
 - Leverages entire watchlist for opportunities
+- Intelligent idle detection prevents capital stagnation
+- Shadow mode actively seeks stocks with live BUY signals
+- Recency penalty prevents ping-pong rotation between dormant stocks
 - Intelligent cooldown prevents excessive rotation
 - Performance threshold ensures meaningful switches
 - Dynamic scoring selects best algorithm based on actual backtest performance
@@ -584,10 +600,10 @@ class TradingEvent:
 ├─────────────────────────────────────────────────────────────┤
 │  [Portfolio Value Chart - Real-time Line Graph]             │
 ├─────────────────────────────────────────────────────────────┤
-│  Recent Trades                                               │
-│  10:43:12  BUY   5 @ $253.45  [Agent: BUY_SMALL, conf=0.82] │
-│  10:15:34  SELL  3 @ $251.20  [Agent: SELL, conf=0.91]      │
-│  09:52:18  BUY  10 @ $249.80  [Agent: BUY_LARGE, conf=0.88] │
+│  Recent Trades (Symbol shown for auto-select sessions)      │
+│  10:43:12  AAPL  BUY   5 @ $253.45  P&L: $0.00              │
+│  10:15:34  AAPL  SELL  3 @ $251.20  P&L: $6.75              │
+│  09:52:18  NVDA  BUY  10 @ $249.80  P&L: $0.00              │
 ├─────────────────────────────────────────────────────────────┤
 │  Risk Status: ✅ All Clear                                   │
 │  • Position Size: 60.1% (max 80%)                           │

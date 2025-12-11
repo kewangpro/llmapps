@@ -271,11 +271,11 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 │ SYMBOL   SHARES   AVG ENTRY   CURRENT   UNREALIZED P&L         │
 │ AAPL     100      $268.49     $270.68   ▲ $218.61 (+0.81%)     │
 ├─────────────────────────────────────────────────────────────────┤
-│ Recent Trades                 │ Event Log                       │
-│ TIME     ACTION   SHARES PRICE│ 09:43:42 [SESSION_START]       │
-│ 09:43:42 BUY_LARGE  50  $268  │ 09:43:42 [TRADE] BUY 50        │
-│ 09:42:42 BUY_LARGE  50  $269  │ 09:42:42 [TRADE] BUY 50        │
-│                               │ 09:44:42 [HOLD] No action      │
+│ Recent Trades                      │ Event Log                  │
+│ TIME     SYMBOL ACTION SHARES PRICE│ 09:43:42 [SESSION_START]   │
+│ 09:43:42 AAPL   BUY_LG  50   $268  │ 09:43:42 [TRADE] BUY 50    │
+│ 09:42:42 AAPL   BUY_LG  50   $269  │ 09:42:42 [TRADE] BUY 50    │
+│                                    │ 09:44:42 [HOLD] No action  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -290,6 +290,9 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 - Auto Select Stock checkbox - enables dynamic stock rotation
   - When checked: Symbol and Algorithm inputs become disabled
   - System automatically selects best performing watchlist stocks using dynamic scoring (Sharpe Ratio × 20 + Total Return % × 2)
+  - Idle detection: Tracks consecutive HOLD cycles and applies -50% penalty after 20 idle cycles to force rotation
+  - Shadow mode: When >50% cash and idle for 3+ cycles, actively scans candidates for live BUY signals
+  - Recency penalty: Applies -30% penalty to stocks rotated away from within last 30 minutes (prevents ping-pong)
   - Creates session ID: SESSION_AUTO_YYYYMMDD_HHMMSS
   - Only one AUTO session can run at a time (system stops duplicate AUTO sessions automatically)
   - Rotation cooldown: 10 cycles (approximately 10 minutes with 60-second cycles)
@@ -314,7 +317,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 - **Session Status Card**: Status, symbol with AUTO badge for auto-select mode, runtime, session ID
 - **Portfolio Card**: Total value, cash, trades count, P&L with live updates
 - **Positions Table**: Current holdings with real-time prices and unrealized P&L
-- **Recent Trades**: Last 10 trades with timestamps, actions, prices, P&L
+- **Recent Trades**: Last 10 trades with timestamps, symbol (for auto-select sessions), actions, prices, P&L
 - **Event Log**: Last 15 events with symbol prefixes for auto-select sessions, rotation events include model names (SESSION_START, TRADE, HOLD, ORDER_REJECTED, FORCE_CLOSE, STOCK_ROTATION, SESSION_END)
 
 **D. Real-Time Updates**
