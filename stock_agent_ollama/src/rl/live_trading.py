@@ -244,6 +244,10 @@ class TradingSession:
     # Track last stock rotation time (for auto-select cooldown)
     last_rotation_time: Optional[datetime] = None
     cycles_since_rotation: int = 0
+    # Track consecutive idle cycles (agent not trading)
+    consecutive_idle_cycles: int = 0
+    # Track recent rotations to prevent ping-pong (symbol -> timestamp left)
+    recent_rotations: Dict[str, datetime] = field(default_factory=dict)
 
     def add_event(self, event_type: str, message: str):
         """Add event to session log"""
@@ -268,12 +272,17 @@ class TradingSession:
             "color": self.color,
             "display_order": self.display_order,
             "last_rotation_time": self.last_rotation_time.isoformat() if self.last_rotation_time else None,
-            "cycles_since_rotation": self.cycles_since_rotation
+            "cycles_since_rotation": self.cycles_since_rotation,
+            "consecutive_idle_cycles": self.consecutive_idle_cycles,
+            "recent_rotations": {k: v.isoformat() for k, v in self.recent_rotations.items()}
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "TradingSession":
         last_rotation_time = data.get("last_rotation_time")
+        recent_rotations_data = data.get("recent_rotations", {})
+        recent_rotations = {k: datetime.fromisoformat(v) for k, v in recent_rotations_data.items()}
+        
         return cls(
             session_id=data["session_id"],
             config=LiveTradingConfig.from_dict(data["config"]),
@@ -288,7 +297,9 @@ class TradingSession:
             color=data.get("color", "#7C3AED"),
             display_order=data.get("display_order", 0),
             last_rotation_time=datetime.fromisoformat(last_rotation_time) if last_rotation_time else None,
-            cycles_since_rotation=data.get("cycles_since_rotation", 0)
+            cycles_since_rotation=data.get("cycles_since_rotation", 0),
+            consecutive_idle_cycles=data.get("consecutive_idle_cycles", 0),
+            recent_rotations=recent_rotations
         )
 
 
@@ -942,8 +953,10 @@ class LiveTradingEngine:
             logger.error(f"Failed to normalize model path: {e}")
             return None
 
-    def _select_best_stock(self) -> Optional[Tuple[str, str]]:
+    def _select_best_stock(self, idle_threshold_override: Optional[int] = None) -> Optional[Tuple[str, str]]:
         """Select best stock from watchlist based on agent backtest performance (prioritized) or stock price performance (fallback)
+        Args:
+            idle_threshold_override: Override the default cycle count for idle penalty (default: 20)
         Returns: (symbol, agent_path) or None
         """
         try:
@@ -954,10 +967,27 @@ class LiveTradingEngine:
             # Minimum performance improvement required to justify rotation (2%)
             MIN_PERFORMANCE_IMPROVEMENT_PCT = 2.0
 
+            # Idle detection: If agent hasn't traded for this many cycles, heavily penalize this stock
+            # Use override if provided, otherwise default to 20
+            threshold_cycles = idle_threshold_override if idle_threshold_override is not None else 20
+            IDLE_PENALTY_PCT = -50.0  # Massive penalty to force rotation
+            
+            # Recency penalty: Prevent ping-ponging back to stocks we just left
+            RECENT_ROTATION_PENALTY_PCT = -30.0
+            RECENT_ROTATION_WINDOW_MINUTES = 30
+
             watchlist = portfolio_manager.load_portfolio("default")
             if not watchlist:
                 logger.warning("No stocks in watchlist for auto-selection")
                 return None
+                
+            # Clean up old recent_rotations entries
+            now = datetime.now()
+            if self.session.recent_rotations:
+                self.session.recent_rotations = {
+                    sym: ts for sym, ts in self.session.recent_rotations.items()
+                    if (now - ts).total_seconds() / 60 < RECENT_ROTATION_WINDOW_MINUTES
+                }
 
             # Evaluate all watchlist stocks (including current symbol)
             stock_scores = []
@@ -995,15 +1025,38 @@ class LiveTradingEngine:
                 else:
                     logger.debug(f"Using backtest performance for {symbol}: {backtest_performance:.2f}%")
 
+                final_performance = backtest_performance
+                
+                # Apply idle penalty if this is the current stock and it's been idle too long
+                if symbol == self.config.symbol and self.session.consecutive_idle_cycles >= threshold_cycles:
+                    final_performance += IDLE_PENALTY_PCT
+                    logger.warning(
+                        f"Auto-select: {symbol} has been idle for {self.session.consecutive_idle_cycles} cycles "
+                        f"(threshold: {threshold_cycles}), "
+                        f"applying {IDLE_PENALTY_PCT}% penalty (original: {backtest_performance:.2f}%, "
+                        f"adjusted: {final_performance:.2f}%)"
+                    )
+                    
+                # Apply recency penalty if we recently rotated away from this stock
+                if symbol in self.session.recent_rotations:
+                    ts_left = self.session.recent_rotations[symbol]
+                    mins_ago = (now - ts_left).total_seconds() / 60
+                    final_performance += RECENT_ROTATION_PENALTY_PCT
+                    logger.warning(
+                        f"Auto-select: {symbol} was rotated away from {mins_ago:.1f} mins ago, "
+                        f"applying {RECENT_ROTATION_PENALTY_PCT}% penalty (original: {backtest_performance:.2f}%, "
+                        f"adjusted: {final_performance:.2f}%)"
+                    )
+
                 stock_scores.append({
                     'symbol': symbol,
                     'algorithm': agent_type,
                     'agent_path': agent_path,
-                    'performance': backtest_performance,
+                    'performance': final_performance,
                     'using_backtest': backtest_file.exists()
                 })
 
-                # Track current symbol's performance
+                # Track current symbol's performance (original, not penalized)
                 if symbol == self.config.symbol:
                     current_symbol_performance = backtest_performance
 
@@ -1016,13 +1069,26 @@ class LiveTradingEngine:
             best_stock = stock_scores[0]
 
             # Only rotate if the best stock is significantly better than current stock
-            if current_symbol_performance is not None:
-                performance_diff = best_stock['performance'] - current_symbol_performance
+            # NOTE: If we applied a penalty to current stock, its score in stock_scores is low, 
+            # so best_stock will likely be something else.
+            # However, we also compare against `current_symbol_performance` (original) to assume "improvement".
+            # If we penalized the current stock, we should probably ignore the "improvement threshold" check
+            # or treat the penalized score as the current score to beat.
+            
+            # If current stock was penalized, we definitely want to rotate if there's a better option.
+            # Let's verify if the best stock is effectively better than the PENALIZED current stock.
+            
+            effective_current_score = current_symbol_performance
+            if self.session.consecutive_idle_cycles >= threshold_cycles:
+                 effective_current_score += IDLE_PENALTY_PCT
+
+            if effective_current_score is not None:
+                performance_diff = best_stock['performance'] - effective_current_score
 
                 if best_stock['symbol'] == self.config.symbol:
-                    # Current stock is still the best, no rotation needed
+                    # Current stock is still the best even with penalty? Unlikely but possible.
                     perf_type = "backtest" if best_stock['using_backtest'] else "5-day"
-                    logger.info(f"Auto-select: {self.config.symbol} remains the best with {current_symbol_performance:.2f}% {perf_type} performance")
+                    logger.info(f"Auto-select: {self.config.symbol} remains the best with {effective_current_score:.2f}% {perf_type} performance")
                     return None
                 elif performance_diff < MIN_PERFORMANCE_IMPROVEMENT_PCT:
                     # Not enough improvement to justify rotation
@@ -1093,6 +1159,9 @@ class LiveTradingEngine:
         try:
             logger.info(f"{self.session.session_id} - Rotating from {self.config.symbol} to {symbol}")
 
+            # Record that we are leaving the current symbol
+            self.session.recent_rotations[self.config.symbol] = datetime.now()
+
             # Extract model name from agent_path
             from pathlib import Path
             agent_path_obj = Path(agent_path)
@@ -1118,6 +1187,7 @@ class LiveTradingEngine:
             # Update rotation tracking
             self.session.last_rotation_time = datetime.now()
             self.session.cycles_since_rotation = 0
+            self.session.consecutive_idle_cycles = 0  # Reset idle counter on rotation
 
             # Add event with model name (don't use _add_event here as we want the NEW symbol shown)
             self.session.add_event("STOCK_ROTATION", f"Rotated to {symbol} ({model_name})")
@@ -1127,6 +1197,124 @@ class LiveTradingEngine:
         except Exception as e:
             logger.error(f"Failed to rotate to {symbol}: {e}")
             self._add_event("ROTATION_FAILED", f"Failed to rotate to {symbol}: {str(e)}")
+
+    def _check_live_signal(self, symbol: str, agent_path: str) -> bool:
+        """
+        Shadow Mode: specific check to see if an agent generates a BUY signal RIGHT NOW.
+        This is expensive (loads model + builds env), so only use for top candidates.
+        """
+        try:
+            from .model_utils import load_rl_agent, load_env_config_from_model
+            from .env_factory import EnvConfig, create_enhanced_env
+            from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
+
+            logger.info(f"Shadow Mode: Checking live signal for {symbol}...")
+
+            # 1. Load Agent
+            # We use a temporary variable to not disturb the main self.agent
+            shadow_agent = load_rl_agent(agent_path, env=None)
+
+            # 2. Setup Temporary Environment (lite version)
+            # We need to match the feature expectations of this specific model
+            try:
+                training_config = load_env_config_from_model(Path(agent_path))
+            except:
+                training_config = {}
+
+            # Detect features (similar logic to setup_environment)
+            include_trend = training_config.get('include_trend_indicators', False)
+            use_regime = training_config.get('use_regime_detector', True)
+            use_mtf = training_config.get('use_mtf_features', True)
+            
+            # Quick observation builder for this symbol
+            # We need to fetch data for THIS symbol, not self.config.symbol
+            # We can reuse _build_observation logic but need to be careful with config/env context
+            
+            # Create a temporary config object for data fetching context
+            temp_config = LiveTradingConfig(symbol=symbol, agent_path=agent_path)
+            temp_market_stream = MarketDataStream(temp_config)
+            tick = temp_market_stream.get_latest_tick()
+            
+            # Build observation manually (extracting logic from _build_observation to be independent)
+            # For simplicity/robustness, we'll create a temporary Env to handle normalization/features correctly
+            # This is slower but guarantees the dimensions match the agent
+            
+            start_date = (datetime.now() - timedelta(days=120)).strftime("%Y-%m-%d") # ample history
+            end_date = datetime.now().strftime("%Y-%m-%d")
+            
+            env_config = EnvConfig(
+                symbol=symbol,
+                start_date=start_date,
+                end_date=end_date,
+                initial_balance=100000,
+                # Key feature flags
+                include_technical_indicators=True,
+                include_trend_indicators=include_trend,
+                use_regime_detector=use_regime,
+                use_mtf_features=use_mtf,
+                # Disable extras for speed
+                enable_diagnostics=False
+            )
+            
+            shadow_env = create_enhanced_env(env_config)
+            
+            # Handle Normalization
+            model_path = Path(agent_path)
+            model_dir = model_path.parent if model_path.is_file() else model_path
+            vec_path = model_dir / "vec_normalize.pkl"
+            if not vec_path.exists(): 
+                vec_path = model_dir.parent / "vec_normalize.pkl"
+                
+            if vec_path.exists():
+                shadow_env = DummyVecEnv([lambda: shadow_env])
+                shadow_env = VecNormalize.load(str(vec_path), shadow_env)
+                shadow_env.training = False
+                shadow_env.norm_reward = False
+
+            # Get latest observation from env
+            # We need to reset the env to get the latest state, but standard reset() goes to start_date.
+            # In live trading, we need the "now" state.
+            # The cleanest way without rewriting the env is to rely on our _build_observation
+            # but we need to temporarily mock 'self.config' and 'self.env' 
+            
+            # SAVE CURRENT STATE
+            original_config = self.config
+            original_env = self.env
+            
+            # SWAP STATE
+            self.config = temp_config
+            self.env = shadow_env
+            
+            try:
+                # Build observation using the main engine's method (now pointing to shadow config)
+                obs = self._build_observation(tick)
+                
+                # Normalize if needed (duplicate logic from trading_cycle because we are bypassing it)
+                if isinstance(shadow_env, VecNormalize):
+                    obs_batch = obs.reshape(1, *obs.shape)
+                    norm_obs_batch = shadow_env.normalize_obs(obs_batch)
+                    obs = norm_obs_batch[0]
+                
+                # Predict
+                action, _ = shadow_agent.predict(obs, deterministic=True)
+                
+                # Check for BUY
+                # Actions: 1=BUY_SMALL, 2=BUY_MEDIUM, 3=BUY_LARGE
+                is_buy = int(action) in [1, 2, 3]
+                
+                conf_msg = "BUY" if is_buy else "NO_BUY"
+                logger.info(f"Shadow Mode {symbol}: Agent predicted {conf_msg} (Action {action})")
+                
+                return is_buy
+                
+            finally:
+                # RESTORE STATE
+                self.config = original_config
+                self.env = original_env
+                
+        except Exception as e:
+            logger.error(f"Shadow Mode failed for {symbol}: {e}")
+            return False
 
     def trading_cycle(self) -> Dict:
         """Single iteration of trading logic"""
@@ -1193,6 +1381,7 @@ class LiveTradingEngine:
 
             # FIX #3: Auto-select stock rotation - check even when holding positions
             # Only rotate after giving current stock enough time (minimum 10 cycles or 10 minutes)
+            # OR if agent is idle with cash (bypass cooldown)
             MIN_CYCLES_BEFORE_ROTATION = 10
             MIN_MINUTES_BEFORE_ROTATION = 10
 
@@ -1206,12 +1395,57 @@ class LiveTradingEngine:
                 if self.session.last_rotation_time:
                     time_elapsed_minutes = (datetime.now() - self.session.last_rotation_time).total_seconds() / 60
 
+                # Check for Idle Cash Condition (bypass cooldown)
+                cash_pct = self.portfolio.cash / self.portfolio.total_value
+                is_idle_cash = (cash_pct > 0.5) and (self.session.consecutive_idle_cycles >= 3)
+
                 can_rotate = (cycles_elapsed >= MIN_CYCLES_BEFORE_ROTATION or
-                             time_elapsed_minutes >= MIN_MINUTES_BEFORE_ROTATION)
+                             time_elapsed_minutes >= MIN_MINUTES_BEFORE_ROTATION or
+                             is_idle_cash)
 
                 if can_rotate:
-                    logger.info(f"{self.session.session_id} - Auto-select mode: {cycles_elapsed} cycles elapsed, checking for better stock...")
-                    best_stock = self._select_best_stock()
+                    trigger_reason = "Idle Cash" if is_idle_cash else "Cooldown Expired"
+                    logger.info(f"{self.session.session_id} - Auto-select mode: Checking for better stock ({trigger_reason})...")
+                    
+                    # --- NEW SIGNAL-BASED ROTATION LOGIC (SHADOW MODE) ---
+                    # If we are sitting on cash and idle, check for ACTIVE SIGNALS elsewhere
+                    best_stock = None
+                    
+                    if is_idle_cash:
+                         logger.info(f"Active Signal Scan: High cash ({cash_pct:.1%}) and idle ({self.session.consecutive_idle_cycles} cycles). Checking top candidates for BUY signals...")
+                         
+                         # Get candidates (force list return logic inside _select_best_stock if needed, 
+                         # but for now we'll just modify how we use it)
+                         # We need a way to get candidates without picking just one. 
+                         # We will assume _select_best_stock returns the best *static* one.
+                         # Better approach: Let's iterate the watchlist manually here or modify _select_best_stock.
+                         # To avoid breaking changes, we will use _select_best_stock to find the "Static Best".
+                         # Then we will also pick 2 random others from watchlist to check for "Surprise Alpha"
+                         
+                         static_best = self._select_best_stock()
+                         
+                         target_found = False
+                         if static_best:
+                             s_sym, s_path = static_best
+                             if s_sym != self.config.symbol:
+                                 # Check if this "Static Best" actually wants to buy
+                                 if self._check_live_signal(s_sym, s_path):
+                                     logger.info(f"Signal Found! {s_sym} has active BUY signal.")
+                                     best_stock = static_best
+                                     target_found = True
+                                 else:
+                                     logger.info(f"{s_sym} is best on paper, but has NO signal. Continuing scan...")
+                         
+                         # If static best didn't have a signal, maybe check one more high-potential stock?
+                         # (Omitted for speed, but this is where we'd loop)
+                         
+                         if not target_found:
+                             # Fallback to standard rotation if no signal found but penalty is high
+                             best_stock = static_best
+
+                    else:
+                        # Standard check (performance based)
+                        best_stock = self._select_best_stock()
 
                     if best_stock:
                         new_symbol, new_agent_path = best_stock
@@ -1363,6 +1597,9 @@ class LiveTradingEngine:
                     self._add_event("TRADE", f"{trade.action.name} {trade.shares} @ ${trade.price:.2f}")
                     logger.info(f"{self.session.session_id} - ✅ Trade executed: {trade.action.name} {trade.shares} shares @ ${trade.price:.2f}, P&L: ${trade.pnl:+.2f}")
 
+                    # Reset idle counter on successful trade
+                    self.session.consecutive_idle_cycles = 0
+
                     return {
                         "status": "trade_executed",
                         "trade": trade,
@@ -1380,7 +1617,8 @@ class LiveTradingEngine:
                     }
 
             # No action taken
-            logger.info(f"{self.session.session_id} - ⏸️  HOLD - No trade executed")
+            self.session.consecutive_idle_cycles += 1
+            logger.info(f"{self.session.session_id} - ⏸️  HOLD - No trade executed (idle cycles: {self.session.consecutive_idle_cycles})")
             return {
                 "status": "hold",
                 "portfolio_value": self.portfolio.total_value,
