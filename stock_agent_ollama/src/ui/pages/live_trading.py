@@ -717,7 +717,17 @@ class LiveTradingPage(pn.viewable.Viewer):
             for trade in reversed(engine.portfolio.trades[-10:]):
                 action_color = Colors.SUCCESS_GREEN if trade.action in (TradingAction.BUY_SMALL, TradingAction.BUY_LARGE) else Colors.DANGER_RED
                 pnl_color = Colors.SUCCESS_GREEN if trade.pnl >= 0 else Colors.DANGER_RED
-                time_str = trade.timestamp.strftime('%H:%M:%S')
+
+                # Handle timestamp as string (from JSON) or datetime
+                if isinstance(trade.timestamp, str):
+                    from datetime import datetime
+                    try:
+                        timestamp_dt = datetime.fromisoformat(trade.timestamp)
+                        time_str = timestamp_dt.strftime('%H:%M:%S')
+                    except:
+                        time_str = trade.timestamp[:8]  # Fallback: take first 8 chars (HH:MM:SS)
+                else:
+                    time_str = trade.timestamp.strftime('%H:%M:%S')
 
                 rows += f"""
                 <tr style='border-bottom: 1px solid {Colors.BORDER_SUBTLE};'>
