@@ -57,11 +57,12 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 - **Paper Trading** with real-time market data (Yahoo Finance)
 - **Trained Agent Execution** using PPO, RecurrentPPO, or Ensemble models
 - **Auto Stock Selection** dynamically rotates to best performing stocks
-  - Intelligent model selection using composite scoring (algorithm type, recency, training quality)
-  - Prioritizes agent backtest performance, falls back to 5-day price performance
+  - Dynamic scoring based on backtest performance (Sharpe ratio + returns)
+  - Prioritizes agent backtest metrics, falls back to 5-day price performance
   - Rotation cooldown (10 cycles/10 minutes) to allow fair trading opportunities
   - Performance threshold (2% improvement) to prevent unnecessary rotation
-  - Automatically selects best-performing algorithm per stock (prioritizes RecurrentPPO)
+  - Automatically closes positions before rotation for optimal opportunity capture
+  - Single AUTO session policy prevents duplicate sessions and capital fragmentation
   - Maximizes capital efficiency across portfolio
 - **Persistent Sessions** automatically save and resume
   - Portfolio state preserved
