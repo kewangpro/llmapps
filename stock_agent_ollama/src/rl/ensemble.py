@@ -248,6 +248,19 @@ class EnsemblePPOAgent:
         episode_start: Optional[np.ndarray]
     ) -> int:
         """Weighted vote using action probabilities as confidence."""
+        
+        # Conflict Resolution: Default to HOLD (0) if actions are opposing (Buy vs Sell)
+        # This prevents forced gambling when models disagree on direction.
+        # Assumes ImprovedTradingAction space: HOLD=0, BUY={1,2,3}, SELL={4,5}
+        is_ppo_buy = ppo_action in [1, 2, 3]
+        is_ppo_sell = ppo_action in [4, 5]
+        is_rppo_buy = rppo_action in [1, 2, 3]
+        is_rppo_sell = rppo_action in [4, 5]
+        
+        if (is_ppo_buy and is_rppo_sell) or (is_ppo_sell and is_rppo_buy):
+            logger.debug(f"Conflict Resolution: Opposing actions (PPO={ppo_action}, RPPO={rppo_action}) -> HOLD")
+            return 0  # HOLD
+            
         try:
             # Get action probabilities from both models (with appropriate observations)
             ppo_probs = self._get_action_probabilities(self.ppo, ppo_observation, None)

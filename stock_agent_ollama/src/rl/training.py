@@ -59,6 +59,7 @@ class EnhancedTrainingConfig:
     use_curriculum_learning: bool = False
     enable_diagnostics: bool = _ENV_DEFAULTS['enable_diagnostics']
     use_lstm_policy: bool = False # New field to enable LSTM policy
+    use_vec_normalize: bool = False
 
     # New improvements (Priority 1-5)
     use_risk_manager: bool = True
@@ -280,7 +281,7 @@ class EnhancedRLTrainer:
         # Wrap environment in DummyVecEnv and then VecNormalize
         # This is crucial for PPO and RecurrentPPO
         # Only do this if not already wrapped
-        if not isinstance(self.env, DummyVecEnv) and self.config.agent_type.lower() != 'ensemble':
+        if self.config.use_vec_normalize and not isinstance(self.env, DummyVecEnv) and self.config.agent_type.lower() != 'ensemble':
             env = self.env  # Capture env for lambda
             self.env = DummyVecEnv([lambda: env]) # Wrap in DummyVecEnv first
             self.env = VecNormalize(
@@ -292,6 +293,12 @@ class EnhancedRLTrainer:
                 gamma=self.config.gamma
             )
             logger.info("Wrapped environment with DummyVecEnv and VecNormalize (norm_obs=True, norm_reward=True)")
+        elif not self.config.use_vec_normalize:
+            logger.info("VecNormalize disabled by configuration.")
+            if not isinstance(self.env, DummyVecEnv):
+                 env = self.env
+                 self.env = DummyVecEnv([lambda: env]) # Still need to wrap in DummyVecEnv for StableBaselines3
+                 logger.info("Wrapped environment with DummyVecEnv only (VecNormalize disabled).")
         elif self.config.agent_type.lower() == 'ensemble':
             # For ensemble, the individual PPO/RPPO trainers will handle their own VecNormalize
             # The env for the main trainer will remain unwrapped if not a single agent
@@ -686,7 +693,7 @@ class EnhancedRLTrainer:
             'use_improved_actions': self.config.use_improved_actions,
             'use_curriculum_learning': self.config.use_curriculum_learning,
             'use_lstm_policy': self.config.use_lstm_policy,
-            'use_vec_normalize': True, # Record usage of VecNormalize
+            'use_vec_normalize': self.config.use_vec_normalize,
 
             # New improvement flags (Priority 1-5)
             'use_risk_manager': getattr(self.config, 'use_risk_manager', True),
