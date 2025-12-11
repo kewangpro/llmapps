@@ -175,9 +175,11 @@ The live trading session is **persistent**. You can stop the application and res
    - **Stop Loss**: Auto stop-loss percentage (5% default)
    - **Auto Select Stock**: Enable to dynamically rotate between watchlist stocks
      - When enabled, Symbol and Algorithm inputs are disabled
-     - System evaluates watchlist stocks when position reaches 0
+     - System continuously evaluates rotation opportunities after cooldown
      - Automatically selects best performing stock (prioritizes backtest performance, falls back to 5-day price return)
-     - Chooses optimal algorithm (prefers RecurrentPPO > PPO > Ensemble)
+     - Chooses optimal algorithm using dynamic scoring based on Sharpe ratio and returns
+     - Automatically closes positions before rotation to capture better opportunities
+     - Single AUTO session policy prevents duplicate sessions
      - Maximizes capital efficiency by trading strongest performers
 3. Click **"Create & Start Session"**
 4. Monitor real-time updates

@@ -322,18 +322,20 @@ class TradingHours:
 
 **How It Works:**
 
-1. **Position Monitoring**: When position reaches 0 (fully sold), system evaluates rotation opportunity
+1. **Continuous Monitoring**: System evaluates rotation opportunities every cycle after cooldown expires
 2. **Rotation Cooldown**: Waits minimum 10 cycles or 10 minutes before considering rotation (prevents premature switching)
 3. **Stock Evaluation**: Analyzes all watchlist stocks including current symbol for performance:
    - Prioritizes agent backtest performance (total_return_pct from backtest_results.json)
    - Falls back to 5-day price performance if no backtest results available
-4. **Model Selection**: Uses intelligent composite scoring to find best model per stock:
-   - Algorithm preference: RecurrentPPO (100 pts) > PPO (80 pts) > Ensemble (60 pts)
-   - Model recency: Up to 20 points for recent models (decreases by 1 pt/day)
+4. **Model Selection**: Uses dynamic backtest-based scoring to find best model per stock:
+   - Primary: Sharpe ratio × 20 + Return % × 2 (e.g., 2.5 Sharpe + 20% return = 90 points)
+   - Fallback: Conservative algorithm preference (20-30 pts) + recency bonus (up to 10 pts) when no backtest
    - Training quality: Up to 20 points based on timesteps (300k+ = 20 pts, 100k+ = 10 pts)
-5. **Rotation Decision**: Only rotates if new stock is 2% better than current (prevents ping-pong effect)
-6. **Agent Reload**: Automatically loads new stock's best model and reinitializes environment
-7. **Event Logging**: Records rotation with model name in session event log
+5. **Position Closure**: Automatically closes current position before rotation to capture better opportunities
+6. **Rotation Decision**: Only rotates if new stock is 2% better than current (prevents ping-pong effect)
+7. **Single Session Policy**: Creating new AUTO session automatically stops existing AUTO sessions
+8. **Agent Reload**: Automatically loads new stock's best model and reinitializes environment
+9. **Event Logging**: Records force close and rotation with PnL in session event log
 
 **Configuration:**
 ```python
@@ -355,7 +357,9 @@ config = LiveTradingConfig(
 - Leverages entire watchlist for opportunities
 - Intelligent cooldown prevents excessive rotation
 - Performance threshold ensures meaningful switches
-- Prioritizes RecurrentPPO models for better temporal pattern recognition
+- Dynamic scoring selects best algorithm based on actual backtest performance
+- Automatic position closure prevents missed opportunities
+- Single session policy prevents capital fragmentation
 
 **Requirements:**
 - Trained models must exist for watchlist stocks
