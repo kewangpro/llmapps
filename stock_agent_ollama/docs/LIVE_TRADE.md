@@ -658,7 +658,7 @@ class TradingEvent:
 - Agent-to-order translation
 
 **Testing:**
-- Test with all agent types (PPO, RecurrentPPO, DQN, QRDQN)
+- Test with all agent types (PPO, RecurrentPPO, Ensemble)
 - Validate observation construction
 - Compare backtest vs live predictions
 
@@ -1027,7 +1027,7 @@ educational purposes. No real trades are executed.
 **Via Web UI:**
 All configuration is done through the Live Trade page interface:
 - Symbol selection
-- Algorithm selection (PPO/RecurrentPPO/DQN/QRDQN)
+- Algorithm selection (PPO/RecurrentPPO/Ensemble)
 - Initial capital
 - Max position size
 - Stop loss percentage
@@ -1047,7 +1047,7 @@ Configuration is saved with the session state in:
 **Via Web UI (Recommended):**
 1. Launch the application: `python src/main.py`
 2. Navigate to **Live Trade** tab
-3. Configure settings (PPO/RecurrentPPO/DQN/QRDQN) and click "Start Trading"
+3. Configure settings (PPO/RecurrentPPO/Ensemble) and click "Start Trading"
 4. Sessions are automatically saved and can be resumed on restart
 
 **Session State:**

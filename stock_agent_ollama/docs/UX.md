@@ -198,7 +198,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 │ Configuration Panel                                     │
 │                                                         │
 │ Symbol: [AAPL ▼]  Algorithm: [PPO ▼]                  │
-│ Algorithms: PPO, RecurrentPPO, DQN, QRDQN              │
+│ Algorithms: PPO, RecurrentPPO, Ensemble                 │
 │ Training Period: [========] 1095 days                  │
 │ Training Steps: [========] 300,000                     │
 │                                                         │
@@ -214,7 +214,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 
 **A. Configuration Panel**
 - Symbol input with autocomplete (accepts any valid ticker)
-- Algorithm: PPO, RecurrentPPO, DQN, or QRDQN
+- Algorithm: PPO, RecurrentPPO, or Ensemble
 - Training period slider (180-1095 days)
 - Training steps slider (50k-500k, default 300k)
 
@@ -525,7 +525,7 @@ All cards follow consistent styling:
 - Model performance tracking (Final Loss, Val Loss)
 
 ### ✅ RL Trading Agents
-- 4 algorithms: PPO, RecurrentPPO, DQN, QRDQN
+- 3 algorithms: PPO, RecurrentPPO, Ensemble
 - RecurrentPPO with LSTM memory and trend indicators
 - Advanced risk management (stop-loss, trailing stops, circuit breakers)
 - Market regime detection (BULL, BEAR, SIDEWAYS, VOLATILE)
@@ -538,7 +538,7 @@ All cards follow consistent styling:
 
 ### ✅ Live Trading Simulation
 - Paper trading with real-time data
-- Trained agent execution (PPO/RecurrentPPO/DQN/QRDQN)
+- Trained agent execution (PPO/RecurrentPPO/Ensemble)
 - Real-time portfolio tracking
 - Integrated risk management (stop-loss, trailing stops, circuit breakers)
 - Market regime awareness
@@ -580,7 +580,7 @@ Configure LSTM → Fetch data → Train ensemble (3 models)
                             → Display training history
 
 Configure RL   → Fetch data → Create trading environment
-                            → Train agent (PPO/RecurrentPPO/DQN/QRDQN)
+                            → Train agent (PPO/RecurrentPPO/Ensemble)
                             → Save model checkpoints
                             → Show progress and results
 ```

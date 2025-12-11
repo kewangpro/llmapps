@@ -131,9 +131,9 @@ The platform features a professional light-theme interface with 6 main pages:
   - `final_model.zip`: End-of-training
 
 **Always Enabled:**
-- Action Masking: Prevents invalid trades via penalty-based learning
+- Action Masking: Automatically prevents invalid trades during execution
 - 6-Action Space: HOLD, BUY_SMALL/MEDIUM/LARGE, SELL_PARTIAL/ALL
-- Agents see which actions are valid in real-time for smarter decision-making
+- Invalid actions are replaced with HOLD for safe operation
 
 ### Running Backtests
 
