@@ -306,11 +306,21 @@ class PPORewardConfig(EnhancedRewardConfig):
 
 **File**: `src/rl/model_utils.py`
 
+**Path Normalization** (Single Source of Truth):
+```python
+def normalize_model_path(model_path, agent_type=None):
+    # Converts any path format to correct loading format
+    # Handles: directories, files, ensemble subdirs, legacy formats
+    # Auto-detects agent type from training_config.json
+    # Returns: Path to model file (PPO/RecurrentPPO) or directory (Ensemble)
+```
+
 **Automatic Type Detection**:
 ```python
 def load_rl_agent(model_path, env=None):
     # Attempts to load: PPO → RecurrentPPO → Ensemble
-    # Auto-detects correct algorithm type
+    # Auto-detects correct algorithm type from training config
+    # Supports backward compatibility with all legacy path formats
     # Returns loaded agent with is_trained flag
 ```
 
@@ -321,6 +331,12 @@ def load_env_config_from_model(model_dir):
     # Used by live trading to match training environment
     # Includes trend indicators for RecurrentPPO models
 ```
+
+**Backward Compatibility**:
+- Supports legacy directory paths (converted to file paths automatically)
+- Handles ensemble subdirectory structures (both new and old formats)
+- Auto-detects model type when agent_type not specified
+- Seamless session resumption across all saved formats
 
 ### Bug Fixes & Improvements
 

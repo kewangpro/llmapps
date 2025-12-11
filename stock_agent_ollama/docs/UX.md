@@ -289,8 +289,11 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 - Stop-loss percentage (1-20%)
 - Auto Select Stock checkbox - enables dynamic stock rotation
   - When checked: Symbol and Algorithm inputs become disabled
-  - System automatically selects best performing watchlist stocks (prioritizes backtest performance, falls back to 5-day price return)
+  - System automatically selects best performing watchlist stocks using dynamic scoring (Sharpe Ratio × 20 + Total Return % × 2)
   - Creates session ID: SESSION_AUTO_YYYYMMDD_HHMMSS
+  - Only one AUTO session can run at a time (system stops duplicate AUTO sessions automatically)
+  - Rotation cooldown: 10 cycles (approximately 10 minutes with 60-second cycles)
+  - Automatically closes positions before rotating to a new stock
 - Manual mode creates session ID: SESSION_SYMBOL_YYYYMMDD_HHMMSS
 
 **B. Dashboard Card** (Multi-Session Overview)
@@ -312,7 +315,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 - **Portfolio Card**: Total value, cash, trades count, P&L with live updates
 - **Positions Table**: Current holdings with real-time prices and unrealized P&L
 - **Recent Trades**: Last 10 trades with timestamps, actions, prices, P&L
-- **Event Log**: Last 15 events with symbol prefixes for auto-select sessions, rotation events include model names (SESSION_START, TRADE, HOLD, ORDER_REJECTED, STOCK_ROTATION, SESSION_END)
+- **Event Log**: Last 15 events with symbol prefixes for auto-select sessions, rotation events include model names (SESSION_START, TRADE, HOLD, ORDER_REJECTED, FORCE_CLOSE, STOCK_ROTATION, SESSION_END)
 
 **D. Real-Time Updates**
 - Position prices update every 5 seconds with current market data
