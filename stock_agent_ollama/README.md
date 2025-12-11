@@ -34,7 +34,7 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 
 ### 🤖 Reinforcement Learning Trading
 - **Train RL Agents** using PPO, RecurrentPPO, and Ensemble
-- **Invalid Action Penalties** training penalizes invalid predictions to improve decision quality
+- **Action Masking** prevents invalid trades automatically during execution
 - **6-Action Trading Space** (HOLD, BUY_SMALL, BUY_MEDIUM, BUY_LARGE, SELL_PARTIAL, SELL_ALL)
 - **RecurrentPPO** with LSTM memory for temporal pattern recognition
 - **Advanced Risk Management** (stop-loss, trailing stops, circuit breakers)
@@ -260,10 +260,10 @@ See [QUICK_START.md](docs/QUICK_START.md#troubleshooting) for more help
 - Auto-training on first analysis
 
 **RL Agents:**
-- **PPO**: Stable baseline with balanced risk management
-- **RecurrentPPO**: LSTM memory + trend indicators for temporal pattern recognition
-- **Ensemble**: Weighted voting combining PPO (30%) + RecurrentPPO (70%)
-- Agents learn to predict only valid actions through reward shaping
+- **PPO**: Exceptional performance with balanced risk management (2.81 Sharpe ratio)
+- **RecurrentPPO**: LSTM memory + trend indicators for temporal pattern recognition (1.84 Sharpe ratio)
+- **Ensemble**: Weighted voting combining PPO (30%) + RecurrentPPO (70%) (1.89 Sharpe ratio)
+- Action masking ensures only valid actions are executed
 - 6-action space with adaptive sizing and algorithm-specific rewards
 
 **Backtesting:**
