@@ -6,12 +6,100 @@ and live trading.
 """
 
 from pathlib import Path
-from typing import Any, Optional, Dict, Tuple
+from typing import Any, Optional, Dict, Tuple, Union
 import json
 import logging
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_model_path(model_path: Union[str, Path], agent_type: Optional[str] = None) -> Path:
+    """
+    Normalize model path to the correct format for loading.
+
+    This is the single source of truth for path resolution across the system.
+
+    Args:
+        model_path: Path to model directory or file
+        agent_type: Optional agent type ('ppo', 'recurrent_ppo', 'ensemble')
+                   If not provided, will be auto-detected from training_config.json
+
+    Returns:
+        Path: Normalized path ready for load_rl_agent()
+              - For PPO/RecurrentPPO: path to best_model.zip or final_model.zip
+              - For Ensemble: path to ensemble subdirectory containing component models
+
+    Raises:
+        FileNotFoundError: If model path or required files don't exist
+    """
+    model_path = Path(model_path)
+
+    if not model_path.exists():
+        raise FileNotFoundError(f"Model path not found: {model_path}")
+
+    # If already a file, return it (already normalized)
+    if model_path.is_file():
+        return model_path
+
+    # It's a directory - need to determine what kind of model
+    model_dir = model_path
+
+    # Check if this is an ensemble directory by detecting component models
+    # Do this BEFORE agent_type detection to handle ensemble subdirectories
+    is_ensemble_dir = (model_dir / "ppo_best_model.zip").exists() and \
+                      (model_dir / "recurrent_ppo_best_model.zip").exists()
+
+    if is_ensemble_dir:
+        logger.debug(f"Detected ensemble directory by component models: {model_dir}")
+        return model_dir
+
+    # Auto-detect agent type if not provided
+    if agent_type is None:
+        # Try current directory first
+        config_path = model_dir / "training_config.json"
+
+        # If not found, try parent directory (for ensemble subdirectories)
+        if not config_path.exists() and model_dir.name == "ensemble":
+            config_path = model_dir.parent / "training_config.json"
+
+        if config_path.exists():
+            try:
+                with open(config_path, 'r') as f:
+                    config = json.load(f)
+                    agent_type = config.get('agent_type', '').lower()
+                    logger.debug(f"Auto-detected agent type: {agent_type}")
+            except Exception as e:
+                logger.warning(f"Could not read training config: {e}")
+
+    # Handle ensemble models
+    if agent_type == 'ensemble':
+        # Ensemble models are in an 'ensemble' subdirectory
+        ensemble_dir = model_dir / "ensemble"
+
+        # Check if ensemble subdirectory exists
+        if ensemble_dir.exists():
+            logger.debug(f"Found ensemble subdirectory: {ensemble_dir}")
+            return ensemble_dir
+
+        # Fallback: return model_dir and let load_rl_agent handle it
+        logger.warning(f"Ensemble directory structure not found, using: {model_dir}")
+        return model_dir
+
+    # Handle PPO and RecurrentPPO models
+    else:
+        # Look for best_model.zip first, then final_model.zip
+        model_file = model_dir / "best_model.zip"
+        if model_file.exists():
+            logger.debug(f"Found best_model.zip: {model_file}")
+            return model_file
+
+        model_file = model_dir / "final_model.zip"
+        if model_file.exists():
+            logger.debug(f"Found final_model.zip: {model_file}")
+            return model_file
+
+        raise FileNotFoundError(f"No model file (best_model.zip or final_model.zip) found in {model_dir}")
 
 
 class CompatibilityAgent:

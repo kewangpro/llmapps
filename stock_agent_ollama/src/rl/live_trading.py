@@ -624,18 +624,17 @@ class LiveTradingEngine:
 
     def load_agent(self, agent_path: str):
         """Load trained RL agent using centralized model loader"""
-        from .model_utils import load_rl_agent
+        from .model_utils import load_rl_agent, normalize_model_path
 
         try:
-            agent_path = Path(agent_path)
-            if not agent_path.exists():
-                raise FileNotFoundError(f"Agent not found: {agent_path}")
+            # Normalize path using centralized function (handles all legacy formats)
+            normalized_path = normalize_model_path(agent_path)
 
             # Use centralized loader that handles PPO, RecurrentPPO, Ensemble
             # Note: We pass None for env here because env is not created yet
             # We will handle VecNormalize wrapping in setup_environment
-            self.agent = load_rl_agent(agent_path, env=None)
-            logger.info(f"Successfully loaded agent from {agent_path}")
+            self.agent = load_rl_agent(normalized_path, env=None)
+            logger.info(f"Successfully loaded agent from {normalized_path}")
 
         except Exception as e:
             logger.error(f"Failed to load agent: {e}")
@@ -929,9 +928,19 @@ class LiveTradingEngine:
 
         # Select model with highest score (backtest performance dominates)
         best_candidate = max(model_candidates, key=lambda x: x['score'])
-        logger.info(f"Selected {best_candidate['agent_type']} for {symbol} (score: {best_candidate['score']:.0f})")
 
-        return (best_candidate['agent_type'], best_candidate['path'])
+        # Use centralized path normalization
+        from .model_utils import normalize_model_path
+        try:
+            normalized_path = normalize_model_path(
+                best_candidate['path'],
+                agent_type=best_candidate['agent_type']
+            )
+            logger.info(f"Selected {best_candidate['agent_type']} for {symbol} (score: {best_candidate['score']:.0f})")
+            return (best_candidate['agent_type'], str(normalized_path))
+        except FileNotFoundError as e:
+            logger.error(f"Failed to normalize model path: {e}")
+            return None
 
     def _select_best_stock(self) -> Optional[Tuple[str, str]]:
         """Select best stock from watchlist based on agent backtest performance (prioritized) or stock price performance (fallback)
@@ -1032,6 +1041,8 @@ class LiveTradingEngine:
     def _force_close_position(self, current_price: float):
         """Force close current position before rotation (FIX #3)"""
         try:
+            from .improvements import ImprovedTradingAction
+
             current_position = self.portfolio.positions.get(self.config.symbol)
             if not current_position or current_position.shares == 0:
                 return
@@ -1051,13 +1062,16 @@ class LiveTradingEngine:
             realized_pnl = trade_value - cost_basis - commission
             current_position.realized_pnl += realized_pnl
 
-            # Record trade
+            # Record trade (use proper TradingAction enum to avoid serialization issues)
+            # Map ImprovedTradingAction.SELL_ALL (5) to the compatible TradingAction
+            # Since TradingAction doesn't have SELL_ALL, we'll use the raw int but wrap properly
+            from datetime import datetime as dt
             trade = Trade(
                 symbol=symbol,
-                action=5,  # SELL_ALL
+                action=TradingAction.SELL,  # Use SELL from TradingAction enum
                 shares=shares_to_sell,
                 price=current_price,
-                timestamp=datetime.now().isoformat(),
+                timestamp=dt.now(),
                 pnl=realized_pnl,
                 commission=commission,
                 trade_id=f"T{len(self.portfolio.trades) + 1:06d}"
