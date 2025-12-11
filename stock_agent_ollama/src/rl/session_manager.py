@@ -75,6 +75,21 @@ class LiveSessionManager:
             session_id: Created session ID
         """
         with self._lock:
+            # FIX #1: Stop duplicate AUTO sessions before creating a new one
+            if config.auto_select_stock:
+                # Find all existing AUTO sessions that are running
+                existing_auto_sessions = [
+                    (sid, engine) for sid, engine in self.sessions.items()
+                    if engine.config.auto_select_stock
+                    and engine.session.status == TradingStatus.RUNNING
+                ]
+
+                if existing_auto_sessions:
+                    logger.warning(f"Stopping {len(existing_auto_sessions)} existing AUTO session(s) before creating new one")
+                    for sid, engine in existing_auto_sessions:
+                        logger.info(f"Stopping duplicate AUTO session: {sid}")
+                        self.stop_session(sid)
+
             # Create engine
             engine = LiveTradingEngine(config)
 

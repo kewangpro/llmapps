@@ -841,7 +841,7 @@ class LiveTradingEngine:
             return None
 
     def _find_best_model_for_symbol(self, symbol: str) -> Optional[Tuple[str, str]]:
-        """Find best performing model (algorithm + path) for a symbol using intelligent heuristics"""
+        """Find best performing model (algorithm + path) for a symbol using backtest-based scoring"""
         from pathlib import Path
         import json
         from datetime import datetime
@@ -863,31 +863,52 @@ class LiveTradingEngine:
                 matching_dirs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
                 latest = matching_dirs[0]
 
-                # Calculate composite score based on multiple factors
+                # FIX #2: Use backtest performance for scoring instead of hardcoded preferences
                 score = 0.0
+                backtest_file = latest / "backtest_results.json"
 
-                # Factor 1: Algorithm preference (RecurrentPPO > PPO > Ensemble)
-                # Based on typical performance, RecurrentPPO often performs best
-                algo_scores = {
-                    'recurrent_ppo': 100,  # Prefer RecurrentPPO (LSTM memory)
-                    'ppo': 80,              # PPO is solid baseline
-                    'ensemble': 60          # Ensemble can be inconsistent
-                }
-                score += algo_scores.get(agent_type_lower, 0)
+                if backtest_file.exists():
+                    try:
+                        with open(backtest_file, 'r') as f:
+                            backtest_data = json.load(f)
+                            # Primary: Sharpe ratio (up to 100 points, scaled by 20x)
+                            sharpe = backtest_data.get('sharpe_ratio', 0)
+                            sharpe_score = sharpe * 20  # e.g., 2.5 Sharpe = 50 points
 
-                # Factor 2: Model recency (newer models may have better training)
-                model_age_days = (datetime.now() - datetime.fromtimestamp(latest.stat().st_mtime)).days
-                recency_score = max(0, 20 - model_age_days)  # Up to 20 points for recent models
-                score += recency_score
+                            # Secondary: Total return percentage (scaled)
+                            return_pct = backtest_data.get('total_return_pct', 0)
+                            return_score = return_pct * 2  # e.g., 20% return = 40 points
 
-                # Factor 3: Training quality (more timesteps = better training)
+                            score = sharpe_score + return_score
+                            logger.debug(f"{agent_type} {symbol}: Sharpe {sharpe:.2f} ({sharpe_score:.0f}pts) + Return {return_pct:.2f}% ({return_score:.0f}pts) = {score:.0f}pts")
+                    except Exception as e:
+                        logger.debug(f"Could not load backtest for {latest.name}: {e}")
+                        score = 0
+
+                # Fallback: If no backtest available, use conservative algorithm preference + recency
+                if score == 0:
+                    # Conservative fallback scoring (much lower than backtest-based)
+                    algo_scores = {
+                        'recurrent_ppo': 30,  # Fallback preference
+                        'ppo': 25,
+                        'ensemble': 20
+                    }
+                    score = algo_scores.get(agent_type_lower, 0)
+
+                    # Add recency bonus
+                    model_age_days = (datetime.now() - datetime.fromtimestamp(latest.stat().st_mtime)).days
+                    recency_score = max(0, 10 - model_age_days)  # Up to 10 points
+                    score += recency_score
+
+                    logger.debug(f"{agent_type} {symbol}: No backtest, using fallback score {score:.0f}pts")
+
+                # Add training quality bonus (up to 20 points)
                 training_config_file = latest / "training_config.json"
                 if training_config_file.exists():
                     try:
                         with open(training_config_file, 'r') as f:
                             config = json.load(f)
                             timesteps = config.get('total_timesteps', 0)
-                            # Give points for longer training (up to 20 points)
                             if timesteps >= 300000:
                                 score += 20
                             elif timesteps >= 100000:
@@ -900,16 +921,15 @@ class LiveTradingEngine:
                 model_candidates.append({
                     'agent_type': agent_type,
                     'path': str(latest),
-                    'score': score,
-                    'age_days': model_age_days
+                    'score': score
                 })
 
         if not model_candidates:
             return None
 
-        # Select model with highest composite score
+        # Select model with highest score (backtest performance dominates)
         best_candidate = max(model_candidates, key=lambda x: x['score'])
-        logger.info(f"Selected {best_candidate['agent_type']} for {symbol} (score: {best_candidate['score']:.0f}, age: {best_candidate['age_days']}d)")
+        logger.info(f"Selected {best_candidate['agent_type']} for {symbol} (score: {best_candidate['score']:.0f})")
 
         return (best_candidate['agent_type'], best_candidate['path'])
 
@@ -1008,6 +1028,51 @@ class LiveTradingEngine:
         except Exception as e:
             logger.error(f"Error selecting best stock: {e}")
             return None
+
+    def _force_close_position(self, current_price: float):
+        """Force close current position before rotation (FIX #3)"""
+        try:
+            current_position = self.portfolio.positions.get(self.config.symbol)
+            if not current_position or current_position.shares == 0:
+                return
+
+            shares_to_sell = current_position.shares
+            symbol = self.config.symbol
+
+            # Execute sell order (full position)
+            trade_value = shares_to_sell * current_price
+            commission = self.config.commission_per_trade
+
+            # Update portfolio
+            self.portfolio.cash += trade_value - commission
+
+            # Calculate realized PnL
+            cost_basis = current_position.avg_entry_price * shares_to_sell
+            realized_pnl = trade_value - cost_basis - commission
+            current_position.realized_pnl += realized_pnl
+
+            # Record trade
+            trade = Trade(
+                symbol=symbol,
+                action=5,  # SELL_ALL
+                shares=shares_to_sell,
+                price=current_price,
+                timestamp=datetime.now().isoformat(),
+                pnl=realized_pnl,
+                commission=commission,
+                trade_id=f"T{len(self.portfolio.trades) + 1:06d}"
+            )
+            self.portfolio.trades.append(trade)
+
+            # Remove position
+            del self.portfolio.positions[symbol]
+
+            logger.info(f"Force closed {shares_to_sell} shares of {symbol} @ ${current_price:.2f}, PnL: ${realized_pnl:.2f}")
+            self._add_event("FORCE_CLOSE", f"Closed {shares_to_sell} shares @ ${current_price:.2f} for rotation (PnL: ${realized_pnl:+.2f})")
+
+        except Exception as e:
+            logger.error(f"Failed to force close position: {e}")
+            raise
 
     def _rotate_to_stock(self, symbol: str, agent_path: str):
         """Rotate to a new stock by updating config and reloading agent"""
@@ -1112,12 +1177,12 @@ class LiveTradingEngine:
             current_position = self.portfolio.positions.get(self.config.symbol)
             current_shares = current_position.shares if current_position else 0
 
-            # Auto-select stock rotation: if enabled and position is 0, consider rotating to better stock
+            # FIX #3: Auto-select stock rotation - check even when holding positions
             # Only rotate after giving current stock enough time (minimum 10 cycles or 10 minutes)
             MIN_CYCLES_BEFORE_ROTATION = 10
             MIN_MINUTES_BEFORE_ROTATION = 10
 
-            if self.config.auto_select_stock and current_shares == 0:
+            if self.config.auto_select_stock:
                 # Increment cycle counter
                 self.session.cycles_since_rotation += 1
 
@@ -1131,12 +1196,17 @@ class LiveTradingEngine:
                              time_elapsed_minutes >= MIN_MINUTES_BEFORE_ROTATION)
 
                 if can_rotate:
-                    logger.info(f"{self.session.session_id} - Auto-select mode: Position is 0 for {cycles_elapsed} cycles, checking for better stock...")
+                    logger.info(f"{self.session.session_id} - Auto-select mode: {cycles_elapsed} cycles elapsed, checking for better stock...")
                     best_stock = self._select_best_stock()
 
                     if best_stock:
                         new_symbol, new_agent_path = best_stock
                         if new_symbol != self.config.symbol:
+                            # If holding position, force close it before rotation
+                            if current_shares > 0:
+                                logger.info(f"{self.session.session_id} - Closing {current_shares} shares of {self.config.symbol} before rotation to {new_symbol}")
+                                self._force_close_position(tick.price)
+
                             # Rotate to new stock
                             self._rotate_to_stock(new_symbol, new_agent_path)
 
@@ -1148,11 +1218,7 @@ class LiveTradingEngine:
                                 "timestamp": tick.timestamp.isoformat()
                             }
                 else:
-                    logger.debug(f"{self.session.session_id} - Auto-select: Position is 0 but only {cycles_elapsed} cycles since rotation, waiting...")
-            else:
-                # Reset counter if we have a position
-                if current_shares > 0:
-                    self.session.cycles_since_rotation = 0
+                    logger.debug(f"{self.session.session_id} - Auto-select: Only {cycles_elapsed} cycles since rotation, waiting...")
 
             # Access underlying environment if wrapped (VecNormalize -> DummyVecEnv -> Env)
             actual_env = self.env
