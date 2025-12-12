@@ -723,11 +723,19 @@ class LiveTradingPage(pn.viewable.Viewer):
                     from datetime import datetime
                     try:
                         timestamp_dt = datetime.fromisoformat(trade.timestamp)
-                        time_str = timestamp_dt.strftime('%H:%M:%S')
+                        # Convert to local timezone if timestamp is timezone-aware
+                        if timestamp_dt.tzinfo is not None:
+                            timestamp_dt = timestamp_dt.astimezone()
+                        time_str = timestamp_dt.strftime('%Y-%m-%d %H:%M:%S')
                     except:
                         time_str = trade.timestamp[:8]  # Fallback: take first 8 chars (HH:MM:SS)
                 else:
-                    time_str = trade.timestamp.strftime('%H:%M:%S')
+                    # Convert to local timezone if timestamp is timezone-aware
+                    if trade.timestamp.tzinfo is not None:
+                        timestamp_local = trade.timestamp.astimezone()
+                    else:
+                        timestamp_local = trade.timestamp
+                    time_str = timestamp_local.strftime('%Y-%m-%d %H:%M:%S')
 
                 rows += f"""
                 <tr style='border-bottom: 1px solid {Colors.BORDER_SUBTLE};'>
@@ -782,7 +790,7 @@ class LiveTradingPage(pn.viewable.Viewer):
                 timestamp = event['timestamp']
                 if isinstance(timestamp, str):
                     timestamp = datetime.fromisoformat(timestamp)
-                time_str = timestamp.strftime('%H:%M:%S')
+                time_str = timestamp.strftime('%Y-%m-%d %H:%M:%S')
                 event_type = event['type']
 
                 type_color = {
