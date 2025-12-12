@@ -280,7 +280,7 @@ See [QUICK_START.md](docs/QUICK_START.md#troubleshooting) for more help
 **Automated Training & Comparison:**
 The `retrain_and_compare.py` CLI utility automates the entire workflow:
 ```bash
-# Train all algorithms on a single stock
+# Train all algorithms on a single stock (efficiently via Ensemble)
 python retrain_and_compare.py --symbol AAPL
 
 # Train specific algorithms on multiple stocks
@@ -310,7 +310,7 @@ python retrain_and_compare.py --symbol NVDA --no-baselines
 - `--skip-training`: Only run backtest on existing models
 - `--no-baselines`: Skip Buy & Hold and Momentum strategies
 
-The tool handles model training, backtesting, and comprehensive strategy comparison automatically.
+The tool handles model training, backtesting, and comprehensive strategy comparison automatically. Note that training the `ensemble` algorithm automatically trains and saves the individual `ppo` and `recurrent_ppo` models as part of the process, making it the most efficient way to generate all three agents.
 
 ---
 

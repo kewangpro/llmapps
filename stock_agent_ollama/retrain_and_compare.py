@@ -466,6 +466,13 @@ def main():
             print(f"   Use PPO, RecurrentPPO, or Ensemble instead.")
             sys.exit(1)
 
+    # Optimization: If retraining ensemble, don't retrain individual models as they are included
+    if 'ensemble' in algorithms:
+        if 'ppo' in algorithms or 'recurrent_ppo' in algorithms:
+            print("\nℹ️  Optimization: 'ensemble' training includes PPO and RecurrentPPO.")
+            print("    Skipping separate training for individual models to avoid redundancy.")
+            algorithms = [a for a in algorithms if a not in ['ppo', 'recurrent_ppo']]
+
     print(f"Algorithms: {', '.join([a.upper() for a in algorithms])}")
     print()
 
