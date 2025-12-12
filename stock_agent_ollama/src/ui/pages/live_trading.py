@@ -739,12 +739,12 @@ class LiveTradingPage(pn.viewable.Viewer):
 
                 rows += f"""
                 <tr style='border-bottom: 1px solid {Colors.BORDER_SUBTLE};'>
-                    <td style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 12px; font-family: {Typography.FONT_MONO};'>{time_str}</td>
-                    <td style='padding: 10px; color: {Colors.ACCENT_CYAN}; font-weight: 600; font-family: {Typography.FONT_MONO};'>{trade.symbol}</td>
-                    <td style='padding: 10px; color: {action_color}; font-weight: 600;'>{trade.action.name}</td>
-                    <td style='padding: 10px; color: {Colors.TEXT_SECONDARY}; text-align: right;'>{trade.shares}</td>
-                    <td style='padding: 10px; color: {Colors.TEXT_SECONDARY}; text-align: right; font-family: {Typography.FONT_MONO};'>${trade.price:.2f}</td>
-                    <td style='padding: 10px; color: {pnl_color}; text-align: right; font-weight: 600; font-family: {Typography.FONT_MONO};'>
+                    <td style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 12px; font-family: {Typography.FONT_MONO}; min-width: 160px;'>{time_str}</td>
+                    <td style='padding: 10px; color: {Colors.ACCENT_CYAN}; font-weight: 600; font-family: {Typography.FONT_MONO}; min-width: 70px;'>{trade.symbol}</td>
+                    <td style='padding: 10px; color: {action_color}; font-weight: 600; min-width: 100px;'>{trade.action.name}</td>
+                    <td style='padding: 10px; color: {Colors.TEXT_SECONDARY}; text-align: right; min-width: 80px;'>{trade.shares}</td>
+                    <td style='padding: 10px; color: {Colors.TEXT_SECONDARY}; text-align: right; font-family: {Typography.FONT_MONO}; min-width: 80px;'>${trade.price:.2f}</td>
+                    <td style='padding: 10px; color: {pnl_color}; text-align: right; font-weight: 600; font-family: {Typography.FONT_MONO}; min-width: 90px;'>
                         ${trade.pnl:.2f}
                     </td>
                 </tr>
@@ -757,12 +757,12 @@ class LiveTradingPage(pn.viewable.Viewer):
                     <table style='width: 100%; border-collapse: collapse;'>
                         <thead style='position: sticky; top: 0; background: {Colors.BG_SECONDARY};'>
                             <tr style='border-bottom: 2px solid {Colors.BORDER_SUBTLE};'>
-                                <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: left;'>TIME</th>
-                                <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: left;'>SYMBOL</th>
-                                <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: left;'>ACTION</th>
-                                <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: right;'>SHARES</th>
-                                <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: right;'>PRICE</th>
-                                <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: right;'>P&L</th>
+                                <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: left; min-width: 160px;'>TIME</th>
+                                <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: left; min-width: 70px;'>SYMBOL</th>
+                                <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: left; min-width: 100px;'>ACTION</th>
+                                <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: right; min-width: 80px;'>SHARES</th>
+                                <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: right; min-width: 80px;'>PRICE</th>
+                                <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: right; min-width: 90px;'>P&L</th>
                             </tr>
                         </thead>
                         <tbody>
