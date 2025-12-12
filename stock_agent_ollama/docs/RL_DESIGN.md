@@ -225,6 +225,7 @@ src/config.py                   # RL configuration
 - Trains both PPO and RecurrentPPO independently
 - Combines trained models with optimized 30/70 weighting
 - Saves both component models plus ensemble metadata
+- **Artifacts**: Generates standalone `ppo_best_model.zip` and `recurrent_ppo_best_model.zip` which can be loaded and used independently of the ensemble wrapper
 
 **Observation Space Handling**:
 - PPO expects base features (e.g., base + technical + regime + MTF)
