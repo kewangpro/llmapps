@@ -239,6 +239,46 @@ src/config.py                   # RL configuration
 
 ---
 
+## Deep Dive: Understanding PPO
+
+**PPO (Proximal Policy Optimization)** is the industry standard for Reinforcement Learning because it strikes a perfect balance between **ease of implementation**, **sample efficiency**, and **performance**.
+
+### 1. The Core Concept: "Learning Safely"
+In traditional Reinforcement Learning (like Policy Gradients), an agent tweaks its neural network weights to increase the probability of actions that resulted in high rewards.
+
+- **The Problem**: Sometimes, an agent will experience a "lucky" run (e.g., buying a stock right before a random spike). In older algorithms, the agent might drastically rewrite its weights to *always* do that action. If that action was just luck, the agent's performance collapses (catastrophic forgetting).
+- **The PPO Solution**: PPO allows the agent to update its policy but puts a **limit (a "clip")** on how much the policy can change in a single training step. It effectively says: *"Improve the policy, but don't change the probability of an action by more than 20% (0.2) at a time."* This "Proximal" constraint ensures **stability**.
+
+### 2. How it Works (Actor-Critic)
+PPO is an **Actor-Critic** algorithm, meaning it uses two neural networks (or two "heads") that work together:
+
+1. **The Actor (The Trader)**:
+   - **Job**: Observes the market state (prices, RSI, MACD) and outputs **Action Probabilities** (e.g., 10% HOLD, 80% BUY_LARGE, 10% SELL).
+   - **Goal**: Maximize the reward.
+2. **The Critic (The Analyst)**:
+   - **Job**: Observes the market state and predicts the **Value ($V$)** of being in that state (i.e., "How much profit do I expect to make from this point forward?").
+   - **Goal**: Accurately predict the final outcome.
+
+The **Critic** helps the **Actor** learn by reducing variance. The Actor looks at how much better the outcome was *compared to what the Critic expected* (the **Advantage**).
+
+### 3. Why PPO is Great for Stock Trading
+Financial data is extremely **noisy** and **non-stationary** (market rules change over time).
+
+- **Stability**: Because PPO limits update size, it is less likely to overfit to short-term trends (like a 2-week bull run) and forget how to survive a crash.
+- **On-Policy Learning**: PPO learns from recent data and discards it. This ensures it optimizes based on its *current* strategy, rather than outdated history.
+- **Robustness**: PPO works well with default hyperparameters, avoiding weeks of math tuning.
+
+### 4. PPO vs. RecurrentPPO
+- **Standard PPO**: Looks at the fixed window (e.g., 60 days) as a static snapshot.
+- **RecurrentPPO**: Adds an **LSTM (Long Short-Term Memory)** layer. It remembers the *sequence* of events, allowing it to understand context like "we have been in a downtrend for 3 months, but momentum is shifting."
+
+In this project:
+- **PPO** provides the reliable, low-risk foundation.
+- **RecurrentPPO** adds memory for complex trend capture.
+- **Ensemble** combines them for robust performance.
+
+---
+
 ## Algorithm-Specific Reward Configurations
 
 ### RecurrentPPORewardConfig
