@@ -1586,7 +1586,7 @@ class LiveTradingEngine:
                     action=order_action,
                     shares=shares,
                     price=tick.price,
-                    timestamp=tick.timestamp
+                    timestamp=datetime.now()  # Use current time for accurate seconds precision
                 )
 
                 # Validate order
