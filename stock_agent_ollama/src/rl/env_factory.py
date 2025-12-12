@@ -30,8 +30,8 @@ class EnvConfig:
     max_position_pct: float = 80.0  # Max position as % of portfolio
 
     # Cost parameters
-    transaction_cost_rate: float = 0.0005  # 0.05% per trade
-    slippage_rate: float = 0.0005  # 0.05% slippage
+    transaction_cost_rate: float = 0.001  # 0.1% per trade (increased to reduce churn)
+    slippage_rate: float = 0.001  # 0.1% slippage (increased for realism)
 
     # Observation parameters
     lookback_window: int = 60
