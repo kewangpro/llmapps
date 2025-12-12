@@ -478,6 +478,13 @@ class LiveTradingPage(pn.viewable.Viewer):
                 # Update the first object in the dashboard card (the header)
                 if hasattr(self.dashboard_card_pane, 'objects') and len(self.dashboard_card_pane.objects) > 0:
                     self.dashboard_card_pane.objects[0].object = header_html
+
+                # Update the sessions table (second object in dashboard card)
+                if hasattr(self.dashboard_card_pane, 'objects') and len(self.dashboard_card_pane.objects) > 1:
+                    # Recreate the full dashboard to update the table
+                    new_dashboard = self._create_dashboard_card(metrics, summaries)
+                    # Replace the entire dashboard card to update the table
+                    self.dashboard_card_pane.objects = new_dashboard.objects
             except Exception as e:
                 logger.error(f"Error updating dashboard metrics: {e}")
 
