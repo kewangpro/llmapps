@@ -163,6 +163,7 @@ class LiveTradingPage(pn.viewable.Viewer):
         self.trades_card_pane = None
         self.events_card_pane = None
         self.dashboard_card_pane = None
+        self.dashboard_table_pane = None  # Separate reference for sessions table
 
         # Start periodic refresh for real-time updates (but don't clear and rebuild everything)
         self.update_callback = pn.state.add_periodic_callback(
@@ -479,12 +480,76 @@ class LiveTradingPage(pn.viewable.Viewer):
                 if hasattr(self.dashboard_card_pane, 'objects') and len(self.dashboard_card_pane.objects) > 0:
                     self.dashboard_card_pane.objects[0].object = header_html
 
-                # Update the sessions table (second object in dashboard card)
-                if hasattr(self.dashboard_card_pane, 'objects') and len(self.dashboard_card_pane.objects) > 1:
-                    # Recreate the full dashboard to update the table
-                    new_dashboard = self._create_dashboard_card(metrics, summaries)
-                    # Replace the entire dashboard card to update the table
-                    self.dashboard_card_pane.objects = new_dashboard.objects
+                # Update the sessions table without recreating the entire dashboard
+                if self.dashboard_table_pane is not None:
+                    # Build new table rows
+                    if not summaries:
+                        # No sessions - show empty message
+                        self.dashboard_table_pane.objects = [
+                            pn.pane.HTML(f"""
+                                <div style='padding: 40px; text-align: center;'>
+                                    <p style='color: {Colors.TEXT_MUTED}; font-size: {Typography.TEXT_BASE};'>No sessions to display</p>
+                                </div>
+                            """, sizing_mode="stretch_width")
+                        ]
+                    else:
+                        # Build table rows
+                        rows = []
+                        for summary in summaries:
+                            session_id = summary['session_id']
+                            status = summary['status']
+
+                            # Extract model name
+                            model_name = "N/A"
+                            if 'agent_path' in summary and summary['agent_path']:
+                                agent_path = Path(summary['agent_path'])
+                                if agent_path.is_file() or agent_path.name in ['ensemble', 'ppo', 'recurrent_ppo']:
+                                    model_name = agent_path.parent.name
+                                else:
+                                    model_name = agent_path.name
+                            elif 'model_name' in summary:
+                                model_name = summary['model_name']
+
+                            view_btn = pn.widgets.Button(name='View', button_type='primary', width=60)
+                            view_btn.on_click(lambda e, sid=session_id: self._select_session(sid))
+
+                            if status == 'running':
+                                action_btn = pn.widgets.Button(name='Stop', button_type='danger', width=80)
+                                action_btn.on_click(lambda e, sid=session_id: self._stop_session(sid))
+                            else:
+                                action_btn = pn.widgets.Button(name='Start', button_type='success', width=80)
+                                action_btn.on_click(lambda e, sid=session_id: self._start_session(sid))
+
+                            button_row = pn.Row(view_btn, action_btn, sizing_mode='fixed')
+
+                            # Auto-select indicator
+                            auto_select = summary.get('auto_select', False)
+                            mode_badge = ""
+                            if auto_select:
+                                mode_badge = f"<span style='background: {Colors.ACCENT_CYAN}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 6px;'>AUTO</span>"
+
+                            symbol_html = f"<div>{summary['symbol']}{mode_badge}</div>"
+
+                            rows.append(pn.Row(
+                                pn.pane.HTML(f"<div>{summary['session_id']}</div>", width=250),
+                                pn.pane.HTML(symbol_html, width=100),
+                                pn.pane.HTML(f"<div>{model_name}</div>", width=300),
+                                pn.pane.HTML(f"<div>{summary['status']}</div>", width=100),
+                                button_row,
+                                sizing_mode='stretch_width',
+                                align='center'
+                            ))
+
+                        # Update table with header + rows
+                        header = pn.Row(
+                            pn.pane.HTML("<b>Session ID</b>", width=250),
+                            pn.pane.HTML("<b>Symbol</b>", width=100),
+                            pn.pane.HTML("<b>Model Name</b>", width=300),
+                            pn.pane.HTML("<b>Status</b>", width=100),
+                            pn.pane.HTML("<b>Actions</b>", width=180, align='center'),
+                            sizing_mode='stretch_width'
+                        )
+                        self.dashboard_table_pane.objects = [header] + rows
             except Exception as e:
                 logger.error(f"Error updating dashboard metrics: {e}")
 
@@ -940,8 +1005,11 @@ class LiveTradingPage(pn.viewable.Viewer):
                 pn.pane.HTML("<b>Actions</b>", width=180, align='center'),
                 sizing_mode='stretch_width'
             )
-            
+
             table_content = pn.Column(header, *rows, sizing_mode="stretch_width")
+
+        # Store reference to table for in-place updates
+        self.dashboard_table_pane = table_content
 
         return pn.Column(
             pn.pane.HTML(header_html, sizing_mode="stretch_width"),
