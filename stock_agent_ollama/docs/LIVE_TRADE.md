@@ -601,9 +601,9 @@ class TradingEvent:
 │  [Portfolio Value Chart - Real-time Line Graph]             │
 ├─────────────────────────────────────────────────────────────┤
 │  Recent Trades (Symbol shown for auto-select sessions)      │
-│  10:43:12  AAPL  BUY   5 @ $253.45  P&L: $0.00              │
-│  10:15:34  AAPL  SELL  3 @ $251.20  P&L: $6.75              │
-│  09:52:18  NVDA  BUY  10 @ $249.80  P&L: $0.00              │
+│  2025-12-12 10:43:12  AAPL  BUY   5 @ $253.45  P&L: $0.00  │
+│  2025-12-12 10:15:34  AAPL  SELL  3 @ $251.20  P&L: $6.75  │
+│  2025-12-12 09:52:18  NVDA  BUY  10 @ $249.80  P&L: $0.00  │
 ├─────────────────────────────────────────────────────────────┤
 │  Risk Status: ✅ All Clear                                   │
 │  • Position Size: 60.1% (max 80%)                           │

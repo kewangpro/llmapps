@@ -197,7 +197,7 @@ The live trading session is **persistent**. You can stop the application and res
 - **Trading Status**: Session status with AUTO badge for auto-select mode, runtime, last update
 - **Portfolio Summary**: Total value, cash, invested, P&L
 - **Current Positions**: Holdings with unrealized P&L
-- **Recent Trades**: Trade history with agent decisions
+- **Recent Trades**: Trade history with full timestamps (date + time), symbol, action, shares, price, and P&L
 - **Event Log**: System events with symbol prefixes for auto-select (e.g., `[HOOD] Agent predicted SELL_ALL...`), includes rotation events with model names (e.g., `Rotated to HOOD (recurrent_ppo_HOOD_20251203_103214)`)
 
 **Controls:**
