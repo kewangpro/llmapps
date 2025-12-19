@@ -164,6 +164,10 @@ class LiveTradingPage(pn.viewable.Viewer):
         self.events_card_pane = None
         self.dashboard_card_pane = None
         self.dashboard_table_pane = None  # Separate reference for sessions table
+        self.dashboard_table_header = None # Reference to header
+        self._last_session_summary_hash = None  # Track changes to avoid unnecessary updates
+        self._session_rows: Dict[str, pn.Row] = {} # Cache for session rows
+        self._session_hashes: Dict[str, int] = {} # Cache for session row hashes
 
         # Start periodic refresh for real-time updates (but don't clear and rebuild everything)
         self.update_callback = pn.state.add_periodic_callback(
@@ -482,66 +486,54 @@ class LiveTradingPage(pn.viewable.Viewer):
 
                 # Update the sessions table without recreating the entire dashboard
                 if self.dashboard_table_pane is not None:
-                    # Build new table rows
-                    if not summaries:
-                        # No sessions - show empty message
-                        self.dashboard_table_pane.objects = [
-                            pn.pane.HTML(f"""
-                                <div style='padding: 40px; text-align: center;'>
-                                    <p style='color: {Colors.TEXT_MUTED}; font-size: {Typography.TEXT_BASE};'>No sessions to display</p>
-                                </div>
-                            """, sizing_mode="stretch_width")
-                        ]
-                    else:
-                        # Build table rows
-                        rows = []
-                        for summary in summaries:
-                            session_id = summary['session_id']
-                            status = summary['status']
-
-                            # Extract model name
-                            model_name = "N/A"
-                            if 'agent_path' in summary and summary['agent_path']:
-                                agent_path = Path(summary['agent_path'])
-                                if agent_path.is_file() or agent_path.name in ['ensemble', 'ppo', 'recurrent_ppo']:
-                                    model_name = agent_path.parent.name
-                                else:
-                                    model_name = agent_path.name
-                            elif 'model_name' in summary:
-                                model_name = summary['model_name']
-
-                            view_btn = pn.widgets.Button(name='View', button_type='primary', width=60)
-                            view_btn.on_click(lambda e, sid=session_id: self._select_session(sid))
-
-                            if status == 'running':
-                                action_btn = pn.widgets.Button(name='Stop', button_type='danger', width=80)
-                                action_btn.on_click(lambda e, sid=session_id: self._stop_session(sid))
-                            else:
-                                action_btn = pn.widgets.Button(name='Start', button_type='success', width=80)
-                                action_btn.on_click(lambda e, sid=session_id: self._start_session(sid))
-
-                            button_row = pn.Row(view_btn, action_btn, sizing_mode='fixed')
-
-                            # Auto-select indicator
-                            auto_select = summary.get('auto_select', False)
-                            mode_badge = ""
-                            if auto_select:
-                                mode_badge = f"<span style='background: {Colors.ACCENT_CYAN}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 6px;'>AUTO</span>"
-
-                            symbol_html = f"<div>{summary['symbol']}{mode_badge}</div>"
-
-                            rows.append(pn.Row(
-                                pn.pane.HTML(f"<div>{summary['session_id']}</div>", width=250),
-                                pn.pane.HTML(symbol_html, width=100),
-                                pn.pane.HTML(f"<div>{model_name}</div>", width=300),
-                                pn.pane.HTML(f"<div>{summary['status']}</div>", width=100),
-                                button_row,
-                                sizing_mode='stretch_width',
-                                align='center'
-                            ))
-
-                        # Update table with header + rows
-                        header = pn.Row(
+                    # Current session IDs from source
+                    current_ids = {s['session_id'] for s in summaries}
+                    
+                    # 1. Remove rows for deleted sessions
+                    rows_removed = False
+                    for sid in list(self._session_rows.keys()):
+                        if sid not in current_ids:
+                            del self._session_rows[sid]
+                            if sid in self._session_hashes:
+                                del self._session_hashes[sid]
+                            rows_removed = True
+                    
+                    # 2. Update or create rows
+                    updated_row_objects = []
+                    for summary in summaries:
+                        sid = summary['session_id']
+                        
+                        # Calculate hash for THIS session only
+                        s_hash = hash((
+                            sid, 
+                            summary['symbol'], 
+                            summary['status'], 
+                            summary.get('agent_path', ''),
+                            summary.get('auto_select', False)
+                        ))
+                        
+                        if sid not in self._session_rows:
+                            # New session -> Create Row
+                            row = self._create_session_row(summary)
+                            self._session_rows[sid] = row
+                            self._session_hashes[sid] = s_hash
+                        elif self._session_hashes.get(sid) != s_hash:
+                            # Changed session -> Update Row in place
+                            # We update the existing row's objects instead of creating a new row
+                            # to minimize flicker and DOM operations
+                            row = self._session_rows[sid]
+                            row.objects = self._create_session_row_content(summary)
+                            self._session_hashes[sid] = s_hash
+                        
+                        # Add to list in correct order
+                        updated_row_objects.append(self._session_rows[sid])
+                    
+                    # 3. Update table objects ONLY if the list structure changed (reordering, add, remove)
+                    current_table_objects = self.dashboard_table_pane.objects
+                    
+                    # Ensure header is available
+                    if not self.dashboard_table_header:
+                         self.dashboard_table_header = pn.Row(
                             pn.pane.HTML("<b>Session ID</b>", width=250),
                             pn.pane.HTML("<b>Symbol</b>", width=100),
                             pn.pane.HTML("<b>Model Name</b>", width=300),
@@ -549,7 +541,33 @@ class LiveTradingPage(pn.viewable.Viewer):
                             pn.pane.HTML("<b>Actions</b>", width=180, align='center'),
                             sizing_mode='stretch_width'
                         )
-                        self.dashboard_table_pane.objects = [header] + rows
+
+                    new_table_objects = [self.dashboard_table_header] + updated_row_objects
+                    
+                    # Check if structure changed (length or identity of rows)
+                    structure_changed = len(current_table_objects) != len(new_table_objects)
+                    
+                    if not structure_changed:
+                        # Check identity of rows (in case order changed)
+                        # Start from 1 to skip header
+                        for i in range(1, len(new_table_objects)):
+                            if current_table_objects[i] is not new_table_objects[i]:
+                                structure_changed = True
+                                break
+                    
+                    if structure_changed:
+                        if not updated_row_objects:
+                             # Empty state
+                             content = pn.pane.HTML(f"""
+                                    <div style='padding: 40px; text-align: center;'>
+                                        <p style='color: {Colors.TEXT_MUTED}; font-size: {Typography.TEXT_BASE};'>No sessions to display</p>
+                                    </div>
+                                """, sizing_mode="stretch_width")
+                             # Use objects list for Column
+                             self.dashboard_table_pane.objects = [content]
+                        else:
+                            self.dashboard_table_pane.objects = new_table_objects
+
             except Exception as e:
                 logger.error(f"Error updating dashboard metrics: {e}")
 
@@ -899,6 +917,59 @@ class LiveTradingPage(pn.viewable.Viewer):
     # Dashboard View
     # ========================================================================
 
+    def _create_session_row_content(self, summary: Dict) -> List[Any]:
+        """Create content list for a session row"""
+        session_id = summary['session_id']
+        status = summary['status']
+
+        # Extract model name
+        model_name = "N/A"
+        if 'agent_path' in summary and summary['agent_path']:
+            agent_path = Path(summary['agent_path'])
+            if agent_path.is_file() or agent_path.name in ['ensemble', 'ppo', 'recurrent_ppo']:
+                model_name = agent_path.parent.name
+            else:
+                model_name = agent_path.name
+        elif 'model_name' in summary:
+            model_name = summary['model_name']
+
+        view_btn = pn.widgets.Button(name='View', button_type='primary', width=60)
+        view_btn.on_click(lambda e, sid=session_id: self._select_session(sid))
+
+        if status == 'running':
+            action_btn = pn.widgets.Button(name='Stop', button_type='danger', width=80)
+            action_btn.on_click(lambda e, sid=session_id: self._stop_session(sid))
+        else:
+            action_btn = pn.widgets.Button(name='Start', button_type='success', width=80)
+            action_btn.on_click(lambda e, sid=session_id: self._start_session(sid))
+
+        button_row = pn.Row(view_btn, action_btn, sizing_mode='fixed')
+
+        # Auto-select indicator
+        auto_select = summary.get('auto_select', False)
+        mode_badge = ""
+        if auto_select:
+            mode_badge = f"<span style='background: {Colors.ACCENT_CYAN}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 6px;'>AUTO</span>"
+
+        symbol_html = f"<div>{summary['symbol']}{mode_badge}</div>"
+
+        return [
+            pn.pane.HTML(f"<div>{summary['session_id']}</div>", width=250),
+            pn.pane.HTML(symbol_html, width=100),
+            pn.pane.HTML(f"<div>{model_name}</div>", width=300),
+            pn.pane.HTML(f"<div>{summary['status']}</div>", width=100),
+            button_row
+        ]
+
+    def _create_session_row(self, summary: Dict) -> pn.Row:
+        """Create a session row component"""
+        content = self._create_session_row_content(summary)
+        return pn.Row(
+            *content,
+            sizing_mode='stretch_width',
+            align='center'
+        )
+
     def _render_dashboard_view(self):
         """Render multi-session comparison dashboard"""
         # Aggregate metrics
@@ -941,63 +1012,44 @@ class LiveTradingPage(pn.viewable.Viewer):
 
         # Sessions table content
         if not summaries:
-            table_content = pn.pane.HTML(f"""
+            content = pn.pane.HTML(f"""
                 <div style='padding: 40px; text-align: center; background: {Colors.BG_SECONDARY}; border-radius: 0 0 8px 8px;'>
                     <p style='color: {Colors.TEXT_MUTED}; font-size: {Typography.TEXT_BASE};'>No sessions to display</p>
                 </div>
             """, sizing_mode="stretch_width")
+            table_content = pn.Column(content, sizing_mode="stretch_width")
+            
+            # Reset cache
+            self._session_rows = {}
+            self._session_hashes = {}
         else:
             rows = []
+            # Reset cache on full rebuild
+            self._session_rows = {}
+            self._session_hashes = {}
+            
             for summary in summaries:
-                session_id = summary['session_id']
-                status = summary['status']
-
-                # Extract model name from agent_path if available
-                model_name = "N/A"
-                if 'agent_path' in summary and summary['agent_path']:
-                    agent_path = Path(summary['agent_path'])
-                    # Handle different path formats:
-                    # - File: .../ppo_SYMBOL_DATE/final_model.zip -> use parent name
-                    # - Ensemble subdir: .../ensemble_SYMBOL_DATE/ensemble -> use parent name
-                    # - Directory: .../ppo_SYMBOL_DATE -> use directory name
-                    if agent_path.is_file() or agent_path.name in ['ensemble', 'ppo', 'recurrent_ppo']:
-                        model_name = agent_path.parent.name
-                    else:
-                        model_name = agent_path.name
-                elif 'model_name' in summary:
-                    model_name = summary['model_name']
-
-                view_btn = pn.widgets.Button(name='View', button_type='primary', width=60)
-                view_btn.on_click(lambda e, sid=session_id: self._select_session(sid))
-
-                if status == 'running':
-                    action_btn = pn.widgets.Button(name='Stop', button_type='danger', width=80)
-                    action_btn.on_click(lambda e, sid=session_id: self._stop_session(sid))
-                else:
-                    action_btn = pn.widgets.Button(name='Start', button_type='success', width=80)
-                    action_btn.on_click(lambda e, sid=session_id: self._start_session(sid))
-
-                button_row = pn.Row(view_btn, action_btn, sizing_mode='fixed')
-
-                # Add auto-select indicator
-                auto_select = summary.get('auto_select', False)
-                mode_badge = ""
-                if auto_select:
-                    mode_badge = f"<span style='background: {Colors.ACCENT_CYAN}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 6px;'>AUTO</span>"
-
-                symbol_html = f"<div>{summary['symbol']}{mode_badge}</div>"
-
-                rows.append(pn.Row(
-                    pn.pane.HTML(f"<div>{summary['session_id']}</div>", width=250),
-                    pn.pane.HTML(symbol_html, width=100),
-                    pn.pane.HTML(f"<div>{model_name}</div>", width=300),
-                    pn.pane.HTML(f"<div>{summary['status']}</div>", width=100),
-                    button_row,
-                    sizing_mode='stretch_width',
-                    align='center'
+                sid = summary['session_id']
+                
+                # Calculate hash for granular updates
+                s_hash = hash((
+                    sid, 
+                    summary['symbol'], 
+                    summary['status'], 
+                    summary.get('agent_path', ''),
+                    summary.get('auto_select', False)
                 ))
+                
+                row = self._create_session_row(summary)
+                
+                # Cache row and hash
+                self._session_rows[sid] = row
+                self._session_hashes[sid] = s_hash
+                
+                rows.append(row)
 
-            header = pn.Row(
+            # Store header reference
+            self.dashboard_table_header = pn.Row(
                 pn.pane.HTML("<b>Session ID</b>", width=250),
                 pn.pane.HTML("<b>Symbol</b>", width=100),
                 pn.pane.HTML("<b>Model Name</b>", width=300),
@@ -1006,7 +1058,7 @@ class LiveTradingPage(pn.viewable.Viewer):
                 sizing_mode='stretch_width'
             )
 
-            table_content = pn.Column(header, *rows, sizing_mode="stretch_width")
+            table_content = pn.Column(self.dashboard_table_header, *rows, sizing_mode="stretch_width")
 
         # Store reference to table for in-place updates
         self.dashboard_table_pane = table_content
