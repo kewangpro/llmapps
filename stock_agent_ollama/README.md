@@ -75,6 +75,7 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 - **Real-time Portfolio Tracking** with live P&L updates
 - **Risk Management** (stop-loss, position limits, circuit breakers)
 - **Live Monitoring** with status, positions, and event log showing symbol-prefixed events
+- **Optimized Dashboard** with granular updates for high-performance multi-session monitoring
 - **Educational Platform** for safe strategy testing
 
 ![Live Trading Screenshot](docs/screenshots/live_trade.png)
