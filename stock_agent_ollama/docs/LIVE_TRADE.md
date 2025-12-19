@@ -1001,9 +1001,10 @@ educational purposes. No real trades are executed.
    - Indexed queries for analysis
 
 4. **UI Updates:**
-   - Throttle dashboard updates (max 1/sec)
-   - Lazy load trade history
-   - Virtualized scrolling for large lists
+   - Optimized granular DOM updates via row caching
+   - Efficient state hashing for minimal change detection
+   - Zero-flicker refresh for high session counts
+   - Lazy loading for detailed history views
 
 ---
 

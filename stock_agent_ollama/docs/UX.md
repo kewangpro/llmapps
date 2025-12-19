@@ -634,6 +634,7 @@ src/ui/
 - **Wider Model Column**: Model name column increased from 200px to 300px to accommodate LSTM PPO naming
 - **Smart Updates**: UI updates in-place without page refresh or scroll jumps
 - **Environment Matching**: Sessions load exact training configuration from saved models
+- **Optimized Rendering**: Granular UI updates for high performance with multiple sessions
 
 ### Symbol Input
 - **Unrestricted Input**: Symbol inputs now accept any valid ticker, not just predefined lists
