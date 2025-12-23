@@ -458,14 +458,47 @@ class BacktestResult:
                 # For PPO/RecurrentPPO, model_path could be .zip file or directory
                 save_dir = model_path.parent if model_path.is_file() else model_path
 
-            # Create backtest results JSON
+            # Calculate action distribution for validation
+            from collections import Counter
+            action_counts = Counter(self.actions)
+            action_names = ['HOLD', 'BUY_SMALL', 'BUY_MEDIUM', 'BUY_LARGE', 'SELL_PARTIAL', 'SELL_ALL']
+            action_distribution = {
+                action_names[action_id]: count
+                for action_id, count in action_counts.items()
+                if action_id < len(action_names)
+            }
+
+            # Convert trades to JSON-serializable format
+            serializable_trades = []
+            for trade in self.trades:
+                trade_copy = trade.copy()
+                # Convert Timestamp objects to ISO format strings
+                for date_field in ['date', 'timestamp']:
+                    if date_field in trade_copy:
+                        ts = trade_copy[date_field]
+                        if hasattr(ts, 'isoformat'):
+                            trade_copy[date_field] = ts.isoformat()
+                        elif isinstance(ts, str):
+                            trade_copy[date_field] = ts
+                serializable_trades.append(trade_copy)
+
+            # Create backtest results JSON with detailed data for validation
+            # Convert dates to strings if they're Timestamp objects
+            start_date = self.config.start_date
+            if hasattr(start_date, 'isoformat'):
+                start_date = start_date.strftime('%Y-%m-%d')
+            end_date = self.config.end_date
+            if hasattr(end_date, 'isoformat'):
+                end_date = end_date.strftime('%Y-%m-%d')
+
             backtest_data = {
                 'agent_type': agent_type,
                 'backtest_date': datetime.now().isoformat(),
                 'backtest_period': {
-                    'start_date': self.config.start_date,
-                    'end_date': self.config.end_date
+                    'start_date': start_date,
+                    'end_date': end_date
                 },
+                # Performance metrics
                 'total_return_pct': self.metrics.total_return_pct,
                 'sharpe_ratio': self.metrics.sharpe_ratio,
                 'sortino_ratio': self.metrics.sortino_ratio,
@@ -477,7 +510,13 @@ class BacktestResult:
                 'losing_trades': self.metrics.losing_trades,
                 'avg_win': self.metrics.avg_win,
                 'avg_loss': self.metrics.avg_loss,
-                'profit_factor': self.metrics.profit_factor
+                'profit_factor': self.metrics.profit_factor,
+                # Detailed data for validation
+                'initial_portfolio_value': float(self.metrics.initial_portfolio_value),
+                'final_portfolio_value': float(self.metrics.final_portfolio_value),
+                'portfolio_values': self.portfolio_values.tolist(),
+                'action_distribution': action_distribution,
+                'trades': serializable_trades
             }
 
             # Save to model directory
@@ -588,7 +627,8 @@ class BacktestEngine:
                     'action': 'BUY' if info['trade_info']['shares_traded'] > 0 else 'SELL',
                     'shares': abs(info['trade_info']['shares_traded']),
                     'price': info['price'],
-                    'cost': info['trade_info']['total_cost']
+                    'cost': info['trade_info']['total_cost'],  # Transaction costs + slippage
+                    'commission': info['trade_info']['total_cost']  # Alias for validator compatibility
                 })
 
         # Calculate metrics
@@ -668,7 +708,8 @@ class BacktestEngine:
                     'action': 'BUY' if info['trade_info']['shares_traded'] > 0 else 'SELL',
                     'shares': abs(info['trade_info']['shares_traded']),
                     'price': info['price'],
-                    'cost': info['trade_info']['total_cost']
+                    'cost': info['trade_info']['total_cost'],  # Transaction costs + slippage
+                    'commission': info['trade_info']['total_cost']  # Alias for validator compatibility
                 })
 
         # Calculate metrics
