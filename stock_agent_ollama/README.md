@@ -313,6 +313,36 @@ python retrain_and_compare.py --symbol NVDA --no-baselines
 
 The tool handles model training, backtesting, and comprehensive strategy comparison automatically. Note that training the `ensemble` algorithm automatically trains and saves the individual `ppo` and `recurrent_ppo` models as part of the process, making it the most efficient way to generate all three agents.
 
+**Backtest Validation:**
+The `validate_backtest.py` tool provides comprehensive validation of backtest results:
+```bash
+# Validate single stock, single algorithm
+python validate_backtest.py --symbol RIVN --algorithm ppo
+
+# Validate single stock, all algorithms
+python validate_backtest.py --symbol RIVN --algorithm all
+
+# Validate all watchlist stocks, single algorithm
+python validate_backtest.py --watchlist --algorithm ppo
+
+# Validate all watchlist stocks, all algorithms
+python validate_backtest.py --watchlist --algorithm all
+```
+
+**Validation Checks:**
+- Return calculation accuracy
+- Action distribution integrity
+- Win rate calculation
+- Portfolio value consistency
+- Metrics reasonableness (Sharpe ratio, drawdown)
+- Transaction cost inclusion
+- Reproducibility testing
+
+**Options:**
+- `--symbol`: Stock symbol to validate (e.g., RIVN, TSLA, AAPL)
+- `--watchlist`: Validate all symbols from default watchlist
+- `--algorithm`: `ppo`, `recurrent_ppo`, `ensemble`, or `all`
+
 ---
 
 ## ⚠️ Important Disclaimer
