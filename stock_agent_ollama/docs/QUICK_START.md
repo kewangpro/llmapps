@@ -526,6 +526,42 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 - RecurrentPPO: ~25-35 minutes (LSTM requires more compute)
 - Ensemble: ~40-55 minutes (trains both PPO + RecurrentPPO)
 
+### Backtest Validation
+
+After running backtests, you can validate the results for mathematical correctness:
+
+```bash
+# Validate a single backtest
+python validate_backtest.py --symbol AAPL --algorithm ppo
+
+# Validate all algorithms for a symbol
+python validate_backtest.py --symbol AAPL --algorithm all
+
+# Validate all watchlist stocks
+python validate_backtest.py --watchlist --algorithm ppo
+
+# Validate all watchlist stocks and all algorithms
+python validate_backtest.py --watchlist --algorithm all
+```
+
+**What it checks:**
+- Return calculation accuracy
+- Action distribution sums to 100%
+- Win rate calculation correctness
+- Portfolio value consistency
+- Metrics reasonableness (Sharpe ratio <8.0, win rates based on sample size)
+- Transaction cost inclusion (0.2% per trade default)
+- Reproducibility hints
+
+**Expected output:**
+```
+✅ PASS Return calculation
+✅ PASS Action distribution sums to 100%
+✅ PASS Win rate calculation
+✅ PASS Transaction costs are applied
+Overall: 8/8 checks passed (100.0%)
+```
+
 ### "Module not found" Error
 **Fix:**
 - Activate environment: `source .venv/bin/activate`

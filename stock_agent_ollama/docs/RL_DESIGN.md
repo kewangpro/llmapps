@@ -1206,6 +1206,158 @@ Models trained via this CLI tool are **automatically available** in the web inte
 
 ---
 
+### Backtest Validation Tool
+
+**File**: `validate_backtest.py` (project root)
+
+#### Purpose
+
+Provides comprehensive validation of backtest results to ensure mathematical correctness and detect common bugs such as data leakage, calculation errors, or unrealistic performance metrics.
+
+#### Usage
+
+**Basic Usage** (validate a single backtest):
+```bash
+source .venv/bin/activate
+python validate_backtest.py --symbol AAPL --algorithm ppo
+```
+
+**Advanced Options**:
+```bash
+# Validate all algorithms for a symbol
+python validate_backtest.py --symbol RIVN --algorithm all
+
+# Validate all watchlist stocks for an algorithm
+python validate_backtest.py --watchlist --algorithm ppo
+
+# Validate all watchlist stocks and all algorithms (36 validations)
+python validate_backtest.py --watchlist --algorithm all
+```
+
+#### Command-Line Arguments
+
+| Argument | Type | Choices | Description |
+|----------|------|---------|-------------|
+| `--symbol` | string | N/A | Stock symbol to validate (mutually exclusive with `--watchlist`) |
+| `--watchlist` | flag | N/A | Validate all symbols from default watchlist |
+| `--algorithm` | string | `ppo`, `recurrent_ppo`, `ensemble`, `all` | Algorithm(s) to validate |
+
+#### Validation Checks
+
+The tool performs **8 comprehensive checks**:
+
+1. **Return Calculation**: Verifies (final_value - initial_value) / initial_value matches reported return
+2. **Action Distribution**: Ensures action percentages sum to 100%
+3. **Win Rate Calculation**: Validates winning_trades / completed_trades matches reported win rate
+4. **Portfolio Value Consistency**: Checks first value = initial capital, last value = final value, no negative values
+5. **Metrics Reasonableness**:
+   - Sharpe ratio < 8.0 (warns if > 6.0 as "excellent")
+   - Win rate thresholds adjusted by sample size (<20 trades: 95%, ≥20 trades: 90%)
+6. **Individual Trade Validation**: Gracefully skips if trades are individual actions (not paired round trips)
+7. **Transaction Cost Inclusion**: Verifies trades include non-zero `cost` or `commission` fields (default 0.2% per trade)
+8. **Reproducibility Test**: Provides instructions for testing deterministic behavior
+
+#### Example Output
+
+```bash
+$ python validate_backtest.py --symbol RIVN --algorithm ppo
+
+╔════════════════════════════════════════════════════════════════════╗
+║                     BACKTEST VALIDATION REPORT                     ║
+║                             RIVN - PPO                             ║
+╚════════════════════════════════════════════════════════════════════╝
+
+======================================================================
+                     Check 1: Return Calculation
+======================================================================
+
+  Initial Portfolio Value: $100,000.00
+  Final Portfolio Value:   $154,949.99
+  Calculated Return:       54.95%
+  Reported Return:         54.95%
+  Difference:              0.0000%
+✅ PASS Return calculation
+
+[... additional checks ...]
+
+======================================================================
+                  Check 7: Commission/Cost Inclusion
+======================================================================
+
+  Total Transaction Costs: $3,601.14
+  Average Cost: 3.601% of initial capital
+  (Includes transaction fees + slippage)
+✅ PASS Transaction costs are applied
+
+======================================================================
+                          VALIDATION SUMMARY
+======================================================================
+
+  Checks Passed: 8/8
+  Success Rate:  100.0%
+
+✅ ALL CHECKS PASSED - Backtest appears valid!
+```
+
+#### Batch Validation Output
+
+When validating multiple combinations (e.g., `--watchlist --algorithm all`), the tool provides an overall summary table:
+
+```
+================================================================================
+                           OVERALL VALIDATION SUMMARY
+================================================================================
+
+Symbol     Algorithm       Passed     Success Rate    Status
+--------------------------------------------------------------------------------
+AAPL       PPO             8/8        100.0%          ✅ PASS
+GOOGL      PPO             8/8        100.0%          ✅ PASS
+MSFT       PPO             8/8        100.0%          ✅ PASS
+...
+
+Overall: 96/96 checks passed (100.0%)
+✅ ALL VALIDATIONS PASSED!
+```
+
+#### Transaction Cost Handling
+
+The validation tool checks for transaction costs in trade records. The backtesting system applies:
+
+- **Transaction cost rate**: 0.1% (default, configurable)
+- **Slippage rate**: 0.1% (default, configurable)
+- **Total cost per trade**: 0.2% of trade value (0.4% round-trip)
+
+Trade records include both `cost` and `commission` fields:
+- `cost`: Original field with total transaction costs + slippage
+- `commission`: Alias for `cost` for validator compatibility
+
+**Configuration:**
+```python
+# In env_factory.py (EnvConfig)
+transaction_cost_rate: float = 0.001  # 0.1% per trade
+slippage_rate: float = 0.001          # 0.1% slippage
+```
+
+#### Integration with Training/Backtesting
+
+The validation tool automatically:
+- Loads backtest results from `data/models/rl/{algo}_{symbol}_{timestamp}/backtest_results.json`
+- Finds the most recent model for each symbol/algorithm combination
+- Validates enhanced backtest data including:
+  - Portfolio value history
+  - Action distribution
+  - Individual trades with costs
+  - Initial/final portfolio values
+
+#### Notes
+
+- **Data Requirements**: Requires backtest results with enhanced validation data (portfolio_values, action_distribution, trades)
+- **Backtest Format**: Works with backtest results from models trained after validation enhancements were added
+- **Sample Size Awareness**: Win rate thresholds adjust based on completed trades to avoid false positives
+- **Educational Use**: Helps users understand and trust backtest metrics
+
+---
+
 ## Conclusion
 
 This RL trading system provides a complete framework for training, evaluating, and deploying RL agents for algorithmic trading. Key strengths include modular architecture, realistic simulation, comprehensive risk management, and advanced features for improved performance.
