@@ -48,7 +48,7 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 - **Comprehensive Backtesting** with automated model loading
 - **Strategy Comparison** against Buy & Hold and Momentum
 - **Performance Metrics** (Returns, Sharpe Ratio, Max Drawdown, Win Rate)
-- **Visualization Charts** (Performance, Actions, Key metrics)
+- **Visualization Charts** (Performance, Price with Trade Signals, Actions, Key metrics)
 
 ![RL Training Screenshot](docs/screenshots/training.png)
 *Train and backtest RL agents with comprehensive performance metrics and strategy comparison*
