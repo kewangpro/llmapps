@@ -480,6 +480,13 @@ data/live_sessions/
 - Progress chart showing reward improvement
 - Action distribution pie chart
 
+**Backtest Results Display**:
+- Performance comparison table with all strategies
+- Portfolio value comparison chart
+- Stock price with trade signals chart (visualizes buy/sell actions on price)
+- Action distribution comparison chart
+- Key metrics comparison chart
+
 ### Live Trading Page
 
 **File**: `src/ui/pages/live_trading.py`

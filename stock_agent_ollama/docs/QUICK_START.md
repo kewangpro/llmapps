@@ -154,6 +154,7 @@ The platform features a professional light-theme interface with 6 main pages:
   - Action distribution across all 6 actions
 - **Charts**:
   - Portfolio value comparison
+  - Stock price with trade signals (buy/sell markers for each RL agent)
   - Action distribution visualization
   - Key metrics bar chart
 
