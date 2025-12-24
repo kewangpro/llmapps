@@ -552,6 +552,209 @@ class RLVisualizer:
         return fig
 
     @staticmethod
+    def plot_price_with_trades(
+        results: Dict[str, BacktestResult],
+        symbol: str,
+        title: str = "Stock Price with Trade Signals"
+    ) -> go.Figure:
+        """
+        Plot stock price with buy/sell markers for multiple strategies.
+
+        Args:
+            results: Dictionary mapping strategy names to results
+            symbol: Stock symbol
+            title: Plot title
+
+        Returns:
+            Plotly figure
+        """
+        from src.tools.stock_fetcher import StockFetcher
+
+        # Get date range from first result
+        first_result = list(results.values())[0]
+        start_date = first_result.dates[0] if first_result.dates else None
+        end_date = first_result.dates[-1] if first_result.dates else None
+
+        if not start_date or not end_date:
+            # Return empty figure if no dates
+            fig = go.Figure()
+            fig.add_annotation(
+                text="No date data available",
+                xref="paper", yref="paper",
+                x=0.5, y=0.5, showarrow=False
+            )
+            return fig
+
+        # Fetch stock price data
+        try:
+            fetcher = StockFetcher()
+            # Convert dates to string format if they're datetime objects
+            start_str = start_date.strftime('%Y-%m-%d') if hasattr(start_date, 'strftime') else str(start_date)
+            end_str = end_date.strftime('%Y-%m-%d') if hasattr(end_date, 'strftime') else str(end_date)
+            stock_data = fetcher.fetch_stock_data(symbol, start_date=start_str, end_date=end_str)
+
+            if stock_data is None or stock_data.empty:
+                fig = go.Figure()
+                fig.add_annotation(
+                    text=f"No price data available for {symbol}",
+                    xref="paper", yref="paper",
+                    x=0.5, y=0.5, showarrow=False
+                )
+                return fig
+        except Exception as e:
+            fig = go.Figure()
+            fig.add_annotation(
+                text=f"Error fetching price data: {str(e)}",
+                xref="paper", yref="paper",
+                x=0.5, y=0.5, showarrow=False
+            )
+            return fig
+
+        fig = go.Figure()
+
+        # Normalize stock_data index to remove timezone for comparison
+        stock_data_tz_naive = stock_data.copy()
+        if stock_data_tz_naive.index.tz is not None:
+            stock_data_tz_naive.index = stock_data_tz_naive.index.tz_localize(None)
+
+        # Plot stock price (candlestick or line)
+        fig.add_trace(go.Scatter(
+            x=stock_data_tz_naive.index,
+            y=stock_data_tz_naive['Close'],
+            mode='lines',
+            name=f'{symbol} Price',
+            line=dict(color='#94a3b8', width=2),
+            hovertemplate='Date: %{x}<br>Price: $%{y:.2f}<extra></extra>'
+        ))
+
+        # Action names and colors
+        action_names = {
+            0: 'HOLD',
+            1: 'BUY_SMALL',
+            2: 'BUY_MEDIUM',
+            3: 'BUY_LARGE',
+            4: 'SELL_PARTIAL',
+            5: 'SELL_ALL'
+        }
+
+        # Use same colors as performance comparison chart
+        performance_colors = ['blue', 'purple', 'orange', 'brown', 'darkgray', 'navy']
+
+        # Plot buy/sell markers for each strategy (exclude baselines)
+        baseline_strategies = ['Buy & Hold', 'Momentum']
+
+        for idx, (strategy_name, result) in enumerate(results.items()):
+            # Skip baseline strategies
+            if strategy_name in baseline_strategies:
+                continue
+
+            # Use same color as performance comparison
+            color = performance_colors[idx % len(performance_colors)]
+
+            # Get buy and sell actions separately
+            buy_actions = [1, 2, 3]  # BUY_SMALL, BUY_MEDIUM, BUY_LARGE
+            sell_actions = [4, 5]     # SELL_PARTIAL, SELL_ALL
+
+            # Find buy indices
+            buy_indices = []
+            for i, action in enumerate(result.actions):
+                action_scalar = int(action.item()) if isinstance(action, (np.ndarray, np.generic)) else int(action)
+                if action_scalar in buy_actions:
+                    buy_indices.append(i)
+
+            if buy_indices:
+                buy_dates = [result.dates[i] for i in buy_indices]
+                # Get corresponding prices from stock_data
+                buy_prices = []
+                for date in buy_dates:
+                    # Ensure date is timezone-naive for comparison
+                    date_naive = date.tz_localize(None) if hasattr(date, 'tz') and date.tz is not None else date
+
+                    if date_naive in stock_data_tz_naive.index:
+                        buy_prices.append(stock_data_tz_naive.loc[date_naive, 'Close'])
+                    else:
+                        # Find nearest date
+                        nearest_idx = stock_data_tz_naive.index.get_indexer([date_naive], method='nearest')[0]
+                        buy_prices.append(stock_data_tz_naive.iloc[nearest_idx]['Close'])
+
+                fig.add_trace(go.Scatter(
+                    x=buy_dates,
+                    y=buy_prices,
+                    mode='markers',
+                    name=f'{strategy_name} BUY',
+                    marker=dict(
+                        size=10,
+                        color=color,
+                        symbol='triangle-up',
+                        line=dict(width=1, color='white')
+                    ),
+                    hovertemplate=f'{strategy_name} BUY<br>Date: %{{x}}<br>Price: $%{{y:.2f}}<extra></extra>'
+                ))
+
+            # Find sell indices
+            sell_indices = []
+            for i, action in enumerate(result.actions):
+                action_scalar = int(action.item()) if isinstance(action, (np.ndarray, np.generic)) else int(action)
+                if action_scalar in sell_actions:
+                    sell_indices.append(i)
+
+            if sell_indices:
+                sell_dates = [result.dates[i] for i in sell_indices]
+                # Get corresponding prices from stock_data
+                sell_prices = []
+                for date in sell_dates:
+                    # Ensure date is timezone-naive for comparison
+                    date_naive = date.tz_localize(None) if hasattr(date, 'tz') and date.tz is not None else date
+
+                    if date_naive in stock_data_tz_naive.index:
+                        sell_prices.append(stock_data_tz_naive.loc[date_naive, 'Close'])
+                    else:
+                        # Find nearest date
+                        nearest_idx = stock_data_tz_naive.index.get_indexer([date_naive], method='nearest')[0]
+                        sell_prices.append(stock_data_tz_naive.iloc[nearest_idx]['Close'])
+
+                fig.add_trace(go.Scatter(
+                    x=sell_dates,
+                    y=sell_prices,
+                    mode='markers',
+                    name=f'{strategy_name} SELL',
+                    marker=dict(
+                        size=10,
+                        color=color,
+                        symbol='triangle-down',
+                        line=dict(width=1, color='white')
+                    ),
+                    hovertemplate=f'{strategy_name} SELL<br>Date: %{{x}}<br>Price: $%{{y:.2f}}<extra></extra>'
+                ))
+
+        fig.update_layout(
+            title=title,
+            xaxis_title="Date",
+            yaxis_title=f"{symbol} Price ($)",
+            template="plotly_white",
+            hovermode='closest',
+            height=450,
+            margin=dict(r=150),  # Add right margin for legend (same as performance chart)
+            legend=dict(
+                yanchor="top",
+                y=0.99,
+                xanchor="left",
+                x=1.02  # Position legend outside plot area (same as performance chart)
+            ),
+            xaxis=dict(
+                rangeslider=dict(visible=False),
+                showgrid=True,
+                gridcolor='#e5e7eb'
+            ),
+            yaxis=dict(
+                showgrid=True,
+                gridcolor='#e5e7eb'
+            )
+        )
+
+        return fig
+
+    @staticmethod
     def create_comprehensive_report(
         result: BacktestResult,
         strategy_name: str = "Strategy"
