@@ -713,6 +713,10 @@ class RLTrainingPanel(param.Parameterized):
             fig = RLVisualizer.plot_strategy_comparison(results, title=f"Performance Comparison - {symbol}")
             self.results_panel.append(pn.pane.Plotly(fig, sizing_mode="stretch_width", height=350))
 
+            # Price chart with buy/sell markers (RIGHT AFTER performance comparison)
+            fig_price = RLVisualizer.plot_price_with_trades(results, symbol, title=f"{symbol} Price with Trade Signals")
+            self.results_panel.append(pn.pane.Plotly(fig_price, sizing_mode="stretch_width", height=450))
+
             # Action comparison
             fig_actions = RLVisualizer.plot_action_comparison(results, title="Action Distribution Comparison")
             self.results_panel.append(pn.pane.Plotly(fig_actions, sizing_mode="stretch_width", height=400))
