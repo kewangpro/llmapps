@@ -704,7 +704,7 @@ class LiveTradingPage(pn.viewable.Viewer):
         html = f"""
         <div style='background: {Colors.BG_SECONDARY}; padding: 20px; border-radius: 8px; flex: 1;'>
             <h3 style='margin-top: 0; color: {Colors.TEXT_PRIMARY}; font-family: {Typography.FONT_PRIMARY};'>Portfolio</h3>
-            <div style='display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;'>
+            <div style='display: grid; grid-template-columns: 1fr 1.5fr; gap: 20px;'>
                 <div>
                     <p style='color: {Colors.TEXT_MUTED}; font-size: 12px; margin-bottom: 5px;'>Total Value</p>
                     <p style='color: {Colors.TEXT_PRIMARY}; font-size: 24px; font-weight: 600; margin: 0; font-family: {Typography.FONT_MONO};'>
@@ -726,7 +726,7 @@ class LiveTradingPage(pn.viewable.Viewer):
                 <div>
                     <p style='color: {Colors.TEXT_MUTED}; font-size: 12px; margin-bottom: 5px;'>Trades</p>
                     <p style='color: {Colors.TEXT_SECONDARY}; font-size: 18px; margin: 0; font-family: {Typography.FONT_PRIMARY};'>
-                        {len(portfolio.trades)}
+                        {len(portfolio.trades)} <span style='color: {Colors.TEXT_MUTED}; font-size: 14px;'>•</span> <span style='color: {Colors.WARNING_YELLOW}; font-family: {Typography.FONT_MONO};'>${sum(t.commission for t in portfolio.trades):,.2f}</span>
                     </p>
                 </div>
             </div>
@@ -834,6 +834,9 @@ class LiveTradingPage(pn.viewable.Viewer):
                     <td style='padding: 10px; color: {action_color}; font-weight: 600; min-width: 100px;'>{trade.action.name}</td>
                     <td style='padding: 10px; color: {Colors.TEXT_SECONDARY}; text-align: right; min-width: 80px;'>{trade.shares}</td>
                     <td style='padding: 10px; color: {Colors.TEXT_SECONDARY}; text-align: right; font-family: {Typography.FONT_MONO}; min-width: 80px;'>${trade.price:.2f}</td>
+                    <td style='padding: 10px; color: {Colors.WARNING_YELLOW}; text-align: right; font-family: {Typography.FONT_MONO}; min-width: 70px;'>
+                        ${trade.commission:.2f}
+                    </td>
                     <td style='padding: 10px; color: {pnl_color}; text-align: right; font-weight: 600; font-family: {Typography.FONT_MONO}; min-width: 90px;'>
                         ${trade.pnl:.2f}
                     </td>
@@ -852,6 +855,7 @@ class LiveTradingPage(pn.viewable.Viewer):
                                 <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: left; min-width: 100px;'>ACTION</th>
                                 <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: right; min-width: 80px;'>SHARES</th>
                                 <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: right; min-width: 80px;'>PRICE</th>
+                                <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: right; min-width: 70px;'>COST</th>
                                 <th style='padding: 10px; color: {Colors.TEXT_MUTED}; font-size: 11px; text-align: right; min-width: 90px;'>P&L</th>
                             </tr>
                         </thead>
