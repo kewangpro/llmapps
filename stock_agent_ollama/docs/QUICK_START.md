@@ -197,9 +197,18 @@ The live trading session is **persistent**. You can stop the application and res
 **Live Trading Dashboard:**
 - **Trading Status**: Session status with AUTO badge for auto-select mode, runtime, last update
 - **Portfolio Summary**: Total value, cash, invested, P&L
+- **Session Stats**: Trade count with total fees displayed (e.g., "5 • $245.50")
 - **Current Positions**: Holdings with unrealized P&L
-- **Recent Trades**: Trade history with full timestamps (date + time), symbol, action, shares, price, and P&L
+- **Recent Trades**: Trade history with full timestamps, symbol, action, shares, price, **COST** (transaction costs), and P&L
 - **Event Log**: System events with symbol prefixes for auto-select (e.g., `[HOOD] Agent predicted SELL_ALL...`), includes rotation events with model names (e.g., `Rotated to HOOD (recurrent_ppo_HOOD_20251203_103214)`)
+
+**Transaction Costs (Realistic Trading Simulation):**
+- **0.1% transaction fee + 0.1% slippage = 0.2% per trade**
+- **Round-trip cost: 0.4%** (buy + sell)
+- Buy costs included in average entry price
+- Sell costs subtracted from P&L
+- All costs match backtesting environment exactly
+- Full transparency in UI (displayed in trades table and session stats)
 
 **Controls:**
 - **Pause**: Suspend trading (keep positions open)

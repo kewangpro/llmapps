@@ -162,10 +162,12 @@ class Order:
 5. **Market Hours:** Only trade during market hours (configurable)
 
 **Execution Simulation:**
-- Use current market price + slippage
-- Apply transaction costs (0.1% default)
+- Use current market price with percentage-based costs
+- Transaction costs: 0.1% (default) + Slippage: 0.1% (default) = **0.2% per trade**
+- Round-trip cost: **0.4%** (buy + sell)
+- Costs match backtesting environment exactly
 - Instant fills (no partial fills)
-- Record all executions
+- Record all executions with detailed cost tracking
 
 ---
 
@@ -514,8 +516,8 @@ class LiveTradingConfig:
 
     # Portfolio
     initial_capital: float = 100000.0
-    transaction_cost: float = 0.0005  # 0.05%
-    slippage: float = 0.0005  # 0.05%
+    transaction_cost_rate: float = 0.001  # 0.1% transaction cost
+    slippage_rate: float = 0.001  # 0.1% slippage (total: 0.2% per trade)
 
     # Execution
     poll_interval: int = 60  # seconds
@@ -530,7 +532,6 @@ class LiveTradingConfig:
 
     # Session
     session_id: Optional[str] = None
-    commission_per_trade: float = 0.0
 ```
 
 ### 3. Trade Record
@@ -722,6 +723,113 @@ class TradingEvent:
 - Validate metric calculations
 - Test export formats
 - Performance regression tests
+
+---
+
+## Transaction Costs & P&L Calculation
+
+### Cost Structure
+
+Live trading uses **percentage-based transaction costs** that exactly match the backtesting environment:
+
+- **Transaction Cost**: 0.1% of trade value
+- **Slippage**: 0.1% of trade value
+- **Total Cost Per Trade**: 0.2%
+- **Round-Trip Cost**: 0.4% (buy + sell)
+
+**Example:**
+```
+Buy 100 shares @ $150.00:
+  Trade value: $15,000
+  Transaction cost: $15.00 (0.1%)
+  Slippage: $15.00 (0.1%)
+  Total cost: $30.00
+  Cash deducted: $15,030.00
+```
+
+### How Costs Are Included in P&L
+
+Transaction costs are **fully integrated** into P&L calculation through two mechanisms:
+
+#### 1. Buy Costs → Average Entry Price
+
+Buy transaction costs are **added to the cost basis** and reflected in `avg_entry_price`:
+
+```python
+# For new position
+avg_entry_price = (trade_value + transaction_costs) / shares
+
+# Example:
+avg_entry_price = ($15,000 + $30) / 100 = $150.30
+```
+
+When adding to an existing position, the costs are added to the total cost basis:
+
+```python
+total_cost_basis = (old_avg * old_shares) + trade_value + costs
+avg_entry_price = total_cost_basis / total_shares
+```
+
+#### 2. Sell Costs → Direct P&L Subtraction
+
+Sell transaction costs are **subtracted from the realized P&L**:
+
+```python
+pnl = (sell_price - avg_entry_price) * shares - sell_costs
+
+# Example (selling the position from above at $160):
+pnl = ($160.00 - $150.30) × 100 - $32.00
+    = $970.00 - $32.00
+    = $938.00
+```
+
+**Complete Round-Trip Example:**
+```
+Buy:  100 shares @ $150.00 → Avg entry: $150.30 (includes $30 costs)
+Sell: 100 shares @ $160.00 → P&L: $938.00
+
+Price profit: ($160 - $150) × 100 = $1,000
+Buy costs: $30 (baked into avg_entry_price)
+Sell costs: $32 (subtracted from P&L)
+Net profit: $1,000 - $30 - $32 = $938 ✓
+```
+
+### Cost Visibility in UI
+
+Transaction costs are displayed in three locations:
+
+1. **Session Stats** - "Trades" stat shows count and total fees:
+   ```
+   Trades: 5 • $245.50
+           ↑     ↑
+         count  total fees
+   ```
+
+2. **Recent Trades Table** - "COST" column shows per-trade costs:
+   ```
+   TIME     SYMBOL  ACTION  SHARES  PRICE    COST     P&L
+   08:11:06 GOOGL   BUY     127     $313.34  $79.59   $0.00
+   08:12:06 GOOGL   BUY     76      $313.17  $47.60   $0.00
+   ```
+
+3. **Event Log** - Trade events include cost information:
+   ```
+   [TRADE] BUY_SMALL 127 @ $313.34 (cost: $79.59)
+   ```
+
+### Validation
+
+Transaction costs match backtesting exactly, ensuring validated results:
+
+```bash
+# Backtest validation
+python validate_backtest.py --symbol AAPL --algorithm ppo
+
+# Check results
+✅ Transaction costs: $4,905.97 (4.9% of capital)
+✅ Returns calculation: Correct
+✅ P&L matches cash profit: 100%
+```
 
 ---
 

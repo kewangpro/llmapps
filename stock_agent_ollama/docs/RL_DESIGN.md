@@ -1334,9 +1334,10 @@ The validation tool checks for transaction costs in trade records. The backtesti
 - **Slippage rate**: 0.1% (default, configurable)
 - **Total cost per trade**: 0.2% of trade value (0.4% round-trip)
 
-Trade records include both `cost` and `commission` fields:
-- `cost`: Original field with total transaction costs + slippage
-- `commission`: Alias for `cost` for validator compatibility
+Trade records include transaction costs:
+- Backtesting: Uses `cost` field with total transaction costs + slippage
+- Live trading: Uses `commission` field with total transaction costs + slippage
+- Validator: Automatically checks for either field
 
 **Configuration:**
 ```python
