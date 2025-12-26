@@ -510,21 +510,21 @@ class OrderExecutor:
             total_required = trade_value + total_cost
             portfolio.cash -= total_required
 
-            # Update or create position (include buy costs in cost basis)
+            # Update or create position (costs deducted from cash, not included in avg price)
             if order.symbol in portfolio.positions:
                 pos = portfolio.positions[order.symbol]
                 total_shares = pos.shares + order.shares
-                # Include transaction costs in cost basis for accurate P&L
-                total_cost_basis = (pos.avg_entry_price * pos.shares) + trade_value + total_cost
+                # Calculate avg entry price WITHOUT transaction costs (costs shown separately in trade P&L)
+                total_cost_basis = (pos.avg_entry_price * pos.shares) + trade_value
                 pos.avg_entry_price = total_cost_basis / total_shares
                 pos.shares = total_shares
                 pos.current_price = order.price
             else:
-                # For new position, include costs in avg entry price
+                # For new position, avg entry price is just the purchase price (not including costs)
                 portfolio.positions[order.symbol] = Position(
                     symbol=order.symbol,
                     shares=order.shares,
-                    avg_entry_price=(trade_value + total_cost) / order.shares,
+                    avg_entry_price=order.price,
                     current_price=order.price
                 )
 
@@ -534,7 +534,7 @@ class OrderExecutor:
                 shares=order.shares,
                 price=order.price,
                 timestamp=order.timestamp,
-                pnl=0.0,
+                pnl=-total_cost,  # Show transaction cost as negative P&L
                 commission=total_cost,  # Store total transaction costs (fee + slippage)
                 trade_id=trade_id
             )
