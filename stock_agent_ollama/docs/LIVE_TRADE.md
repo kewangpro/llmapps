@@ -749,24 +749,28 @@ Buy 100 shares @ $150.00:
 
 ### How Costs Are Included in P&L
 
-Transaction costs are **fully integrated** into P&L calculation through two mechanisms:
+Transaction costs are **fully integrated** into P&L calculation and displayed separately to avoid double-counting:
 
-#### 1. Buy Costs → Average Entry Price
+#### 1. Buy Costs → Shown as Negative P&L
 
-Buy transaction costs are **added to the cost basis** and reflected in `avg_entry_price`:
+Buy transaction costs are **deducted from cash** but NOT included in `avg_entry_price`. Instead, they're shown as negative P&L in the trade record:
 
 ```python
 # For new position
-avg_entry_price = (trade_value + transaction_costs) / shares
+avg_entry_price = price  # Pure purchase price, no costs
+
+# Trade P&L for display
+buy_trade_pnl = -transaction_costs  # Shows cost impact
 
 # Example:
-avg_entry_price = ($15,000 + $30) / 100 = $150.30
+avg_entry_price = $150.00
+buy_trade_pnl = -$30.00
 ```
 
-When adding to an existing position, the costs are added to the total cost basis:
+When adding to an existing position, the average is calculated without costs:
 
 ```python
-total_cost_basis = (old_avg * old_shares) + trade_value + costs
+total_cost_basis = (old_avg * old_shares) + (price * shares)
 avg_entry_price = total_cost_basis / total_shares
 ```
 
@@ -777,21 +781,21 @@ Sell transaction costs are **subtracted from the realized P&L**:
 ```python
 pnl = (sell_price - avg_entry_price) * shares - sell_costs
 
-# Example (selling the position from above at $160):
-pnl = ($160.00 - $150.30) × 100 - $32.00
-    = $970.00 - $32.00
-    = $938.00
+# Example (selling position at $160):
+pnl = ($160.00 - $150.00) × 100 - $32.00
+    = $1,000.00 - $32.00
+    = $968.00
 ```
 
 **Complete Round-Trip Example:**
 ```
-Buy:  100 shares @ $150.00 → Avg entry: $150.30 (includes $30 costs)
-Sell: 100 shares @ $160.00 → P&L: $938.00
+Buy:  100 shares @ $150.00 → Buy P&L: -$30.00 (cost only)
+Sell: 100 shares @ $160.00 → Sell P&L: $968.00 (price gain - sell cost)
 
 Price profit: ($160 - $150) × 100 = $1,000
-Buy costs: $30 (baked into avg_entry_price)
-Sell costs: $32 (subtracted from P&L)
-Net profit: $1,000 - $30 - $32 = $938 ✓
+Buy costs: $30 (shown in buy trade P&L)
+Sell costs: $32 (subtracted from sell P&L)
+Total P&L: -$30 + $968 = $938 ✓
 ```
 
 ### Cost Visibility in UI
@@ -805,11 +809,11 @@ Transaction costs are displayed in three locations:
          count  total fees
    ```
 
-2. **Recent Trades Table** - "COST" column shows per-trade costs:
+2. **Recent Trades Table** - "COST" and "P&L" columns show full transaction details:
    ```
    TIME     SYMBOL  ACTION  SHARES  PRICE    COST     P&L
-   08:11:06 GOOGL   BUY     127     $313.34  $79.59   $0.00
-   08:12:06 GOOGL   BUY     76      $313.17  $47.60   $0.00
+   08:11:06 GOOGL   BUY     127     $313.34  $79.59   -$79.59
+   08:12:06 GOOGL   SELL    127     $315.00  $80.10   $130.73
    ```
 
 3. **Event Log** - Trade events include cost information:

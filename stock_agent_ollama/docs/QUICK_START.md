@@ -205,8 +205,8 @@ The live trading session is **persistent**. You can stop the application and res
 **Transaction Costs (Realistic Trading Simulation):**
 - **0.1% transaction fee + 0.1% slippage = 0.2% per trade**
 - **Round-trip cost: 0.4%** (buy + sell)
-- Buy costs included in average entry price
-- Sell costs subtracted from P&L
+- Buy costs shown as negative P&L in trade record
+- Sell costs subtracted from realized P&L
 - All costs match backtesting environment exactly
 - Full transparency in UI (displayed in trades table and session stats)
 
