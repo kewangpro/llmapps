@@ -57,8 +57,8 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 - **Paper Trading** with real-time market data (Yahoo Finance)
 - **Trained Agent Execution** using PPO, RecurrentPPO, or Ensemble models
 - **Realistic Transaction Costs** (0.1% transaction fee + 0.1% slippage = 0.2% per trade)
-  - Buy costs included in average entry price
-  - Sell costs subtracted from P&L
+  - Buy costs shown as negative P&L in trade record
+  - Sell costs subtracted from realized P&L
   - Costs match backtesting environment exactly
   - Full transparency: costs displayed in trades table and session stats
 - **Auto Stock Selection** dynamically rotates to best performing stocks
