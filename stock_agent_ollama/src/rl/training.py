@@ -104,8 +104,8 @@ class EnhancedTrainingConfig:
     # - SAC: 0.001 (0.1%) via SACRewardConfig
     # - PPO: 0.002 (0.2%) via PPORewardConfig
     # - RecurrentPPO: 0.001 (0.1%) via RecurrentPPORewardConfig
-    transaction_cost_rate: float = _ENV_DEFAULTS['transaction_cost_rate']  # 0.05% per trade (base)
-    slippage_rate: float = _ENV_DEFAULTS['slippage_rate']
+    transaction_cost_rate: float = _ENV_DEFAULTS['transaction_cost_rate']  # 0.1% per trade (base)
+    slippage_rate: float = _ENV_DEFAULTS['slippage_rate']  # 0.1% slippage
 
     # Save settings
     save_dir: Optional[str] = None

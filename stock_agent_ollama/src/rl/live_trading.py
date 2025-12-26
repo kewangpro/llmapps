@@ -5,7 +5,7 @@ Educational paper trading system that uses trained RL models with real-time mark
 This is for SIMULATION ONLY - no real money is involved.
 """
 
-from dataclasses import dataclass, field, asdict, fields
+from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Tuple, Any
@@ -210,7 +210,9 @@ class LiveTradingConfig:
     update_interval: int = 60  # Seconds between updates
     enforce_trading_hours: bool = True
     auto_select_stock: bool = False  # Dynamically select stocks to maximize returns
-    commission_per_trade: float = 0.0  # Commission per trade
+    # Percentage-based transaction costs (matching backtesting)
+    transaction_cost_rate: float = _ENV_DEFAULTS['transaction_cost_rate']  # 0.1% transaction cost
+    slippage_rate: float = _ENV_DEFAULTS['slippage_rate']  # 0.1% slippage
     session_id: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -218,11 +220,7 @@ class LiveTradingConfig:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "LiveTradingConfig":
-        # Get all field names from the dataclass
-        known_fields = {f.name for f in fields(cls)}
-        # Filter data to only include known fields
-        filtered_data = {k: v for k, v in data.items() if k in known_fields}
-        return cls(**filtered_data)
+        return cls(**data)
 
 
 @dataclass
@@ -437,12 +435,17 @@ class RiskManager:
                     reason=f"Position would be {position_pct:.1f}% of portfolio, max is {self.config.max_position_size:.1f}%"
                 )
 
-            # Check if enough cash
-            cost = order.shares * order.price + self.config.commission_per_trade
-            if cost > portfolio.cash:
+            # Check if enough cash (using percentage-based costs)
+            trade_value = order.shares * order.price
+            trade_cost = trade_value * self.config.transaction_cost_rate
+            slippage_cost = trade_value * self.config.slippage_rate
+            total_cost = trade_cost + slippage_cost
+            total_required = trade_value + total_cost
+
+            if total_required > portfolio.cash:
                 return RiskStatus(
                     approved=False,
-                    reason=f"Insufficient cash: Need ${cost:.2f}, have ${portfolio.cash:.2f}"
+                    reason=f"Insufficient cash: Need ${total_required:.2f}, have ${portfolio.cash:.2f}"
                 )
 
         elif order.action == TradingAction.SELL:
@@ -476,8 +479,13 @@ class OrderExecutor:
     def validate(self, order: Order, portfolio: Portfolio) -> bool:
         """Validate order can be executed"""
         if order.action in (TradingAction.BUY_SMALL, TradingAction.BUY_LARGE):
-            cost = order.shares * order.price + self.config.commission_per_trade
-            return cost <= portfolio.cash
+            # Calculate percentage-based costs (matching backtesting)
+            trade_value = order.shares * order.price
+            trade_cost = trade_value * self.config.transaction_cost_rate
+            slippage_cost = trade_value * self.config.slippage_rate
+            total_cost = trade_cost + slippage_cost
+            total_required = trade_value + total_cost
+            return total_required <= portfolio.cash
 
         elif order.action == TradingAction.SELL:
             position = portfolio.positions.get(order.symbol)
@@ -486,31 +494,37 @@ class OrderExecutor:
         return False
 
     def execute(self, order: Order, portfolio: Portfolio) -> Trade:
-        """Execute order and update portfolio"""
+        """Execute order and update portfolio (matching backtesting cost calculation)"""
 
         self._trade_counter += 1
         trade_id = f"T{self._trade_counter:06d}"
 
         if order.action in (TradingAction.BUY_SMALL, TradingAction.BUY_LARGE):
-            # Execute buy (support small/large buys)
-            cost = order.shares * order.price
-            total_cost = cost + self.config.commission_per_trade
+            # Execute buy - use percentage-based costs matching backtesting
+            trade_value = order.shares * order.price
+            trade_cost = trade_value * self.config.transaction_cost_rate
+            slippage_cost = trade_value * self.config.slippage_rate
+            total_cost = trade_cost + slippage_cost
 
-            portfolio.cash -= total_cost
+            # Deduct trade value + costs from cash
+            total_required = trade_value + total_cost
+            portfolio.cash -= total_required
 
-            # Update or create position
+            # Update or create position (include buy costs in cost basis)
             if order.symbol in portfolio.positions:
                 pos = portfolio.positions[order.symbol]
                 total_shares = pos.shares + order.shares
-                total_cost_basis = (pos.avg_entry_price * pos.shares) + cost
+                # Include transaction costs in cost basis for accurate P&L
+                total_cost_basis = (pos.avg_entry_price * pos.shares) + trade_value + total_cost
                 pos.avg_entry_price = total_cost_basis / total_shares
                 pos.shares = total_shares
                 pos.current_price = order.price
             else:
+                # For new position, include costs in avg entry price
                 portfolio.positions[order.symbol] = Position(
                     symbol=order.symbol,
                     shares=order.shares,
-                    avg_entry_price=order.price,
+                    avg_entry_price=(trade_value + total_cost) / order.shares,
                     current_price=order.price
                 )
 
@@ -521,19 +535,24 @@ class OrderExecutor:
                 price=order.price,
                 timestamp=order.timestamp,
                 pnl=0.0,
-                commission=self.config.commission_per_trade,
+                commission=total_cost,  # Store total transaction costs (fee + slippage)
                 trade_id=trade_id
             )
 
         elif order.action == TradingAction.SELL:
-            # Execute sell
+            # Execute sell - use percentage-based costs matching backtesting
             position = portfolio.positions[order.symbol]
 
-            proceeds = order.shares * order.price
-            total_proceeds = proceeds - self.config.commission_per_trade
+            trade_value = order.shares * order.price
+            trade_cost = trade_value * self.config.transaction_cost_rate
+            slippage_cost = trade_value * self.config.slippage_rate
+            total_cost = trade_cost + slippage_cost
 
-            # Calculate P&L
-            pnl = (order.price - position.avg_entry_price) * order.shares - self.config.commission_per_trade
+            # Calculate proceeds after costs
+            total_proceeds = trade_value - total_cost
+
+            # Calculate P&L (profit/loss from price difference minus costs)
+            pnl = (order.price - position.avg_entry_price) * order.shares - total_cost
 
             portfolio.cash += total_proceeds
             position.shares -= order.shares
@@ -550,7 +569,7 @@ class OrderExecutor:
                 price=order.price,
                 timestamp=order.timestamp,
                 pnl=pnl,
-                commission=self.config.commission_per_trade,
+                commission=total_cost,  # Store total transaction costs (fee + slippage)
                 trade_id=trade_id
             )
 
@@ -1105,7 +1124,7 @@ class LiveTradingEngine:
             return None
 
     def _force_close_position(self, current_price: float):
-        """Force close current position before rotation (FIX #3)"""
+        """Force close current position before rotation (using percentage-based costs)"""
         try:
             from .improvements import ImprovedTradingAction
 
@@ -1116,16 +1135,19 @@ class LiveTradingEngine:
             shares_to_sell = current_position.shares
             symbol = self.config.symbol
 
-            # Execute sell order (full position)
+            # Execute sell order (full position) - use percentage-based costs
             trade_value = shares_to_sell * current_price
-            commission = self.config.commission_per_trade
+            trade_cost = trade_value * self.config.transaction_cost_rate
+            slippage_cost = trade_value * self.config.slippage_rate
+            total_cost = trade_cost + slippage_cost
 
-            # Update portfolio
-            self.portfolio.cash += trade_value - commission
+            # Update portfolio (proceeds after costs)
+            total_proceeds = trade_value - total_cost
+            self.portfolio.cash += total_proceeds
 
             # Calculate realized PnL
             cost_basis = current_position.avg_entry_price * shares_to_sell
-            realized_pnl = trade_value - cost_basis - commission
+            realized_pnl = trade_value - cost_basis - total_cost
             current_position.realized_pnl += realized_pnl
 
             # Record trade (use proper TradingAction enum to avoid serialization issues)
@@ -1139,7 +1161,7 @@ class LiveTradingEngine:
                 price=current_price,
                 timestamp=dt.now(),
                 pnl=realized_pnl,
-                commission=commission,
+                commission=total_cost,  # Store total transaction costs (fee + slippage)
                 trade_id=f"T{len(self.portfolio.trades) + 1:06d}"
             )
             self.portfolio.trades.append(trade)
@@ -1594,8 +1616,8 @@ class LiveTradingEngine:
 
                 if order_risk_status.approved and self.order_executor.validate(order, self.portfolio):
                     trade = self.order_executor.execute(order, self.portfolio)
-                    self._add_event("TRADE", f"{trade.action.name} {trade.shares} @ ${trade.price:.2f}")
-                    logger.info(f"{self.session.session_id} - ✅ Trade executed: {trade.action.name} {trade.shares} shares @ ${trade.price:.2f}, P&L: ${trade.pnl:+.2f}")
+                    self._add_event("TRADE", f"{trade.action.name} {trade.shares} @ ${trade.price:.2f} (cost: ${trade.commission:.2f})")
+                    logger.info(f"{self.session.session_id} - ✅ Trade executed: {trade.action.name} {trade.shares} shares @ ${trade.price:.2f}, Cost: ${trade.commission:.2f}, P&L: ${trade.pnl:+.2f}")
 
                     # Reset idle counter on successful trade
                     self.session.consecutive_idle_cycles = 0
