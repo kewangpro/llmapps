@@ -424,10 +424,11 @@ class BacktestResult:
     trades: List[Dict]
     dates: List[datetime]
     equity_curve: pd.DataFrame
+    paired_trades: List[Dict] = None  # Round-trip trades for P&L validation
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
-        return {
+        result = {
             'config': self.config.__dict__,
             'metrics': self.metrics.to_dict(),
             'portfolio_values': self.portfolio_values.tolist(),
@@ -435,6 +436,9 @@ class BacktestResult:
             'trades': self.trades,
             'dates': [d.isoformat() for d in self.dates],
         }
+        if self.paired_trades is not None:
+            result['paired_trades'] = self.paired_trades
+        return result
 
     def save_to_model_dir(self, model_path: Path, agent_type: str):
         """
@@ -482,6 +486,11 @@ class BacktestResult:
                             trade_copy[date_field] = ts
                 serializable_trades.append(trade_copy)
 
+            # Convert paired_trades to JSON-serializable format (if available)
+            serializable_paired_trades = None
+            if self.paired_trades:
+                serializable_paired_trades = self.paired_trades  # Already plain dicts
+
             # Create backtest results JSON with detailed data for validation
             # Convert dates to strings if they're Timestamp objects
             start_date = self.config.start_date
@@ -518,6 +527,10 @@ class BacktestResult:
                 'action_distribution': action_distribution,
                 'trades': serializable_trades
             }
+
+            # Add paired_trades if available (for P&L validation)
+            if serializable_paired_trades:
+                backtest_data['paired_trades'] = serializable_paired_trades
 
             # Save to model directory
             backtest_file = save_dir / "backtest_results.json"
@@ -602,7 +615,16 @@ class BacktestEngine:
         actions = []
         portfolio_values = [self.env.initial_balance]
         trades = []
+        paired_trades = []  # Round-trip trades for P&L validation
         dates = []
+
+        # Track position for paired trade generation
+        position_tracker = {
+            'shares': 0,
+            'total_cost': 0.0,  # Total cost basis (shares * avg_entry_price)
+            'avg_entry_price': 0.0,
+            'total_commission_paid': 0.0  # Accumulated buy commissions
+        }
 
         while not done:
             # Get action from agent
@@ -622,14 +644,54 @@ class BacktestEngine:
 
             # Record trades
             if 'trade_info' in info and info['trade_info']['shares_traded'] != 0:
+                shares_traded = info['trade_info']['shares_traded']
+                price = info['price']
+                commission = info['trade_info']['total_cost']
+
+                # Record individual action trade
                 trades.append({
                     'date': info['date'],
-                    'action': 'BUY' if info['trade_info']['shares_traded'] > 0 else 'SELL',
-                    'shares': abs(info['trade_info']['shares_traded']),
-                    'price': info['price'],
-                    'cost': info['trade_info']['total_cost'],  # Transaction costs + slippage
-                    'commission': info['trade_info']['total_cost']  # Alias for validator compatibility
+                    'action': 'BUY' if shares_traded > 0 else 'SELL',
+                    'shares': abs(shares_traded),
+                    'price': price,
+                    'cost': commission,
+                    'commission': commission
                 })
+
+                # Update position tracker and generate paired trades
+                if shares_traded > 0:  # BUY
+                    # Update position (costs NOT included in avg price)
+                    new_shares = position_tracker['shares'] + shares_traded
+                    position_tracker['total_cost'] += shares_traded * price
+                    position_tracker['avg_entry_price'] = position_tracker['total_cost'] / new_shares
+                    position_tracker['shares'] = new_shares
+                    position_tracker['total_commission_paid'] += commission
+
+                else:  # SELL
+                    # Generate paired round-trip trade for validation
+                    if position_tracker['shares'] > 0:
+                        sell_shares = abs(shares_traded)
+                        entry_price = position_tracker['avg_entry_price']
+                        exit_price = price
+
+                        # Calculate P&L: price difference minus sell commission
+                        # (buy commission already tracked separately)
+                        pnl = (exit_price - entry_price) * sell_shares - commission
+
+                        paired_trades.append({
+                            'entry_price': entry_price,
+                            'exit_price': exit_price,
+                            'shares': sell_shares,
+                            'commission': commission,  # Sell commission only
+                            'pnl': pnl
+                        })
+
+                        # Update position
+                        position_tracker['shares'] -= sell_shares
+                        if position_tracker['shares'] == 0:
+                            position_tracker['total_cost'] = 0.0
+                            position_tracker['avg_entry_price'] = 0.0
+                            position_tracker['total_commission_paid'] = 0.0
 
         # Calculate metrics
         portfolio_values_array = np.array(portfolio_values)
@@ -656,7 +718,8 @@ class BacktestEngine:
             actions=actions,
             trades=trades,
             dates=dates,
-            equity_curve=equity_curve
+            equity_curve=equity_curve,
+            paired_trades=paired_trades if paired_trades else None
         )
 
         return result
@@ -686,7 +749,16 @@ class BacktestEngine:
         actions = []
         portfolio_values = [self.env.initial_balance]
         trades = []
+        paired_trades = []  # Round-trip trades for P&L validation
         dates = []
+
+        # Track position for paired trade generation
+        position_tracker = {
+            'shares': 0,
+            'total_cost': 0.0,  # Total cost basis (shares * avg_entry_price)
+            'avg_entry_price': 0.0,
+            'total_commission_paid': 0.0  # Accumulated buy commissions
+        }
 
         while not done:
             # Get action from strategy
@@ -703,14 +775,54 @@ class BacktestEngine:
 
             # Record trades
             if 'trade_info' in info and info['trade_info']['shares_traded'] != 0:
+                shares_traded = info['trade_info']['shares_traded']
+                price = info['price']
+                commission = info['trade_info']['total_cost']
+
+                # Record individual action trade
                 trades.append({
                     'date': info['date'],
-                    'action': 'BUY' if info['trade_info']['shares_traded'] > 0 else 'SELL',
-                    'shares': abs(info['trade_info']['shares_traded']),
-                    'price': info['price'],
-                    'cost': info['trade_info']['total_cost'],  # Transaction costs + slippage
-                    'commission': info['trade_info']['total_cost']  # Alias for validator compatibility
+                    'action': 'BUY' if shares_traded > 0 else 'SELL',
+                    'shares': abs(shares_traded),
+                    'price': price,
+                    'cost': commission,
+                    'commission': commission
                 })
+
+                # Update position tracker and generate paired trades
+                if shares_traded > 0:  # BUY
+                    # Update position (costs NOT included in avg price)
+                    new_shares = position_tracker['shares'] + shares_traded
+                    position_tracker['total_cost'] += shares_traded * price
+                    position_tracker['avg_entry_price'] = position_tracker['total_cost'] / new_shares
+                    position_tracker['shares'] = new_shares
+                    position_tracker['total_commission_paid'] += commission
+
+                else:  # SELL
+                    # Generate paired round-trip trade for validation
+                    if position_tracker['shares'] > 0:
+                        sell_shares = abs(shares_traded)
+                        entry_price = position_tracker['avg_entry_price']
+                        exit_price = price
+
+                        # Calculate P&L: price difference minus sell commission
+                        # (buy commission already tracked separately)
+                        pnl = (exit_price - entry_price) * sell_shares - commission
+
+                        paired_trades.append({
+                            'entry_price': entry_price,
+                            'exit_price': exit_price,
+                            'shares': sell_shares,
+                            'commission': commission,  # Sell commission only
+                            'pnl': pnl
+                        })
+
+                        # Update position
+                        position_tracker['shares'] -= sell_shares
+                        if position_tracker['shares'] == 0:
+                            position_tracker['total_cost'] = 0.0
+                            position_tracker['avg_entry_price'] = 0.0
+                            position_tracker['total_commission_paid'] = 0.0
 
         # Calculate metrics
         portfolio_values_array = np.array(portfolio_values)
@@ -737,7 +849,8 @@ class BacktestEngine:
             actions=actions,
             trades=trades,
             dates=dates,
-            equity_curve=equity_curve
+            equity_curve=equity_curve,
+            paired_trades=paired_trades if paired_trades else None
         )
 
         return result
