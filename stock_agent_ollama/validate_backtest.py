@@ -177,8 +177,8 @@ def validate_win_rate(data: Dict[str, Any]) -> bool:
     expected_win_rate = winning_trades / completed_trades
 
     # Handle win_rate stored as decimal vs percentage
-    if reported_win_rate < 1.0:
-        # Stored as decimal (0.61 = 61%)
+    if reported_win_rate <= 1.0:
+        # Stored as decimal (0.61 = 61%, 1.0 = 100%)
         reported_win_rate_pct = reported_win_rate * 100
         matches = abs(expected_win_rate - reported_win_rate) < 0.001
     else:
@@ -314,20 +314,28 @@ def validate_trade_pnl(data: Dict[str, Any], num_samples: int = 5) -> bool:
     """Sample and validate individual trade P&L calculations"""
     print_header("Check 6: Individual Trade Validation")
 
-    trades = data.get('trades', [])
+    # Check if paired trades are available (new format)
+    paired_trades = data.get('paired_trades', [])
 
-    if not trades:
-        print("  No individual trades recorded to validate")
-        print_warning("Consider enabling trade logging for better validation")
-        return True
+    if paired_trades:
+        print(f"  Using paired round-trip trades for validation")
+        trades = paired_trades
+    else:
+        # Fall back to regular trades
+        trades = data.get('trades', [])
 
-    # Check if trades have required P&L fields
-    first_trade = trades[0]
-    if 'entry_price' not in first_trade or 'exit_price' not in first_trade:
-        print("  Trade structure: Individual actions (BUY/SELL)")
-        print("  P&L validation requires paired round-trip trades")
-        print_warning("Skipping P&L validation - trades are individual actions, not paired round trips")
-        return True  # Not a failure, just not applicable
+        if not trades:
+            print("  No individual trades recorded to validate")
+            print_warning("Consider enabling trade logging for better validation")
+            return True
+
+        # Check if trades have required P&L fields
+        first_trade = trades[0]
+        if 'entry_price' not in first_trade or 'exit_price' not in first_trade:
+            print("  Trade structure: Individual actions (BUY/SELL)")
+            print("  P&L validation requires paired round-trip trades")
+            print_warning("Skipping P&L validation - trades are individual actions, not paired round trips")
+            return True  # Not a failure, just not applicable
 
     print(f"  Total Trades: {len(trades)}")
     print(f"  Sampling {min(num_samples, len(trades))} trades for validation\n")
