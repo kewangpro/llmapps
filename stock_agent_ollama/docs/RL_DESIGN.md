@@ -1260,7 +1260,7 @@ The tool performs **8 comprehensive checks**:
 5. **Metrics Reasonableness**:
    - Sharpe ratio < 8.0 (warns if > 6.0 as "excellent")
    - Win rate thresholds adjusted by sample size (<20 trades: 95%, ≥20 trades: 90%)
-6. **Individual Trade Validation**: Gracefully skips if trades are individual actions (not paired round trips)
+6. **Individual Trade Validation**: Validates P&L calculations on paired round-trip trades (entry/exit price, commission)
 7. **Transaction Cost Inclusion**: Verifies trades include non-zero `cost` or `commission` fields (default 0.2% per trade)
 8. **Reproducibility Test**: Provides instructions for testing deterministic behavior
 
