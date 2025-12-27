@@ -341,6 +341,7 @@ python validate_backtest.py --watchlist --algorithm all
 - Win rate calculation
 - Portfolio value consistency
 - Metrics reasonableness (Sharpe ratio, drawdown)
+- Individual trade P&L validation
 - Transaction cost inclusion
 - Reproducibility testing
 
