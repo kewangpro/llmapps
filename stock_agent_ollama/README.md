@@ -56,7 +56,8 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 ### 🔴 Live Trading Simulation (Paper Trading)
 - **Paper Trading** with real-time market data (Yahoo Finance)
 - **Trained Agent Execution** using PPO, RecurrentPPO, or Ensemble models
-- **Realistic Transaction Costs** (0.1% transaction fee + 0.1% slippage = 0.2% per trade)
+- **Realistic Transaction Costs** (zero-commission era: $0 commissions + 0.05% slippage)
+  - Reflects modern brokers (Fidelity, Schwab, Robinhood)
   - Buy costs shown as negative P&L in trade record
   - Sell costs subtracted from realized P&L
   - Costs match backtesting environment exactly
@@ -228,8 +229,8 @@ OLLAMA_MODEL=gemma3:latest           # AI model for analysis
 OLLAMA_BASE_URL=http://localhost:11434
 PANEL_PORT=5006                      # Web interface port
 RL_DEFAULT_INITIAL_BALANCE=100000.0  # Starting balance ($100k)
-RL_TRANSACTION_COST_RATE=0.001       # 0.1% transaction cost
-RL_SLIPPAGE_RATE=0.001               # 0.1% slippage (total: 0.2% per trade)
+RL_TRANSACTION_COST_RATE=0.0         # $0 commissions (zero-commission era)
+RL_SLIPPAGE_RATE=0.0005              # 0.05% slippage for liquid stocks
 RL_MAX_POSITION_PCT=80.0             # Max position size (80% of portfolio)
 RL_STOP_LOSS_PCT=0.05                # 5% stop-loss (default)
 RL_TRAILING_STOP_PCT=0.03            # 3% trailing stop (default)
