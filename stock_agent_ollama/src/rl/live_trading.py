@@ -211,8 +211,8 @@ class LiveTradingConfig:
     enforce_trading_hours: bool = True
     auto_select_stock: bool = False  # Dynamically select stocks to maximize returns
     # Percentage-based transaction costs (matching backtesting)
-    transaction_cost_rate: float = _ENV_DEFAULTS['transaction_cost_rate']  # 0.1% transaction cost
-    slippage_rate: float = _ENV_DEFAULTS['slippage_rate']  # 0.1% slippage
+    transaction_cost_rate: float = _ENV_DEFAULTS['transaction_cost_rate']  # $0 commissions (zero-commission era)
+    slippage_rate: float = _ENV_DEFAULTS['slippage_rate']  # 0.05% slippage for liquid stocks
     session_id: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:

@@ -101,11 +101,10 @@ class EnhancedTrainingConfig:
     # Transaction costs (from EnvConfig)
     # Algorithm-specific transaction costs via reward configs:
     # - QRDQN: 0.0005 (0.05%) via EnhancedRewardConfig
-    # - SAC: 0.001 (0.1%) via SACRewardConfig
-    # - PPO: 0.002 (0.2%) via PPORewardConfig
-    # - RecurrentPPO: 0.001 (0.1%) via RecurrentPPORewardConfig
-    transaction_cost_rate: float = _ENV_DEFAULTS['transaction_cost_rate']  # 0.1% per trade (base)
-    slippage_rate: float = _ENV_DEFAULTS['slippage_rate']  # 0.1% slippage
+    # Transaction costs: $0 commissions (zero-commission era, 2025)
+    # Slippage only: ~0.05% for liquid S&P 500 stocks
+    transaction_cost_rate: float = _ENV_DEFAULTS['transaction_cost_rate']  # $0 per trade
+    slippage_rate: float = _ENV_DEFAULTS['slippage_rate']  # 0.05% slippage
 
     # Save settings
     save_dir: Optional[str] = None

@@ -29,9 +29,9 @@ class EnvConfig:
     max_position_size: int = 1000  # Maximum shares
     max_position_pct: float = 80.0  # Max position as % of portfolio
 
-    # Cost parameters
-    transaction_cost_rate: float = 0.001  # 0.1% per trade (increased to reduce churn)
-    slippage_rate: float = 0.001  # 0.1% slippage (increased for realism)
+    # Cost parameters (zero-commission era, 2025)
+    transaction_cost_rate: float = 0.0  # $0 commissions (Fidelity, Schwab, Robinhood)
+    slippage_rate: float = 0.0005  # 0.05% slippage for liquid S&P 500 stocks
 
     # Observation parameters
     lookback_window: int = 60
