@@ -163,8 +163,9 @@ class Order:
 
 **Execution Simulation:**
 - Use current market price with percentage-based costs
-- Transaction costs: 0.1% (default) + Slippage: 0.1% (default) = **0.2% per trade**
-- Round-trip cost: **0.4%** (buy + sell)
+- Commissions: $0 (zero-commission era) + Slippage: 0.05% = **0.05% per trade**
+- Round-trip cost: **0.1%** (buy + sell)
+- Reflects modern brokers (Fidelity, Schwab, Robinhood)
 - Costs match backtesting environment exactly
 - Instant fills (no partial fills)
 - Record all executions with detailed cost tracking
@@ -516,8 +517,8 @@ class LiveTradingConfig:
 
     # Portfolio
     initial_capital: float = 100000.0
-    transaction_cost_rate: float = 0.001  # 0.1% transaction cost
-    slippage_rate: float = 0.001  # 0.1% slippage (total: 0.2% per trade)
+    transaction_cost_rate: float = 0.0  # $0 commissions (zero-commission era)
+    slippage_rate: float = 0.0005  # 0.05% slippage for liquid stocks
 
     # Execution
     poll_interval: int = 60  # seconds
@@ -732,19 +733,19 @@ class TradingEvent:
 
 Live trading uses **percentage-based transaction costs** that exactly match the backtesting environment:
 
-- **Transaction Cost**: 0.1% of trade value
-- **Slippage**: 0.1% of trade value
-- **Total Cost Per Trade**: 0.2%
-- **Round-Trip Cost**: 0.4% (buy + sell)
+- **Commissions**: $0 (zero-commission era: Fidelity, Schwab, Robinhood)
+- **Slippage**: 0.05% of trade value (liquid S&P 500 stocks)
+- **Total Cost Per Trade**: 0.05%
+- **Round-Trip Cost**: 0.1% (buy + sell)
 
 **Example:**
 ```
 Buy 100 shares @ $150.00:
   Trade value: $15,000
-  Transaction cost: $15.00 (0.1%)
-  Slippage: $15.00 (0.1%)
-  Total cost: $30.00
-  Cash deducted: $15,030.00
+  Commissions: $0.00
+  Slippage: $7.50 (0.05%)
+  Total cost: $7.50
+  Cash deducted: $15,007.50
 ```
 
 ### How Costs Are Included in P&L
@@ -789,13 +790,13 @@ pnl = ($160.00 - $150.00) × 100 - $32.00
 
 **Complete Round-Trip Example:**
 ```
-Buy:  100 shares @ $150.00 → Buy P&L: -$30.00 (cost only)
-Sell: 100 shares @ $160.00 → Sell P&L: $968.00 (price gain - sell cost)
+Buy:  100 shares @ $150.00 → Buy P&L: -$7.50 (slippage only)
+Sell: 100 shares @ $160.00 → Sell P&L: $992.00 (price gain - sell slippage)
 
 Price profit: ($160 - $150) × 100 = $1,000
-Buy costs: $30 (shown in buy trade P&L)
-Sell costs: $32 (subtracted from sell P&L)
-Total P&L: -$30 + $968 = $938 ✓
+Buy slippage: $7.50 (shown in buy trade P&L)
+Sell slippage: $8.00 (subtracted from sell P&L)
+Total P&L: -$7.50 + $992.00 = $984.50 ✓
 ```
 
 ### Cost Visibility in UI

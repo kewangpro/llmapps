@@ -203,8 +203,9 @@ The live trading session is **persistent**. You can stop the application and res
 - **Event Log**: System events with symbol prefixes for auto-select (e.g., `[HOOD] Agent predicted SELL_ALL...`), includes rotation events with model names (e.g., `Rotated to HOOD (recurrent_ppo_HOOD_20251203_103214)`)
 
 **Transaction Costs (Realistic Trading Simulation):**
-- **0.1% transaction fee + 0.1% slippage = 0.2% per trade**
-- **Round-trip cost: 0.4%** (buy + sell)
+- **$0 commissions + 0.05% slippage** (zero-commission era)
+- **Round-trip cost: 0.1%** (buy + sell)
+- Reflects modern brokers (Fidelity, Schwab, Robinhood)
 - Buy costs shown as negative P&L in trade record
 - Sell costs subtracted from realized P&L
 - All costs match backtesting environment exactly
@@ -560,7 +561,7 @@ python validate_backtest.py --watchlist --algorithm all
 - Win rate calculation correctness
 - Portfolio value consistency
 - Metrics reasonableness (Sharpe ratio <8.0, win rates based on sample size)
-- Transaction cost inclusion (0.2% per trade default)
+- Transaction cost inclusion (0.05% per trade, slippage only)
 - Reproducibility hints
 
 **Expected output:**

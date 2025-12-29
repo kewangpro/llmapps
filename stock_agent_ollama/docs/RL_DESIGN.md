@@ -554,8 +554,8 @@ All environment parameters centralized in `src/rl/env_factory.py`:
 class EnvConfig:
     initial_balance: float = 100000.0
     max_position_pct: float = 80.0
-    transaction_cost_rate: float = 0.0005
-    slippage_rate: float = 0.0005
+    transaction_cost_rate: float = 0.0  # $0 commissions
+    slippage_rate: float = 0.0005  # 0.05% slippage
     lookback_window: int = 60
     include_trend_indicators: bool = False  # For RecurrentPPO
     use_action_masking: bool = True
@@ -1261,7 +1261,7 @@ The tool performs **8 comprehensive checks**:
    - Sharpe ratio < 8.0 (warns if > 6.0 as "excellent")
    - Win rate thresholds adjusted by sample size (<20 trades: 95%, ≥20 trades: 90%)
 6. **Individual Trade Validation**: Validates P&L calculations on paired round-trip trades (entry/exit price, commission)
-7. **Transaction Cost Inclusion**: Verifies trades include non-zero `cost` or `commission` fields (default 0.2% per trade)
+7. **Transaction Cost Inclusion**: Verifies trades include non-zero `cost` or `commission` fields (default 0.05% per trade)
 8. **Reproducibility Test**: Provides instructions for testing deterministic behavior
 
 #### Example Output
@@ -1330,20 +1330,20 @@ Overall: 96/96 checks passed (100.0%)
 
 The validation tool checks for transaction costs in trade records. The backtesting system applies:
 
-- **Transaction cost rate**: 0.1% (default, configurable)
-- **Slippage rate**: 0.1% (default, configurable)
-- **Total cost per trade**: 0.2% of trade value (0.4% round-trip)
+- **Commissions**: $0 (zero-commission era: Fidelity, Schwab, Robinhood)
+- **Slippage rate**: 0.05% (liquid S&P 500 stocks)
+- **Total cost per trade**: 0.05% of trade value (0.1% round-trip)
 
 Trade records include transaction costs:
-- Backtesting: Uses `cost` field with total transaction costs + slippage
-- Live trading: Uses `commission` field with total transaction costs + slippage
+- Backtesting: Uses `cost` field with total slippage
+- Live trading: Uses `commission` field with total slippage
 - Validator: Automatically checks for either field
 
 **Configuration:**
 ```python
 # In env_factory.py (EnvConfig)
-transaction_cost_rate: float = 0.001  # 0.1% per trade
-slippage_rate: float = 0.001          # 0.1% slippage
+transaction_cost_rate: float = 0.0      # $0 commissions
+slippage_rate: float = 0.0005           # 0.05% slippage
 ```
 
 #### Integration with Training/Backtesting
