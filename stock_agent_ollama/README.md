@@ -323,17 +323,15 @@ The tool handles model training, backtesting, and comprehensive strategy compari
 **Backtest Validation:**
 The `validate_backtest.py` tool provides comprehensive validation of backtest results:
 ```bash
-# Validate single stock, single algorithm
+# Validate single stock (all algorithms)
+python validate_backtest.py --symbol RIVN
+
+# Validate all watchlist stocks (all algorithms)
+python validate_backtest.py --watchlist
+
+# Validate specific algorithm only
 python validate_backtest.py --symbol RIVN --algorithm ppo
-
-# Validate single stock, all algorithms
-python validate_backtest.py --symbol RIVN --algorithm all
-
-# Validate all watchlist stocks, single algorithm
-python validate_backtest.py --watchlist --algorithm ppo
-
-# Validate all watchlist stocks, all algorithms
-python validate_backtest.py --watchlist --algorithm all
+python validate_backtest.py --watchlist --algorithm ensemble
 ```
 
 **Validation Checks:**

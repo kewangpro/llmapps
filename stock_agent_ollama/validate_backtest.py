@@ -3,9 +3,10 @@
 Backtest Validation Script
 
 Validates that backtest results are mathematically correct and free from common bugs.
-Usage: python validate_backtest.py --symbol RIVN --algorithm ppo
-       python validate_backtest.py --watchlist --algorithm ppo
-Example: python validate_backtest.py --symbol RIVN --algorithm ensemble
+Usage: python validate_backtest.py --symbol RIVN
+       python validate_backtest.py --watchlist
+       python validate_backtest.py --symbol RIVN --algorithm ppo
+Example: python validate_backtest.py --symbol RIVN
          python validate_backtest.py --watchlist --algorithm ensemble
 """
 
@@ -496,16 +497,16 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  python validate_backtest.py --symbol RIVN
   python validate_backtest.py --symbol RIVN --algorithm ppo
-  python validate_backtest.py --symbol TSLA --algorithm ensemble
-  python validate_backtest.py --watchlist --algorithm ppo
+  python validate_backtest.py --watchlist
   python validate_backtest.py --watchlist --algorithm ensemble
 
-Algorithms:
+Algorithms (default: all):
   ppo              - Proximal Policy Optimization
   recurrent_ppo    - RecurrentPPO with LSTM memory
   ensemble         - Ensemble of PPO + RecurrentPPO
-  all              - Validate all algorithms
+  all              - Validate all algorithms (default)
         """
     )
 
@@ -527,9 +528,9 @@ Algorithms:
     parser.add_argument(
         '--algorithm',
         type=str,
-        required=True,
+        default='all',
         choices=['ppo', 'recurrent_ppo', 'ensemble', 'all'],
-        help='RL algorithm(s) to validate'
+        help='RL algorithm(s) to validate (default: all)'
     )
 
     args = parser.parse_args()
