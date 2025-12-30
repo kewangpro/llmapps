@@ -542,17 +542,15 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 After running backtests, you can validate the results for mathematical correctness:
 
 ```bash
-# Validate a single backtest
-python validate_backtest.py --symbol AAPL --algorithm ppo
-
 # Validate all algorithms for a symbol
-python validate_backtest.py --symbol AAPL --algorithm all
+python validate_backtest.py --symbol AAPL
 
-# Validate all watchlist stocks
-python validate_backtest.py --watchlist --algorithm ppo
+# Validate all watchlist stocks (all algorithms)
+python validate_backtest.py --watchlist
 
-# Validate all watchlist stocks and all algorithms
-python validate_backtest.py --watchlist --algorithm all
+# Validate specific algorithm only
+python validate_backtest.py --symbol AAPL --algorithm ppo
+python validate_backtest.py --watchlist --algorithm ensemble
 ```
 
 **What it checks:**

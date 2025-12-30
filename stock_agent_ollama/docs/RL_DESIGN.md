@@ -1223,31 +1223,31 @@ Provides comprehensive validation of backtest results to ensure mathematical cor
 
 #### Usage
 
-**Basic Usage** (validate a single backtest):
+**Basic Usage**:
 ```bash
 source .venv/bin/activate
-python validate_backtest.py --symbol AAPL --algorithm ppo
+
+# Validate all algorithms for a symbol
+python validate_backtest.py --symbol AAPL
+
+# Validate all watchlist stocks (all algorithms)
+python validate_backtest.py --watchlist
 ```
 
 **Advanced Options**:
 ```bash
-# Validate all algorithms for a symbol
-python validate_backtest.py --symbol RIVN --algorithm all
-
-# Validate all watchlist stocks for an algorithm
-python validate_backtest.py --watchlist --algorithm ppo
-
-# Validate all watchlist stocks and all algorithms (36 validations)
-python validate_backtest.py --watchlist --algorithm all
+# Validate specific algorithm only
+python validate_backtest.py --symbol RIVN --algorithm ppo
+python validate_backtest.py --watchlist --algorithm ensemble
 ```
 
 #### Command-Line Arguments
 
-| Argument | Type | Choices | Description |
-|----------|------|---------|-------------|
-| `--symbol` | string | N/A | Stock symbol to validate (mutually exclusive with `--watchlist`) |
-| `--watchlist` | flag | N/A | Validate all symbols from default watchlist |
-| `--algorithm` | string | `ppo`, `recurrent_ppo`, `ensemble`, `all` | Algorithm(s) to validate |
+| Argument | Type | Default | Choices | Description |
+|----------|------|---------|---------|-------------|
+| `--symbol` | string | N/A | N/A | Stock symbol to validate (mutually exclusive with `--watchlist`) |
+| `--watchlist` | flag | N/A | N/A | Validate all symbols from default watchlist |
+| `--algorithm` | string | `all` | `ppo`, `recurrent_ppo`, `ensemble`, `all` | Algorithm(s) to validate |
 
 #### Validation Checks
 
@@ -1267,7 +1267,7 @@ The tool performs **8 comprehensive checks**:
 #### Example Output
 
 ```bash
-$ python validate_backtest.py --symbol RIVN --algorithm ppo
+$ python validate_backtest.py --symbol RIVN
 
 ╔════════════════════════════════════════════════════════════════════╗
 ║                     BACKTEST VALIDATION REPORT                     ║

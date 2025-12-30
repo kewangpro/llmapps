@@ -828,7 +828,7 @@ Transaction costs match backtesting exactly, ensuring validated results:
 
 ```bash
 # Backtest validation
-python validate_backtest.py --symbol AAPL --algorithm ppo
+python validate_backtest.py --symbol AAPL
 
 # Check results
 ✅ Transaction costs: $4,905.97 (4.9% of capital)
