@@ -230,9 +230,15 @@ def create_app():
     # Create all pages
     analysis_app = StockAnalysisApp()
     rl_panel = RLTrainingPanel()
-    portfolio_page = PortfolioPage(watchlist_symbols=watchlist_symbols, watchlist_panel=None)  # Will set later
-    models_page = ModelsPage()
     live_trading_page = create_live_trading_page(session_manager=session_manager)
+    portfolio_page = PortfolioPage(
+        watchlist_symbols=watchlist_symbols,
+        watchlist_panel=None,
+        analysis_app=analysis_app,
+        training_page=rl_panel,
+        live_trade_page=live_trading_page
+    )
+    models_page = ModelsPage()
 
     # Create professional navigation tabs
     tabs = pn.Tabs(
