@@ -99,12 +99,37 @@ def create_app():
 
             return total_shares, total_value
 
+        def _get_all_positions(self):
+            """Get aggregated position info for all symbols across all sessions"""
+            positions_map = {} # symbol -> {shares, value}
+
+            try:
+                # Get all live trading engines
+                engines = self.session_manager.get_all_sessions()
+
+                for engine in engines:
+                    session = engine.session
+                    # Count positions from all sessions
+                    for symbol, position in session.portfolio.positions.items():
+                        if symbol not in positions_map:
+                            positions_map[symbol] = {'shares': 0, 'value': 0.0}
+                        
+                        positions_map[symbol]['shares'] += position.shares
+                        positions_map[symbol]['value'] += position.shares * position.current_price
+            except Exception as e:
+                logger.warning(f"Error getting all positions: {e}")
+
+            return positions_map
+
         async def refresh(self):
             """Refresh watchlist data"""
             self.watchlist_symbols = portfolio_manager.load_portfolio("default")
 
             tasks = [asyncio.to_thread(self.stock_fetcher.get_real_time_price, symbol) for symbol in self.watchlist_symbols]
             results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Pre-calculate positions for efficient lookup
+            positions_map = self._get_all_positions()
 
             # Create header HTML
             watchlist_header = pn.pane.HTML(f"""
@@ -137,8 +162,12 @@ def create_app():
                     color = Colors.SUCCESS_GREEN if change >= 0 else Colors.DANGER_RED
                     symbol_icon = '▲' if change >= 0 else '▼'
 
-                    # Get position information for this symbol
-                    total_shares, total_value = self._get_positions_for_symbol(symbol)
+                    # Get position information for this symbol from pre-calculated map
+                    total_shares = 0
+                    total_value = 0.0
+                    if symbol in positions_map:
+                        total_shares = positions_map[symbol]['shares']
+                        total_value = positions_map[symbol]['value']
 
                     # Build position HTML if there are active positions
                     position_html = ""
