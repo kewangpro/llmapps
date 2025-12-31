@@ -634,7 +634,11 @@ src/ui/
 - **Wider Model Column**: Model name column increased from 200px to 300px to accommodate LSTM PPO naming
 - **Smart Updates**: UI updates in-place without page refresh or scroll jumps
 - **Environment Matching**: Sessions load exact training configuration from saved models
-- **Optimized Rendering**: Granular UI updates for high performance with multiple sessions
+- **Optimized Rendering**: Granular UI updates for high-performance rendering
+
+### Dashboard Page
+- **Non-blocking Refresh**: Data fetching is now asynchronous, keeping the UI responsive during updates
+- **Parallel Data Loading**: Market indices and watchlist data load concurrently for faster refresh times
 
 ### Symbol Input
 - **Unrestricted Input**: Symbol inputs now accept any valid ticker, not just predefined lists
@@ -661,6 +665,7 @@ src/ui/
 
 3. **Real-time Updates**
    - Uses polling (5-second intervals for live trading, 60-second trading cycles)
+   - Note: Polling is non-blocking (async), ensuring UI responsiveness
    - Could be improved with WebSocket for true real-time
 
 4. **Model Management**
