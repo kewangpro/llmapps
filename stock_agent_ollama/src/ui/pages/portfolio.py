@@ -43,12 +43,16 @@ class PortfolioPage(param.Parameterized):
     tracked_stocks = param.List(default=[], doc="List of stock symbols being tracked")
     quick_view_symbols = param.List(default=[], doc="List of symbols in quick view")
 
-    def __init__(self, watchlist_symbols=None, watchlist_panel=None, **params):
+    def __init__(self, watchlist_symbols=None, watchlist_panel=None, analysis_app=None, training_page=None, live_trade_page=None, **params):
         super().__init__(**params)
         self.watchlist_name = "default"
         self.stock_fetcher = StockFetcher()
         self.quick_view_symbols = watchlist_symbols or []
         self.watchlist_panel = watchlist_panel  # Reference to sidebar watchlist panel
+        self.analysis_app = analysis_app  # Reference to analysis page
+        self.training_page = training_page  # Reference to training page
+        self.live_trade_page = live_trade_page  # Reference to live trade page
+        self.watchlist_rows = {}  # Track rows by symbol for efficient updates
 
         self._load_watchlist()
         self._create_ui()
@@ -118,6 +122,29 @@ class PortfolioPage(param.Parameterized):
             ),
             sizing_mode="stretch_width"
         )
+
+    def _refresh_suggestion_buttons(self):
+        """Update Top Movers button states without refetching data"""
+        # Find all buttons in suggestions container and update their states
+        for component in self.suggestions_container:
+            if isinstance(component, pn.Row):  # The row containing cards
+                for card in component:
+                    if isinstance(card, pn.Column):  # Each card
+                        # Find the button in the card
+                        for item in card:
+                            if isinstance(item, pn.widgets.Button):
+                                # Extract symbol from the card's HTML (first element)
+                                if len(card) > 0 and isinstance(card[0], pn.pane.HTML):
+                                    html_content = card[0].object
+                                    # Parse symbol from HTML (it's in the first div)
+                                    import re
+                                    match = re.search(r'<div[^>]*>([A-Z]+)</div>', html_content)
+                                    if match:
+                                        symbol = match.group(1)
+                                        is_added = symbol in self.quick_view_symbols
+                                        item.name = "Added" if is_added else "Add"
+                                        item.button_type = "light" if is_added else "primary"
+                                        item.disabled = is_added
 
     async def _update_suggestions(self):
         """Fetch and display suggested high-momentum stocks"""
@@ -249,12 +276,12 @@ class PortfolioPage(param.Parameterized):
         """Add a suggested stock to watchlist"""
         self.quick_view_input.value = symbol
         self._add_to_quick_view(None)
-        # Refresh suggestions UI to update button state
-        asyncio.create_task(self._update_suggestions())
+        # Button state is already updated by _add_to_quick_view -> _refresh_suggestion_buttons()
 
     async def _refresh_quick_view(self):
         """Refresh quick view with real-time data"""
         self.quick_view_container.clear()
+        self.watchlist_rows.clear()
 
         if not self.quick_view_symbols:
             self.quick_view_container.append(
@@ -294,9 +321,27 @@ class PortfolioPage(param.Parameterized):
 
         rows = await asyncio.gather(*tasks, return_exceptions=True)
 
-        for row in rows:
+        for i, row in enumerate(rows):
             if not isinstance(row, Exception):
+                symbol = self.quick_view_symbols[i]
+                self.watchlist_rows[symbol] = row
                 self.quick_view_container.append(row)
+
+    async def _add_watchlist_row(self, symbol: str):
+        """Add a single row to the watchlist without rebuilding"""
+        row = await self._create_quick_view_row(symbol)
+        if not isinstance(row, Exception):
+            self.watchlist_rows[symbol] = row
+            self.quick_view_container.append(row)
+
+    def _remove_watchlist_row(self, symbol: str):
+        """Remove a single row from the watchlist without rebuilding"""
+        if symbol in self.watchlist_rows:
+            row = self.watchlist_rows.pop(symbol)
+            try:
+                self.quick_view_container.remove(row)
+            except ValueError:
+                pass  # Row already removed
 
     async def _create_quick_view_row(self, symbol: str) -> pn.Row:
         """Create a single watchlist row with real-time data"""
@@ -401,10 +446,17 @@ class PortfolioPage(param.Parameterized):
         self.quick_view_input.value = ""
         self._save_watchlist()
 
-        # Refresh both the page view and sidebar
-        asyncio.create_task(self._refresh_quick_view())
+        # Add row without refreshing entire table
+        asyncio.create_task(self._add_watchlist_row(symbol))
+        self._refresh_suggestion_buttons()  # Update Top Movers button states (no fetch)
         if self.watchlist_panel:
             asyncio.create_task(self.watchlist_panel.refresh())
+        if self.analysis_app:
+            self.analysis_app.refresh_quick_buttons()
+        if self.training_page:
+            self.training_page.refresh_symbol_dropdown()
+        if self.live_trade_page:
+            self.live_trade_page.refresh_symbol_dropdown()
 
     def _remove_from_quick_view(self, symbol: str):
         """Remove symbol from watchlist"""
@@ -414,10 +466,17 @@ class PortfolioPage(param.Parameterized):
             self.tracked_stocks.remove(symbol)
         self._save_watchlist()
 
-        # Refresh both the page view and sidebar
-        asyncio.create_task(self._refresh_quick_view())
+        # Remove row without refreshing entire table
+        self._remove_watchlist_row(symbol)
+        self._refresh_suggestion_buttons()  # Update Top Movers button states (no fetch)
         if self.watchlist_panel:
             asyncio.create_task(self.watchlist_panel.refresh())
+        if self.analysis_app:
+            self.analysis_app.refresh_quick_buttons()
+        if self.training_page:
+            self.training_page.refresh_symbol_dropdown()
+        if self.live_trade_page:
+            self.live_trade_page.refresh_symbol_dropdown()
 
     # ========================================================================
     # Main View

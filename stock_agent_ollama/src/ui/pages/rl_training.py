@@ -51,14 +51,15 @@ class RLTrainingPanel(param.Parameterized):
         # Load watchlist symbols dynamically
         watchlist_symbols = portfolio_manager.load_portfolio("default")
 
-        # Fallback symbols if watchlist is empty
+        # Check if watchlist is empty
         if not watchlist_symbols:
-            watchlist_symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA']
+            logger.warning("Watchlist is empty")
+            watchlist_symbols = []
 
         # Symbol input with autocomplete from watchlist
         self.symbol_input = pn.widgets.AutocompleteInput(
             name='',
-            value=watchlist_symbols[0] if watchlist_symbols else 'GOOGL',
+            value=watchlist_symbols[0] if watchlist_symbols else '',
             options=watchlist_symbols,
             placeholder='Enter symbol...',
             case_sensitive=False,
@@ -151,6 +152,20 @@ class RLTrainingPanel(param.Parameterized):
         # Results panel
         self.results_panel = pn.Column(sizing_mode="stretch_width", min_height=250)
 
+    def refresh_symbol_dropdown(self):
+        """Refresh symbol dropdown when watchlist changes"""
+        try:
+            watchlist_symbols = portfolio_manager.load_portfolio("default")
+            if not watchlist_symbols:
+                logger.warning("Watchlist is empty")
+                watchlist_symbols = []
+        except Exception as e:
+            logger.error(f"Failed to load watchlist for symbol dropdown: {e}")
+            watchlist_symbols = []
+
+        # Update the options
+        self.symbol_input.options = watchlist_symbols
+        logger.info(f"Training page symbol dropdown refreshed with {len(watchlist_symbols)} stocks")
 
     def _start_training(self, event):
         """Start RL training."""

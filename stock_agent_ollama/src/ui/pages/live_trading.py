@@ -45,6 +45,21 @@ class LiveTradingPage(pn.viewable.Viewer):
         # Register cleanup on session destroy
         pn.state.on_session_destroyed(self._cleanup)
 
+    def refresh_symbol_dropdown(self):
+        """Refresh symbol dropdown when watchlist changes"""
+        try:
+            watchlist_symbols = portfolio_manager.load_portfolio("default")
+            if not watchlist_symbols:
+                logger.warning("Watchlist is empty")
+                watchlist_symbols = []
+        except Exception as e:
+            logger.error(f"Failed to load watchlist for symbol dropdown: {e}")
+            watchlist_symbols = []
+
+        # Update the options
+        self.symbol_input.options = watchlist_symbols
+        logger.info(f"Live trading page symbol dropdown refreshed with {len(watchlist_symbols)} stocks")
+
     def _cleanup(self, session_context):
         """Cleanup resources when the page is destroyed"""
         if self.update_callback:
@@ -180,13 +195,14 @@ class LiveTradingPage(pn.viewable.Viewer):
         # Load watchlist symbols dynamically
         watchlist_symbols = portfolio_manager.load_portfolio("default")
 
-        # Fallback symbols if watchlist is empty
+        # Check if watchlist is empty
         if not watchlist_symbols:
-            watchlist_symbols = ['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'AMZN', 'NVDA', 'META']
+            logger.warning("Watchlist is empty")
+            watchlist_symbols = []
 
         # Session configuration inputs
         self.symbol_input = pn.widgets.AutocompleteInput(
-            value=watchlist_symbols[0] if watchlist_symbols else 'AAPL',
+            value=watchlist_symbols[0] if watchlist_symbols else '',
             options=watchlist_symbols,
             placeholder='Enter symbol...',
             case_sensitive=False,

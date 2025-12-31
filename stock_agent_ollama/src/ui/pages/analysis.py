@@ -104,21 +104,21 @@ class StockAnalysisApp(param.Parameterized):
         )
         self.lstm_prediction_text = pn.pane.HTML("")
 
-        # Quick action buttons - more compact
+        # Quick action buttons - more compact with wrapping
         try:
-            watchlist_stocks = portfolio_manager.load_portfolio("default")
-            if watchlist_stocks:
-                quick_stocks = watchlist_stocks
-            else:
-                quick_stocks = ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META", "TEAM"]
+            quick_stocks = portfolio_manager.load_portfolio("default")
+            if not quick_stocks:
+                logger.warning("Watchlist is empty")
+                quick_stocks = []
         except Exception as e:
-            logger.warning(f"Failed to load watchlist for quick buttons: {e}")
-            quick_stocks = ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META", "TEAM"]
+            logger.error(f"Failed to load watchlist for quick buttons: {e}")
+            quick_stocks = []
 
-        self.quick_buttons = pn.Row(
+        self.quick_buttons = pn.FlexBox(
             *[pn.widgets.Button(name=sym, button_type="light", width=70, height=30)
               for sym in quick_stocks],
             sizing_mode="stretch_width",
+            flex_wrap="wrap"
         )
 
         # Bind events
@@ -129,6 +129,33 @@ class StockAnalysisApp(param.Parameterized):
             button.on_click(self._handle_quick_button)
 
 
+
+    def refresh_quick_buttons(self):
+        """Refresh quick action buttons when watchlist changes"""
+        try:
+            quick_stocks = portfolio_manager.load_portfolio("default")
+            if not quick_stocks:
+                logger.warning("Watchlist is empty")
+                quick_stocks = []
+        except Exception as e:
+            logger.error(f"Failed to load watchlist for quick buttons: {e}")
+            quick_stocks = []
+
+        # Clear existing buttons
+        self.quick_buttons.clear()
+
+        # Create new buttons
+        new_buttons = [pn.widgets.Button(name=sym, button_type="light", width=70, height=30)
+                       for sym in quick_stocks]
+
+        # Add new buttons to the container (will wrap as needed)
+        self.quick_buttons.extend(new_buttons)
+
+        # Rebind click events
+        for button in self.quick_buttons:
+            button.on_click(self._handle_quick_button)
+
+        logger.info(f"Quick buttons refreshed with {len(quick_stocks)} stocks")
 
     def _on_enter_key(self, event):
         """Handle Enter key press"""
