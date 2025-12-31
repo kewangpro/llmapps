@@ -33,26 +33,30 @@ class DashboardPage(param.Parameterized):
         )
         self.refresh_button.on_click(self._refresh_dashboard)
 
-        pn.state.onload(self._refresh_dashboard)
+        # Schedule initial refresh
+        pn.state.onload(lambda: asyncio.create_task(self._refresh_dashboard()))
 
-    def _refresh_dashboard(self, event=None):
+    async def _refresh_dashboard(self, event=None):
         """Refresh dashboard data"""
         try:
-            self._load_market_overview()
+            # Load components concurrently
+            await asyncio.gather(
+                self._load_market_overview(),
+                self._refresh_watchlist()
+            )
             self._load_quick_actions()
-            # Also refresh watchlist if available
-            if self.watchlist_panel:
-                # `watchlist_panel.refresh` may be an async coroutine. Use
-                # asyncio.create_task inside pn.state.execute so the coroutine
-                # is scheduled on the server event loop and not left
-                # un-awaited.
-                pn.state.execute(lambda: asyncio.create_task(self.watchlist_panel.refresh()))
+            
             pn.state.notifications.success("Dashboard and watchlist refreshed", duration=2000)
         except Exception as e:
             logger.error(f"Dashboard refresh failed: {e}")
             pn.state.notifications.error(f"Failed to refresh dashboard: {str(e)}", duration=5000)
 
-    def _load_market_overview(self):
+    async def _refresh_watchlist(self):
+        """Helper to refresh watchlist if available"""
+        if self.watchlist_panel:
+            await self.watchlist_panel.refresh()
+
+    async def _load_market_overview(self):
         """Load market overview with major indices"""
         indices = {
             "^GSPC": "S&P 500", "^IXIC": "NASDAQ", "^DJI": "Dow Jones", "^RUT": "Russell 2000"
@@ -65,9 +69,26 @@ class DashboardPage(param.Parameterized):
             </div>
             <div style='display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;'>
         """
-        for symbol, name in indices.items():
-            try:
-                real_time_data = self.stock_fetcher.get_real_time_price(symbol)
+        
+        # Fetch data concurrently
+        symbols = list(indices.keys())
+        tasks = [asyncio.to_thread(self.stock_fetcher.get_real_time_price, symbol) for symbol in symbols]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        for i, symbol in enumerate(symbols):
+            name = indices[symbol]
+            result = results[i]
+            
+            if isinstance(result, Exception):
+                logger.warning(f"Failed to fetch {symbol}: {result}")
+                overview_html += f"""
+                <div style='background: {Colors.BG_PRIMARY}; border: 1px solid {Colors.BORDER_SUBTLE}; padding: 15px; border-radius: 8px; opacity: 0.6;'>
+                    <div style='font-size: 0.875rem; margin-bottom: 5px; color: {Colors.TEXT_SECONDARY};'>{name}</div>
+                    <div style='font-size: 1rem; color: {Colors.TEXT_MUTED};'>Loading...</div>
+                </div>
+                """
+            else:
+                real_time_data = result
                 price = real_time_data.get('current_price', 0) or 0
                 prev_close = real_time_data.get('previous_close', 0) or 0
                 change = price - prev_close
@@ -81,14 +102,7 @@ class DashboardPage(param.Parameterized):
                     <div style='font-size: 0.8rem; color: {color}; font-weight: 600;'>{symbol_icon} {change_pct:+.2f}%</div>
                 </div>
                 """
-            except Exception as e:
-                logger.warning(f"Failed to fetch {symbol}: {e}")
-                overview_html += f"""
-                <div style='background: {Colors.BG_PRIMARY}; border: 1px solid {Colors.BORDER_SUBTLE}; padding: 15px; border-radius: 8px; opacity: 0.6;'>
-                    <div style='font-size: 0.875rem; margin-bottom: 5px; color: {Colors.TEXT_SECONDARY};'>{name}</div>
-                    <div style='font-size: 1rem; color: {Colors.TEXT_MUTED};'>Loading...</div>
-                </div>
-                """
+                
         overview_html += "</div></div>"
         self.market_overview.object = overview_html
 
