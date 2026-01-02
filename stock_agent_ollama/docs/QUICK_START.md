@@ -224,7 +224,7 @@ The live trading session is **persistent**. You can stop the application and res
 **Important Notes:**
 - ⚠️ **Paper trading only** - No real money involved
 - Uses real-time Yahoo Finance data (1-minute delayed)
-- Trading cycle runs every 60 seconds
+- Trading cycle runs every 3600 seconds (1 hour) default
 - Requires trained RL model for the selected symbol (or watchlist stocks for auto-select mode)
 - Sessions auto-save every 5 minutes and on stop
 - Session state persists across application restarts
@@ -340,15 +340,16 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 - ✅ Auto-saves best model
 
 ### Performance
-- ⚡ Real-time data with 5-second refresh
-- ⚡ Multi-tier intelligent caching for optimal performance:
-  - Real-time prices: 1 minute cache
-  - Top Movers bulk data: 5 minutes cache
-  - Company fundamentals: 1 hour cache
-  - Historical data: 1 day cache
-- ⚡ Manual refresh available for Top Movers to force fresh data
-- ⚡ Reduce training steps to 30k for quick experiments
-- ⚡ LSTM predictions load existing models or train new ones
+- ⚡ Real-time data with 5-second UI refresh
+- ⚡ Intelligent multi-tier caching system for optimal performance:
+  - Real-time quotes: 1 minute cache for live price data
+  - Bulk data/Top Movers: 5 minutes cache for high-frequency requests
+  - Company fundamentals: 1 hour cache for stable information
+  - Historical OHLCV: 1 day cache for long-term charts
+  - Automatic cache invalidation on manual refresh
+- ⚡ Manual refresh button available for Top Movers to force fresh market data
+- ⚡ Reduce training steps to 100k for quick experiments (300k recommended)
+- ⚡ LSTM predictions load existing models or auto-train new ones
 
 ---
 

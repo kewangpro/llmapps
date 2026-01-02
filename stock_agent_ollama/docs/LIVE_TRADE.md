@@ -66,9 +66,11 @@ This document outlines the design for a **live trading simulation system** that 
 **Purpose:** Provide real-time price data to the trading engine
 
 **Data Sources:**
-- **Primary:** Yahoo Finance API (free, 1-minute delayed)
+- **Primary:** Yahoo Finance API (free, real-time with 15-minute delay for most stocks)
 - **Fallback:** yfinance library real-time quotes
-- **Frequency:** Poll every 60 seconds (configurable)
+- **Frequency:** Configurable update interval (default: 3600 seconds / 1 hour)
+  - Match to model training timeframe (hourly/daily)
+  - Real-time data cached for 1 minute to minimize API calls
 
 **Data Structure:**
 ```python
@@ -1073,7 +1075,7 @@ Configuration is saved with the session state in:
 - Initial capital: $100,000
 - Transaction cost: 0.05%
 - Stop loss: 5%
-- Poll interval: 60 seconds
+- Poll interval: 3600 seconds (1 hour)
 
 ### Running a Session
 
@@ -1088,6 +1090,135 @@ Configuration is saved with the session state in:
 - Auto-saved every 5 minutes while active
 - Automatically loaded on application start
 - Contains portfolio, positions, trades, and configuration
+
+---
+
+## ⚠️ Critical: Timeframe Mismatch and Overtrading
+
+### The Problem
+
+**Default RL agents are trained on DAILY historical data (`interval='1d'`)** but the live trading system previously defaulted to **60-second update intervals**. This timeframe mismatch causes severe overtrading:
+
+**Symptoms:**
+- Agent trades every minute (400+ trades in 6 hours)
+- Extremely low win rate (<25%)
+- High transaction costs eroding capital
+- "Churning" behavior: rapid buy/sell cycles
+- Negative P&L despite model showing positive backtest results
+
+**Root Cause:**
+The agent's observation window is 60 days of daily OHLCV data. When polled every 60 seconds:
+- Historical features (60 days) remain static between daily market closes
+- Only portfolio state changes (cash, position) update each minute
+- Agent sees minimal state change and makes indecisive actions
+- Results in high-frequency trading on a model trained for daily decisions
+
+### The Fix (v2.1.0+)
+
+**1. Increased Default `update_interval`**
+```python
+# Before (BAD - causes overtrading)
+update_interval: int = 60  # Poll every 60 seconds
+
+# After (GOOD - matches training timeframe)
+update_interval: int = 3600  # Poll every hour (or 86400 for daily)
+```
+
+**2. Append Current Tick Price to Observations**
+```python
+# Critical fix in _build_observation():
+# Take last 59 historical daily closes + current live tick price
+close_with_live = np.concatenate([close.iloc[-59:].values, [tick.price]])
+# This makes the agent reactive to live price movement
+```
+
+**3. Increased `excessive_trading_penalty`**
+```python
+# Discourage high-frequency "chatter" during retraining
+excessive_trading_penalty: float = -0.5  # Was -0.1
+```
+
+### Configuration Guidelines
+
+**Match Update Interval to Training Timeframe:**
+
+| Training Data | `update_interval` | Notes |
+|--------------|-------------------|-------|
+| Daily (`1d`) | 86400 (1 day) | Default models - safest option |
+| Hourly (`1h`) | 3600 (1 hour) | Requires hourly-trained model |
+| 5-min (`5m`) | 300 (5 minutes) | Requires intraday-trained model |
+| 1-min (`1m`) | 60 (1 minute) | **Not recommended** - requires specialized training |
+
+**For existing AUTO sessions:**
+```python
+# Update session config manually or via UI
+session.config.update_interval = 86400  # Daily updates for daily-trained models
+```
+
+### Retraining for Intraday Trading
+
+**If you want true 1-minute or 5-minute trading**, you must retrain agents on matching timeframe data:
+
+**1. Modify Training Data Fetching:**
+```python
+# In training script or environment setup
+hist_data = fetcher.fetch_stock_data(
+    symbol=symbol,
+    start_date=start_date,
+    end_date=end_date,
+    interval='5m',  # Changed from '1d' to '5m' or '1h'
+    force_refresh=True
+)
+```
+
+**2. Adjust Observation Window:**
+```python
+# For 5-minute data, 60 timesteps = 5 hours of data (not 60 days)
+# You may need to adjust window_size based on timeframe:
+# - Daily: 60 days = ~3 months
+# - Hourly: 60 hours = ~2.5 days
+# - 5-min: 60 bars = 5 hours (may want 120-240 bars for full trading day context)
+```
+
+**3. Increase `excessive_trading_penalty` in Reward Config:**
+```python
+# During retraining, use higher penalty to discourage churn
+config = RecurrentPPORewardConfig(
+    excessive_trading_penalty=-0.5,  # Increased from -0.02
+    # ... other params
+)
+```
+
+**4. Validate with Backtesting First:**
+```bash
+# Always backtest on the same timeframe before live trading
+python retrain_and_compare.py --symbol AAPL --algorithms ppo
+# Verify win rate >40% and positive Sharpe ratio before going live
+```
+
+### Best Practices
+
+✅ **DO:**
+- Match `update_interval` to your model's training timeframe
+- Use daily updates (86400) for default models
+- Backtest before live trading
+- Monitor win rate and trade frequency
+
+❌ **DON'T:**
+- Use 60-second intervals with daily-trained models
+- Assume faster trading = better performance
+- Ignore transaction costs in analysis
+- Trade live without backtesting first
+
+### Validation Checklist
+
+Before starting a live session, verify:
+
+- [ ] Model trained on timeframe matching `update_interval`
+- [ ] Backtest shows win rate >40% and positive Sharpe ratio
+- [ ] `excessive_trading_penalty` ≥ -0.5 in reward config
+- [ ] Transaction costs (commission + slippage) ≥ 0.05% total
+- [ ] `update_interval` = 3600 (hourly) or 86400 (daily), NOT 60
 
 ---
 

@@ -380,8 +380,9 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 
 **Features:**
 - **Smart Suggestions**: Automatically finds top 8 performers from curated 30-stock universe (30-day return)
-  - Data cached for 5 minutes for optimal performance
+  - Intelligent caching: Bulk data cached for 5 minutes for optimal performance
   - Manual refresh button (🔄 Refresh) to force fresh market data on demand
+  - Cache invalidation: Automatically clears cache on manual refresh
   - Automatically updates on browser refresh
 - Add symbols using input field
 - Remove symbols with "×" button
@@ -523,9 +524,10 @@ All cards follow consistent styling:
 ## Key Features Implemented
 
 ### ✅ Real-time Data
-- Live market indices
-- Real-time watchlist prices
-- Auto-refresh capabilities
+- Live market indices with 5-second UI refresh
+- Real-time watchlist prices with intelligent caching
+- Multi-tier caching system (1 minute to 1 day TTLs)
+- Auto-refresh capabilities with cache invalidation
 
 ### ✅ LSTM Predictions
 - 30-day price forecasts

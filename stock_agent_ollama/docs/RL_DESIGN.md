@@ -543,7 +543,22 @@ sb3-contrib>=2.2.0
 # Portfolio Optimization
 PyPortfolioOpt>=1.5.0
 cvxpy>=1.4.0
+
+# Data Layer
+yfinance>=0.2.28              # Yahoo Finance API
 ```
+
+### Data Infrastructure
+
+The RL system leverages an intelligent multi-tier caching system for optimal performance:
+
+**Cache Tiers:**
+- **Real-time quotes**: 1 minute TTL for live trading and backtesting
+- **Bulk data**: 5 minutes TTL for Top Movers scanning in auto-select mode
+- **Company fundamentals**: 1 hour TTL for stable company information
+- **Historical OHLCV**: 1 day TTL for training and backtesting data
+
+This caching strategy balances data freshness with API rate limits and performance, ensuring training and live trading have access to current market data without unnecessary API calls.
 
 ### Configuration System
 
