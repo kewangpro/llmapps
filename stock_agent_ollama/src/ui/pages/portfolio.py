@@ -146,29 +146,30 @@ class PortfolioPage(param.Parameterized):
                                         item.button_type = "light" if is_added else "primary"
                                         item.disabled = is_added
 
-    async def _update_suggestions(self):
+    async def _update_suggestions(self, force_refresh: bool = False):
         """Fetch and display suggested high-momentum stocks"""
         self.suggestions_container.clear()
-        
+
         # Show loading state
         self.suggestions_container.append(
             pn.pane.HTML("<div style='color: gray; font-style: italic; margin-top: 10px; margin-bottom: 10px;'>Scanning market for top performers...</div>")
         )
-        
+
         try:
             # Fetch data for universe
             tickers = " ".join(SUGGESTION_UNIVERSE)
-            
+
             # Fetch 1 month of history to calculate momentum
             # Use threads to avoid blocking UI
             data = await asyncio.to_thread(
-                self.stock_fetcher.fetch_bulk_data, 
-                symbols=tickers, 
-                period="1mo", 
-                interval="1d", 
-                group_by='ticker', 
+                self.stock_fetcher.fetch_bulk_data,
+                symbols=tickers,
+                period="1mo",
+                interval="1d",
+                group_by='ticker',
                 progress=False,
-                threads=True
+                threads=True,
+                force_refresh=force_refresh
             )
             
             performance = []
@@ -257,15 +258,35 @@ class PortfolioPage(param.Parameterized):
             
             # Update container
             self.suggestions_container.clear()
-            
-            header = pn.pane.HTML(f"""
-                <div style='margin-top: 15px; margin-bottom: 10px; color: {Colors.TEXT_SECONDARY}; font-weight: 600; font-size: 0.9rem;'>
-                    🔥 Top Movers (30-Day) &mdash; Potential High Returns
-                </div>
-            """)
-            
+
+            # Create header with inline refresh button
+            refresh_btn = pn.widgets.Button(
+                name="🔄 Refresh",
+                button_type="light",
+                width=90,
+                height=24,
+                margin=(15, 0, 0, 10),
+                styles={'font-size': '0.75rem', 'padding': '2px 8px'}
+            )
+
+            def refresh_handler(event):
+                asyncio.create_task(self._update_suggestions(force_refresh=True))
+
+            refresh_btn.on_click(refresh_handler)
+
+            header_row = pn.Row(
+                pn.pane.HTML(f"""
+                    <div style='margin-top: 15px; margin-bottom: 10px; color: {Colors.TEXT_SECONDARY}; font-weight: 600; font-size: 0.9rem;'>
+                        🔥 Top Movers (30-Day) &mdash; Potential High Returns
+                    </div>
+                """),
+                refresh_btn,
+                sizing_mode="stretch_width",
+                margin=(0, 0, 10, 0)
+            )
+
             # Add horizontal scroll container
-            self.suggestions_container.append(header)
+            self.suggestions_container.append(header_row)
             self.suggestions_container.append(pn.Row(*cards, scroll=True, sizing_mode="stretch_width", height=110, margin=(0,0,20,0)))
             
         except Exception as e:
