@@ -447,10 +447,10 @@ class LiveSessionManager:
         session_files = list(self.sessions_dir.glob("*.json"))
 
         if not session_files:
-            logger.info("No session files found")
+            logger.debug("No session files found")
             return
 
-        logger.info(f"Found {len(session_files)} session files, loading...")
+        logger.debug(f"Found {len(session_files)} session files, loading...")
 
         # Load each session
         for session_file in session_files:

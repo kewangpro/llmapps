@@ -219,7 +219,9 @@ class EnhancedRewardConfig:
     # Penalties
     # Balanced to discourage invalid actions without causing action collapse
     invalid_action_penalty: float = -1.0
-    excessive_trading_penalty: float = -0.1
+    # INCREASED to discourage high-frequency "churning" behavior in live trading
+    # Models trained on daily data should not trade every minute
+    excessive_trading_penalty: float = -0.5  # Increased from -0.1
     # QRDQN/SAC work well with lighter penalties (learn risk naturally via Q-values)
     risk_penalty_weight: float = 0.01
     drawdown_penalty_weight: float = 0.05
@@ -293,8 +295,9 @@ class RecurrentPPORewardConfig(PPORewardConfig):
     # Momentum bonus for staying invested during uptrends
     momentum_trend_bonus: float = 0.3  # NEW: Bonus for holding during strong momentum
 
-    # Minimal trading penalty (we want to avoid overtrading)
-    excessive_trading_penalty: float = -0.02  # Further reduced
+    # INCREASED to prevent high-frequency trading with daily-trained models
+    # RecurrentPPO with LSTM should learn to hold positions, not churn
+    excessive_trading_penalty: float = -0.3  # Increased from -0.02
 
     # Strong reward for profitable trades
     profitable_trade_bonus: float = 0.5  # Further increased

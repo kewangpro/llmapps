@@ -207,7 +207,12 @@ class LiveTradingConfig:
     max_portfolio_risk_pct: float = 2.0  # Max 2% portfolio risk per trade
     stop_loss_pct: float = 5.0  # 5% stop loss
     max_daily_loss_pct: float = 10.0  # 10% max daily loss (circuit breaker)
-    update_interval: int = 60  # Seconds between updates
+    # IMPORTANT: Default agents are trained on DAILY data (interval='1d')
+    # For live trading, update_interval should match the training timeframe:
+    # - 3600 (1 hour) for hourly-trained models
+    # - 86400 (1 day) for daily-trained models (default)
+    # Using a 60-second interval with daily-trained models causes overtrading!
+    update_interval: int = 3600  # Seconds between updates (default: 1 hour, use 86400 for daily)
     enforce_trading_hours: bool = True
     auto_select_stock: bool = False  # Dynamically select stocks to maximize returns
     # Percentage-based transaction costs (matching backtesting)
@@ -623,7 +628,7 @@ class LiveTradingEngine:
             file_path.parent.mkdir(parents=True, exist_ok=True)
             with open(file_path, 'w') as f:
                 json.dump(state, f, indent=2)
-            logger.info(f"{self.session.session_id} - Successfully saved trading session to {file_path}")
+            logger.debug(f"{self.session.session_id} - Successfully saved trading session to {file_path}")
         except Exception as e:
             logger.error(f"{self.session.session_id} - Failed to save trading session: {e}")
 
@@ -643,8 +648,8 @@ class LiveTradingEngine:
             
             # Set running status
             engine._is_running = session.status == TradingStatus.RUNNING
-            
-            logger.info(f"Successfully loaded trading session from {file_path}")
+
+            logger.debug(f"Successfully loaded trading session from {file_path}")
             return engine
         except Exception as e:
             logger.error(f"Failed to load trading session: {e}")
@@ -1685,6 +1690,40 @@ class LiveTradingEngine:
                 force_refresh=True  # Always fetch fresh data for live trading
             )
 
+            # MERGE LATEST TICK DATA
+            # Ensure we are using the real-time price for the latest observation
+            if tick and tick.price > 0:
+                current_price = tick.price
+                current_vol = tick.volume
+                
+                # Convert tick timestamp to date for comparison
+                tick_date = tick.timestamp.date() if isinstance(tick.timestamp, datetime) else datetime.now().date()
+                
+                if not hist_data.empty:
+                    last_date = hist_data.index[-1].date()
+                    
+                    if tick_date > last_date:
+                        # Append new daily bar
+                        new_row = pd.DataFrame({
+                            'Open': [current_price],
+                            'High': [current_price],
+                            'Low': [current_price],
+                            'Close': [current_price],
+                            'Volume': [current_vol]
+                        }, index=[pd.Timestamp(tick_date)])
+                        hist_data = pd.concat([hist_data, new_row])
+                        logger.debug(f"Appended new daily bar for {self.config.symbol}: {current_price}")
+                        
+                    elif tick_date == last_date:
+                        # Update existing daily bar
+                        idx = hist_data.index[-1]
+                        hist_data.at[idx, 'Close'] = current_price
+                        hist_data.at[idx, 'High'] = max(hist_data.at[idx, 'High'], current_price)
+                        hist_data.at[idx, 'Low'] = min(hist_data.at[idx, 'Low'], current_price)
+                        # Volume is cumulative, yfinance might have partial, just take max
+                        hist_data.at[idx, 'Volume'] = max(hist_data.at[idx, 'Volume'], current_vol)
+                        logger.debug(f"Updated daily bar for {self.config.symbol}: {current_price}")
+
             # Calculate expected features based on environment config
             expected_features = 5  # base features
             if actual_env.include_technical_indicators:
@@ -1759,17 +1798,22 @@ class LiveTradingEngine:
                 ema_crossover_last_60 = ema_crossover.iloc[-60:].values
                 price_momentum_last_60 = price_momentum.iloc[-60:].values
 
-            # Normalize features
-            first_price = close_last_60[0]
-            close_norm = (close_last_60 - first_price) / first_price
+            # CRITICAL FIX: Append current live tick price to the historical series
+            # This ensures the agent reacts to live price movement, not just historical daily closes
+            # We take the last 59 historical prices and append the current tick as the 60th point
+            close_with_live = np.concatenate([close.iloc[-59:].values, [tick.price]])
+
+            # Normalize features using the live-updated close series
+            first_price = close_with_live[0]
+            close_norm = (close_with_live - first_price) / first_price
 
             max_volume = volume_last_60.max()
             volume_norm = volume_last_60 / (max_volume + 1e-8)
 
             rsi_norm = rsi_last_60 / 100.0
-            macd_norm = macd_last_60 / (close_last_60 + 1e-8)
-            macd_signal_norm = macd_signal_last_60 / (close_last_60 + 1e-8)
-            bb_position = (close_last_60 - bb_lower_last_60) / (bb_upper_last_60 - bb_lower_last_60 + 1e-8)
+            macd_norm = macd_last_60 / (close_with_live + 1e-8)
+            macd_signal_norm = macd_signal_last_60 / (close_with_live + 1e-8)
+            bb_position = (close_with_live - bb_lower_last_60) / (bb_upper_last_60 - bb_lower_last_60 + 1e-8)
             stochastic_norm = stochastic_last_60 / 100.0
 
             # Portfolio state (repeated for all timesteps)
