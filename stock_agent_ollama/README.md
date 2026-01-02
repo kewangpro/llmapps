@@ -178,10 +178,11 @@ python src/main.py
               │   • Yahoo Finance       │
               │   • Multi-tier Caching  │
               │     - Real-time: 1 min  │
-              │     - Bulk: 5 min       │
+              │     - Bulk/Top: 5 min   │
               │     - Info: 1 hour      │
               │     - Historical: 1 day │
               │   • Model Storage       │
+              │   • Session Persistence │
               └─────────────────────────┘
 ```
 
@@ -189,7 +190,11 @@ python src/main.py
 - **AI**: Ollama (gemma3:latest) with regex fallback
 - **ML**: TensorFlow LSTM ensemble (3 models per symbol)
 - **RL**: Stable-Baselines3 (PPO) + sb3-contrib (RecurrentPPO) + Custom Ensemble
-- **Data**: Yahoo Finance with multi-tier intelligent caching (1 min to 1 day TTLs)
+- **Data**: Yahoo Finance with intelligent multi-tier caching system
+  - Real-time quotes: 1 minute cache for live price data
+  - Bulk data/Top Movers: 5 minutes for optimal performance
+  - Company fundamentals: 1 hour for stable information
+  - Historical data: 1 day for long-term charts
 - **UI**: Panel + Plotly, light theme, wide layouts
 
 ---
@@ -234,12 +239,12 @@ OLLAMA_MODEL=gemma3:latest           # AI model for analysis
 OLLAMA_BASE_URL=http://localhost:11434
 PANEL_PORT=5006                      # Web interface port
 
-# Data Caching (optimized for performance + freshness)
-CACHE_TTL_SECONDS=3600               # Default cache TTL
-REALTIME_DATA_TTL=60                 # Real-time prices (1 minute)
+# Data Caching (intelligent multi-tier system)
+CACHE_TTL_SECONDS=3600               # Default cache TTL (1 hour)
+REALTIME_DATA_TTL=60                 # Real-time quotes (1 minute)
 BULK_DATA_TTL=300                    # Bulk data/Top Movers (5 minutes)
 STOCK_INFO_TTL=3600                  # Company fundamentals (1 hour)
-HISTORICAL_DATA_TTL=86400            # Historical data (1 day)
+HISTORICAL_DATA_TTL=86400            # Historical OHLCV data (1 day)
 
 # RL Trading Configuration
 RL_DEFAULT_INITIAL_BALANCE=100000.0  # Starting balance ($100k)
