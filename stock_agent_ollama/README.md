@@ -14,7 +14,8 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 ### 📊 Professional Dashboard
 - **Market Overview** with live major indices (S&P 500, NASDAQ, Dow Jones, Russell 2000)
 - **Interactive Watchlist** in sidebar with clickable stock cards
-  - **Top Movers Suggestions**: Automatically finds 8 high-momentum stocks (30-day max returns) to potential opportunities
+  - **Top Movers Suggestions**: Automatically finds 8 high-momentum stocks (30-day max returns) from curated universe
+  - Manual refresh button to force fresh market data on demand
   - Real-time prices and daily changes
   - Live position tracking from active trading sessions
   - Click any stock to instantly navigate to Analysis page
@@ -175,7 +176,11 @@ python src/main.py
               ┌─────────────────────────┐
               │   Data Layer            │
               │   • Yahoo Finance       │
-              │   • Intelligent Caching │
+              │   • Multi-tier Caching  │
+              │     - Real-time: 1 min  │
+              │     - Bulk: 5 min       │
+              │     - Info: 1 hour      │
+              │     - Historical: 1 day │
               │   • Model Storage       │
               └─────────────────────────┘
 ```
@@ -184,7 +189,7 @@ python src/main.py
 - **AI**: Ollama (gemma3:latest) with regex fallback
 - **ML**: TensorFlow LSTM ensemble (3 models per symbol)
 - **RL**: Stable-Baselines3 (PPO) + sb3-contrib (RecurrentPPO) + Custom Ensemble
-- **Data**: Yahoo Finance with intelligent caching
+- **Data**: Yahoo Finance with multi-tier intelligent caching (1 min to 1 day TTLs)
 - **UI**: Panel + Plotly, light theme, wide layouts
 
 ---
@@ -228,6 +233,15 @@ stock_agent_ollama/
 OLLAMA_MODEL=gemma3:latest           # AI model for analysis
 OLLAMA_BASE_URL=http://localhost:11434
 PANEL_PORT=5006                      # Web interface port
+
+# Data Caching (optimized for performance + freshness)
+CACHE_TTL_SECONDS=3600               # Default cache TTL
+REALTIME_DATA_TTL=60                 # Real-time prices (1 minute)
+BULK_DATA_TTL=300                    # Bulk data/Top Movers (5 minutes)
+STOCK_INFO_TTL=3600                  # Company fundamentals (1 hour)
+HISTORICAL_DATA_TTL=86400            # Historical data (1 day)
+
+# RL Trading Configuration
 RL_DEFAULT_INITIAL_BALANCE=100000.0  # Starting balance ($100k)
 RL_TRANSACTION_COST_RATE=0.0         # $0 commissions (zero-commission era)
 RL_SLIPPAGE_RATE=0.0005              # 0.05% slippage for liquid stocks
