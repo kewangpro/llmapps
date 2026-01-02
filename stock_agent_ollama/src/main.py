@@ -48,6 +48,7 @@ def setup_logging():
     logging.getLogger("tensorflow").setLevel(logging.WARNING)
     logging.getLogger("matplotlib").setLevel(logging.WARNING)
     logging.getLogger("bokeh").setLevel(logging.WARNING)
+    logging.getLogger("tornado.access").setLevel(logging.WARNING)
 
     # Add filter to suppress Panel "Dropping a patch" warnings
     root_logger = logging.getLogger()
