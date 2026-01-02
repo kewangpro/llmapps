@@ -77,7 +77,7 @@ class StockFetcher:
         if not force_refresh:
             cached_data = self.cache.get(cache_key)
             if cached_data is not None:
-                logger.info(f"Using cached data for {validated_symbol}")
+                logger.debug(f"Using cached data for {validated_symbol}")
                 
                 # Handle both old format (list) and new format (dict)
                 if isinstance(cached_data, list):
@@ -115,7 +115,7 @@ class StockFetcher:
         
         # Fetch from yfinance
         try:
-            logger.info(f"Fetching fresh data for {validated_symbol}")
+            logger.debug(f"Fetching fresh data for {validated_symbol}")
             ticker = yf.Ticker(validated_symbol)
 
             # Use start/end dates if provided, otherwise use period
@@ -153,11 +153,11 @@ class StockFetcher:
             if not force_refresh:
                 cached_data = self.cache.get(cache_key)
                 if cached_data is not None:
-                    logger.info(f"Using cached real-time data for {validated_symbol}")
+                    logger.debug(f"Using cached real-time data for {validated_symbol}")
                     return cached_data
 
             # Create a fresh ticker instance to bypass yfinance caching
-            logger.info(f"Fetching fresh real-time data for {validated_symbol}")
+            logger.debug(f"Fetching fresh real-time data for {validated_symbol}")
             ticker = yf.Ticker(validated_symbol)
 
             # Use history with 1-minute interval for most recent data
@@ -285,7 +285,7 @@ class StockFetcher:
             cached_data = self.cache.get(cache_key)
             if cached_data is not None:
                 if isinstance(cached_data, pd.DataFrame):
-                    logger.info(f"Using cached bulk data for {len(tickers_str.split())} symbols")
+                    logger.debug(f"Using cached bulk data for {len(tickers_str.split())} symbols")
                     return cached_data
                 # If it's not a DataFrame (e.g. old cache?), try to convert or ignore
                 # But with our new SafeJSONEncoder, it should be a DataFrame.
@@ -295,8 +295,8 @@ class StockFetcher:
         else:
             tickers = symbols
 
-        logger.info(f"Fetching fresh bulk data for {len(tickers.split())} symbols")
-        
+        logger.debug(f"Fetching fresh bulk data for {len(tickers.split())} symbols")
+
         data = yf.download(
             tickers=tickers,
             period=period,
@@ -378,10 +378,10 @@ class StockFetcher:
             if not force_refresh:
                 cached_data = self.cache.get(cache_key)
                 if cached_data is not None:
-                    logger.info(f"Using cached stock info for {validated_symbol}")
+                    logger.debug(f"Using cached stock info for {validated_symbol}")
                     return cached_data
 
-            logger.info(f"Fetching fresh stock info for {validated_symbol}")
+            logger.debug(f"Fetching fresh stock info for {validated_symbol}")
 
             ticker = yf.Ticker(validated_symbol)
             info = ticker.info
