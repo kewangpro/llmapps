@@ -20,6 +20,9 @@ class Config:
     # Cache settings
     CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "3600"))
     STOCK_DATA_TTL = 900  # 15 minutes for real-time data
+    REALTIME_DATA_TTL = 60  # 1 minute for real-time data
+    BULK_DATA_TTL = 300     # 5 minutes for bulk data
+    STOCK_INFO_TTL = 3600   # 1 hour for company info (fundamentals rarely change)
     HISTORICAL_DATA_TTL = 86400  # 1 day for historical data
     
     # LSTM model settings
