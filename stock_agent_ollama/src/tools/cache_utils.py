@@ -15,7 +15,8 @@ class SafeJSONEncoder(json.JSONEncoder):
         if isinstance(obj, np.ndarray):
             return {'__numpy_array__': obj.tolist()}
         elif isinstance(obj, pd.DataFrame):
-            return {'__pandas_dataframe__': obj.to_dict('records'), '__pandas_index__': list(obj.index), '__pandas_columns__': list(obj.columns)}
+            # Use to_json with split orientation to preserve MultiIndex and types
+            return {'__pandas_json_split__': obj.to_json(orient='split', date_format='iso')}
         elif isinstance(obj, pd.Series):
             return {'__pandas_series__': obj.to_dict(), '__pandas_index__': list(obj.index)}
         elif isinstance(obj, np.integer):
@@ -31,6 +32,23 @@ def safe_json_decode(dct):
     """JSON decoder that can reconstruct numpy arrays and pandas DataFrames"""
     if '__numpy_array__' in dct:
         return np.array(dct['__numpy_array__'])
+    elif '__pandas_json_split__' in dct:
+        from io import StringIO
+        # Use StringIO to avoid potential path interpretation issues
+        df = pd.read_json(StringIO(dct['__pandas_json_split__']), orient='split')
+        
+        # Attempt to restore MultiIndex if columns are tuples (common with yfinance)
+        if not df.empty and len(df.columns) > 0:
+            try:
+                # Check if first column is a tuple (or list masquerading as tuple in some contexts)
+                first_col = df.columns[0]
+                if isinstance(first_col, (tuple, list)):
+                    df.columns = pd.MultiIndex.from_tuples(df.columns)
+            except Exception:
+                # If restoration fails, keep as is
+                pass
+                
+        return df
     elif '__pandas_dataframe__' in dct:
         df = pd.DataFrame(dct['__pandas_dataframe__'])
         if '__pandas_index__' in dct:

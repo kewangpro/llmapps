@@ -2,6 +2,7 @@ import pandas as pd
 import yfinance as yf
 import time
 import re
+import hashlib
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Union
@@ -99,11 +100,16 @@ class StockFetcher:
                         start_date = end_date - pd.Timedelta(days=len(df)-1)
                         df.index = pd.date_range(start=start_date, end=end_date, periods=len(df))
                 else:
+                    # Generic case (e.g. loaded via __pandas_json_split__)
+                    if isinstance(cached_data, pd.DataFrame):
+                        return cached_data
+                    
                     # Unknown format, try to create DataFrame directly
                     df = pd.DataFrame(cached_data)
-                    end_date = pd.Timestamp.now().normalize()
-                    start_date = end_date - pd.Timedelta(days=len(df)-1)
-                    df.index = pd.date_range(start=start_date, end=end_date, periods=len(df))
+                    if len(df) > 0:
+                        end_date = pd.Timestamp.now().normalize()
+                        start_date = end_date - pd.Timedelta(days=len(df)-1)
+                        df.index = pd.date_range(start=start_date, end=end_date, periods=len(df))
                 
                 return df
         
@@ -126,11 +132,9 @@ class StockFetcher:
             
             # Cache the data with index information preserved
             ttl = Config.STOCK_DATA_TTL if interval in ["1m", "5m"] else Config.HISTORICAL_DATA_TTL
-            cached_data = {
-                'data': data.to_dict('records'),
-                'index': data.index.strftime('%Y-%m-%d').tolist() if isinstance(data.index, pd.DatetimeIndex) else data.index.tolist()
-            }
-            self.cache.set(cache_key, cached_data, ttl=ttl)
+            
+            # Note: We now rely on SafeJSONEncoder to handle DataFrame caching properly via to_json
+            self.cache.set(cache_key, data, ttl=ttl)
             
             return data
             
@@ -138,13 +142,22 @@ class StockFetcher:
             logger.error(f"Failed to fetch data for {validated_symbol}: {e}")
             raise
     
-    def get_real_time_price(self, symbol: str) -> Dict[str, Any]:
-        """Get current price and basic info, bypassing cache for real-time data"""
+    def get_real_time_price(self, symbol: str, force_refresh: bool = False) -> Dict[str, Any]:
+        """Get current price and basic info with short-lived caching"""
         try:
             # Validate and sanitize the symbol
             validated_symbol = self._validate_symbol(symbol)
 
+            # Check cache first (unless force refresh)
+            cache_key = f"realtime_{validated_symbol}"
+            if not force_refresh:
+                cached_data = self.cache.get(cache_key)
+                if cached_data is not None:
+                    logger.info(f"Using cached real-time data for {validated_symbol}")
+                    return cached_data
+
             # Create a fresh ticker instance to bypass yfinance caching
+            logger.info(f"Fetching fresh real-time data for {validated_symbol}")
             ticker = yf.Ticker(validated_symbol)
 
             # Use history with 1-minute interval for most recent data
@@ -187,7 +200,7 @@ class StockFetcher:
                 market_cap = None
                 previous_close = None
 
-            return {
+            result = {
                 'symbol': validated_symbol,
                 'current_price': current_price,
                 'market_cap': market_cap,
@@ -195,6 +208,11 @@ class StockFetcher:
                 'previous_close': previous_close,
                 'timestamp': timestamp if isinstance(timestamp, str) else timestamp.isoformat()
             }
+            
+            # Cache the result
+            self.cache.set(cache_key, result, ttl=Config.REALTIME_DATA_TTL)
+            
+            return result
 
         except Exception as e:
             logger.error(f"Failed to get real-time price for {symbol}: {e}")
@@ -240,24 +258,44 @@ class StockFetcher:
                 return 9 <= hour < 16
 
     def fetch_bulk_data(
-        self, 
-        symbols: Union[str, List[str]], 
-        period: str = "1mo", 
-        interval: str = "1d", 
+        self,
+        symbols: Union[str, List[str]],
+        period: str = "1mo",
+        interval: str = "1d",
         group_by: str = 'ticker',
         progress: bool = False,
-        threads: bool = True
+        threads: bool = True,
+        force_refresh: bool = False
     ) -> pd.DataFrame:
         """
         Fetch bulk data for multiple symbols using yf.download.
         Useful for efficiently getting data for watchlists.
         """
+        # Generate cache key
+        if isinstance(symbols, list):
+            tickers_str = " ".join(sorted(symbols))  # Sort to ensure consistent cache key for same symbols
+        else:
+            tickers_str = symbols
+
+        # Include group_by in cache key since it affects DataFrame structure
+        cache_key = f"bulk_{hashlib.md5(tickers_str.encode()).hexdigest()}_{period}_{interval}_{group_by}"
+
+        # Check cache (unless force refresh)
+        if not force_refresh:
+            cached_data = self.cache.get(cache_key)
+            if cached_data is not None:
+                if isinstance(cached_data, pd.DataFrame):
+                    logger.info(f"Using cached bulk data for {len(tickers_str.split())} symbols")
+                    return cached_data
+                # If it's not a DataFrame (e.g. old cache?), try to convert or ignore
+                # But with our new SafeJSONEncoder, it should be a DataFrame.
+        
         if isinstance(symbols, list):
             tickers = " ".join(symbols)
         else:
             tickers = symbols
-        
-        logger.info(f"Fetching bulk data for {len(tickers.split())} symbols")
+
+        logger.info(f"Fetching fresh bulk data for {len(tickers.split())} symbols")
         
         data = yf.download(
             tickers=tickers,
@@ -268,6 +306,10 @@ class StockFetcher:
             progress=progress,
             threads=threads
         )
+        
+        # Cache data
+        self.cache.set(cache_key, data, ttl=Config.BULK_DATA_TTL)
+        
         return data
 
     def get_multiple_stocks(self, symbols: List[str], period: str = "1y") -> Dict[str, pd.DataFrame]:
@@ -325,11 +367,22 @@ class StockFetcher:
             'SPY', 'QQQ', 'IWM', 'VTI', 'BTC-USD', 'ETH-USD'
         ]
     
-    def get_stock_info(self, symbol: str) -> Dict[str, Any]:
-        """Get comprehensive stock information"""
+    def get_stock_info(self, symbol: str, force_refresh: bool = False) -> Dict[str, Any]:
+        """Get comprehensive stock information with caching"""
         try:
             # Validate symbol to ensure consistent formatting and safety
             validated_symbol = self._validate_symbol(symbol)
+
+            # Check cache (unless force refresh)
+            cache_key = f"info_{validated_symbol}"
+            if not force_refresh:
+                cached_data = self.cache.get(cache_key)
+                if cached_data is not None:
+                    logger.info(f"Using cached stock info for {validated_symbol}")
+                    return cached_data
+
+            logger.info(f"Fetching fresh stock info for {validated_symbol}")
+
             ticker = yf.Ticker(validated_symbol)
             info = ticker.info
 
@@ -426,6 +479,10 @@ class StockFetcher:
 
             # Merge legacy keys into the top-level result for backward compatibility
             result.update(legacy)
+
+            # Cache the result (use longer TTL since company fundamentals rarely change)
+            self.cache.set(cache_key, result, ttl=Config.STOCK_INFO_TTL)
+            
             return result
             
         except Exception as e:
