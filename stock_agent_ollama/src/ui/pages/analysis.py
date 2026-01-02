@@ -43,7 +43,7 @@ class StockAnalysisApp(param.Parameterized):
         # Initialize components - use enhanced processor with Ollama integration
         try:
             self.query_processor = HybridQueryProcessor()
-            logger.info("Using HybridQueryProcessor with Ollama integration")
+            logger.debug("Using HybridQueryProcessor with Ollama integration")
         except Exception as e:
             logger.warning(f"Failed to initialize HybridQueryProcessor, falling back to legacy: {e}")
             self.query_processor = QueryProcessor()
