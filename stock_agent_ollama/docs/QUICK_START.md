@@ -280,7 +280,10 @@ The live trading session is **persistent**. You can stop the application and res
 **Purpose**: Simple stock price tracker with smart suggestions
 
 **Features:**
-- **Top Movers Suggestions**: Automatically finds and displays 8 high-momentum stocks (30-day max returns) above the watchlist
+- **Top Movers Suggestions**: Automatically finds and displays 8 high-momentum stocks (30-day max returns) from curated universe
+  - Data cached for 5 minutes for optimal performance
+  - Manual refresh button (🔄 Refresh) to force fresh market data on demand
+  - Automatically updates on browser refresh
 - **Real-time Tracking**: Monitor current prices, daily changes, and volume
 - **Compact Table**: View key metrics (Price, Change, 52W Range, Market Cap)
 - **Easy Management**: Add/remove symbols with a single click
@@ -338,7 +341,12 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 
 ### Performance
 - ⚡ Real-time data with 5-second refresh
-- ⚡ Stock data cached for faster queries
+- ⚡ Multi-tier intelligent caching for optimal performance:
+  - Real-time prices: 1 minute cache
+  - Top Movers bulk data: 5 minutes cache
+  - Company fundamentals: 1 hour cache
+  - Historical data: 1 day cache
+- ⚡ Manual refresh available for Top Movers to force fresh data
 - ⚡ Reduce training steps to 30k for quick experiments
 - ⚡ LSTM predictions load existing models or train new ones
 

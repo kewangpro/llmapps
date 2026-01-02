@@ -999,8 +999,11 @@ educational purposes. No real trades are executed.
    - Concurrent multi-symbol support
    - Background indicator calculation
 
-2. **Caching:**
-   - Cache recent market data
+2. **Multi-tier Caching:**
+   - Real-time price data: 1 minute TTL
+   - Bulk market data: 5 minutes TTL
+   - Company fundamentals: 1 hour TTL
+   - Historical data: 1 day TTL
    - Reuse observation calculations
    - Store computed indicators
 

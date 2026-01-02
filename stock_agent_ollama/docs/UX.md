@@ -364,7 +364,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 **Single Table View:**
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ 🔥 Top Movers (30-Day)                                          │
+│ 🔥 Top Movers (30-Day) — Potential High Returns  [🔄 Refresh]  │
 │ [NVDA +15%] [MSTR +12%] [COIN +8%] ...                          │
 └─────────────────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────────────────┐
@@ -379,7 +379,10 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 ```
 
 **Features:**
-- **Smart Suggestions**: Automatically finds top 8 performers from popular stocks (30-day return)
+- **Smart Suggestions**: Automatically finds top 8 performers from curated 30-stock universe (30-day return)
+  - Data cached for 5 minutes for optimal performance
+  - Manual refresh button (🔄 Refresh) to force fresh market data on demand
+  - Automatically updates on browser refresh
 - Add symbols using input field
 - Remove symbols with "×" button
 - Real-time price updates
