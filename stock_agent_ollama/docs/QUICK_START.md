@@ -552,14 +552,14 @@ After running backtests, you can validate the results for mathematical correctne
 
 ```bash
 # Validate all algorithms for a symbol
-python tests/validate_backtest.py --symbol AAPL
+python validate_backtest.py --symbol AAPL
 
 # Validate all watchlist stocks (all algorithms)
-python tests/validate_backtest.py --watchlist
+python validate_backtest.py --watchlist
 
 # Validate specific algorithm only
-python tests/validate_backtest.py --symbol AAPL --algorithm ppo
-python tests/validate_backtest.py --watchlist --algorithm ensemble
+python validate_backtest.py --symbol AAPL --algorithm ppo
+python validate_backtest.py --watchlist --algorithm ensemble
 ```
 
 **What it checks:**

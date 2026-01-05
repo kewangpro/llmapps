@@ -114,9 +114,10 @@ tests/                          # Test suite (48 tests)
 ├── test_action_masking.py      # Action masking validation
 ├── test_live_trading_models.py # Data model tests
 ├── test_rl_components.py       # RL environment tests
-├── test_technical_analysis.py  # Indicator tests
-├── retrain_and_compare.py      # Training automation CLI
-└── validate_backtest.py        # Backtest validation CLI
+└── test_technical_analysis.py  # Indicator tests
+
+retrain_and_compare.py          # Training automation CLI (root directory)
+validate_backtest.py            # Backtest validation CLI (root directory)
 ```
 
 **Module Organization**:
