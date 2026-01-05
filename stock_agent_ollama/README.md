@@ -207,29 +207,19 @@ stock_agent_ollama/
 ├── src/
 │   ├── agents/           # AI query processing
 │   ├── rl/               # RL training, backtesting, live trading
-│   │   ├── types.py      # Type-safe action enums (TradingAction, ImprovedTradingAction)
-│   │   ├── env_factory.py # Centralized environment configuration
-│   │   ├── environments.py # Trading environments
-│   │   ├── improvements.py # Action masking, rewards, features
-│   │   └── ensemble.py    # Ensemble agent with conflict resolution
 │   ├── tools/            # Data fetching, technical analysis, LSTM
 │   ├── ui/               # Web interface (Panel)
-│   └── config.py         # Centralized configuration (Config.RL_*)
+│   └── config.py         # Centralized configuration
 ├── data/
-│   ├── cache/            # Multi-tier stock data cache
+│   ├── cache/            # Stock data cache
 │   ├── models/           # Trained models (LSTM, RL)
 │   ├── logs/             # Application logs
-│   └── live_sessions/    # Trading session persistence
-├── tests/                # Test suite (48 tests, 16% coverage)
-│   ├── test_config.py                 # Configuration tests
-│   ├── test_action_masking.py         # Action masking tests
-│   ├── test_live_trading_models.py    # Data model tests
-│   ├── test_rl_components.py          # RL environment tests
-│   ├── test_technical_analysis.py     # Indicator tests
-│   ├── retrain_and_compare.py         # Training automation CLI
-│   └── validate_backtest.py           # Backtest validation CLI
-├── docs/                 # User guides and technical docs
-└── requirements.txt      # Dependencies (includes pytest, pytest-cov)
+│   └── live_sessions/    # Trading sessions
+├── tests/                # Test suite (48 tests)
+├── docs/                 # Documentation
+├── retrain_and_compare.py   # Training automation
+├── validate_backtest.py     # Backtest validation
+└── requirements.txt         # Dependencies
 ```
 
 ---
@@ -350,28 +340,28 @@ python -m pytest tests/test_action_masking.py -v
 ## 🛠️ Developer Tools
 
 **Automated Training & Comparison:**
-The `tests/retrain_and_compare.py` CLI utility automates the entire workflow:
+The `retrain_and_compare.py` CLI utility automates the entire workflow:
 ```bash
 # Train all algorithms on a single stock (efficiently via Ensemble)
-python tests/retrain_and_compare.py --symbol AAPL
+python retrain_and_compare.py --symbol AAPL
 
 # Train specific algorithms on multiple stocks
-python tests/retrain_and_compare.py --symbol AMZN,AAPL,META --algorithms ensemble
+python retrain_and_compare.py --symbol AMZN,AAPL,META --algorithms ensemble
 
 # Train all algorithms on watchlist stocks
-python tests/retrain_and_compare.py --watchlist
+python retrain_and_compare.py --watchlist
 
 # Train only Ensemble on watchlist
-python tests/retrain_and_compare.py --watchlist --algorithms ensemble
+python retrain_and_compare.py --watchlist --algorithms ensemble
 
 # Train only PPO and Ensemble
-python tests/retrain_and_compare.py --symbol TSLA --algorithms ppo,ensemble
+python retrain_and_compare.py --symbol TSLA --algorithms ppo,ensemble
 
 # Compare existing models without retraining
-python tests/retrain_and_compare.py --symbol MSFT --skip-training
+python retrain_and_compare.py --symbol MSFT --skip-training
 
 # Skip baseline strategies in comparison
-python tests/retrain_and_compare.py --symbol NVDA --no-baselines
+python retrain_and_compare.py --symbol NVDA --no-baselines
 ```
 
 **Options:**
@@ -385,17 +375,17 @@ python tests/retrain_and_compare.py --symbol NVDA --no-baselines
 The tool handles model training, backtesting, and comprehensive strategy comparison automatically. Note that training the `ensemble` algorithm automatically trains and saves the individual `ppo` and `recurrent_ppo` models as part of the process, making it the most efficient way to generate all three agents.
 
 **Backtest Validation:**
-The `tests/validate_backtest.py` tool provides comprehensive validation of backtest results:
+The `validate_backtest.py` tool provides comprehensive validation of backtest results:
 ```bash
 # Validate single stock (all algorithms)
-python tests/validate_backtest.py --symbol RIVN
+python validate_backtest.py --symbol RIVN
 
 # Validate all watchlist stocks (all algorithms)
-python tests/validate_backtest.py --watchlist
+python validate_backtest.py --watchlist
 
 # Validate specific algorithm only
-python tests/validate_backtest.py --symbol RIVN --algorithm ppo
-python tests/validate_backtest.py --watchlist --algorithm ensemble
+python validate_backtest.py --symbol RIVN --algorithm ppo
+python validate_backtest.py --watchlist --algorithm ensemble
 ```
 
 **Validation Checks:**
