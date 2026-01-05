@@ -207,15 +207,29 @@ stock_agent_ollama/
 ├── src/
 │   ├── agents/           # AI query processing
 │   ├── rl/               # RL training, backtesting, live trading
+│   │   ├── types.py      # Type-safe action enums (TradingAction, ImprovedTradingAction)
+│   │   ├── env_factory.py # Centralized environment configuration
+│   │   ├── environments.py # Trading environments
+│   │   ├── improvements.py # Action masking, rewards, features
+│   │   └── ensemble.py    # Ensemble agent with conflict resolution
 │   ├── tools/            # Data fetching, technical analysis, LSTM
-│   └── ui/               # Web interface (Panel)
+│   ├── ui/               # Web interface (Panel)
+│   └── config.py         # Centralized configuration (Config.RL_*)
 ├── data/
-│   ├── cache/            # Stock data cache
+│   ├── cache/            # Multi-tier stock data cache
 │   ├── models/           # Trained models (LSTM, RL)
 │   ├── logs/             # Application logs
 │   └── live_sessions/    # Trading session persistence
+├── tests/                # Test suite (48 tests, 16% coverage)
+│   ├── test_config.py                 # Configuration tests
+│   ├── test_action_masking.py         # Action masking tests
+│   ├── test_live_trading_models.py    # Data model tests
+│   ├── test_rl_components.py          # RL environment tests
+│   ├── test_technical_analysis.py     # Indicator tests
+│   ├── retrain_and_compare.py         # Training automation CLI
+│   └── validate_backtest.py           # Backtest validation CLI
 ├── docs/                 # User guides and technical docs
-└── requirements.txt
+└── requirements.txt      # Dependencies (includes pytest, pytest-cov)
 ```
 
 ---
@@ -303,31 +317,61 @@ See [QUICK_START.md](docs/QUICK_START.md#troubleshooting) for more help
 - Compares vs baselines (Buy & Hold, Momentum)
 - Comprehensive metrics (Sharpe, Max Drawdown, Win Rate)
 
-### 🛠️ Developer Tools
+#### 🧪 Testing
+
+**Comprehensive Test Suite:**
+The project includes 48 automated tests covering core functionality:
+
+```bash
+# Run all tests
+python -m pytest tests/ -v
+
+# Run with coverage report
+python -m pytest tests/ --cov=src --cov-report=term-missing
+
+# Run specific test file
+python -m pytest tests/test_action_masking.py -v
+```
+
+**Test Coverage:**
+- Configuration management (96% coverage)
+- Action masking logic (validates invalid trade prevention)
+- Live trading data models (Portfolio, Position, Trade, Order)
+- RL components (ensemble voting, environment creation)
+- Technical analysis indicators (SMA, EMA, RSI, MACD)
+
+**Test Files:**
+- `test_config.py` - Configuration validation
+- `test_action_masking.py` - Action masking for standard and improved actions
+- `test_live_trading_models.py` - Portfolio and trading models
+- `test_rl_components.py` - RL environment and ensemble
+- `test_technical_analysis.py` - Technical indicators
+
+## 🛠️ Developer Tools
 
 **Automated Training & Comparison:**
-The `retrain_and_compare.py` CLI utility automates the entire workflow:
+The `tests/retrain_and_compare.py` CLI utility automates the entire workflow:
 ```bash
 # Train all algorithms on a single stock (efficiently via Ensemble)
-python retrain_and_compare.py --symbol AAPL
+python tests/retrain_and_compare.py --symbol AAPL
 
 # Train specific algorithms on multiple stocks
-python retrain_and_compare.py --symbol AMZN,AAPL,META --algorithms ensemble
+python tests/retrain_and_compare.py --symbol AMZN,AAPL,META --algorithms ensemble
 
 # Train all algorithms on watchlist stocks
-python retrain_and_compare.py --watchlist
+python tests/retrain_and_compare.py --watchlist
 
 # Train only Ensemble on watchlist
-python retrain_and_compare.py --watchlist --algorithms ensemble
+python tests/retrain_and_compare.py --watchlist --algorithms ensemble
 
 # Train only PPO and Ensemble
-python retrain_and_compare.py --symbol TSLA --algorithms ppo,ensemble
+python tests/retrain_and_compare.py --symbol TSLA --algorithms ppo,ensemble
 
 # Compare existing models without retraining
-python retrain_and_compare.py --symbol MSFT --skip-training
+python tests/retrain_and_compare.py --symbol MSFT --skip-training
 
 # Skip baseline strategies in comparison
-python retrain_and_compare.py --symbol NVDA --no-baselines
+python tests/retrain_and_compare.py --symbol NVDA --no-baselines
 ```
 
 **Options:**
@@ -341,17 +385,17 @@ python retrain_and_compare.py --symbol NVDA --no-baselines
 The tool handles model training, backtesting, and comprehensive strategy comparison automatically. Note that training the `ensemble` algorithm automatically trains and saves the individual `ppo` and `recurrent_ppo` models as part of the process, making it the most efficient way to generate all three agents.
 
 **Backtest Validation:**
-The `validate_backtest.py` tool provides comprehensive validation of backtest results:
+The `tests/validate_backtest.py` tool provides comprehensive validation of backtest results:
 ```bash
 # Validate single stock (all algorithms)
-python validate_backtest.py --symbol RIVN
+python tests/validate_backtest.py --symbol RIVN
 
 # Validate all watchlist stocks (all algorithms)
-python validate_backtest.py --watchlist
+python tests/validate_backtest.py --watchlist
 
 # Validate specific algorithm only
-python validate_backtest.py --symbol RIVN --algorithm ppo
-python validate_backtest.py --watchlist --algorithm ensemble
+python tests/validate_backtest.py --symbol RIVN --algorithm ppo
+python tests/validate_backtest.py --watchlist --algorithm ensemble
 ```
 
 **Validation Checks:**
