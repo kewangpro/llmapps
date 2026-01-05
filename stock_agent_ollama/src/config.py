@@ -50,6 +50,17 @@ class Config:
     RL_SLIPPAGE_RATE = float(os.getenv("RL_SLIPPAGE", "0.0005"))
     RL_DEFAULT_TRAINING_TIMESTEPS = int(os.getenv("RL_TRAINING_TIMESTEPS", "50000"))
     RL_LOOKBACK_WINDOW = int(os.getenv("RL_LOOKBACK_WINDOW", "60"))
+    RL_MAX_POSITION_PCT = float(os.getenv("RL_MAX_POSITION_PCT", "80.0"))
+    RL_STOP_LOSS_PCT = float(os.getenv("RL_STOP_LOSS_PCT", "0.05"))
+    RL_TRAILING_STOP_PCT = float(os.getenv("RL_TRAILING_STOP_PCT", "0.03"))
+    RL_MAX_DRAWDOWN_PCT = float(os.getenv("RL_MAX_DRAWDOWN_PCT", "0.15"))
+
+    # RL Enhancement Defaults
+    RL_USE_ACTION_MASKING = True
+    RL_USE_ENHANCED_REWARDS = True
+    RL_USE_ADAPTIVE_SIZING = True
+    RL_USE_IMPROVED_ACTIONS = True
+    RL_ENABLE_DIAGNOSTICS = True
 
     # RL Agent default hyperparameters
     RL_PPO_LEARNING_RATE = float(os.getenv("RL_PPO_LR", "0.0003"))
