@@ -87,6 +87,28 @@ class TechnicalAnalysis:
         }).max(axis=1)
         
         return true_range.rolling(window=window).mean()
+
+    @staticmethod
+    def calculate_trend_indicators(close: pd.Series) -> Dict[str, pd.Series]:
+        """Calculate standardized trend indicators for RL environment"""
+        sma_20 = TechnicalAnalysis.calculate_sma(close, 20)
+        ema_12 = TechnicalAnalysis.calculate_ema(close, 12)
+        ema_26 = TechnicalAnalysis.calculate_ema(close, 26)
+
+        # SMA Trend: Percentage change of SMA-20 over 5 periods
+        sma_trend = sma_20.diff(periods=5) / (sma_20.shift(5) + 1e-8)
+        
+        # EMA Crossover: Normalized difference between Fast and Slow EMA
+        ema_crossover = (ema_12 - ema_26) / (ema_26 + 1e-8)
+        
+        # Price Momentum: Percentage change of price over 5 periods
+        price_momentum = close.pct_change(periods=5)
+        
+        return {
+            'sma_trend': sma_trend,
+            'ema_crossover': ema_crossover,
+            'price_momentum': price_momentum
+        }
     
     @staticmethod
     def analyze_trends(data: pd.DataFrame) -> Dict[str, Any]:
