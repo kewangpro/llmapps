@@ -81,6 +81,7 @@ A professional financial analysis platform combining **AI-powered analysis**, **
   - Sessions sorted by creation time (newest first)
 - **Real-time Portfolio Tracking** with live P&L updates
 - **Risk Management** (stop-loss, position limits, circuit breakers)
+- **Churn Protection** prevents rapid ping-pong trading (15-min cooldown)
 - **Live Monitoring** with status, positions, and event log showing symbol-prefixed events
 - **Optimized Dashboard** with granular updates for high-performance multi-session monitoring
 - **Educational Platform** for safe strategy testing
