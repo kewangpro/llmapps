@@ -1077,11 +1077,11 @@ All configuration is done through the Live Trade page interface:
 
 **Persistence:**
 Configuration is saved with the session state in:
-- `data/live_sessions/live_session.json`
+- `data/live_sessions/SESSION_*.json`
 
 **Default Settings:**
 - Initial capital: $100,000
-- Transaction cost: 0.05%
+- Transaction cost: $0 commission + 0.05% slippage
 - Stop loss: 5%
 - Poll interval: 3600 seconds (1 hour)
 
@@ -1094,7 +1094,7 @@ Configuration is saved with the session state in:
 4. Sessions are automatically saved and can be resumed on restart
 
 **Session State:**
-- Saved to: `data/live_sessions/live_session.json`
+- Saved to: `data/live_sessions/SESSION_*.json`
 - Auto-saved every 5 minutes while active
 - Automatically loaded on application start
 - Contains portfolio, positions, trades, and configuration
