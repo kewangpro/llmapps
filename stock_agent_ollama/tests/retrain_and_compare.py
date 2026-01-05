@@ -44,8 +44,8 @@ from datetime import datetime, timedelta
 from collections import Counter
 import logging
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent))
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.rl import EnhancedRLTrainer, EnhancedTrainingConfig
 from src.rl import BacktestEngine, BacktestConfig

@@ -18,8 +18,8 @@ from typing import Dict, Any, List, Tuple
 import numpy as np
 from datetime import datetime, timedelta
 
-# Add src to path for portfolio_manager import
-sys.path.insert(0, str(Path(__file__).parent))
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.tools.portfolio_manager import portfolio_manager
 
 # Color codes for terminal output
