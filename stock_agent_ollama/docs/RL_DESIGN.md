@@ -46,7 +46,9 @@ This RL trading system provides advanced reinforcement learning capabilities for
 3. **Realism**: Configurable transaction costs and slippage
 4. **Educational**: Transparent metrics and visualizations for learning
 5. **Integration**: Seamlessly extends existing stock analysis platform
-6. **Consistency**: Single source of truth for environment configuration (env_factory.py)
+6. **Consistency**: Single source of truth for configuration (src/config.py)
+7. **Type Safety**: Type-safe enums (src/rl/types.py) prevent magic number bugs
+8. **Testability**: Comprehensive test suite (48 tests, 16% coverage)
 
 ### Key Design Patterns
 
@@ -61,11 +63,22 @@ This RL trading system provides advanced reinforcement learning capabilities for
 - `load_env_config_from_model()` loads exact training configuration from saved models
 - Live trading uses loaded config to match training environment exactly
 
+**Configuration Management:**
+- Centralized in `src/config.py` with Config.RL_* constants
+- Eliminates redundant _ENV_DEFAULTS across modules
+- Single source of truth for all RL parameters
+- Environment variables support for easy overrides
+
+**Type Safety:**
+- `src/rl/types.py` provides TradingAction and ImprovedTradingAction enums
+- Eliminates magic numbers in code (e.g., action == 2 becomes action == TradingAction.BUY_SMALL)
+- Ensemble agent uses type-safe conflict resolution (Buy vs Sell → HOLD)
 
 **Critical Bug Fixes:**
 - **Short-Selling Prevention**: Checks position before sell calculations
 - **Floating Point Tolerance**: 0.01% tolerance for precision
 - **Action Masking**: Prevents invalid trades automatically
+- **Data Model Restoration**: Fixed missing Portfolio, Position, Trade, Order classes
 
 ---
 
@@ -76,23 +89,34 @@ This RL trading system provides advanced reinforcement learning capabilities for
 ```
 src/rl/
 ├── __init__.py                 # Main RL module exports
+├── types.py                    # Type-safe action enums (TradingAction, ImprovedTradingAction)
 ├── env_factory.py              # Shared environment configuration (EnvConfig, create_enhanced_env)
 ├── model_utils.py              # Shared model loading utilities (load_rl_agent, load_env_config)
 ├── environments.py             # All trading environments (Base, SingleStock, Enhanced)
 ├── training.py                 # Training pipeline (EnhancedRLTrainer)
 ├── improvements.py             # Action masking, adaptive sizing, curriculum learning
+├── ensemble.py                 # Ensemble agent with type-safe conflict resolution
 ├── callbacks.py                # Training callbacks (progress, early stopping)
 ├── rewards.py                  # Reward functions (simple, risk-adjusted, enhanced)
 ├── backtesting.py              # Backtesting (Engine + Metrics Calculator)
 ├── baselines.py                # Baseline strategies (Buy&Hold, Momentum)
-├── live_trading.py             # Live paper trading engine
+├── live_trading.py             # Live paper trading engine (with data models)
 └── visualizer.py               # RL-specific visualizations
 
 src/ui/pages/
 ├── rl_training.py              # RL training UI
 └── live_trading.py             # Live trading UI
 
-src/config.py                   # RL configuration
+src/config.py                   # Centralized RL configuration (Config.RL_*)
+
+tests/                          # Test suite (48 tests)
+├── test_config.py              # Configuration tests
+├── test_action_masking.py      # Action masking validation
+├── test_live_trading_models.py # Data model tests
+├── test_rl_components.py       # RL environment tests
+├── test_technical_analysis.py  # Indicator tests
+├── retrain_and_compare.py      # Training automation CLI
+└── validate_backtest.py        # Backtest validation CLI
 ```
 
 **Module Organization**:

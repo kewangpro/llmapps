@@ -552,14 +552,14 @@ After running backtests, you can validate the results for mathematical correctne
 
 ```bash
 # Validate all algorithms for a symbol
-python validate_backtest.py --symbol AAPL
+python tests/validate_backtest.py --symbol AAPL
 
 # Validate all watchlist stocks (all algorithms)
-python validate_backtest.py --watchlist
+python tests/validate_backtest.py --watchlist
 
 # Validate specific algorithm only
-python validate_backtest.py --symbol AAPL --algorithm ppo
-python validate_backtest.py --watchlist --algorithm ensemble
+python tests/validate_backtest.py --symbol AAPL --algorithm ppo
+python tests/validate_backtest.py --watchlist --algorithm ensemble
 ```
 
 **What it checks:**
@@ -591,6 +591,43 @@ Overall: 8/8 checks passed (100.0%)
 - RL performance calculated during backtesting
 - Not stored with models
 - Click "Run Backtest" in Trading tab to see metrics
+
+---
+
+## 🧪 Testing
+
+### Running Tests
+
+The project includes a comprehensive test suite with 48 automated tests:
+
+```bash
+# Run all tests
+python -m pytest tests/ -v
+
+# Run with coverage report
+python -m pytest tests/ --cov=src --cov-report=term-missing
+
+# Run specific test file
+python -m pytest tests/test_action_masking.py -v
+
+# Generate HTML coverage report
+python -m pytest tests/ --cov=src --cov-report=html
+# View at: htmlcov/index.html
+```
+
+**Test Coverage:**
+- Configuration management (96% coverage)
+- Action masking logic
+- Live trading data models
+- RL components (ensemble, environments)
+- Technical analysis indicators
+
+**Test Files:**
+- `tests/test_config.py` - Configuration validation (14 tests)
+- `tests/test_action_masking.py` - Action masking (10 tests)
+- `tests/test_live_trading_models.py` - Data models (14 tests)
+- `tests/test_rl_components.py` - RL components (5 tests)
+- `tests/test_technical_analysis.py` - Technical indicators (5 tests)
 
 ---
 

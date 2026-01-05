@@ -380,9 +380,12 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
 
 **Features:**
 - **Smart Suggestions**: Automatically finds top 8 performers from curated 30-stock universe (30-day return)
-  - Intelligent caching: Bulk data cached for 5 minutes for optimal performance
+  - Intelligent multi-tier caching: Bulk data cached for 5 minutes for optimal performance
   - Manual refresh button (🔄 Refresh) to force fresh market data on demand
   - Cache invalidation: Automatically clears cache on manual refresh
+  - Real-time quotes: 1 minute cache for live price data
+  - Company fundamentals: 1 hour cache for stable information
+  - Historical OHLCV: 1 day cache for long-term charts
   - Automatically updates on browser refresh
 - Add symbols using input field
 - Remove symbols with "×" button
