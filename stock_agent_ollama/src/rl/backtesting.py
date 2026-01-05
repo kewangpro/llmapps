@@ -9,6 +9,7 @@ from pathlib import Path
 from .environments import EnhancedTradingEnv
 from .improvements import EnhancedRewardConfig
 from .env_factory import EnvConfig
+from ..config import Config
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Callable
@@ -17,9 +18,26 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-# Reference defaults from EnvConfig (single source of truth)
-_ENV_DEFAULTS = {f.name: f.default for f in EnvConfig.__dataclass_fields__.values()}
+# ==================== BACKTEST ENGINE ====================
 
+@dataclass
+class BacktestConfig:
+    symbol: str
+    start_date: str
+    end_date: str
+    initial_balance: float = Config.RL_DEFAULT_INITIAL_BALANCE
+    transaction_cost_rate: float = Config.RL_TRANSACTION_COST_RATE
+    slippage_rate: float = Config.RL_SLIPPAGE_RATE
+    risk_free_rate: float = 0.0
+
+    # Enhancement flags
+    use_action_masking: bool = Config.RL_USE_ACTION_MASKING
+    use_enhanced_rewards: bool = Config.RL_USE_ENHANCED_REWARDS
+    use_adaptive_sizing: bool = Config.RL_USE_ADAPTIVE_SIZING
+    use_improved_actions: bool = Config.RL_USE_IMPROVED_ACTIONS
+    include_trend_indicators: bool = False  # For LSTM models
+    max_position_pct: float = Config.RL_MAX_POSITION_PCT
+    reward_config: Optional[EnhancedRewardConfig] = field(default_factory=lambda: EnhancedRewardConfig())
 
 
 # ==================== METRICS CALCULATOR ====================
@@ -399,18 +417,18 @@ class BacktestConfig:
     symbol: str
     start_date: str
     end_date: str
-    initial_balance: float = _ENV_DEFAULTS['initial_balance']
-    transaction_cost_rate: float = _ENV_DEFAULTS['transaction_cost_rate']
-    slippage_rate: float = _ENV_DEFAULTS['slippage_rate']
+    initial_balance: float = Config.RL_DEFAULT_INITIAL_BALANCE
+    transaction_cost_rate: float = Config.RL_TRANSACTION_COST_RATE
+    slippage_rate: float = Config.RL_SLIPPAGE_RATE
     risk_free_rate: float = 0.0
 
-    # Enhancement flags (from EnvConfig)
-    use_action_masking: bool = _ENV_DEFAULTS['use_action_masking']
-    use_enhanced_rewards: bool = _ENV_DEFAULTS['use_enhanced_rewards']
-    use_adaptive_sizing: bool = _ENV_DEFAULTS['use_adaptive_sizing']
-    use_improved_actions: bool = _ENV_DEFAULTS['use_improved_actions']
+    # Enhancement flags
+    use_action_masking: bool = Config.RL_USE_ACTION_MASKING
+    use_enhanced_rewards: bool = Config.RL_USE_ENHANCED_REWARDS
+    use_adaptive_sizing: bool = Config.RL_USE_ADAPTIVE_SIZING
+    use_improved_actions: bool = Config.RL_USE_IMPROVED_ACTIONS
     include_trend_indicators: bool = False  # For LSTM models
-    max_position_pct: float = _ENV_DEFAULTS['max_position_pct']
+    max_position_pct: float = Config.RL_MAX_POSITION_PCT
     reward_config: Optional[EnhancedRewardConfig] = field(default_factory=lambda: EnhancedRewardConfig())
 
 
@@ -464,13 +482,17 @@ class BacktestResult:
 
             # Calculate action distribution for validation
             from collections import Counter
+            from .types import ImprovedTradingAction
             action_counts = Counter(self.actions)
-            action_names = ['HOLD', 'BUY_SMALL', 'BUY_MEDIUM', 'BUY_LARGE', 'SELL_PARTIAL', 'SELL_ALL']
-            action_distribution = {
-                action_names[action_id]: count
-                for action_id, count in action_counts.items()
-                if action_id < len(action_names)
-            }
+            
+            action_distribution = {}
+            for action_id, count in action_counts.items():
+                try:
+                    action_name = ImprovedTradingAction(action_id).name
+                    action_distribution[action_name] = count
+                except ValueError:
+                    # Fallback for unknown actions
+                    action_distribution[f"ACTION_{action_id}"] = count
 
             # Convert trades to JSON-serializable format
             serializable_trades = []

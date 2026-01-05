@@ -13,6 +13,7 @@ import numpy as np
 from typing import Tuple, Optional, Dict, Any
 from pathlib import Path
 import logging
+from src.rl.types import ImprovedTradingAction
 
 logger = logging.getLogger(__name__)
 
@@ -252,14 +253,28 @@ class EnsemblePPOAgent:
         # Conflict Resolution: Default to HOLD (0) if actions are opposing (Buy vs Sell)
         # This prevents forced gambling when models disagree on direction.
         # Assumes ImprovedTradingAction space: HOLD=0, BUY={1,2,3}, SELL={4,5}
-        is_ppo_buy = ppo_action in [1, 2, 3]
-        is_ppo_sell = ppo_action in [4, 5]
-        is_rppo_buy = rppo_action in [1, 2, 3]
-        is_rppo_sell = rppo_action in [4, 5]
+        is_ppo_buy = ppo_action in [
+            ImprovedTradingAction.BUY_SMALL,
+            ImprovedTradingAction.BUY_MEDIUM,
+            ImprovedTradingAction.BUY_LARGE
+        ]
+        is_ppo_sell = ppo_action in [
+            ImprovedTradingAction.SELL_PARTIAL,
+            ImprovedTradingAction.SELL_ALL
+        ]
+        is_rppo_buy = rppo_action in [
+            ImprovedTradingAction.BUY_SMALL,
+            ImprovedTradingAction.BUY_MEDIUM,
+            ImprovedTradingAction.BUY_LARGE
+        ]
+        is_rppo_sell = rppo_action in [
+            ImprovedTradingAction.SELL_PARTIAL,
+            ImprovedTradingAction.SELL_ALL
+        ]
         
         if (is_ppo_buy and is_rppo_sell) or (is_ppo_sell and is_rppo_buy):
             logger.debug(f"Conflict Resolution: Opposing actions (PPO={ppo_action}, RPPO={rppo_action}) -> HOLD")
-            return 0  # HOLD
+            return int(ImprovedTradingAction.HOLD)
             
         try:
             # Get action probabilities from both models (with appropriate observations)

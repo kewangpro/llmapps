@@ -10,15 +10,15 @@ This module provides a complete RL trading framework including:
 - Visualization tools
 """
 
-from .environments import SingleStockTradingEnv, BaseTradingEnv, TradingAction, EnhancedTradingEnv
+from .environments import SingleStockTradingEnv, BaseTradingEnv, EnhancedTradingEnv
+from .types import TradingAction, ImprovedTradingAction
 from .training import EnhancedRLTrainer, EnhancedTrainingConfig
 from .improvements import (
     ActionMasker,
     EnhancedRewardFunction,
     EnhancedRewardConfig,
     AdaptiveActionSizer,
-    CurriculumManager,
-    ImprovedTradingAction
+    CurriculumManager
 )
 from .backtesting import BacktestEngine, BacktestConfig, PerformanceMetrics
 from .baselines import BuyHoldStrategy, MomentumStrategy

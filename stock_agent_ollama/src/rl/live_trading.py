@@ -9,8 +9,9 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Tuple, Any
-from src.rl.environments import TradingAction as EnvTradingAction
+from src.rl.types import TradingAction as EnvTradingAction
 from src.rl.env_factory import EnvConfig
+from ..config import Config
 import numpy as np
 import pandas as pd
 from src.tools.stock_fetcher import StockFetcher
@@ -20,27 +21,13 @@ import json
 
 logger = logging.getLogger(__name__)
 
-# Reference defaults from EnvConfig (single source of truth)
-_ENV_DEFAULTS = {f.name: f.default for f in EnvConfig.__dataclass_fields__.values()}
-
 
 # ============================================================================
 # Enums and Constants
 # ============================================================================
 
-# Use the environment's TradingAction IntEnum for consistency with training
-# EnvTradingAction values: SELL=0, HOLD=1, BUY_SMALL=2, BUY_LARGE=3
-class TradingAction(Enum):
-    """Compatibility wrapper mapping to environment TradingAction values.
-
-    Keep a small Enum here for typing and backwards compatibility in other
-    parts of the code (UI expects BUY/SELL/HOLD labels). Internally we map
-    to the environment's action integers.
-    """
-    SELL = int(EnvTradingAction.SELL)
-    HOLD = int(EnvTradingAction.HOLD)
-    BUY_SMALL = int(EnvTradingAction.BUY_SMALL)
-    BUY_LARGE = int(EnvTradingAction.BUY_LARGE)
+# Compatibility alias
+TradingAction = EnvTradingAction
 
 
 class TradingStatus(Enum):
@@ -202,10 +189,10 @@ class LiveTradingConfig:
     """Live trading configuration"""
     symbol: str
     agent_path: str
-    initial_capital: float = _ENV_DEFAULTS['initial_balance']
-    max_position_size: float = _ENV_DEFAULTS['max_position_pct']  # Max position as % of portfolio value (from EnvConfig)
+    initial_capital: float = Config.RL_DEFAULT_INITIAL_BALANCE
+    max_position_size: float = Config.RL_MAX_POSITION_PCT  # Max position as % of portfolio value
     max_portfolio_risk_pct: float = 2.0  # Max 2% portfolio risk per trade
-    stop_loss_pct: float = 5.0  # 5% stop loss
+    stop_loss_pct: float = Config.RL_STOP_LOSS_PCT * 100  # Config is 0.05, LiveTrading expects percentage (5.0)
     max_daily_loss_pct: float = 10.0  # 10% max daily loss (circuit breaker)
     # IMPORTANT: Default agents are trained on DAILY data (interval='1d')
     # For live trading, update_interval should match the training timeframe:
@@ -216,8 +203,8 @@ class LiveTradingConfig:
     enforce_trading_hours: bool = True
     auto_select_stock: bool = False  # Dynamically select stocks to maximize returns
     # Percentage-based transaction costs (matching backtesting)
-    transaction_cost_rate: float = _ENV_DEFAULTS['transaction_cost_rate']  # $0 commissions (zero-commission era)
-    slippage_rate: float = _ENV_DEFAULTS['slippage_rate']  # 0.05% slippage for liquid stocks
+    transaction_cost_rate: float = Config.RL_TRANSACTION_COST_RATE  # $0 commissions (zero-commission era)
+    slippage_rate: float = Config.RL_SLIPPAGE_RATE  # 0.05% slippage for liquid stocks
     session_id: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -1516,8 +1503,33 @@ class LiveTradingEngine:
                 # Fallback to default calculation
                 action_mask = np.ones(6 if getattr(actual_env, 'use_improved_actions', True) else 4)
 
+            # --- CHURN PROTECTION (Wash Sale Prevention) ---
+            # If we recently traded, discourage reversing immediately unless price moved significantly
+            last_trade = self.portfolio.trades[-1] if self.portfolio.trades else None
+            churn_hold = False
+            
+            if last_trade:
+                minutes_since_trade = (datetime.now() - last_trade.timestamp).total_seconds() / 60
+                if minutes_since_trade < 15:  # 15 minute cooldown
+                    # If we just SOLD, don't BUY back unless price is much lower (e.g. 1%)
+                    if last_trade.action == TradingAction.SELL:
+                        if tick.price > last_trade.price * 0.99:
+                             churn_hold = True
+                             logger.info(f"{self.session.session_id} - Churn Protection: Holding (Sold {minutes_since_trade:.1f}m ago @ ${last_trade.price:.2f}, current ${tick.price:.2f})")
+                    
+                    # If we just BOUGHT, don't SELL immediately unless significant move (risk manager handles stop-loss)
+                    elif last_trade.action in (TradingAction.BUY_SMALL, TradingAction.BUY_LARGE):
+                        # Prevent "noise" selling
+                        if tick.price < last_trade.price * 1.01 and tick.price > last_trade.price * 0.99:
+                             churn_hold = True
+                             logger.info(f"{self.session.session_id} - Churn Protection: Holding (Bought {minutes_since_trade:.1f}m ago @ ${last_trade.price:.2f}, current ${tick.price:.2f})")
+
             # Get action from agent
-            action, _states = self.agent.predict(observation, deterministic=True)
+            if churn_hold:
+                action = float(ImprovedTradingAction.HOLD)
+                _states = None
+            else:
+                action, _states = self.agent.predict(observation, deterministic=True)
 
             action_names = {
                 0: 'HOLD',
@@ -1763,13 +1775,10 @@ class LiveTradingEngine:
 
             # --- Trend Indicators (for LSTM models) ---
             if actual_env.include_trend_indicators:
-                sma_20 = TechnicalAnalysis.calculate_sma(close, 20)
-                ema_12 = TechnicalAnalysis.calculate_ema(close, 12)
-                ema_26 = TechnicalAnalysis.calculate_ema(close, 26)
-
-                sma_trend = sma_20.diff(periods=5) / (sma_20.shift(5) + 1e-8)
-                ema_crossover = (ema_12 - ema_26) / (ema_26 + 1e-8)
-                price_momentum = close.pct_change(periods=5)
+                trend_indicators = TechnicalAnalysis.calculate_trend_indicators(close)
+                sma_trend = trend_indicators['sma_trend']
+                ema_crossover = trend_indicators['ema_crossover']
+                price_momentum = trend_indicators['price_momentum']
 
             # Fill NaN values
             hist_data = hist_data.bfill().ffill()

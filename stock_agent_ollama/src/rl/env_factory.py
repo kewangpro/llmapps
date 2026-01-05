@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 from .environments import EnhancedTradingEnv
 from .improvements import EnhancedRewardConfig, CurriculumManager
+from ..config import Config
 
 
 @dataclass
@@ -25,38 +26,38 @@ class EnvConfig:
     end_date: str
 
     # Portfolio parameters
-    initial_balance: float = 100000.0
+    initial_balance: float = Config.RL_DEFAULT_INITIAL_BALANCE
     max_position_size: int = 1000  # Maximum shares
-    max_position_pct: float = 80.0  # Max position as % of portfolio
+    max_position_pct: float = Config.RL_MAX_POSITION_PCT  # Max position as % of portfolio
 
     # Cost parameters (zero-commission era, 2025)
-    transaction_cost_rate: float = 0.0  # $0 commissions (Fidelity, Schwab, Robinhood)
-    slippage_rate: float = 0.0005  # 0.05% slippage for liquid S&P 500 stocks
+    transaction_cost_rate: float = Config.RL_TRANSACTION_COST_RATE  # $0 commissions (Fidelity, Schwab, Robinhood)
+    slippage_rate: float = Config.RL_SLIPPAGE_RATE  # 0.05% slippage for liquid S&P 500 stocks
 
     # Observation parameters
-    lookback_window: int = 60
+    lookback_window: int = Config.RL_LOOKBACK_WINDOW
     include_technical_indicators: bool = True
     include_trend_indicators: bool = False  # Trend indicators for RecurrentPPO (SMA_Trend, EMA_Crossover, Price_Momentum)
 
     # Enhancement flags
-    use_action_masking: bool = True  # Mask invalid actions (does NOT add to observations)
-    use_enhanced_rewards: bool = True
-    use_adaptive_sizing: bool = True
-    use_improved_actions: bool = True
+    use_action_masking: bool = Config.RL_USE_ACTION_MASKING  # Mask invalid actions (does NOT add to observations)
+    use_enhanced_rewards: bool = Config.RL_USE_ENHANCED_REWARDS
+    use_adaptive_sizing: bool = Config.RL_USE_ADAPTIVE_SIZING
+    use_improved_actions: bool = Config.RL_USE_IMPROVED_ACTIONS
 
     # New improvement flags (Priority 1-5)
     use_risk_manager: bool = True
     use_regime_detector: bool = True
     use_mtf_features: bool = True
     use_kelly_sizing: bool = True
-    stop_loss_pct: float = 0.05
-    trailing_stop_pct: float = 0.03
-    max_drawdown_pct: float = 0.15
+    stop_loss_pct: float = Config.RL_STOP_LOSS_PCT
+    trailing_stop_pct: float = Config.RL_TRAILING_STOP_PCT
+    max_drawdown_pct: float = Config.RL_MAX_DRAWDOWN_PCT
 
     # Optional components
     reward_config: Optional[EnhancedRewardConfig] = None
     curriculum_manager: Optional[CurriculumManager] = None
-    enable_diagnostics: bool = True
+    enable_diagnostics: bool = Config.RL_ENABLE_DIAGNOSTICS
 
     def to_dict(self):
         """Convert to dictionary for serialization."""

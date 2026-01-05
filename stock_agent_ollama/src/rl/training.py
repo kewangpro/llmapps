@@ -32,12 +32,9 @@ from .improvements import (
 )
 from .callbacks import TrainingProgressCallback, PerformanceMonitorCallback
 from .env_factory import EnvConfig
+from ..config import Config
 
 logger = logging.getLogger(__name__)
-
-# Reference defaults from EnvConfig (single source of truth)
-_ENV_DEFAULTS = {f.name: f.default for f in EnvConfig.__dataclass_fields__.values()}
-
 
 @dataclass
 class EnhancedTrainingConfig:
@@ -47,17 +44,17 @@ class EnhancedTrainingConfig:
     symbol: str
     start_date: str
     end_date: str
-    initial_balance: float = _ENV_DEFAULTS['initial_balance']
+    initial_balance: float = Config.RL_DEFAULT_INITIAL_BALANCE
 
     # Environment enhancements
-    use_action_masking: bool = _ENV_DEFAULTS['use_action_masking']
-    use_enhanced_rewards: bool = _ENV_DEFAULTS['use_enhanced_rewards']
-    use_adaptive_sizing: bool = _ENV_DEFAULTS['use_adaptive_sizing']
-    use_improved_actions: bool = _ENV_DEFAULTS['use_improved_actions']
+    use_action_masking: bool = Config.RL_USE_ACTION_MASKING
+    use_enhanced_rewards: bool = Config.RL_USE_ENHANCED_REWARDS
+    use_adaptive_sizing: bool = Config.RL_USE_ADAPTIVE_SIZING
+    use_improved_actions: bool = Config.RL_USE_IMPROVED_ACTIONS
     # Disabled curriculum learning - was causing excessive exploration leading to 65% invalid action rate
     # Agent performs better with direct learning on the full task
     use_curriculum_learning: bool = False
-    enable_diagnostics: bool = _ENV_DEFAULTS['enable_diagnostics']
+    enable_diagnostics: bool = Config.RL_ENABLE_DIAGNOSTICS
     use_lstm_policy: bool = False # New field to enable LSTM policy
     use_vec_normalize: bool = False
 
@@ -66,16 +63,16 @@ class EnhancedTrainingConfig:
     use_regime_detector: bool = True
     use_mtf_features: bool = True
     use_kelly_sizing: bool = True
-    stop_loss_pct: float = 0.05
-    trailing_stop_pct: float = 0.03
-    max_drawdown_pct: float = 0.15
+    stop_loss_pct: float = Config.RL_STOP_LOSS_PCT
+    trailing_stop_pct: float = Config.RL_TRAILING_STOP_PCT
+    max_drawdown_pct: float = Config.RL_MAX_DRAWDOWN_PCT
 
     # Position limits (from EnvConfig)
-    max_position_size: int = _ENV_DEFAULTS['max_position_size']
-    max_position_pct: float = _ENV_DEFAULTS['max_position_pct']
+    max_position_size: int = 1000
+    max_position_pct: float = Config.RL_MAX_POSITION_PCT
 
     # Observation parameters (from EnvConfig)
-    lookback_window: int = _ENV_DEFAULTS['lookback_window']
+    lookback_window: int = Config.RL_LOOKBACK_WINDOW
 
     # Reward configuration
     reward_config: EnhancedRewardConfig = field(default_factory=EnhancedRewardConfig)
@@ -94,7 +91,7 @@ class EnhancedTrainingConfig:
     n_epochs: int = 10
 
     # Training settings
-    total_timesteps: int = 300000  # Recommended for all algorithms, especially RecurrentPPO (LSTM needs more training)
+    total_timesteps: int = Config.RL_DEFAULT_TRAINING_TIMESTEPS  # Recommended for all algorithms
     eval_freq: int = 5000
     save_freq: int = 10000
 
@@ -103,8 +100,8 @@ class EnhancedTrainingConfig:
     # - QRDQN: 0.0005 (0.05%) via EnhancedRewardConfig
     # Transaction costs: $0 commissions (zero-commission era, 2025)
     # Slippage only: ~0.05% for liquid S&P 500 stocks
-    transaction_cost_rate: float = _ENV_DEFAULTS['transaction_cost_rate']  # $0 per trade
-    slippage_rate: float = _ENV_DEFAULTS['slippage_rate']  # 0.05% slippage
+    transaction_cost_rate: float = Config.RL_TRANSACTION_COST_RATE  # $0 per trade
+    slippage_rate: float = Config.RL_SLIPPAGE_RATE  # 0.05% slippage
 
     # Save settings
     save_dir: Optional[str] = None

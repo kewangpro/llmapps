@@ -15,16 +15,10 @@ import logging
 
 from ..tools.stock_fetcher import StockFetcher
 from ..tools.technical_analysis import TechnicalAnalysis
+from ..config import Config
+from .types import TradingAction, ImprovedTradingAction
 
 logger = logging.getLogger(__name__)
-
-
-class TradingAction(IntEnum):
-    """Discrete trading actions."""
-    SELL = 0
-    HOLD = 1
-    BUY_SMALL = 2
-    BUY_LARGE = 3
 
 
 class BaseTradingEnv(gym.Env, ABC):
@@ -39,9 +33,9 @@ class BaseTradingEnv(gym.Env, ABC):
 
     def __init__(
         self,
-        initial_balance: float = 100000.0,
-        transaction_cost_rate: float = 0.001,
-        slippage_rate: float = 0.0,
+        initial_balance: float = Config.RL_DEFAULT_INITIAL_BALANCE,
+        transaction_cost_rate: float = Config.RL_TRANSACTION_COST_RATE,
+        slippage_rate: float = Config.RL_SLIPPAGE_RATE,
         max_position_size: int = 1000,
         enable_short_selling: bool = False,
     ):
@@ -425,15 +419,10 @@ class SingleStockTradingEnv(BaseTradingEnv):
         # === TREND-FOLLOWING INDICATORS (for RecurrentPPO) ===
         # Only add if include_trend_indicators is True
         if self.include_trend_indicators:
-            # 1. SMA trend (slope of 20-period SMA) - indicates trend direction
-            sma_20 = self.data['SMA_20']
-            self.data['SMA_Trend'] = sma_20.diff(periods=5) / (sma_20.shift(5) + 1e-8)  # 5-day slope
-
-            # 2. EMA crossover signal (bullish when EMA12 > EMA26, bearish otherwise)
-            self.data['EMA_Crossover'] = (self.data['EMA_12'] - self.data['EMA_26']) / (self.data['EMA_26'] + 1e-8)
-
-            # 3. Price momentum (5-day rate of change) - measures trend strength
-            self.data['Price_Momentum'] = close_prices.pct_change(periods=5)
+            trend_indicators = TechnicalAnalysis.calculate_trend_indicators(close_prices)
+            self.data['SMA_Trend'] = trend_indicators['sma_trend']
+            self.data['EMA_Crossover'] = trend_indicators['ema_crossover']
+            self.data['Price_Momentum'] = trend_indicators['price_momentum']
 
         # Fill NaN values (use newer pandas method)
         self.data = self.data.bfill().ffill()
@@ -752,6 +741,8 @@ class SingleStockTradingEnv(BaseTradingEnv):
 # ENHANCED TRADING ENVIRONMENT
 # ==============================================================================
 
+from .types import ImprovedTradingAction
+
 # Import improvements components (after other definitions to avoid circular imports)
 from .improvements import (
     ActionMasker,
@@ -760,7 +751,6 @@ from .improvements import (
     AdaptiveActionSizer,
     CurriculumManager,
     TrainingDiagnostics,
-    ImprovedTradingAction,
     RiskManager,
     RegimeDetector,
     MultiTimeframeFeatures,
@@ -783,12 +773,12 @@ class EnhancedTradingEnv(SingleStockTradingEnv):
         symbol: str,
         start_date: str,
         end_date: str,
-        initial_balance: float = 100000.0,
-        transaction_cost_rate: float = 0.001,
-        slippage_rate: float = 0.0,
+        initial_balance: float = Config.RL_DEFAULT_INITIAL_BALANCE,
+        transaction_cost_rate: float = Config.RL_TRANSACTION_COST_RATE,
+        slippage_rate: float = Config.RL_SLIPPAGE_RATE,
         max_position_size: int = 1000,
-        max_position_pct: float = 80.0,
-        lookback_window: int = 60,
+        max_position_pct: float = Config.RL_MAX_POSITION_PCT,
+        lookback_window: int = Config.RL_LOOKBACK_WINDOW,
         include_technical_indicators: bool = True,
         include_trend_indicators: bool = False,  # RecurrentPPO only
         # Enhancement parameters
@@ -804,9 +794,9 @@ class EnhancedTradingEnv(SingleStockTradingEnv):
         use_regime_detector: bool = True,
         use_mtf_features: bool = True,
         use_kelly_sizing: bool = True,
-        stop_loss_pct: float = 0.05,
-        trailing_stop_pct: float = 0.03,
-        max_drawdown_pct: float = 0.15,
+        stop_loss_pct: float = Config.RL_STOP_LOSS_PCT,
+        trailing_stop_pct: float = Config.RL_TRAILING_STOP_PCT,
+        max_drawdown_pct: float = Config.RL_MAX_DRAWDOWN_PCT,
         **kwargs
     ):
         """

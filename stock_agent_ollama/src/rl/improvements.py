@@ -17,23 +17,10 @@ from dataclasses import dataclass
 from enum import IntEnum
 import logging
 
-from .environments import TradingAction, BaseTradingEnv
+from .types import TradingAction, ImprovedTradingAction
+from ..config import Config
 
 logger = logging.getLogger(__name__)
-
-
-# ============================================================================
-# IMPROVED ACTION SPACE
-# ============================================================================
-
-class ImprovedTradingAction(IntEnum):
-    """Improved discrete trading actions with HOLD as default (action 0)."""
-    HOLD = 0          # Default action - do nothing
-    BUY_SMALL = 1     # Buy with 10-20% of cash (adaptive)
-    BUY_MEDIUM = 2    # Buy with 20-40% of cash (adaptive)
-    BUY_LARGE = 3     # Buy with 40-60% of cash (adaptive)
-    SELL_PARTIAL = 4  # Sell 50% of position
-    SELL_ALL = 5      # Sell entire position
 
 
 # ============================================================================
@@ -918,9 +905,9 @@ class RiskManager:
 
     def __init__(
         self,
-        stop_loss_pct: float = 0.05,      # 5% stop-loss per position
-        trailing_stop_pct: float = 0.03,   # 3% trailing stop from peak
-        max_drawdown_pct: float = 0.15,    # 15% portfolio drawdown limit
+        stop_loss_pct: float = Config.RL_STOP_LOSS_PCT,
+        trailing_stop_pct: float = Config.RL_TRAILING_STOP_PCT,
+        max_drawdown_pct: float = Config.RL_MAX_DRAWDOWN_PCT,
         enable_stops: bool = True
     ):
         self.stop_loss_pct = stop_loss_pct
