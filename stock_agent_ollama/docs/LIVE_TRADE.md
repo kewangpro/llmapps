@@ -241,6 +241,14 @@ The trading environment includes advanced risk management components:
 - Uses Kelly Criterion for optimal sizing
 - Requires minimum 20 trades before activating
 
+**D. Churn Protection** (`LiveTradingEngine` in `live_trading.py`)
+- **15-Minute Reversal Cooldown**: Prevents rapid buy/sell flipping
+- **Signal Filtering**:
+  - Buying back a sold stock requires price > 99% of exit (prevent FOMO)
+  - Selling a bought stock requires price movement > 1% (prevent noise selling)
+- Prevents "ping-pong" trading that erodes capital through slippage
+- Logs "Churn Protection: Holding" events when triggered
+
 ### 6. Session Persistence
 
 **Purpose:** To save and load the state of a live trading session, allowing it to be resumed across application restarts.

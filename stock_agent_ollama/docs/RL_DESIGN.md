@@ -451,6 +451,12 @@ data/live_sessions/
 - Automatically enables trend indicators for RecurrentPPO models
 - Ensures no train-test distribution mismatch
 
+**Churn Protection**:
+- Prevents rapid trade reversals within 15 minutes
+- Requires significant price movement (>1%) to override cooldown
+- Reduces transaction cost erosion from "noise" trading
+- Logs protection events for transparency
+
 **Config Priority**:
 1. Saved model config (if available)
 2. User-specified overrides
