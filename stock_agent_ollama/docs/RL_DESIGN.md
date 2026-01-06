@@ -319,12 +319,23 @@ In this project:
 **Configuration**:
 ```python
 @dataclass
-class RecurrentPPORewardConfig(EnhancedRewardConfig):
+class RecurrentPPORewardConfig(PPORewardConfig):
+    # Balanced penalties for trend following
     risk_penalty_weight: float = 0.1
     drawdown_penalty_weight: float = 0.2
-    transaction_cost_rate: float = 0.0005
-    hold_winner_bonus: float = 0.1
-    momentum_trend_bonus: float = 0.15
+
+    # Higher incentives for holding winning positions
+    hold_winning_position_bonus: float = 0.2
+    momentum_trend_bonus: float = 0.3
+
+    # Penalize high-frequency trading
+    excessive_trading_penalty: float = -0.2
+
+    # Profitable trade bonus (kept moderate)
+    profitable_trade_bonus: float = 0.05
+
+    # Minimal transaction costs
+    transaction_cost_rate: float = 0.001
 ```
 
 ### PPORewardConfig
@@ -343,7 +354,8 @@ class PPORewardConfig(EnhancedRewardConfig):
     risk_penalty_weight: float = 0.3
     drawdown_penalty_weight: float = 0.5
     transaction_cost_rate: float = 0.002
-    action_diversity_bonus: float = 1.0
+    diversity_bonus: float = 0.5
+    diversity_penalty: float = -0.5
 ```
 
 ---
@@ -747,60 +759,64 @@ Each environment step calculates reward using **7 components** from `EnhancedRew
 **1. Base Return (Primary Signal)**
 ```python
 portfolio_return = (current_value - prev_value) / prev_value
-base_reward = portfolio_return * 100  # Scaled up (return_weight)
+base_reward = portfolio_return * 1.0  # (return_weight)
 ```
 
 **2. Action Masking**
 ```python
 if action_is_masked:
     action = HOLD  # Replace invalid action with HOLD
-    # No penalty - action masking handles invalid actions
+    reward += invalid_action_penalty # -1.0
+else:
+    reward += valid_action_bonus # 0.01
 ```
 
 **3. Excessive Trading Penalty**
 ```python
-if action == prev_action and is_trading:
+if is_trading_action and was_trading_action:
     consecutive_count += 1
-    penalty = -0.005 * min(consecutive_count, 5)  # Progressive
-    reward += penalty  # Penalty is negative
+    penalty = excessive_trading_penalty * min(consecutive_count, 5)  # Progressive
+    if action == prev_action:
+        penalty *= 2.0 # Double penalty for hyper-churn
+    reward += penalty
 ```
 
 **4. Transaction Costs**
 ```python
 if is_buy or is_sell:
-    cost = trade_value * transaction_cost_rate  # 0.05%-0.2%
+    cost = trade_value * transaction_cost_rate
     reward -= cost / portfolio_value
 ```
 
 **5. Risk Penalties**
 ```python
 volatility = std(recent_returns[-20:])
-reward -= volatility * 0.1  # Volatility penalty
+reward -= volatility * risk_penalty_weight
 
 if len(returns) >= 5:
     sharpe = mean_return / (volatility + 1e-8)
-    reward += sharpe * 0.05  # Sharpe bonus
+    reward += sharpe * sharpe_bonus_weight
 ```
 
 **6. Drawdown Penalty**
 ```python
 if drawdown > 5%:
-    reward -= drawdown * 0.5  # Penalize deep drawdowns
+    reward -= drawdown * drawdown_penalty_weight
 ```
 
 **7. Profitable Trade Bonus**
 ```python
 if portfolio_return > 0:
-    reward += 0.001  # Small bonus for profitable steps
+    reward += profitable_trade_bonus # 0.01-0.05
 ```
 
 **8. Hold Incentives**
 ```python
 if action == HOLD:
-    reward += 0.001  # Base hold incentive
+    reward += base_hold_incentive # 0.01-0.05
 
 if action == HOLD and position > 0 and return > 0:
-    reward += 0.002  # Hold winning position bonus
+    reward += hold_winning_position_bonus # 0.05-0.2
 ```
 
 #### Real Example Calculation

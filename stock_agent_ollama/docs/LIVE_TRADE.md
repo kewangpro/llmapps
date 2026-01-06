@@ -1143,7 +1143,8 @@ close_with_live = np.concatenate([close.iloc[-59:].values, [tick.price]])
 **3. Increased `excessive_trading_penalty`**
 ```python
 # Discourage high-frequency "chatter" during retraining
-excessive_trading_penalty: float = -0.5  # Was -0.1
+# Triggers when ANY trading action follows another
+excessive_trading_penalty: float = -0.1 # To -0.2 depending on algorithm
 ```
 
 ### Configuration Guidelines
