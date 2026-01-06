@@ -542,9 +542,9 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 - Close other applications to free up resources
 
 **Expected Training Times (300k steps):**
-- PPO: ~15-20 minutes (efficient on-policy)
-- RecurrentPPO: ~25-35 minutes (LSTM requires more compute)
-- Ensemble: ~40-55 minutes (trains both PPO + RecurrentPPO)
+- PPO: ~35-45 minutes (efficient on-policy)
+- RecurrentPPO: ~55-70 minutes (LSTM requires more compute)
+- Ensemble: ~90-110 minutes (trains both PPO + RecurrentPPO)
 
 ### Backtest Validation
 

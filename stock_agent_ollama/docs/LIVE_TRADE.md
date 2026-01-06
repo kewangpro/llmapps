@@ -531,7 +531,7 @@ class LiveTradingConfig:
     slippage_rate: float = 0.0005  # 0.05% slippage for liquid stocks
 
     # Execution
-    poll_interval: int = 60  # seconds
+    poll_interval: int = 3600  # seconds (1 hour)
     enforce_trading_hours: bool = True
     auto_select_stock: bool = False  # Dynamically rotate between best stocks
 

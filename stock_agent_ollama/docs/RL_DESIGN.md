@@ -183,13 +183,13 @@ validate_backtest.py            # Backtest validation CLI (root directory)
 
 ### 2. RL Agents
 
-#### PPO (Proximal Policy Optimization)
+**PPO (Proximal Policy Optimization)**
 
 **Implementation**: Stable-Baselines3 PPO
 
 **Strengths**:
 - Stable training with clipped objective
-- Exceptional risk-adjusted returns (2.81 Sharpe ratio on AMZN)
+- Strong risk-adjusted returns (0.51 Sharpe ratio on PLTR)
 - Strong baseline performance with balanced action distribution
 - No VecNormalize normalization for better convergence
 
@@ -209,8 +209,8 @@ validate_backtest.py            # Backtest validation CLI (root directory)
 **Strengths**:
 - LSTM memory for temporal patterns
 - Trend indicators (13 features vs 10 base)
-- Excellent performance for trending markets (1.84 Sharpe ratio on AMZN)
-- High win rate (76%) with momentum-focused rewards
+- Good performance for trending markets (0.23 Sharpe ratio on PLTR)
+- Stable performance with momentum-focused rewards
 - No VecNormalize normalization preserves temporal learning
 
 **Hyperparameters**:
@@ -240,11 +240,11 @@ validate_backtest.py            # Backtest validation CLI (root directory)
 4. Confidence weighting: Uses action probabilities to determine final decision
 
 **Strengths**:
-- Strong risk-adjusted returns (1.89 Sharpe ratio on AMZN)
+- Robust risk-adjusted returns (0.31 Sharpe ratio on PLTR)
 - Leverages RecurrentPPO's LSTM memory as primary strategy (70% weight)
 - PPO provides opportunistic growth for tactical trades (30% weight)
 - Confidence-based decisions favor more certain predictions
-- Balanced action distribution with high win rate (62%)
+- Balanced action distribution with healthy win rate (53%)
 
 **Training**:
 - Trains both PPO and RecurrentPPO independently
@@ -629,7 +629,7 @@ config = EnhancedTrainingConfig(
     start_date="2021-01-01",
     end_date="2024-01-01",
     agent_type="ppo",  # or "recurrent_ppo", "ensemble"
-    total_timesteps=100000
+    total_timesteps=300000
 )
 
 trainer = EnhancedRLTrainer(config)
