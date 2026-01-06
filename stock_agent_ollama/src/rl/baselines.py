@@ -14,8 +14,9 @@ from typing import Dict, Any, Optional
 
 class BuyHoldStrategy:
 
-    def __init__(self):
+    def __init__(self, use_improved_actions: bool = True):
         self.has_bought = False
+        self.use_improved_actions = use_improved_actions
 
     def get_action(self, observation: np.ndarray, **kwargs) -> int:
         """
@@ -26,39 +27,47 @@ class BuyHoldStrategy:
             **kwargs: Additional parameters
 
         Returns:
-            Action (0: SELL, 1: HOLD, 2: BUY_SMALL, 3: BUY_LARGE)
+            Action (0: SELL, 1: HOLD, 2: BUY_SMALL, 3: BUY_LARGE for standard)
+            Action (0: HOLD, 1: BUY_SMALL, ..., 3: BUY_LARGE for improved)
         """
+        if self.use_improved_actions:
+            hold_action = 0
+            buy_action = 3  # BUY_LARGE
+        else:
+            hold_action = 1
+            buy_action = 3  # BUY_LARGE
+
         if not self.has_bought:
             self.has_bought = True
-            return 3  # BUY_LARGE on first step
+            return buy_action
         else:
-            return 1  # HOLD for all subsequent steps
+            return hold_action
 
     def reset(self):
         """Reset strategy state."""
         self.has_bought = False
 
 
-def buy_hold_strategy(observation: np.ndarray, state: Optional[dict] = None) -> int:
+def buy_hold_strategy(observation: np.ndarray, state: Optional[dict] = None, use_improved_actions: bool = True) -> int:
     """
     Stateless buy-hold strategy function.
-
-    Args:
-        observation: Current observation
-        state: Optional state dictionary
-
-    Returns:
-        Action
     """
     if state is None:
         state = {'step': 0}
 
+    if use_improved_actions:
+        hold_action = 0
+        buy_action = 3
+    else:
+        hold_action = 1
+        buy_action = 3
+
     if state['step'] == 0:
         state['step'] += 1
-        return 3  # BUY_LARGE
+        return buy_action
     else:
         state['step'] += 1
-        return 1  # HOLD
+        return hold_action
 
 
 
@@ -66,24 +75,32 @@ def buy_hold_strategy(observation: np.ndarray, state: Optional[dict] = None) -> 
 
 class MomentumStrategy:
 
-    def __init__(self, lookback: int = 20, threshold: float = 0.02):
+    def __init__(self, lookback: int = 20, threshold: float = 0.02, use_improved_actions: bool = True):
         self.lookback = lookback
         self.threshold = threshold
         self.price_history = []
         self.has_position = False
+        self.use_improved_actions = use_improved_actions
 
     def get_action(self, observation: np.ndarray, price: Optional[float] = None, **kwargs) -> int:
         # Extract current price from observation if not provided
         if price is None:
-            # Assuming first feature is normalized price
-            # In practice, you'd need to denormalize or use actual price
-            price = observation[-1, 0]  # Last timestep, first feature
+            price = observation[-1, 0]
 
         self.price_history.append(price)
 
+        if self.use_improved_actions:
+            hold_action = 0
+            buy_action = 3
+            sell_action = 5 # SELL_ALL
+        else:
+            hold_action = 1
+            buy_action = 3
+            sell_action = 0
+
         # Not enough data yet
         if len(self.price_history) < self.lookback:
-            return 1  # HOLD
+            return hold_action
 
         # Calculate momentum
         current_price = self.price_history[-1]
@@ -92,16 +109,13 @@ class MomentumStrategy:
 
         # Trading logic
         if momentum > self.threshold and not self.has_position:
-            # Positive momentum, buy
             self.has_position = True
-            return 3  # BUY_LARGE
+            return buy_action
         elif momentum < -self.threshold and self.has_position:
-            # Negative momentum, sell
             self.has_position = False
-            return 0  # SELL
+            return sell_action
         else:
-            # Hold current position
-            return 1  # HOLD
+            return hold_action
 
     def reset(self):
         self.price_history = []
@@ -113,34 +127,27 @@ class SimpleMomentumStrategy:
     Simplified momentum strategy using observation directly.
     """
 
-    def __init__(self, threshold: float = 0.0):
-        """
-        Initialize simple momentum strategy.
-
-        Args:
-            threshold: Threshold for momentum signal
-        """
+    def __init__(self, threshold: float = 0.0, use_improved_actions: bool = True):
         self.threshold = threshold
         self.prev_price = None
         self.has_position = False
+        self.use_improved_actions = use_improved_actions
 
     def get_action(self, observation: np.ndarray, **kwargs) -> int:
-        """
-        Get action based on simple momentum.
-
-        Args:
-            observation: Current observation (last price)
-            **kwargs: Additional parameters
-
-        Returns:
-            Action
-        """
-        # Get current price (from last timestep of observation)
         current_price = observation[-1, 0]
+
+        if self.use_improved_actions:
+            hold_action = 0
+            buy_action = 3
+            sell_action = 5
+        else:
+            hold_action = 1
+            buy_action = 3
+            sell_action = 0
 
         if self.prev_price is None:
             self.prev_price = current_price
-            return 3  # BUY_LARGE initially
+            return buy_action
 
         # Calculate price change
         price_change = (current_price - self.prev_price) / (abs(self.prev_price) + 1e-8)
@@ -148,15 +155,16 @@ class SimpleMomentumStrategy:
         # Trading logic
         if price_change > self.threshold and not self.has_position:
             self.has_position = True
-            action = 3  # BUY_LARGE
+            action = buy_action
         elif price_change < -abs(self.threshold) and self.has_position:
             self.has_position = False
-            action = 0  # SELL
+            action = sell_action
         else:
-            action = 1  # HOLD
+            action = hold_action
 
         self.prev_price = current_price
         return action
+
 
     def reset(self):
         """Reset strategy."""
