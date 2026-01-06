@@ -1112,8 +1112,13 @@ python retrain_and_compare.py --symbol NVDA --algorithms ppo,ensemble
 # Custom training duration
 python retrain_and_compare.py --symbol NVDA --timesteps 500000
 
-# Skip training, only backtest existing models
-python retrain_and_compare.py --symbol GOOGL --skip-training
+# Compare ALL existing models without retraining (comprehensive)
+python retrain_and_compare.py --symbol TEAM --skip-training
+# Shows all models: 4 PPO + 4 RecurrentPPO + 3 Ensemble
+
+# Compare only PPO models (all versions)
+python retrain_and_compare.py --symbol TEAM --algorithms ppo --skip-training
+# Shows all 4 PPO models with timestamps for evolution tracking
 
 # Exclude baseline strategies
 python retrain_and_compare.py --symbol MSFT --no-baselines
@@ -1124,9 +1129,9 @@ python retrain_and_compare.py --symbol MSFT --no-baselines
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
 | `--symbol` | string | **required** | Stock symbol(s) to train on - single or comma-separated (e.g., AAPL or AAPL,TSLA,NVDA) |
-| `--algorithms` | string | `all` | Comma-separated list: `ppo,recurrent_ppo,ensemble` |
+| `--algorithms` | string | `all` | Comma-separated list: `ppo,recurrent_ppo,ensemble`<br>During training: Controls which algorithms to train<br>During `--skip-training`: Controls which algorithm types to backtest (backtests ALL models of selected types) |
 | `--timesteps` | int | `300000` | Training timesteps per algorithm |
-| `--skip-training` | flag | `False` | Skip training, only backtest existing models |
+| `--skip-training` | flag | `False` | Skip training, backtest ALL existing models of selected algorithm types<br>Results show full model names with timestamps (e.g., `ppo_TEAM_20260106_071323`)<br>Enables comparison across model versions to track improvements over time |
 | `--no-baselines` | flag | `False` | Skip baseline strategies (Buy & Hold, Momentum) |
 
 #### What It Does
@@ -1138,10 +1143,12 @@ python retrain_and_compare.py --symbol MSFT --no-baselines
 - Saves both `best_model.zip` (peak performance) and `final_model.zip`
 
 **2. Backtesting Phase**:
-- Automatically finds latest trained models for each algorithm
+- **Default**: Finds ALL models for each selected algorithm type (not just latest)
+- **With `--skip-training`**: Backtests all existing models to enable version comparison
 - Tests on last 9 months of data (280 days)
 - Loads exact training configuration from saved models
 - Compares against Buy & Hold and Momentum strategies
+- Results display full model names with timestamps for tracking improvements
 
 **3. Results Display**:
 ```
@@ -1290,17 +1297,23 @@ Provides comprehensive validation of backtest results to ensure mathematical cor
 ```bash
 source .venv/bin/activate
 
-# Validate all algorithms for a symbol
+# Validate ALL models for a symbol (all algorithms, all versions)
 python validate_backtest.py --symbol AAPL
 
-# Validate all watchlist stocks (all algorithms)
+# Validate all watchlist stocks (all algorithms, all models)
 python validate_backtest.py --watchlist
+
+# Validate ALL PPO models for a symbol (default: all versions)
+python validate_backtest.py --symbol TEAM --algorithm ppo
+# Validates all 4 PPO models with timestamps
 ```
 
 **Advanced Options**:
 ```bash
-# Validate specific algorithm only
-python validate_backtest.py --symbol RIVN --algorithm ppo
+# Validate only LATEST model (faster for quick checks)
+python validate_backtest.py --symbol TEAM --algorithm ppo --latest-only
+
+# Validate specific algorithm across watchlist
 python validate_backtest.py --watchlist --algorithm ensemble
 ```
 
@@ -1311,6 +1324,9 @@ python validate_backtest.py --watchlist --algorithm ensemble
 | `--symbol` | string | N/A | N/A | Stock symbol to validate (mutually exclusive with `--watchlist`) |
 | `--watchlist` | flag | N/A | N/A | Validate all symbols from default watchlist |
 | `--algorithm` | string | `all` | `ppo`, `recurrent_ppo`, `ensemble`, `all` | Algorithm(s) to validate |
+| `--latest-only` | flag | `False` | N/A | Validate only the most recent model (default: validates all models) |
+
+**Note**: By default, the tool validates **ALL available models** for the selected algorithm(s), not just the latest. This enables comprehensive validation across model versions. Results show full model names with timestamps (e.g., `ppo_TEAM_20260106_071323`).
 
 #### Validation Checks
 

@@ -552,16 +552,21 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 After running backtests, you can validate the results for mathematical correctness:
 
 ```bash
-# Validate all algorithms for a symbol
+# Validate ALL models for a symbol (default: all versions)
 python validate_backtest.py --symbol AAPL
 
-# Validate all watchlist stocks (all algorithms)
+# Validate all watchlist stocks (all algorithms, all models)
 python validate_backtest.py --watchlist
 
-# Validate specific algorithm only
-python validate_backtest.py --symbol AAPL --algorithm ppo
-python validate_backtest.py --watchlist --algorithm ensemble
+# Validate ALL PPO models for a symbol
+python validate_backtest.py --symbol TEAM --algorithm ppo
+# Shows results for all PPO models with timestamps
+
+# Validate only the LATEST model (faster)
+python validate_backtest.py --symbol TEAM --algorithm ppo --latest-only
 ```
+
+**Note**: By default, validates **ALL available models** (not just latest) to enable comprehensive validation across model versions.
 
 **What it checks:**
 - Return calculation accuracy
