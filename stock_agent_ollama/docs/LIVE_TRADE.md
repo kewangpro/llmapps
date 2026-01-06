@@ -70,7 +70,7 @@ This document outlines the design for a **live trading simulation system** that 
 - **Fallback:** yfinance library real-time quotes
 - **Frequency:** Configurable update interval (default: 3600 seconds / 1 hour)
   - Match to model training timeframe (hourly/daily)
-  - Real-time data cached for 1 minute to minimize API calls
+  - Multi-tier caching: Real-time (1 min), Intraday (15 min), Bulk (5 min), Info (1 hr), Historical (1 day)
 
 **Data Structure:**
 ```python

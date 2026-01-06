@@ -384,6 +384,7 @@ ACCENT_CYAN = "#0891B2"       # Secondary actions
   - Manual refresh button (🔄 Refresh) to force fresh market data on demand
   - Cache invalidation: Automatically clears cache on manual refresh
   - Real-time quotes: 1 minute cache for live price data
+  - Intraday data: 15 minutes cache for 1m/5m intervals
   - Company fundamentals: 1 hour cache for stable information
   - Historical OHLCV: 1 day cache for long-term charts
   - Automatically updates on browser refresh
@@ -529,7 +530,12 @@ All cards follow consistent styling:
 ### ✅ Real-time Data
 - Live market indices with 5-second UI refresh
 - Real-time watchlist prices with intelligent caching
-- Multi-tier caching system (1 minute to 1 day TTLs)
+- Multi-tier caching system:
+  - Real-time quotes: 1 minute TTL
+  - Intraday data: 15 minutes TTL
+  - Bulk data: 5 minutes TTL
+  - Company info: 1 hour TTL
+  - Historical data: 1 day TTL
 - Auto-refresh capabilities with cache invalidation
 
 ### ✅ LSTM Predictions

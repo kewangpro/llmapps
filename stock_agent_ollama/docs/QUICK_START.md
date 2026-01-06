@@ -343,6 +343,7 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 - ⚡ Real-time data with 5-second UI refresh
 - ⚡ Intelligent multi-tier caching system for optimal performance:
   - Real-time quotes: 1 minute cache for live price data
+  - Intraday data: 15 minutes for 1m/5m intervals
   - Bulk data/Top Movers: 5 minutes cache for high-frequency requests
   - Company fundamentals: 1 hour cache for stable information
   - Historical OHLCV: 1 day cache for long-term charts

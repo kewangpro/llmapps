@@ -585,6 +585,7 @@ The RL system leverages an intelligent multi-tier caching system for optimal per
 
 **Cache Tiers:**
 - **Real-time quotes**: 1 minute TTL for live trading and backtesting
+- **Intraday data**: 15 minutes TTL for 1m/5m interval data
 - **Bulk data**: 5 minutes TTL for Top Movers scanning in auto-select mode
 - **Company fundamentals**: 1 hour TTL for stable company information
 - **Historical OHLCV**: 1 day TTL for training and backtesting data
