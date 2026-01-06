@@ -591,7 +591,9 @@ class ModelsPage(param.Parameterized):
 
                             # Run backtest
                             # Use symbol prefix for multi-symbol support
-                            agent_name = f"[{symbol}] {model['algorithm'].replace('_', ' ')}"
+                            # Include unique model identifier to avoid duplicate keys
+                            model_name_without_symbol = model['name'].replace(f"_{symbol}_", "_", 1)
+                            agent_name = f"[{symbol}] {model_name_without_symbol}"
                             result = engine.run_agent_backtest(agent, deterministic=True)
                             results[agent_name] = result
 
