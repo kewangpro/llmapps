@@ -170,7 +170,7 @@ def test_config_env_variable_override(monkeypatch):
 
 def test_config_rl_training_defaults():
     """Test RL training default values."""
-    assert Config.RL_DEFAULT_TRAINING_TIMESTEPS == 50000
+    assert Config.RL_DEFAULT_TRAINING_TIMESTEPS == 300000  # Recommended default
     assert isinstance(Config.RL_DEFAULT_TRAINING_TIMESTEPS, int)
     assert Config.RL_DEFAULT_TRAINING_TIMESTEPS > 0
 
