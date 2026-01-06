@@ -193,6 +193,7 @@ python src/main.py
 - **RL**: Stable-Baselines3 (PPO) + sb3-contrib (RecurrentPPO) + Custom Ensemble
 - **Data**: Yahoo Finance with intelligent multi-tier caching system
   - Real-time quotes: 1 minute cache for live price data
+  - Intraday data: 15 minutes for 1m/5m intervals
   - Bulk data/Top Movers: 5 minutes for optimal performance
   - Company fundamentals: 1 hour for stable information
   - Historical data: 1 day for long-term charts
@@ -247,6 +248,7 @@ PANEL_PORT=5006                      # Web interface port
 # Data Caching (intelligent multi-tier system)
 CACHE_TTL_SECONDS=3600               # Default cache TTL (1 hour)
 REALTIME_DATA_TTL=60                 # Real-time quotes (1 minute)
+STOCK_DATA_TTL=900                   # Intraday data (15 minutes)
 BULK_DATA_TTL=300                    # Bulk data/Top Movers (5 minutes)
 STOCK_INFO_TTL=3600                  # Company fundamentals (1 hour)
 HISTORICAL_DATA_TTL=86400            # Historical OHLCV data (1 day)
