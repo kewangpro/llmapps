@@ -8,14 +8,20 @@ Usage:
 Options:
     --symbol SYMBOL         Stock symbol(s) to train on - single or comma-separated list
     --watchlist             Train on all symbols from default watchlist
-    --algorithms ALG1,ALG2  Comma-separated list of algorithms to train
+    --algorithms ALG1,ALG2  Comma-separated list of algorithms to train/backtest
                            (options: ppo, recurrent_ppo, ensemble)
                            (default: all)
     --timesteps N          Training timesteps (default: 300000)
-    --skip-training        Skip training, only run backtest
+    --skip-training        Skip training, only run backtest on ALL models
     --no-baselines         Skip baseline strategies in backtest
 
 Note: Either --symbol or --watchlist is required
+
+Backtest Behavior:
+    When --skip-training is used:
+    - With --algorithms ppo: Backtests ALL PPO models for the symbol
+    - With --algorithms all (default): Backtests ALL RL models for the symbol
+    - Results show full model names with timestamps for comparison
 
 Examples:
     # Retrain all algorithms on TSLA
@@ -24,17 +30,17 @@ Examples:
     # Retrain PPO and Ensemble on AAPL
     python retrain_and_compare.py --symbol AAPL --algorithms ppo,ensemble
 
-    # Retrain ensemble on multiple stocks
-    python retrain_and_compare.py --symbol AMZN,AAPL,META --algorithms ensemble
+    # Compare ALL PPO models for TEAM (no training)
+    python retrain_and_compare.py --symbol TEAM --algorithms ppo --skip-training
+
+    # Compare ALL RL models for TEAM (no training)
+    python retrain_and_compare.py --symbol TEAM --skip-training
 
     # Retrain all watchlist symbols with all algorithms
     python retrain_and_compare.py --watchlist
 
     # Retrain watchlist with ensemble only
     python retrain_and_compare.py --watchlist --algorithms ensemble
-
-    # Only backtest existing models for NVDA
-    python retrain_and_compare.py --symbol NVDA --skip-training
 """
 
 import sys
@@ -119,9 +125,24 @@ def find_latest_model(symbol: str, agent_type: str) -> Path:
     Returns:
         Path to model file, or None if not found
     """
+    models = find_all_models(symbol, agent_type)
+    return models[0] if models else None
+
+
+def find_all_models(symbol: str, agent_type: str) -> list:
+    """
+    Find all completed models for a symbol and algorithm type.
+
+    Args:
+        symbol: Stock symbol
+        agent_type: Algorithm type
+
+    Returns:
+        List of paths to model files (newest first), empty list if none found
+    """
     models_dir = Path("data/models/rl")
     if not models_dir.exists():
-        return None
+        return []
 
     # Find all model directories for this symbol and agent type
     pattern = f"{agent_type.lower()}_{symbol}_*"
@@ -132,35 +153,40 @@ def find_latest_model(symbol: str, agent_type: str) -> Path:
     )
 
     if not matching_dirs:
-        return None
+        return []
 
     # Only use completed models (those with final_model.zip)
     # This prevents loading models that are still training
+    completed_models = []
     for model_dir in matching_dirs:
         if agent_type == 'ensemble':
             # Ensemble saves config in a subdirectory
             if (model_dir / "ensemble" / "ensemble_config.json").exists():
-                return model_dir / "ensemble"
+                completed_models.append(model_dir / "ensemble")
         else:
             final_model_path = model_dir / "final_model.zip"
             if final_model_path.exists():
-                return final_model_path
+                completed_models.append(final_model_path)
 
-    # No completed models found
-    return None
+    return completed_models
 
 
-def run_comprehensive_backtest(symbol: str, include_baselines: bool = True) -> dict:
+def run_comprehensive_backtest(symbol: str, algorithms: list = None, include_baselines: bool = True) -> dict:
     """
     Run backtest on all available models and save results.
 
     Args:
         symbol: Stock symbol
+        algorithms: List of algorithm types to backtest (default: all)
         include_baselines: Whether to include baseline strategies
 
     Returns:
         Dictionary of strategy name -> backtest result
     """
+    # Default to all algorithms if not specified
+    if algorithms is None:
+        algorithms = ['ppo', 'recurrent_ppo', 'ensemble']
+
     print(f"\n{'='*80}")
     print(f"📊 COMPREHENSIVE BACKTEST: {symbol}")
     print(f"{'='*80}\n")
@@ -171,77 +197,87 @@ def run_comprehensive_backtest(symbol: str, include_baselines: bool = True) -> d
 
     results = {}
 
-    # Test all algorithms
-    algorithms = ['ppo', 'recurrent_ppo', 'ensemble']
-
+    # Test all specified algorithms - find ALL models for each
     for agent_type in algorithms:
-        logger.info(f"Backtesting {agent_type.upper()}...")
-        model_path = find_latest_model(symbol, agent_type)
+        logger.info(f"Finding all {agent_type.upper()} models...")
+        all_model_paths = find_all_models(symbol, agent_type)
 
-        if not model_path:
-            logger.warning(f"No model found for {agent_type}")
+        if not all_model_paths:
+            logger.warning(f"No models found for {agent_type}")
             continue
 
-        try:
-            # Load training config
-            training_config = load_env_config_from_model(model_path)
+        logger.info(f"Found {len(all_model_paths)} {agent_type.upper()} model(s)")
 
-            # Determine include_trend_indicators
-            include_trend = training_config.get('include_trend_indicators', False)
-            if agent_type == 'recurrent_ppo' or agent_type == 'ensemble':
-                include_trend = True
+        # Backtest each model
+        for model_path in all_model_paths:
+            try:
+                # Extract model directory name for unique identification
+                if agent_type == 'ensemble':
+                    model_dir_name = model_path.parent.name
+                else:
+                    model_dir_name = model_path.parent.name
 
-            # Create backtest config
-            backtest_config = BacktestConfig(
-                symbol=symbol,
-                start_date=start_date,
-                end_date=end_date,
-                use_improved_actions=training_config.get('use_improved_actions', True),
-                include_trend_indicators=include_trend
-            )
+                logger.info(f"Backtesting {model_dir_name}...")
 
-            # Create engine and run backtest
-            engine = BacktestEngine(backtest_config)
+                # Load training config
+                training_config = load_env_config_from_model(model_path)
 
-            # Load agent first to check observation space
-            agent = load_rl_agent(model_path, env=None)
+                # Determine include_trend_indicators
+                include_trend = training_config.get('include_trend_indicators', False)
+                if agent_type == 'recurrent_ppo' or agent_type == 'ensemble':
+                    include_trend = True
 
-            # Setup environment to verify observation space compatibility
-            env = engine.setup_environment()
-            expected_obs_shape = env.observation_space.shape
-
-            # Get model's expected observation space
-            if hasattr(agent, 'observation_space'):
-                model_obs_shape = agent.observation_space.shape
-            elif hasattr(agent, 'policy') and hasattr(agent.policy, 'observation_space'):
-                model_obs_shape = agent.policy.observation_space.shape
-            else:
-                # Can't determine model obs shape, skip validation
-                logger.warning(f"Cannot determine observation space for {agent_type}, attempting backtest anyway")
-                model_obs_shape = expected_obs_shape
-
-            # Check if observation spaces match
-            if model_obs_shape != expected_obs_shape:
-                logger.warning(
-                    f"Skipping {agent_type}: observation space mismatch. "
-                    f"Model expects {model_obs_shape}, environment provides {expected_obs_shape}. "
-                    f"This model was trained before action masks were added. Please retrain."
+                # Create backtest config
+                backtest_config = BacktestConfig(
+                    symbol=symbol,
+                    start_date=start_date,
+                    end_date=end_date,
+                    use_improved_actions=training_config.get('use_improved_actions', True),
+                    include_trend_indicators=include_trend
                 )
-                continue
 
-            result = engine.run_agent_backtest(agent, deterministic=True)
+                # Create engine and run backtest
+                engine = BacktestEngine(backtest_config)
 
-            # Store result
-            display_name = agent_type.upper().replace('_', ' ')
-            results[f"{display_name} Agent"] = result
+                # Load agent first to check observation space
+                agent = load_rl_agent(model_path, env=None)
 
-            # Save backtest results to model directory for auto-select to use
-            result.save_to_model_dir(model_path, agent_type)
+                # Setup environment to verify observation space compatibility
+                env = engine.setup_environment()
+                expected_obs_shape = env.observation_space.shape
 
-            print(f"   ✅ {display_name}: {result.metrics.total_return_pct:+.2f}%")
+                # Get model's expected observation space
+                if hasattr(agent, 'observation_space'):
+                    model_obs_shape = agent.observation_space.shape
+                elif hasattr(agent, 'policy') and hasattr(agent.policy, 'observation_space'):
+                    model_obs_shape = agent.policy.observation_space.shape
+                else:
+                    # Can't determine model obs shape, skip validation
+                    logger.warning(f"Cannot determine observation space for {model_dir_name}, attempting backtest anyway")
+                    model_obs_shape = expected_obs_shape
 
-        except Exception as e:
-            logger.error(f"Failed to backtest {agent_type}: {e}", exc_info=True)
+                # Check if observation spaces match
+                if model_obs_shape != expected_obs_shape:
+                    logger.warning(
+                        f"Skipping {model_dir_name}: observation space mismatch. "
+                        f"Model expects {model_obs_shape}, environment provides {expected_obs_shape}. "
+                        f"This model was trained before action masks were added. Please retrain."
+                    )
+                    continue
+
+                result = engine.run_agent_backtest(agent, deterministic=True)
+
+                # Store result with full model name (including timestamp) for uniqueness
+                display_name = model_dir_name
+                results[display_name] = result
+
+                # Save backtest results to model directory for auto-select to use
+                result.save_to_model_dir(model_path, agent_type)
+
+                print(f"   ✅ {model_dir_name}: {result.metrics.total_return_pct:+.2f}%")
+
+            except Exception as e:
+                logger.error(f"Failed to backtest {model_path}: {e}", exc_info=True)
 
     # Run baseline strategies
     if include_baselines:
@@ -353,7 +389,14 @@ def analyze_results(results: dict):
     # Check for action collapse in RL agents
     print(f"\n📊 Action Distribution Analysis:")
     for strategy, result in results.items():
-        if "Agent" in strategy:
+        # Check if this is an RL model (starts with ppo_, recurrent_ppo_, or ensemble_)
+        # or old format with "Agent" in the name
+        is_rl_agent = (
+            strategy.startswith(('ppo_', 'recurrent_ppo_', 'ensemble_')) or
+            "Agent" in strategy
+        )
+
+        if is_rl_agent:
             # Calculate action counts from actions list
             action_counts = Counter(result.actions)
             total = len(result.actions)
@@ -467,7 +510,8 @@ def main():
             sys.exit(1)
 
     # Optimization: If retraining ensemble, don't retrain individual models as they are included
-    if 'ensemble' in algorithms:
+    # BUT: If skip-training, we want to backtest ALL models, so skip this optimization
+    if not args.skip_training and 'ensemble' in algorithms:
         if 'ppo' in algorithms or 'recurrent_ppo' in algorithms:
             print("\nℹ️  Optimization: 'ensemble' training includes PPO and RecurrentPPO.")
             print("    Skipping separate training for individual models to avoid redundancy.")
@@ -505,6 +549,7 @@ def main():
         print(f"\n📌 Running Comprehensive Backtest for {symbol}")
         results = run_comprehensive_backtest(
             symbol,
+            algorithms=algorithms,
             include_baselines=not args.no_baselines
         )
 

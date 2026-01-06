@@ -51,9 +51,12 @@ def print_warning(message: str):
     print(f"{YELLOW}⚠️  WARNING: {message}{RESET}")
 
 
-def load_backtest_results(symbol: str, algorithm: str) -> Dict[str, Any]:
-    """Load backtest results from file"""
-    # Find the model directory (models are stored flat in data/models/rl/)
+def find_all_models(symbol: str, algorithm: str) -> List[Path]:
+    """Find all model directories matching symbol and algorithm
+
+    Returns:
+        List of Path objects for matching model directories (newest first)
+    """
     models_dir = Path("data/models/rl")
 
     if not models_dir.exists():
@@ -75,20 +78,33 @@ def load_backtest_results(symbol: str, algorithm: str) -> Dict[str, Any]:
         print(f"{RED}Error: No models found for {symbol} {algorithm}{RESET}")
         sys.exit(1)
 
-    model_dir = matching_dirs[0]
+    return matching_dirs
+
+
+def load_backtest_results(model_dir: Path) -> Tuple[Dict[str, Any], str]:
+    """Load backtest results from a specific model directory
+
+    Args:
+        model_dir: Path to the model directory
+
+    Returns:
+        Tuple of (data, model_name) where model_name is the directory name
+    """
+    model_name = model_dir.name
     backtest_file = model_dir / "backtest_results.json"
 
     if not backtest_file.exists():
         print(f"{RED}Error: No backtest results found at {backtest_file}{RESET}")
-        print(f"Run backtest first: python -m src.tools.backtest_cli {symbol} {algorithm}")
-        sys.exit(1)
+        print(f"{YELLOW}Run backtest first to generate results{RESET}")
+        raise FileNotFoundError(f"No backtest results at {backtest_file}")
 
     print(f"{BLUE}Loading backtest from: {backtest_file}{RESET}")
+    print(f"{BLUE}Model: {model_name}{RESET}")
 
     with open(backtest_file) as f:
         data = json.load(f)
 
-    return data
+    return data, model_name
 
 
 def validate_return_calculation(data: Dict[str, Any]) -> bool:
@@ -417,11 +433,16 @@ def validate_reproducibility(symbol: str, algorithm: str, data: Dict[str, Any]) 
     return True
 
 
-def generate_validation_report(symbol: str, algorithm: str) -> Tuple[int, int]:
+def generate_validation_report(model_dir: Path, symbol: str, algorithm: str) -> Tuple[int, int, str]:
     """Generate complete validation report
 
+    Args:
+        model_dir: Path to the model directory
+        symbol: Stock symbol (for display)
+        algorithm: Algorithm type (for display)
+
     Returns:
-        Tuple of (passed_checks, total_checks)
+        Tuple of (passed_checks, total_checks, model_name)
     """
     print()
     print(f"{BOLD}{BLUE}╔{'═'*68}╗{RESET}")
@@ -433,10 +454,10 @@ def generate_validation_report(symbol: str, algorithm: str) -> Tuple[int, int]:
 
     # Load data
     try:
-        data = load_backtest_results(symbol, algorithm)
+        data, model_name = load_backtest_results(model_dir)
     except Exception as e:
         print(f"{RED}Error loading backtest results: {e}{RESET}")
-        return 0, 8
+        return 0, 8, "Unknown"
 
     # Run all validation checks
     results = {}
@@ -454,7 +475,7 @@ def generate_validation_report(symbol: str, algorithm: str) -> Tuple[int, int]:
         print(f"{RED}Error during validation: {e}{RESET}")
         import traceback
         traceback.print_exc()
-        return 0, 8
+        return 0, 8, model_name
 
     # Summary
     print_header("VALIDATION SUMMARY")
@@ -487,7 +508,7 @@ def generate_validation_report(symbol: str, algorithm: str) -> Tuple[int, int]:
     if data.get('win_rate', 0) > 80.0:
         print(f"{YELLOW}Recommendation: Manually verify several trades for correctness{RESET}")
 
-    return passed, total
+    return passed, total, model_name
 
 
 def main():
@@ -497,16 +518,26 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Validate all PPO models for TEAM
+  python validate_backtest.py --symbol TEAM --algorithm ppo
+
+  # Validate only the most recent PPO model for TEAM
+  python validate_backtest.py --symbol TEAM --algorithm ppo --latest-only
+
+  # Validate all models for RIVN (all algorithms)
   python validate_backtest.py --symbol RIVN
-  python validate_backtest.py --symbol RIVN --algorithm ppo
+
+  # Validate all models in watchlist
   python validate_backtest.py --watchlist
-  python validate_backtest.py --watchlist --algorithm ensemble
 
 Algorithms (default: all):
   ppo              - Proximal Policy Optimization
   recurrent_ppo    - RecurrentPPO with LSTM memory
   ensemble         - Ensemble of PPO + RecurrentPPO
   all              - Validate all algorithms (default)
+
+Options:
+  --latest-only    - Validate only the most recent model (default: validate all)
         """
     )
 
@@ -533,6 +564,12 @@ Algorithms (default: all):
         help='RL algorithm(s) to validate (default: all)'
     )
 
+    parser.add_argument(
+        '--latest-only',
+        action='store_true',
+        help='Validate only the most recent model (default: validate all models)'
+    )
+
     args = parser.parse_args()
 
     # Determine symbols to validate
@@ -553,31 +590,58 @@ Algorithms (default: all):
 
     # Validate all combinations
     validation_results = []
+    total_models_found = 0
+
     for symbol in symbols:
         for algorithm in algorithms:
-            passed, total = generate_validation_report(symbol, algorithm)
-            validation_results.append({
-                'symbol': symbol,
-                'algorithm': algorithm,
-                'passed': passed,
-                'total': total,
-                'success_rate': (passed / total * 100) if total > 0 else 0
-            })
+            # Find all matching models
+            try:
+                all_models = find_all_models(symbol, algorithm)
+                total_models_found += len(all_models)
+
+                # Filter to latest only if requested
+                if args.latest_only:
+                    models_to_validate = [all_models[0]]
+                    print(f"{BLUE}Validating latest model only (found {len(all_models)} total){RESET}\n")
+                else:
+                    models_to_validate = all_models
+                    print(f"{BLUE}Validating all {len(all_models)} model(s) for {symbol} {algorithm.upper()}{RESET}\n")
+
+                # Validate each model
+                for model_dir in models_to_validate:
+                    passed, total, model_name = generate_validation_report(model_dir, symbol, algorithm)
+                    validation_results.append({
+                        'symbol': symbol,
+                        'algorithm': algorithm,
+                        'model_name': model_name,
+                        'passed': passed,
+                        'total': total,
+                        'success_rate': (passed / total * 100) if total > 0 else 0
+                    })
+
+            except SystemExit:
+                # No models found for this combination, skip
+                continue
+
+    # Check if any models were validated
+    if not validation_results:
+        print(f"{RED}❌ No models found to validate{RESET}")
+        sys.exit(1)
 
     # Print overall summary if validating multiple combinations
     if len(validation_results) > 1:
         print()
-        print(f"{BOLD}{BLUE}{'='*80}{RESET}")
-        print(f"{BOLD}{BLUE}{'OVERALL VALIDATION SUMMARY'.center(80)}{RESET}")
-        print(f"{BOLD}{BLUE}{'='*80}{RESET}\n")
+        print(f"{BOLD}{BLUE}{'='*120}{RESET}")
+        print(f"{BOLD}{BLUE}{'OVERALL VALIDATION SUMMARY'.center(120)}{RESET}")
+        print(f"{BOLD}{BLUE}{'='*120}{RESET}\n")
 
-        # Summary table
-        print(f"{'Symbol':<10} {'Algorithm':<15} {'Passed':<10} {'Success Rate':<15} {'Status'}")
-        print(f"{'-'*80}")
+        # Summary table with full model names
+        print(f"{'Symbol':<10} {'Model':<50} {'Passed':<10} {'Success Rate':<15} {'Status'}")
+        print(f"{'-'*120}")
 
         for result in validation_results:
             symbol = result['symbol']
-            algo = result['algorithm'].upper()
+            model_name = result['model_name']
             passed = f"{result['passed']}/{result['total']}"
             success = f"{result['success_rate']:.1f}%"
 
@@ -588,7 +652,7 @@ Algorithms (default: all):
             else:
                 status = f"{RED}❌ FAIL{RESET}"
 
-            print(f"{symbol:<10} {algo:<15} {passed:<10} {success:<15} {status}")
+            print(f"{symbol:<10} {model_name:<50} {passed:<10} {success:<15} {status}")
 
         # Overall stats
         total_checks = sum(r['total'] for r in validation_results)
@@ -605,7 +669,7 @@ Algorithms (default: all):
             failed_count = sum(1 for r in validation_results if r['passed'] < r['total'])
             print(f"{YELLOW}{BOLD}⚠️  {failed_count} validation(s) need attention{RESET}")
 
-        print(f"{BOLD}{BLUE}{'='*80}{RESET}\n")
+        print(f"{BOLD}{BLUE}{'='*120}{RESET}\n")
 
 
 if __name__ == "__main__":

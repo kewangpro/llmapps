@@ -360,8 +360,13 @@ python retrain_and_compare.py --watchlist --algorithms ensemble
 # Train only PPO and Ensemble
 python retrain_and_compare.py --symbol TSLA --algorithms ppo,ensemble
 
-# Compare existing models without retraining
-python retrain_and_compare.py --symbol MSFT --skip-training
+# Compare ALL existing models without retraining (comprehensive comparison)
+python retrain_and_compare.py --symbol TEAM --skip-training
+# Shows all 11 models: 4 PPO + 4 RecurrentPPO + 3 Ensemble
+
+# Compare only PPO models (all versions)
+python retrain_and_compare.py --symbol TEAM --algorithms ppo --skip-training
+# Shows all 4 PPO models with timestamps for evolution tracking
 
 # Skip baseline strategies in comparison
 python retrain_and_compare.py --symbol NVDA --no-baselines
@@ -371,8 +376,12 @@ python retrain_and_compare.py --symbol NVDA --no-baselines
 - `--symbol`: Single stock or comma-separated list (e.g., `AAPL` or `AAPL,TSLA,NVDA`)
 - `--watchlist`: Train on all symbols from default watchlist (mutually exclusive with `--symbol`)
 - `--algorithms`: Comma-separated list of `ppo`, `recurrent_ppo`, `ensemble` (default: all)
+  - During training: Controls which algorithms to train
+  - During `--skip-training`: Controls which algorithm types to backtest (backtests ALL models of selected types)
 - `--timesteps`: Training steps (default: 300,000)
-- `--skip-training`: Only run backtest on existing models
+- `--skip-training`: Skip training, backtest ALL existing models of selected algorithm types
+  - Results show full model names with timestamps (e.g., `ppo_TEAM_20260106_071323`)
+  - Enables comparison across model versions to track improvements over time
 - `--no-baselines`: Skip Buy & Hold and Momentum strategies
 
 The tool handles model training, backtesting, and comprehensive strategy comparison automatically. Note that training the `ensemble` algorithm automatically trains and saves the individual `ppo` and `recurrent_ppo` models as part of the process, making it the most efficient way to generate all three agents.
@@ -380,31 +389,49 @@ The tool handles model training, backtesting, and comprehensive strategy compari
 **Backtest Validation:**
 The `validate_backtest.py` tool provides comprehensive validation of backtest results:
 ```bash
-# Validate single stock (all algorithms)
+# Validate ALL PPO models for a symbol (default behavior)
+python validate_backtest.py --symbol TEAM --algorithm ppo
+# Validates all 4 PPO models: shows which specific model passed/failed
+
+# Validate ALL models for a symbol (all algorithms)
 python validate_backtest.py --symbol RIVN
+# Validates all PPO + RecurrentPPO + Ensemble models
 
-# Validate all watchlist stocks (all algorithms)
+# Validate all watchlist stocks (all algorithms, all models)
 python validate_backtest.py --watchlist
+# Comprehensive validation across entire portfolio
 
-# Validate specific algorithm only
-python validate_backtest.py --symbol RIVN --algorithm ppo
+# Validate only the LATEST model (faster for quick checks)
+python validate_backtest.py --symbol TEAM --algorithm ppo --latest-only
+# Validates only ppo_TEAM_20260106_071323 (newest)
+
+# Validate specific algorithm across watchlist
 python validate_backtest.py --watchlist --algorithm ensemble
 ```
 
 **Validation Checks:**
 - Return calculation accuracy
-- Action distribution integrity
-- Win rate calculation
-- Portfolio value consistency
-- Metrics reasonableness (Sharpe ratio, drawdown)
-- Individual trade P&L validation
-- Transaction cost inclusion
-- Reproducibility testing
+- Action distribution integrity (sums to 100%)
+- Win rate calculation correctness
+- Portfolio value consistency (initial/final match)
+- Metrics reasonableness (Sharpe ratio, drawdown thresholds)
+- Individual trade P&L validation (samples 5 trades)
+- Transaction cost inclusion verification
+- Reproducibility testing guidance
 
 **Options:**
 - `--symbol`: Stock symbol to validate (e.g., RIVN, TSLA, AAPL)
 - `--watchlist`: Validate all symbols from default watchlist
-- `--algorithm`: `ppo`, `recurrent_ppo`, `ensemble`, or `all`
+- `--algorithm`: `ppo`, `recurrent_ppo`, `ensemble`, or `all` (default: all)
+- `--latest-only`: Validate only the most recent model (default: validates all models)
+
+**Output Format:**
+Results show full model names with timestamps for clarity:
+```
+Symbol     Model                                              Passed     Success Rate    Status
+TEAM       ppo_TEAM_20260106_071323                          8/8        100.0%          ✅ PASS
+TEAM       ppo_TEAM_20251230_154251                          8/8        100.0%          ✅ PASS
+```
 
 ---
 
