@@ -687,7 +687,6 @@ class RLTrainingPanel(param.Parameterized):
                     action_counts[action_name] += 1
 
             total_actions = sum(action_counts.values())
-            total_trades = len(result.trades)
 
             combined_html += f"<tr style='border: 1px solid #e5e7eb;'>"
             combined_html += f"<td style='padding: 10px; font-weight: bold;'>{name}</td>"
@@ -714,7 +713,7 @@ class RLTrainingPanel(param.Parameterized):
                 combined_html += f"<span style='color: #9ca3af; font-size: 11px;'>({pct:.0f}%)</span>"
                 combined_html += "</td>"
 
-            combined_html += f"<td style='padding: 10px; text-align: center; font-weight: bold; color: #059669;'>{total_trades}</td>"
+            combined_html += f"<td style='padding: 10px; text-align: center; font-weight: bold; color: #059669;'>{m.total_executed}</td>"
             combined_html += "</tr>"
 
         combined_html += "</tbody></table></div>"
