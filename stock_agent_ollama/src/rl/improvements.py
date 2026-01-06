@@ -267,27 +267,28 @@ class RecurrentPPORewardConfig(PPORewardConfig):
 
     RecurrentPPO uses LSTM memory with trend indicators for temporal pattern recognition.
     This config encourages trend-following behavior:
-    - Strong HOLD incentive during uptrends
+    - Moderate HOLD incentive during uptrends
     - Momentum trend bonus for riding winners
-    - Minimal penalties to avoid premature exits
+    - Balanced penalties to avoid premature exits but protect gains
     - Encourages fuller position sizing
     """
-    # Minimal penalties to allow full trend riding
-    risk_penalty_weight: float = 0.05  # Further reduced
-    drawdown_penalty_weight: float = 0.1  # Further reduced
+    # Balanced penalties to allow trend riding while protecting gains
+    risk_penalty_weight: float = 0.1  # Increased from 0.05
+    drawdown_penalty_weight: float = 0.2  # Increased from 0.1
 
-    # Very strong HOLD incentive during winning positions
-    hold_winning_position_bonus: float = 0.5  # Increased from 0.15
+    # Moderate HOLD incentive during winning positions
+    # (Reduced from 0.5 to prevent being 'too sticky' to positions)
+    hold_winning_position_bonus: float = 0.15
 
     # Momentum bonus for staying invested during uptrends
-    momentum_trend_bonus: float = 0.3  # NEW: Bonus for holding during strong momentum
+    momentum_trend_bonus: float = 0.2  # Reduced from 0.3
 
     # INCREASED to prevent high-frequency trading with daily-trained models
     # RecurrentPPO with LSTM should learn to hold positions, not churn
-    excessive_trading_penalty: float = -0.3  # Increased from -0.02
+    excessive_trading_penalty: float = -0.3
 
     # Strong reward for profitable trades
-    profitable_trade_bonus: float = 0.5  # Further increased
+    profitable_trade_bonus: float = 0.3  # Reduced from 0.5
 
     # Minimal transaction costs
     transaction_cost_rate: float = 0.001  # Further reduced

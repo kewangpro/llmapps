@@ -273,8 +273,32 @@ class EnsemblePPOAgent:
         ]
         
         if (is_ppo_buy and is_rppo_sell) or (is_ppo_sell and is_rppo_buy):
-            logger.debug(f"Conflict Resolution: Opposing actions (PPO={ppo_action}, RPPO={rppo_action}) -> HOLD")
-            return int(ImprovedTradingAction.HOLD)
+            # Directional disagreement: check if one model is much more confident than the other
+            try:
+                ppo_probs = self._get_action_probabilities(self.ppo, ppo_observation, None)
+                rppo_probs = self._get_action_probabilities(
+                    self.recurrent_ppo, rppo_observation, state, episode_start
+                )
+                
+                ppo_conf = ppo_probs[ppo_action]
+                rppo_conf = rppo_probs[rppo_action]
+                
+                ppo_score = self.ppo_weight * ppo_conf
+                rppo_score = self.recurrent_ppo_weight * rppo_conf
+                
+                # If one model's weighted score is > 2.5x the other, follow it despite disagreement
+                if ppo_score > rppo_score * 2.5:
+                    logger.debug(f"Conflict Resolution: PPO wins via high confidence ({ppo_score:.3f} vs {rppo_score:.3f})")
+                    return ppo_action
+                if rppo_score > ppo_score * 2.5:
+                    logger.debug(f"Conflict Resolution: RPPO wins via high confidence ({rppo_score:.3f} vs {ppo_score:.3f})")
+                    return rppo_action
+                
+                logger.debug(f"Conflict Resolution: Directional disagreement (PPO={ppo_action}, RPPO={rppo_action}) -> HOLD")
+                return int(ImprovedTradingAction.HOLD)
+            except Exception as e:
+                logger.warning(f"Confidence check failed in conflict resolution: {e}")
+                return int(ImprovedTradingAction.HOLD)
             
         try:
             # Get action probabilities from both models (with appropriate observations)
