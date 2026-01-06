@@ -48,7 +48,7 @@ class Config:
     RL_DEFAULT_INITIAL_BALANCE = float(os.getenv("RL_INITIAL_BALANCE", "100000.0"))
     RL_TRANSACTION_COST_RATE = float(os.getenv("RL_TRANSACTION_COST", "0.0"))
     RL_SLIPPAGE_RATE = float(os.getenv("RL_SLIPPAGE", "0.0005"))
-    RL_DEFAULT_TRAINING_TIMESTEPS = int(os.getenv("RL_TRAINING_TIMESTEPS", "50000"))
+    RL_DEFAULT_TRAINING_TIMESTEPS = int(os.getenv("RL_TRAINING_TIMESTEPS", "300000"))
     RL_LOOKBACK_WINDOW = int(os.getenv("RL_LOOKBACK_WINDOW", "60"))
     RL_MAX_POSITION_PCT = float(os.getenv("RL_MAX_POSITION_PCT", "80.0"))
     RL_STOP_LOSS_PCT = float(os.getenv("RL_STOP_LOSS_PCT", "0.05"))
