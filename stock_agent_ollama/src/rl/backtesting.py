@@ -66,6 +66,7 @@ class PerformanceMetrics:
 
     # Trading metrics
     total_trades: int
+    total_executed: int  # Non-HOLD actions (BUY/SELL actions)
     winning_trades: int
     losing_trades: int
     win_rate: float
@@ -97,6 +98,7 @@ class PerformanceMetrics:
             'max_drawdown_duration': self.max_drawdown_duration,
             'avg_drawdown': self.avg_drawdown,
             'total_trades': self.total_trades,
+            'total_executed': self.total_executed,
             'winning_trades': self.winning_trades,
             'losing_trades': self.losing_trades,
             'win_rate': self.win_rate,
@@ -346,7 +348,8 @@ class MetricsCalculator:
         trades: List[Dict],
         initial_balance: float,
         risk_free_rate: float = 0.0,
-        trading_days_per_year: int = 252
+        trading_days_per_year: int = 252,
+        actions: Optional[List[int]] = None
     ) -> PerformanceMetrics:
         """
         Calculate all performance metrics.
@@ -357,6 +360,7 @@ class MetricsCalculator:
             initial_balance: Initial portfolio value
             risk_free_rate: Annual risk-free rate
             trading_days_per_year: Trading days per year
+            actions: List of actions taken (optional, for calculating executed actions)
 
         Returns:
             PerformanceMetrics object
@@ -377,6 +381,14 @@ class MetricsCalculator:
         # Trading metrics
         trading_metrics = MetricsCalculator.calculate_trading_metrics(trades)
 
+        # Calculate total executed actions (non-HOLD actions)
+        # Action 0 is HOLD in improved action space
+        if actions is not None:
+            total_executed = sum(1 for action in actions if action != 0)
+        else:
+            # Fallback to total_trades if actions not provided
+            total_executed = trading_metrics['total_trades']
+
         # Create PerformanceMetrics object
         metrics = PerformanceMetrics(
             cumulative_return=returns_metrics['cumulative_return'],
@@ -392,6 +404,7 @@ class MetricsCalculator:
             max_drawdown_duration=drawdown_metrics['max_drawdown_duration'],
             avg_drawdown=drawdown_metrics['avg_drawdown'],
             total_trades=trading_metrics['total_trades'],
+            total_executed=total_executed,
             winning_trades=trading_metrics['winning_trades'],
             losing_trades=trading_metrics['losing_trades'],
             win_rate=trading_metrics['win_rate'],
@@ -721,7 +734,8 @@ class BacktestEngine:
             portfolio_values=portfolio_values_array,
             trades=trades,
             initial_balance=self.config.initial_balance,
-            risk_free_rate=self.config.risk_free_rate
+            risk_free_rate=self.config.risk_free_rate,
+            actions=actions
         )
 
         # Create equity curve DataFrame
@@ -852,7 +866,8 @@ class BacktestEngine:
             portfolio_values=portfolio_values_array,
             trades=trades,
             initial_balance=self.config.initial_balance,
-            risk_free_rate=self.config.risk_free_rate
+            risk_free_rate=self.config.risk_free_rate,
+            actions=actions
         )
 
         # Create equity curve
