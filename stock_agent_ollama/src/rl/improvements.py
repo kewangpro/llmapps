@@ -206,17 +206,22 @@ class EnhancedRewardConfig:
     # Penalties
     # Balanced to discourage invalid actions without causing action collapse
     invalid_action_penalty: float = -1.0
-    # INCREASED to discourage high-frequency "churning" behavior in live trading
-    # Models trained on daily data should not trade every minute
-    excessive_trading_penalty: float = -0.5  # Increased from -0.1
+    # Excessive trading penalty: applied when trading consecutively
+    excessive_trading_penalty: float = -0.1
     # QRDQN/SAC work well with lighter penalties (learn risk naturally via Q-values)
     risk_penalty_weight: float = 0.01
     drawdown_penalty_weight: float = 0.05
 
-    # Bonuses
-    profitable_trade_bonus: float = 0.1
-    sharpe_bonus_weight: float = 0.2
-    valid_action_bonus: float = 0.1
+    # Bonuses (REDUCED significantly to prevent noise-driven overtrading)
+    profitable_trade_bonus: float = 0.01
+    sharpe_bonus_weight: float = 0.1
+    valid_action_bonus: float = 0.01
+
+    # Hold & Diversity (Consistent across models)
+    diversity_bonus: float = 0.1
+    diversity_penalty: float = -0.2
+    base_hold_incentive: float = 0.01
+    hold_winning_position_bonus: float = 0.05
 
     # Transaction costs
     # QRDQN/SAC learn from costs naturally, weak penalty allows optimal trading frequency
@@ -231,10 +236,10 @@ class EnhancedRewardConfig:
     # Advanced
     min_hold_steps: int = 5  # Minimum steps to hold before selling
 
-    # Legacy fields (not used in current implementation)
-    action_diversity_bonus: float = 0.1  # NOT USED
-    hold_winner_bonus: float = 0.1  # NOT USED
-    diversity_window: int = 50  # NOT USED
+    # Legacy fields (kept for backward compatibility with older models)
+    action_diversity_bonus: float = 0.1
+    hold_winner_bonus: float = 0.1
+    diversity_window: int = 50
 
 
 @dataclass
@@ -246,18 +251,20 @@ class PPORewardConfig(EnhancedRewardConfig):
     - Entropy-based exploration (vs epsilon-greedy)
     - On-policy learning (discards experiences)
     - Prone to action collapse
-
-    These stronger values help prevent collapse.
     """
     # Stronger penalties to discourage collapse
     risk_penalty_weight: float = 0.3
     drawdown_penalty_weight: float = 0.5
 
     # Stronger diversity bonus to prevent action collapse
-    action_diversity_bonus: float = 1.0
+    diversity_bonus: float = 0.5
+    diversity_penalty: float = -0.5
 
     # Higher transaction costs to discourage overtrading
     transaction_cost_rate: float = 0.002
+
+    # Stronger HOLD incentive to combat PPO's tendency to overtrade
+    base_hold_incentive: float = 0.05
 
 
 @dataclass
@@ -266,32 +273,23 @@ class RecurrentPPORewardConfig(PPORewardConfig):
     Reward configuration optimized for RecurrentPPO.
 
     RecurrentPPO uses LSTM memory with trend indicators for temporal pattern recognition.
-    This config encourages trend-following behavior:
-    - Moderate HOLD incentive during uptrends
-    - Momentum trend bonus for riding winners
-    - Balanced penalties to avoid premature exits but protect gains
-    - Encourages fuller position sizing
     """
-    # Balanced penalties to allow trend riding while protecting gains
-    risk_penalty_weight: float = 0.1  # Increased from 0.05
-    drawdown_penalty_weight: float = 0.2  # Increased from 0.1
+    # Balanced penalties for trend following
+    risk_penalty_weight: float = 0.1
+    drawdown_penalty_weight: float = 0.2
 
-    # Moderate HOLD incentive during winning positions
-    # (Reduced from 0.5 to prevent being 'too sticky' to positions)
-    hold_winning_position_bonus: float = 0.15
+    # Higher incentives for holding winning positions
+    hold_winning_position_bonus: float = 0.2
+    momentum_trend_bonus: float = 0.3
 
-    # Momentum bonus for staying invested during uptrends
-    momentum_trend_bonus: float = 0.2  # Reduced from 0.3
+    # Penalize high-frequency trading
+    excessive_trading_penalty: float = -0.2
 
-    # INCREASED to prevent high-frequency trading with daily-trained models
-    # RecurrentPPO with LSTM should learn to hold positions, not churn
-    excessive_trading_penalty: float = -0.3
-
-    # Strong reward for profitable trades
-    profitable_trade_bonus: float = 0.3  # Reduced from 0.5
+    # Profitable trade bonus (kept moderate)
+    profitable_trade_bonus: float = 0.05
 
     # Minimal transaction costs
-    transaction_cost_rate: float = 0.001  # Further reduced
+    transaction_cost_rate: float = 0.001
 
 
 class EnhancedRewardFunction:
@@ -407,22 +405,27 @@ class EnhancedRewardFunction:
 
         # === 2. ACTION SEQUENCE SHAPING ===
         if self.config.use_action_shaping:
-            # Penalize excessive trading (same action repeatedly)
-            # FIX 2.0: Start penalty IMMEDIATELY on first repeat (not 2nd!)
+            # Penalize excessive trading (any trading action after another)
             is_trading_action = action != (ImprovedTradingAction.HOLD if self.use_improved_actions
                                           else TradingAction.HOLD)
+            was_trading_action = self.prev_action != (ImprovedTradingAction.HOLD if self.use_improved_actions
+                                                     else TradingAction.HOLD)
 
-            if action == self.prev_action and is_trading_action:
+            if is_trading_action and was_trading_action:
                 self.consecutive_same_actions += 1
-
-                # Progressive penalty: START AT FIRST REPEAT
-                if self.consecutive_same_actions >= 1:  # Changed from >= 2
-                    # Scale penalty: 1x, 2x, 3x, 4x, 5x (cap at 5x)
-                    penalty_multiplier = min(self.consecutive_same_actions, 5)  # Removed -1
-                    progressive_penalty = self.config.excessive_trading_penalty * penalty_multiplier
-                    reward += progressive_penalty  # excessive_trading_penalty is negative
-                    logger.debug(f"Consecutive action penalty ({self.consecutive_same_actions}x): {progressive_penalty:.4f}")
-            else:
+                
+                # Progressive penalty for any consecutive trading
+                penalty_multiplier = min(self.consecutive_same_actions, 5)
+                progressive_penalty = self.config.excessive_trading_penalty * penalty_multiplier
+                
+                # Double penalty if it's the EXACT same action (discourage hyper-churn)
+                if action == self.prev_action:
+                    progressive_penalty *= 2.0
+                    
+                reward += progressive_penalty
+                logger.debug(f"Consecutive trading penalty ({self.consecutive_same_actions}x): {progressive_penalty:.4f}")
+            elif not is_trading_action:
+                # Reset when agent chooses to HOLD
                 self.consecutive_same_actions = 0
 
             # Encourage holding after buying
