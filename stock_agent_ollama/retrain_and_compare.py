@@ -308,7 +308,7 @@ def display_results(results: dict):
             'Return': f"{metrics.total_return_pct:+.2f}%",
             'Sharpe': f"{metrics.sharpe_ratio:.2f}",
             'Max DD': f"{metrics.max_drawdown * 100:.2f}%",
-            'Win Rate': f"{metrics.win_rate:.0f}%",
+            'Win Rate': f"{metrics.win_rate * 100:.0f}%",
             'HOLD': f"{action_pcts.get('HOLD', 0):.0f}%",
             'BUY_S': f"{action_pcts.get('BUY_SMALL', 0):.0f}%",
             'BUY_M': f"{action_pcts.get('BUY_MEDIUM', 0):.0f}%",

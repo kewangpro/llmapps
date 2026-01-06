@@ -255,6 +255,7 @@ HISTORICAL_DATA_TTL=86400            # Historical OHLCV data (1 day)
 RL_DEFAULT_INITIAL_BALANCE=100000.0  # Starting balance ($100k)
 RL_TRANSACTION_COST_RATE=0.0         # $0 commissions (zero-commission era)
 RL_SLIPPAGE_RATE=0.0005              # 0.05% slippage for liquid stocks
+RL_DEFAULT_TRAINING_TIMESTEPS=300000 # Default training steps (recommended)
 RL_MAX_POSITION_PCT=80.0             # Max position size (80% of portfolio)
 RL_STOP_LOSS_PCT=0.05                # 5% stop-loss (default)
 RL_TRAILING_STOP_PCT=0.03            # 3% trailing stop (default)
