@@ -315,7 +315,7 @@ def display_results(results: dict):
             'BUY_L': f"{action_pcts.get('BUY_LARGE', 0):.0f}%",
             'SELL_P': f"{action_pcts.get('SELL_PARTIAL', 0):.0f}%",
             'SELL_A': f"{action_pcts.get('SELL_ALL', 0):.0f}%",
-            'Trades': metrics.total_trades,
+            'Trades': metrics.total_executed,
         })
 
     df = pd.DataFrame(data)
