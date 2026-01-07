@@ -218,7 +218,7 @@ stock_agent_ollama/
 │   └── live_sessions/    # Trading sessions
 ├── tests/                # Test suite (48 tests)
 ├── docs/                 # Documentation
-├── retrain_and_compare.py   # Training automation
+├── retrain_rl.py   # Training automation
 ├── validate_backtest.py     # Backtest validation
 └── requirements.txt         # Dependencies
 ```
@@ -342,71 +342,49 @@ python -m pytest tests/test_action_masking.py -v
 
 ## 🛠️ Developer Tools
 
-**Automated Training & Comparison:**
-The `retrain_and_compare.py` CLI utility automates the entire workflow:
+**Automated Training:**
+The `retrain_rl.py` CLI utility automates the training workflow. It trains models and automatically generates initial backtest results for evaluation.
+
 ```bash
 # Train all algorithms on a single stock (efficiently via Ensemble)
-python retrain_and_compare.py --symbol AAPL
+python retrain_rl.py --symbol AAPL
 
 # Train specific algorithms on multiple stocks
-python retrain_and_compare.py --symbol AMZN,AAPL,META --algorithms ensemble
+python retrain_rl.py --symbol AMZN,AAPL,META --algorithms ensemble
 
 # Train all algorithms on watchlist stocks
-python retrain_and_compare.py --watchlist
+python retrain_rl.py --watchlist
 
 # Train only Ensemble on watchlist
-python retrain_and_compare.py --watchlist --algorithms ensemble
+python retrain_rl.py --watchlist --algorithms ensemble
 
 # Train only PPO and Ensemble
-python retrain_and_compare.py --symbol TSLA --algorithms ppo,ensemble
-
-# Compare ALL existing models without retraining (comprehensive comparison)
-python retrain_and_compare.py --symbol TEAM --skip-training
-# Shows all 11 models: 4 PPO + 4 RecurrentPPO + 3 Ensemble
-
-# Compare only PPO models (all versions)
-python retrain_and_compare.py --symbol TEAM --algorithms ppo --skip-training
-# Shows all 4 PPO models with timestamps for evolution tracking
-
-# Skip baseline strategies in comparison
-python retrain_and_compare.py --symbol NVDA --no-baselines
+python retrain_rl.py --symbol TSLA --algorithms ppo,ensemble
 ```
 
 **Options:**
 - `--symbol`: Single stock or comma-separated list (e.g., `AAPL` or `AAPL,TSLA,NVDA`)
 - `--watchlist`: Train on all symbols from default watchlist (mutually exclusive with `--symbol`)
 - `--algorithms`: Comma-separated list of `ppo`, `recurrent_ppo`, `ensemble` (default: all)
-  - During training: Controls which algorithms to train
-  - During `--skip-training`: Controls which algorithm types to backtest (backtests ALL models of selected types)
 - `--timesteps`: Training steps (default: 300,000)
-- `--skip-training`: Skip training, backtest ALL existing models of selected algorithm types
-  - Results show full model names with timestamps (e.g., `ppo_TEAM_20260106_071323`)
-  - Enables comparison across model versions to track improvements over time
-- `--no-baselines`: Skip Buy & Hold and Momentum strategies
 
-The tool handles model training, backtesting, and comprehensive strategy comparison automatically. Note that training the `ensemble` algorithm automatically trains and saves the individual `ppo` and `recurrent_ppo` models as part of the process, making it the most efficient way to generate all three agents.
+The tool handles model training and automatically triggers validation to generate initial artifacts. Note that training the `ensemble` algorithm automatically trains and saves the individual `ppo` and `recurrent_ppo` models as part of the process.
 
 **Backtest Validation:**
-The `validate_backtest.py` tool provides comprehensive validation of backtest results, including automated checks for baseline strategies (Buy & Hold, Momentum):
+The `validate_backtest.py` tool provides comprehensive validation of backtest results and can force new backtests to be run:
+
 ```bash
 # Validate ALL PPO models for a symbol (default behavior)
 python validate_backtest.py --symbol TEAM --algorithm ppo
-# Validates all 4 PPO models: shows which specific model passed/failed
 
-# Validate ALL models for a symbol (all algorithms)
-python validate_backtest.py --symbol RIVN
-# Validates all PPO + RecurrentPPO + Ensemble models + Baselines
+# Force RUN a new backtest and then validate (useful for re-evaluating logic)
+python validate_backtest.py --symbol RIVN --run
 
-# Validate all watchlist stocks (all algorithms, all models)
+# Validate all watchlist stocks
 python validate_backtest.py --watchlist
-# Comprehensive validation across entire portfolio
 
-# Validate only the LATEST model (faster for quick checks)
+# Validate only the LATEST model
 python validate_backtest.py --symbol TEAM --algorithm ppo --latest-only
-# Validates only ppo_TEAM_20260106_071323 (newest)
-
-# Validate specific algorithm across watchlist
-python validate_backtest.py --watchlist --algorithm ensemble
 ```
 
 **Validation Checks:**
@@ -415,9 +393,9 @@ python validate_backtest.py --watchlist --algorithm ensemble
 - Win rate calculation correctness
 - Portfolio value consistency (initial/final match)
 - Metrics reasonableness (Sharpe ratio, drawdown thresholds)
-- Individual trade P&L validation (samples 5 trades)
+- Individual trade P&L validation
 - Transaction cost inclusion verification
-- Market Data Integrity (verifies trade prices against historical market data)
+- Market Data Integrity
 - Reproducibility (Automated double-run verification)
 
 **Options:**
@@ -425,6 +403,7 @@ python validate_backtest.py --watchlist --algorithm ensemble
 - `--watchlist`: Validate all symbols from default watchlist
 - `--algorithm`: `ppo`, `recurrent_ppo`, `ensemble`, or `all` (default: all)
 - `--latest-only`: Validate only the most recent model (default: validates all models)
+- `--run`: Force execution of a new backtest before validation (default: validates existing results)
 
 **Output Format:**
 Results show full model names with returns and pass rates:
@@ -432,7 +411,6 @@ Results show full model names with returns and pass rates:
 Symbol     Model                                              Return       Passed     Status
 META       ppo_META_20260107_024443                           +10.24%      8/9        ⚠️  WARN
 META       Buy & Hold Baseline                                -5.14%       9/9        ✅ PASS
-META       Momentum Baseline                                  -8.94%       9/9        ✅ PASS
 ```
 
 **Training Evaluation:**
@@ -447,6 +425,9 @@ python eval_training.py --symbol PLTR
 # Filter by minimum trade count (to exclude inactive models)
 python eval_training.py --min-trades 10
 
+# Prune (archive) models with negative returns older than 24 hours
+python eval_training.py --prune --min-return 0 --age 24h
+
 # Sort by return (default: date)
 python eval_training.py --sort return
 ```
@@ -454,6 +435,7 @@ python eval_training.py --sort return
 **Key Features:**
 - **Performance Summary**: Color-coded table with Returns, Sharpe Ratio, Max Drawdown, and Win Rate
 - **Pathology Detection**: Identifies "Action Collapse" (stuck in one action), Over-trading, and Under-trading
+- **Pruning System**: Automatically archives poor-performing or old models to `data/models/rl/archive/` to keep the workspace clean
 - **Actionable Insights**: Generates specific recommendations (e.g., "Increase entropy coefficient")
 - **Best/Worst Performers**: Highlights top strategies and struggling agents
 - **Visual Health Check**: Quick Green/Red status indicators for overall model health

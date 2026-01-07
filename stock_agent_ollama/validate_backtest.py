@@ -6,8 +6,9 @@ Validates that backtest results are mathematically correct and free from common 
 Usage: python validate_backtest.py --symbol RIVN
        python validate_backtest.py --watchlist
        python validate_backtest.py --symbol RIVN --algorithm ppo
+       python validate_backtest.py --symbol RIVN --run
 Example: python validate_backtest.py --symbol RIVN
-         python validate_backtest.py --watchlist --algorithm ensemble
+         python validate_backtest.py --watchlist --algorithm ensemble --run
 """
 
 import json
@@ -877,6 +878,12 @@ Examples:
         help='Validate only the most recent model (default: validate all models)'
     )
 
+    parser.add_argument(
+        '--run',
+        action='store_true',
+        help='Force run backtest before validation'
+    )
+
     args = parser.parse_args()
 
     # Determine symbols to validate
@@ -918,8 +925,10 @@ Examples:
                     try:
                         data, model_name = load_backtest_results(model_dir)
                         
-                        # If results missing, try to run on-demand
-                        if data is None:
+                        # If results missing OR forced run, try to run on-demand
+                        if data is None or args.run:
+                            if args.run:
+                                print(f"{YELLOW}Forcing backtest run for {model_dir.name}...{RESET}")
                             data = run_on_demand_backtest(model_dir, symbol, algorithm)
                             
                         if data is None:

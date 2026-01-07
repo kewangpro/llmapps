@@ -1,20 +1,7 @@
-#!/usr/bin/env python3
-"""
-RL Training Evaluation & Insights Script
-
-This script scans all trained RL models, analyzes their backtest performance,
-detects common training pathologies (action collapse, over-trading, etc.),
-and provides actionable insights for improving future training runs.
-
-Usage:
-    python eval_training.py
-    python eval_training.py --symbol PLTR
-    python eval_training.py --min-trades 10
-"""
-
 import os
 import json
 import argparse
+import shutil
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -24,6 +11,7 @@ from typing import Dict, List, Any, Optional
 
 # Constants
 MODELS_DIR = Path("data/models/rl")
+ARCHIVE_DIR = MODELS_DIR / "archive"
 DEFAULT_WATCHLIST_PATH = Path("data/portfolios/default.json")
 
 # Thresholds for analysis
@@ -56,6 +44,22 @@ def load_json(path: Path) -> Dict[str, Any]:
             return json.load(f)
     except Exception:
         return {}
+
+def parse_age_to_seconds(age_str: str) -> int:
+    """Parse age string (e.g. '24h', '7d') to seconds."""
+    try:
+        if not age_str:
+            return 0
+        unit = age_str[-1].lower()
+        if unit.isdigit():
+            return int(age_str)
+        
+        value = int(age_str[:-1])
+        if unit == 'h': return value * 3600
+        if unit == 'd': return value * 86400
+        return value
+    except:
+        return 0
 
 def get_model_age(path: Path) -> str:
     """Get readable age of a model file."""
@@ -90,7 +94,7 @@ def analyze_model(model_dir: Path) -> Dict[str, Any]:
     # Extract baseline results if available (usually at the top level of backtest_results.json for batch runs, 
     # or sometimes embedded. Based on file structure, they might be missing in individual model folders.
     # Let's check if 'baseline_results' key exists or if we need to infer from the text report)
-    # Actually, retrain_and_compare.py often saves baselines in the same JSON or a sibling. 
+    # Actually, retrain_rl.py often saves baselines in the same JSON or a sibling. 
     # For now, we'll look for 'baseline_results' key in the loaded json.
     
     baselines = results.get('baseline_results', {})
@@ -102,6 +106,7 @@ def analyze_model(model_dir: Path) -> Dict[str, Any]:
         'symbol': config.get('symbol', results.get('symbol', 'Unknown')),
         'agent_type': config.get('agent_type', 'unknown'),
         'age': get_model_age(backtest_path),
+        'mtime': backtest_path.stat().st_mtime,
         'return': results.get('total_return_pct', 0.0),
         'sharpe': results.get('sharpe_ratio', 0.0),
         'drawdown': results.get('max_drawdown', 0.0),
@@ -143,6 +148,50 @@ def analyze_model(model_dir: Path) -> Dict[str, Any]:
     # For now, we look for 'Buy & Hold' comparison in the same folder structure if comprehensive test was run
     
     return metrics
+
+def prune_models(models: List[Dict[str, Any]], min_return: float, age_seconds: int):
+    """Archive models matching criteria."""
+    print(f"\n{Color.HEADER}{'='*80}")
+    print(f"🧹 PRUNING MODELS (Return < {min_return}%, Age > {age_seconds/3600:.1f}h)")
+    print(f"{Color.HEADER}{'='*80}{Color.END}")
+    
+    threshold_time = datetime.now().timestamp() - age_seconds
+    to_prune = []
+    
+    for m in models:
+        # We prune models that are losing money AND older than the threshold
+        if m['return'] < min_return and m['mtime'] < threshold_time:
+            to_prune.append(m)
+            
+    if not to_prune:
+        print("No models matched the pruning criteria.")
+        return
+        
+    if not ARCHIVE_DIR.exists():
+        ARCHIVE_DIR.mkdir(parents=True)
+        print(f"Created archive directory: {ARCHIVE_DIR}")
+        
+    print(f"Found {len(to_prune)} models to archive...\n")
+    
+    for m in to_prune:
+        source_path = m['path']
+        dest_path = ARCHIVE_DIR / source_path.name
+        
+        try:
+            # Move directory
+            if dest_path.exists():
+                # If already exists in archive, remove existing first to allow overwrite/update
+                if dest_path.is_dir():
+                    shutil.rmtree(dest_path)
+                else:
+                    dest_path.unlink()
+                    
+            shutil.move(str(source_path), str(dest_path))
+            print(f"  {Color.YELLOW}Archived:{Color.END} {m['name']:<45} (Return: {m['return']:+.2f}%, Age: {m['age']})")
+        except Exception as e:
+            print(f"  {Color.RED}Error archiving {m['name']}:{Color.END} {e}")
+            
+    print(f"\n{Color.GREEN}Success: Moved {len(to_prune)} models to {ARCHIVE_DIR}{Color.END}")
 
 def generate_insights(models: List[Dict[str, Any]]) -> List[str]:
     """Generate high-level insights based on aggregated model data."""
@@ -281,7 +330,7 @@ def print_summary_of_findings(models: List[Dict[str, Any]]):
             diff_color = Color.GREEN if diff >= 0 else Color.RED
             baseline_text = f" (vs B&H: {diff_color}{sign}{diff:.2f}%{Color.END})"
 
-        print(f"     * {Color.CYAN}{m['symbol']}{Color.END} ({format_algo(m['agent_type'])}): {ret_color}{m['return']:+.2f}% Return{Color.END}{baseline_text} (Sharpe {m['sharpe']:.2f})")
+        print(f"     * {Color.CYAN}{m['symbol']}{Color.END} ({format_algo(m['agent_type'])}) [{m['name']}]: {ret_color}{m['return']:+.2f}% Return{Color.END}{baseline_text} (Sharpe {m['sharpe']:.2f})")
 
         
 
@@ -347,7 +396,7 @@ def print_summary_of_findings(models: List[Dict[str, Any]]):
 
             
             ret_color = Color.GREEN if m['return'] > 0 else Color.RED
-            print(f"     * {Color.CYAN}{m['symbol']}{Color.END} ({format_algo(m['agent_type'])}): {ret_color}{m['return']:+.2f}% Return{Color.END}.{suffix}")
+            print(f"     * {Color.CYAN}{m['symbol']}{Color.END} ({format_algo(m['agent_type'])}) [{m['name']}]: {ret_color}{m['return']:+.2f}% Return{Color.END}.{suffix}")
 
     else:
 
@@ -359,13 +408,13 @@ def print_summary_of_findings(models: List[Dict[str, Any]]):
 
             for m in worst_performers:
                 ret_color = Color.GREEN if m['return'] > 0 else Color.RED
-                print(f"     * {Color.CYAN}{m['symbol']}{Color.END} ({format_algo(m['agent_type'])}): {ret_color}{m['return']:+.2f}% Return{Color.END} (Sharpe {m['sharpe']:.2f})")
+                print(f"     * {Color.CYAN}{m['symbol']}{Color.END} ({format_algo(m['agent_type'])}) [{m['name']}]: {ret_color}{m['return']:+.2f}% Return{Color.END} (Sharpe {m['sharpe']:.2f})")
 
 def print_table(models: List[Dict[str, Any]]):
     """Print formatted table of model results."""
-    # Columns: Name, Sym, Algo, Ret%, Sharpe, DD%, Trades, Action Dist, Age
-    print(f"\n{Color.BOLD}{'Symbol':<6} {'Algorithm':<14} {'Return':<9} {'Sharpe':<7} {'MaxDD':<8} {'Trades':<7} {'WinRate':<8} {'Baseline':<12} {'Dominant Action':<20} {'Age':<8}{Color.END}")
-    print("-" * 115)
+    # Columns: Symbol, Algo, Model Name, Return, Sharpe, MaxDD, WinRate, Actions(H, BS, BM, BL, SP, SA), Trades, Age
+    print(f"\n{Color.BOLD}{'Symbol':<6} {'Algorithm':<14} {'Model Name':<45} {'Return':<10} {'Sharpe':<8} {'MaxDD':<9} {'WinRate':<9} {'HOLD':<6} {'BUY_S':<6} {'BUY_M':<6} {'BUY_L':<6} {'SELL_P':<7} {'SELL_A':<7} {'Trades':<8} {'Age':<8}{Color.END}")
+    print("-" * 175)
     
     for m in models:
         # Color code return
@@ -387,22 +436,34 @@ def print_table(models: List[Dict[str, Any]]):
         if m['trades'] < 5: trades_str += " (L)" # Low
         elif m['trades'] > 100: trades_str += " (H)" # High
         
-        # Format Baseline
-        bh = m.get('buy_hold_return', 0.0)
-        baseline_str = f"{bh:+.1f}%" if bh != 0.0 else "-"
+        # Calculate Action Percentages
+        action_counts = m['actions']
+        total = sum(action_counts.values())
+        pcts = {k: (v/total*100) if total > 0 else 0 for k,v in action_counts.items()}
         
-        # Format Action Dist
-        dom_action = f"{m['dominant_action']} ({m['max_action_pct']:.0%})"
-        if m['max_action_pct'] > 0.8:
-            dom_action = f"{Color.RED}{dom_action}{Color.END}"
+        # Format percentages as strings to avoid stray % signs in alignment
+        ret_fmt = f"{ret_color}{ret_str:<10}{Color.END}"
+        sharpe_fmt = f"{sharpe_color}{sharpe_val:<8.2f}{Color.END}"
+        dd_fmt = f"{m['drawdown']*100:>6.1f}%"
+        wr_fmt = f"{m['win_rate']*100:>6.0f}%"
         
-        print(f"{m['symbol']:<6} {m['agent_type']:<14} {ret_color}{ret_str:<9}{Color.END} {sharpe_color}{sharpe_val:<7.2f}{Color.END} {m['drawdown']*100:<7.1f}% {trades_str:<7} {m['win_rate']*100:<7.0f}% {baseline_str:<12} {dom_action:<20} {m['age']:<8}")
+        h_pct = f"{pcts.get('HOLD',0):>4.0f}%"
+        bs_pct = f"{pcts.get('BUY_SMALL',0):>4.0f}%"
+        bm_pct = f"{pcts.get('BUY_MEDIUM',0):>4.0f}%"
+        bl_pct = f"{pcts.get('BUY_LARGE',0):>4.0f}%"
+        sp_pct = f"{pcts.get('SELL_PARTIAL',0):>5.0f}%"
+        sa_pct = f"{pcts.get('SELL_ALL',0):>5.0f}%"
+        
+        print(f"{m['symbol']:<6} {m['agent_type']:<14} {m['name']:<45} {ret_fmt} {sharpe_fmt} {dd_fmt:<9} {wr_fmt:<9} {h_pct:<6} {bs_pct:<6} {bm_pct:<6} {bl_pct:<6} {sp_pct:<7} {sa_pct:<7} {trades_str:<8} {m['age']:<8}")
 
 def main():
     parser = argparse.ArgumentParser(description="Analyze RL training results and provide insights.")
     parser.add_argument("--symbol", type=str, help="Filter by stock symbol")
     parser.add_argument("--min-trades", type=int, default=0, help="Filter models with fewer than N trades")
     parser.add_argument("--sort", type=str, choices=['return', 'sharpe', 'date'], default='date', help="Sort order")
+    parser.add_argument("--prune", action="store_true", help="Move models matching criteria to archive")
+    parser.add_argument("--min-return", type=float, default=0.0, help="Prune models with return less than this value")
+    parser.add_argument("--age", type=str, default="24h", help="Prune models older than this (e.g. '24h', '7d')")
     args = parser.parse_args()
     
     print(f"\n{Color.HEADER}{'='*80}")
@@ -450,10 +511,19 @@ def main():
     # 3. Print Detailed Table
     print_table(analyzed_models)
     
-    # 4. Print Summary of Findings
+    # 4. Handle Pruning
+    if args.prune:
+        age_seconds = parse_age_to_seconds(args.age)
+        prune_models(analyzed_models, args.min_return, age_seconds)
+        # Re-scan after pruning to update summary and insights
+        return main() # Recursion to show fresh state? No, maybe just exit.
+        # Actually, it's better to just finish or re-analyze. 
+        # For now, I'll just print summary and exit.
+    
+    # 5. Print Summary of Findings
     print_summary_of_findings(analyzed_models)
     
-    # 5. Generate Insights
+    # 6. Generate Insights
     print(f"\n{Color.HEADER}{'='*80}")
     print(f"💡 TRAINING INSIGHTS")
     print(f"{Color.HEADER}{'='*80}{Color.END}")
