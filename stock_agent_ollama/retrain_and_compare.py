@@ -233,7 +233,13 @@ def run_comprehensive_backtest(symbol: str, algorithms: list = None, include_bas
                     start_date=start_date,
                     end_date=end_date,
                     use_improved_actions=training_config.get('use_improved_actions', True),
-                    include_trend_indicators=include_trend
+                    include_trend_indicators=include_trend,
+                    # Inherit improvements from training config (default to True if not specified)
+                    use_risk_manager=training_config.get('use_risk_manager', True),
+                    use_adaptive_sizing=training_config.get('use_adaptive_sizing', True),
+                    use_regime_detector=training_config.get('use_regime_detector', True),
+                    use_mtf_features=training_config.get('use_mtf_features', True),
+                    use_kelly_sizing=training_config.get('use_kelly_sizing', True)
                 )
 
                 # Create engine and run backtest

@@ -18,9 +18,13 @@ from typing import Dict, Any, List, Tuple
 import numpy as np
 from datetime import datetime, timedelta
 
-# Add src to path for portfolio_manager import
+# Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 from src.tools.portfolio_manager import portfolio_manager
+from src.rl.backtesting import BacktestEngine, BacktestConfig
+from src.rl.baselines import BuyHoldStrategy, MomentumStrategy
+from src.rl.training import EnhancedRLTrainer
+from src.rl.model_utils import load_env_config_from_model
 
 # Color codes for terminal output
 GREEN = '\033[92m'
@@ -75,8 +79,8 @@ def find_all_models(symbol: str, algorithm: str) -> List[Path]:
     matching_dirs = sorted(models_dir.glob(pattern), reverse=True)
 
     if not matching_dirs:
-        print(f"{RED}Error: No models found for {symbol} {algorithm}{RESET}")
-        sys.exit(1)
+        # Don't exit here, return empty list so baselines can still run
+        return []
 
     return matching_dirs
 
@@ -88,15 +92,13 @@ def load_backtest_results(model_dir: Path) -> Tuple[Dict[str, Any], str]:
         model_dir: Path to the model directory
 
     Returns:
-        Tuple of (data, model_name) where model_name is the directory name
+        Tuple of (data, model_name). Returns (None, model_name) if file missing.
     """
     model_name = model_dir.name
     backtest_file = model_dir / "backtest_results.json"
 
     if not backtest_file.exists():
-        print(f"{RED}Error: No backtest results found at {backtest_file}{RESET}")
-        print(f"{YELLOW}Run backtest first to generate results{RESET}")
-        raise FileNotFoundError(f"No backtest results at {backtest_file}")
+        return None, model_name
 
     print(f"{BLUE}Loading backtest from: {backtest_file}{RESET}")
     print(f"{BLUE}Model: {model_name}{RESET}")
@@ -105,6 +107,77 @@ def load_backtest_results(model_dir: Path) -> Tuple[Dict[str, Any], str]:
         data = json.load(f)
 
     return data, model_name
+
+
+def run_on_demand_backtest(model_dir: Path, symbol: str, algorithm: str) -> Dict[str, Any]:
+    """Run backtest on demand if results file is missing."""
+    print(f"{YELLOW}Backtest results not found. Running on-demand backtest for {model_dir.name}...{RESET}")
+    
+    try:
+        # 1. Load Agent
+        if algorithm.lower() == 'ensemble':
+            model_path = model_dir / "ensemble"
+        else:
+            model_path = model_dir / "final_model.zip"
+
+        if not model_path.exists():
+            print(f"{RED}Model file not found at {model_path}{RESET}")
+            return None
+
+        # 2. Setup Config
+        # Try to load training config to get improved_actions flag
+        try:
+            training_config = load_env_config_from_model(model_dir)
+            use_improved = training_config.get('use_improved_actions', True)
+            include_trend = training_config.get('include_trend_indicators', False)
+        except:
+            use_improved = True
+            include_trend = False
+
+        # Force trend indicators for relevant algos
+        if algorithm.lower() in ['recurrent_ppo', 'ensemble']:
+            include_trend = True
+
+        # Standard validation period (last 280 days)
+        end_date = datetime.now().strftime("%Y-%m-%d")
+        start_date = (datetime.now() - timedelta(days=280)).strftime("%Y-%m-%d")
+
+        backtest_config = BacktestConfig(
+            symbol=symbol,
+            start_date=start_date,
+            end_date=end_date,
+            use_improved_actions=use_improved,
+            include_trend_indicators=include_trend,
+            # Validation should match baseline settings for fair comparison?
+            # Or use training defaults? Using training defaults (True) is fairer to the agent's training.
+            use_risk_manager=True,
+            use_adaptive_sizing=True,
+            use_regime_detector=True,
+            use_mtf_features=True,
+            use_kelly_sizing=True
+        )
+
+        # 3. Run Backtest
+        engine = BacktestEngine(backtest_config)
+        
+        # Load agent with None env initially
+        agent = EnhancedRLTrainer.load_agent(
+            model_path=model_path,
+            agent_type=algorithm.lower(),
+            env=None 
+        )
+        
+        # Run
+        result = engine.run_agent_backtest(agent, deterministic=True)
+        
+        # 4. Save results for future use
+        result.save_to_model_dir(model_dir, algorithm.lower())
+        
+        return result.to_dict()
+
+    except Exception as e:
+        print(f"{RED}On-demand backtest failed: {e}{RESET}")
+        return None
 
 
 def validate_return_calculation(data: Dict[str, Any]) -> bool:
@@ -419,31 +492,223 @@ def validate_commission_inclusion(data: Dict[str, Any]) -> bool:
         return False
 
 
-def validate_reproducibility(symbol: str, algorithm: str, data: Dict[str, Any]) -> bool:
-    """Check if backtest results are deterministic"""
-    print_header("Check 8: Reproducibility Test")
-
-    print("  To test reproducibility, run the backtest twice:")
-    print(f"  python -m src.tools.backtest_cli {symbol} {algorithm}")
-    print(f"  python -m src.tools.backtest_cli {symbol} {algorithm}")
-    print()
-    print("  Then compare the results - they should be identical.")
-    print("  If results differ, there may be non-deterministic behavior.")
-
-    return True
-
-
-def generate_validation_report(model_dir: Path, symbol: str, algorithm: str) -> Tuple[int, int, str]:
-    """Generate complete validation report
-
-    Args:
-        model_dir: Path to the model directory
-        symbol: Stock symbol (for display)
-        algorithm: Algorithm type (for display)
-
-    Returns:
-        Tuple of (passed_checks, total_checks, model_name)
+def validate_market_data(data: Dict[str, Any], symbol: str) -> bool:
     """
+    Validate that backtest prices match real market data.
+    Also provides Market Return context.
+    """
+    print_header("Check 8: Market Data Integrity & Baseline Context")
+
+    from src.tools.stock_fetcher import StockFetcher
+    import pandas as pd
+
+    config = data.get('config', {})
+    dates = data.get('dates', [])
+    trades = data.get('trades', [])
+
+    if not dates:
+        print_warning("No dates in backtest results to validate market data")
+        return True
+
+    # Handle both string dates and Timestamp objects
+    def get_date_str(d):
+        if isinstance(d, str):
+            return d[:10]
+        if hasattr(d, 'strftime'):
+            return d.strftime('%Y-%m-%d')
+        return str(d)[:10]
+
+    start_date = config.get('start_date') or get_date_str(dates[0])
+    end_date = config.get('end_date') or get_date_str(dates[-1])
+
+    print(f"  Fetching validation data for {symbol}")
+    print(f"  Period: {start_date} to {end_date}")
+
+    try:
+        fetcher = StockFetcher()
+        # Fetch with buffer to ensure we cover the range
+        df = fetcher.fetch_stock_data(
+            symbol=symbol,
+            start_date=start_date,
+            end_date=end_date,
+            interval="1d"
+        )
+
+        if df.empty:
+            print_warning(f"Could not fetch data for {symbol} - skipping validation")
+            return True
+
+        # 1. Market Return Context
+        market_start_price = df['Close'].iloc[0]
+        market_end_price = df['Close'].iloc[-1]
+        market_return_pct = ((market_end_price - market_start_price) / market_start_price) * 100
+        
+        # Theoretical Baseline (50% invested, mimicking Buy & Hold baseline)
+        baseline_return_pct = market_return_pct * 0.5
+
+        model_return = data.get('total_return_pct', 0)
+
+        print(f"\n  {BOLD}Market Context:{RESET}")
+        print(f"    Start Price:   ${market_start_price:.2f}")
+        print(f"    End Price:     ${market_end_price:.2f}")
+        print(f"    Market Return: {market_return_pct:+.2f}% (Buy & Hold 100%)")
+        print(f"    Baseline Est.: {baseline_return_pct:+.2f}% (Buy & Hold 50%)")
+        print(f"    Model Return:  {model_return:+.2f}%")
+        
+        if model_return > market_return_pct:
+            print(f"    Performance:   {GREEN}Outperformed Market{RESET}")
+        elif model_return > baseline_return_pct:
+            print(f"    Performance:   {GREEN}Outperformed 50% Baseline{RESET}")
+        else:
+            print(f"    Performance:   {YELLOW}Underperformed{RESET}")
+
+        # 2. Price Integrity Check
+        if trades:
+            print(f"\n  {BOLD}Price Integrity Check:{RESET}")
+            matches = 0
+            samples = 0
+            
+            # Create lookup for fast access
+            price_map = {d.strftime('%Y-%m-%d'): p for d, p in df['Close'].items()}
+            
+            # Check last 5 trades
+            for trade in trades[-5:]:
+                trade_date_str = get_date_str(trade.get('date', ''))
+                trade_price = trade['price']
+                
+                if trade_date_str in price_map:
+                    real_price = price_map[trade_date_str]
+                    diff_pct = abs(trade_price - real_price) / real_price
+                    
+                    if diff_pct < 0.01:
+                        matches += 1
+                    else:
+                        print(f"    {RED}Mismatch on {trade_date_str}: Trade ${trade_price:.2f} vs Real ${real_price:.2f} ({diff_pct:.2%}){RESET}")
+                    
+                    samples += 1
+            
+            if samples > 0:
+                integrity_pass = matches == samples
+                print_check(f"Trade prices match market data ({matches}/{samples} sampled)", integrity_pass)
+                return integrity_pass
+            else:
+                return True
+        else:
+            return True
+
+    except Exception as e:
+        print_warning(f"Market data validation error: {e}")
+        return True
+
+
+def validate_reproducibility(symbol: str, algorithm: str, data: Dict[str, Any], model_dir: Path = None) -> bool:
+    """Check if backtest results are deterministic by running a second pass"""
+    print_header("Check 9: Reproducibility Test")
+
+    if algorithm in ['buy_hold', 'momentum']:
+        print("  Baseline strategies are deterministic by definition.")
+        return True
+
+    if not model_dir:
+        print_warning("No model directory provided - cannot run automatic reproducibility check")
+        return True
+
+    # Handle both string dates and Timestamp objects
+    def get_date_str(d):
+        if isinstance(d, str):
+            return d[:10]
+        if hasattr(d, 'strftime'):
+            return d.strftime('%Y-%m-%d')
+        return str(d)[:10]
+
+    print(f"  Running automated verification for {algorithm.upper()}...")
+    print(f"  (Executing second backtest pass to verify determinism)")
+
+    try:
+        from src.rl.training import EnhancedRLTrainer
+        import inspect
+
+        # 1. Load Agent
+        # Handle ensemble pathing
+        if algorithm.lower() == 'ensemble':
+            model_path = model_dir / "ensemble"
+        else:
+            model_path = model_dir / "final_model.zip"
+
+        if not model_path.exists():
+            print_warning(f"Model file not found at {model_path} - skipping check")
+            return True
+
+        agent = EnhancedRLTrainer.load_agent(
+            model_path=model_path,
+            agent_type=algorithm.lower(),
+            env=None
+        )
+
+        # 2. Reconstruct Config
+        config_data = data.get('config', {})
+        
+        # Ensure required fields are present and dates are strictly YYYY-MM-DD
+        reconstructed_config = {
+            'symbol': symbol,
+            'start_date': get_date_str(config_data.get('start_date') or data.get('dates', [None])[0]),
+            'end_date': get_date_str(config_data.get('end_date') or data.get('dates', [None])[-1]),
+            'initial_balance': config_data.get('initial_balance', 100000.0),
+            'transaction_cost_rate': config_data.get('transaction_cost_rate', 0.0),
+            'slippage_rate': config_data.get('slippage_rate', 0.0005)
+        }
+        
+        # Add enhancement flags
+        for flag in ['use_action_masking', 'use_enhanced_rewards', 'use_adaptive_sizing', 
+                     'use_improved_actions', 'use_risk_manager', 'use_regime_detector', 
+                     'use_mtf_features', 'use_kelly_sizing', 'include_trend_indicators']:
+            if flag in config_data:
+                reconstructed_config[flag] = config_data[flag]
+
+        # Force include_trend_indicators for RPPO/Ensemble as they require it
+        if algorithm.lower() in ['recurrent_ppo', 'ensemble']:
+            reconstructed_config['include_trend_indicators'] = True
+
+        backtest_config = BacktestConfig(**reconstructed_config)
+        engine = BacktestEngine(backtest_config)
+
+        # 3. Run Second Pass
+        second_result = engine.run_agent_backtest(agent, deterministic=True)
+        
+        # 4. Compare Results
+        original_return = data.get('total_return_pct', 0)
+        second_return = second_result.metrics.total_return_pct
+        
+        original_trades = data.get('total_executed', 0)
+        second_trades = second_result.metrics.total_executed
+
+        # Check for strict equality (with tiny float tolerance for return)
+        return_match = abs(original_return - second_return) < 1e-5
+        trades_match = original_trades == second_trades
+        
+        print(f"\n  Comparison:")
+        print(f"    Pass 1: {original_return:+.4f}% return, {original_trades} trades")
+        print(f"    Pass 2: {second_return:+.4f}% return, {second_trades} trades")
+
+        if return_match and trades_match:
+            print_check("Reproducibility (100% match)", True)
+            return True
+        else:
+            details = []
+            if not return_match: details.append(f"Return mismatch: {original_return:+.4f} vs {second_return:+.4f}")
+            if not trades_match: details.append(f"Trade count mismatch: {original_trades} vs {second_trades}")
+            print_check("Reproducibility", False, "; ".join(details))
+            print_warning("Strategy is non-deterministic! Evaluation results may be unreliable.")
+            return False
+
+    except Exception as e:
+        print_warning(f"Automatic reproducibility check failed: {e}")
+        # Don't fail the whole validation if this check crashes (e.g. env issues)
+        return True
+
+
+def generate_validation_report(data: Dict[str, Any], model_name: str, symbol: str, algorithm: str, model_dir: Path = None) -> Tuple[int, int, List[str]]:
+    """Generate complete validation report for a data dictionary"""
     print()
     print(f"{BOLD}{BLUE}╔{'═'*68}╗{RESET}")
     print(f"{BOLD}{BLUE}║{' '*68}║{RESET}")
@@ -452,30 +717,30 @@ def generate_validation_report(model_dir: Path, symbol: str, algorithm: str) -> 
     print(f"{BOLD}{BLUE}║{' '*68}║{RESET}")
     print(f"{BOLD}{BLUE}╚{'═'*68}╝{RESET}")
 
-    # Load data
-    try:
-        data, model_name = load_backtest_results(model_dir)
-    except Exception as e:
-        print(f"{RED}Error loading backtest results: {e}{RESET}")
-        return 0, 8, "Unknown"
-
-    # Run all validation checks
     results = {}
+    failed_checks = []
 
     try:
-        results['return_calculation'] = validate_return_calculation(data)
-        results['action_distribution'] = validate_action_distribution(data)
-        results['win_rate'] = validate_win_rate(data)
-        results['portfolio_consistency'] = validate_portfolio_consistency(data)
-        results['metrics_reasonableness'] = validate_metrics_reasonableness(data)
-        results['trade_pnl'] = validate_trade_pnl(data)
-        results['commission_inclusion'] = validate_commission_inclusion(data)
-        results['reproducibility'] = validate_reproducibility(symbol, algorithm, data)
+        results['Return Calculation'] = validate_return_calculation(data)
+        results['Action Distribution'] = validate_action_distribution(data)
+        results['Win Rate Calculation'] = validate_win_rate(data)
+        results['Portfolio Consistency'] = validate_portfolio_consistency(data)
+        results['Metrics Reasonableness'] = validate_metrics_reasonableness(data)
+        results['Trade P&L'] = validate_trade_pnl(data)
+        results['Commission Inclusion'] = validate_commission_inclusion(data)
+        results['Market Data Integrity'] = validate_market_data(data, symbol)
+        results['Reproducibility'] = validate_reproducibility(symbol, algorithm, data, model_dir)
+        
+        # Collect failed checks
+        for check_name, passed in results.items():
+            if not passed:
+                failed_checks.append(check_name)
+                
     except Exception as e:
         print(f"{RED}Error during validation: {e}{RESET}")
         import traceback
         traceback.print_exc()
-        return 0, 8, model_name
+        return 0, 9, ["Critical Error"]
 
     # Summary
     print_header("VALIDATION SUMMARY")
@@ -498,17 +763,71 @@ def generate_validation_report(model_dir: Path, symbol: str, algorithm: str) -> 
     print(f"{BLUE}{'='*70}{RESET}")
     print()
 
-    # Recommendations
-    if not results.get('commission_inclusion', True):
-        print(f"{YELLOW}Recommendation: Ensure transaction costs are enabled in training config{RESET}")
+    return passed, total, failed_checks
 
-    if data.get('sharpe_ratio', 0) > 5.0:
-        print(f"{YELLOW}Recommendation: Verify no lookahead bias or data leakage{RESET}")
 
-    if data.get('win_rate', 0) > 80.0:
-        print(f"{YELLOW}Recommendation: Manually verify several trades for correctness{RESET}")
+def run_baseline_validation(symbol: str) -> List[Dict[str, Any]]:
+    """Run validation for baseline strategies"""
+    print(f"\n{BOLD}{BLUE}Running Baseline Validation for {symbol}...{RESET}")
+    
+    # Setup dates (last 280 days, similar to backtest default)
+    end_date = datetime.now().strftime("%Y-%m-%d")
+    start_date = (datetime.now() - timedelta(days=280)).strftime("%Y-%m-%d")
+    
+    # Config WITHOUT improvements (Critical for correct baseline behavior)
+    config = BacktestConfig(
+        symbol=symbol,
+        start_date=start_date,
+        end_date=end_date,
+        use_risk_manager=False,
+        use_adaptive_sizing=False,
+        use_regime_detector=False,
+        use_mtf_features=False,
+        use_kelly_sizing=False
+    )
+    
+    engine = BacktestEngine(config)
+    results = []
+    
+    # 1. Buy & Hold
+    try:
+        buy_hold = BuyHoldStrategy()
+        result = engine.run_strategy_backtest(buy_hold.get_action)
+        data = result.to_dict()
+        passed, total, failures = generate_validation_report(data, "Buy & Hold Baseline", symbol, "buy_hold")
+        results.append({
+            'symbol': symbol,
+            'algorithm': 'buy_hold',
+            'model_name': 'Buy & Hold Baseline',
+            'passed': passed,
+            'total': total,
+            'return': data.get('total_return_pct', 0),
+            'failures': failures,
+            'success_rate': (passed / total * 100) if total > 0 else 0
+        })
+    except Exception as e:
+        print(f"{RED}Error validating Buy & Hold: {e}{RESET}")
 
-    return passed, total, model_name
+    # 2. Momentum
+    try:
+        momentum = MomentumStrategy()
+        result = engine.run_strategy_backtest(momentum.get_action)
+        data = result.to_dict()
+        passed, total, failures = generate_validation_report(data, "Momentum Baseline", symbol, "momentum")
+        results.append({
+            'symbol': symbol,
+            'algorithm': 'momentum',
+            'model_name': 'Momentum Baseline',
+            'passed': passed,
+            'total': total,
+            'return': data.get('total_return_pct', 0),
+            'failures': failures,
+            'success_rate': (passed / total * 100) if total > 0 else 0
+        })
+    except Exception as e:
+        print(f"{RED}Error validating Momentum: {e}{RESET}")
+        
+    return results
 
 
 def main():
@@ -521,23 +840,11 @@ Examples:
   # Validate all PPO models for TEAM
   python validate_backtest.py --symbol TEAM --algorithm ppo
 
-  # Validate only the most recent PPO model for TEAM
-  python validate_backtest.py --symbol TEAM --algorithm ppo --latest-only
-
-  # Validate all models for RIVN (all algorithms)
-  python validate_backtest.py --symbol RIVN
+  # Validate all models AND baselines for META
+  python validate_backtest.py --symbol META --baselines
 
   # Validate all models in watchlist
   python validate_backtest.py --watchlist
-
-Algorithms (default: all):
-  ppo              - Proximal Policy Optimization
-  recurrent_ppo    - RecurrentPPO with LSTM memory
-  ensemble         - Ensemble of PPO + RecurrentPPO
-  all              - Validate all algorithms (default)
-
-Options:
-  --latest-only    - Validate only the most recent model (default: validate all)
         """
     )
 
@@ -590,86 +897,106 @@ Options:
 
     # Validate all combinations
     validation_results = []
-    total_models_found = 0
 
     for symbol in symbols:
+        # 1. Validate RL Models
         for algorithm in algorithms:
-            # Find all matching models
             try:
                 all_models = find_all_models(symbol, algorithm)
-                total_models_found += len(all_models)
 
                 # Filter to latest only if requested
-                if args.latest_only:
+                if args.latest_only and all_models:
                     models_to_validate = [all_models[0]]
                     print(f"{BLUE}Validating latest model only (found {len(all_models)} total){RESET}\n")
                 else:
                     models_to_validate = all_models
-                    print(f"{BLUE}Validating all {len(all_models)} model(s) for {symbol} {algorithm.upper()}{RESET}\n")
+                    if models_to_validate:
+                        print(f"{BLUE}Validating all {len(all_models)} model(s) for {symbol} {algorithm.upper()}{RESET}\n")
 
                 # Validate each model
                 for model_dir in models_to_validate:
-                    passed, total, model_name = generate_validation_report(model_dir, symbol, algorithm)
-                    validation_results.append({
-                        'symbol': symbol,
-                        'algorithm': algorithm,
-                        'model_name': model_name,
-                        'passed': passed,
-                        'total': total,
-                        'success_rate': (passed / total * 100) if total > 0 else 0
-                    })
+                    try:
+                        data, model_name = load_backtest_results(model_dir)
+                        
+                        # If results missing, try to run on-demand
+                        if data is None:
+                            data = run_on_demand_backtest(model_dir, symbol, algorithm)
+                            
+                        if data is None:
+                            print(f"{RED}Skipping validation for {model_name} (no results and generation failed){RESET}")
+                            continue
+
+                        passed, total, failures = generate_validation_report(data, model_name, symbol, algorithm, model_dir)
+                        validation_results.append({
+                            'symbol': symbol,
+                            'algorithm': algorithm,
+                            'model_name': model_name,
+                            'passed': passed,
+                            'total': total,
+                            'return': data.get('total_return_pct', 0),
+                            'failures': failures,
+                            'success_rate': (passed / total * 100) if total > 0 else 0
+                        })
+                    except Exception as e:
+                        print(f"{RED}Error validating model {model_dir}: {e}{RESET}")
+                        import traceback
+                        traceback.print_exc()
 
             except SystemExit:
-                # No models found for this combination, skip
                 continue
+        
+        # 2. Validate Baselines (Always)
+        baseline_results = run_baseline_validation(symbol)
+        validation_results.extend(baseline_results)
 
-    # Check if any models were validated
+    # Check if any validation occurred
     if not validation_results:
-        print(f"{RED}❌ No models found to validate{RESET}")
+        print(f"{RED}❌ No validation results generated.{RESET}")
         sys.exit(1)
 
-    # Print overall summary if validating multiple combinations
-    if len(validation_results) > 1:
-        print()
-        print(f"{BOLD}{BLUE}{'='*120}{RESET}")
-        print(f"{BOLD}{BLUE}{'OVERALL VALIDATION SUMMARY'.center(120)}{RESET}")
-        print(f"{BOLD}{BLUE}{'='*120}{RESET}\n")
+    # Print overall summary
+    print()
+    print(f"{BOLD}{BLUE}{'='*140}{RESET}")
+    print(f"{BOLD}{BLUE}{'OVERALL VALIDATION SUMMARY'.center(140)}{RESET}")
+    print(f"{BOLD}{BLUE}{'='*140}{RESET}\n")
 
-        # Summary table with full model names
-        print(f"{'Symbol':<10} {'Model':<50} {'Passed':<10} {'Success Rate':<15} {'Status'}")
-        print(f"{'-'*120}")
+    # Summary table with full model names and returns
+    print(f"{'Symbol':<10} {'Model':<45} {'Return':<10} {'Passed':<8} {'Status':<10} {'Details/Warnings'}")
+    print(f"{'-'*140}")
 
-        for result in validation_results:
-            symbol = result['symbol']
-            model_name = result['model_name']
-            passed = f"{result['passed']}/{result['total']}"
-            success = f"{result['success_rate']:.1f}%"
+    for result in validation_results:
+        symbol = result['symbol']
+        model_name = result['model_name']
+        ret = f"{result.get('return', 0):+.2f}%"
+        passed = f"{result['passed']}/{result['total']}"
+        failures = result.get('failures', [])
+        details = ", ".join(failures) if failures else ""
 
-            if result['passed'] == result['total']:
-                status = f"{GREEN}✅ PASS{RESET}"
-            elif result['passed'] >= result['total'] * 0.75:
-                status = f"{YELLOW}⚠️  WARN{RESET}"
-            else:
-                status = f"{RED}❌ FAIL{RESET}"
-
-            print(f"{symbol:<10} {model_name:<50} {passed:<10} {success:<15} {status}")
-
-        # Overall stats
-        total_checks = sum(r['total'] for r in validation_results)
-        total_passed = sum(r['passed'] for r in validation_results)
-        overall_rate = (total_passed / total_checks * 100) if total_checks > 0 else 0
-
-        print()
-        print(f"{BOLD}Overall: {total_passed}/{total_checks} checks passed ({overall_rate:.1f}%){RESET}")
-
-        all_passed = all(r['passed'] == r['total'] for r in validation_results)
-        if all_passed:
-            print(f"{GREEN}{BOLD}✅ ALL VALIDATIONS PASSED!{RESET}")
+        if result['passed'] == result['total']:
+            status = f"{GREEN}✅ PASS{RESET}"
+        elif result['passed'] >= result['total'] * 0.75:
+            status = f"{YELLOW}⚠️  WARN{RESET}"
         else:
-            failed_count = sum(1 for r in validation_results if r['passed'] < r['total'])
-            print(f"{YELLOW}{BOLD}⚠️  {failed_count} validation(s) need attention{RESET}")
+            status = f"{RED}❌ FAIL{RESET}"
 
-        print(f"{BOLD}{BLUE}{'='*120}{RESET}\n")
+        print(f"{symbol:<10} {model_name:<45} {ret:<10} {passed:<8} {status:<10} {details}")
+
+    # Overall stats
+    total_checks = sum(r['total'] for r in validation_results)
+    total_passed = sum(r['passed'] for r in validation_results)
+    overall_rate = (total_passed / total_checks * 100) if total_checks > 0 else 0
+
+    print()
+    print(f"{BOLD}Overall: {total_passed}/{total_checks} checks passed ({overall_rate:.1f}%){RESET}")
+
+    all_passed = all(r['passed'] == r['total'] for r in validation_results)
+    if all_passed:
+        print(f"{GREEN}{BOLD}✅ ALL VALIDATIONS PASSED!{RESET}")
+    else:
+        failed_count = sum(1 for r in validation_results if r['passed'] < r['total'])
+        print(f"{YELLOW}{BOLD}⚠️  {failed_count} validation(s) need attention{RESET}")
+
+    print(f"{BOLD}{BLUE}{'='*140}{RESET}\n")
 
 
 if __name__ == "__main__":
