@@ -435,6 +435,29 @@ META       Buy & Hold Baseline                                -5.14%       9/9  
 META       Momentum Baseline                                  -8.94%       9/9        ✅ PASS
 ```
 
+**Training Evaluation:**
+The `eval_training.py` tool scans all trained models and generates a comprehensive performance report with actionable insights:
+```bash
+# Evaluate all models
+python eval_training.py
+
+# Filter by symbol
+python eval_training.py --symbol PLTR
+
+# Filter by minimum trade count (to exclude inactive models)
+python eval_training.py --min-trades 10
+
+# Sort by return (default: date)
+python eval_training.py --sort return
+```
+
+**Key Features:**
+- **Performance Summary**: Color-coded table with Returns, Sharpe Ratio, Max Drawdown, and Win Rate
+- **Pathology Detection**: Identifies "Action Collapse" (stuck in one action), Over-trading, and Under-trading
+- **Actionable Insights**: Generates specific recommendations (e.g., "Increase entropy coefficient")
+- **Best/Worst Performers**: Highlights top strategies and struggling agents
+- **Visual Health Check**: Quick Green/Red status indicators for overall model health
+
 ---
 
 ## ⚠️ Important Disclaimer
