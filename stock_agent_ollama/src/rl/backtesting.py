@@ -464,17 +464,56 @@ class BacktestResult:
     paired_trades: List[Dict] = None  # Round-trip trades for P&L validation
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
+        """Convert to dictionary matching the schema of saved backtest_results.json."""
+        # Convert trades to JSON-serializable format
+        serializable_trades = []
+        for trade in self.trades:
+            trade_copy = trade.copy()
+            # Convert Timestamp objects to ISO format strings
+            for date_field in ['date', 'timestamp']:
+                if date_field in trade_copy:
+                    ts = trade_copy[date_field]
+                    if hasattr(ts, 'isoformat'):
+                        trade_copy[date_field] = ts.isoformat()
+                    elif isinstance(ts, str):
+                        trade_copy[date_field] = ts
+            serializable_trades.append(trade_copy)
+
+        # Calculate action distribution
+        from collections import Counter
+        from .types import ImprovedTradingAction
+        action_counts = Counter(self.actions)
+        
+        action_distribution = {}
+        for action_id, count in action_counts.items():
+            try:
+                # Try to use improved action name if applicable
+                # Note: This might be inaccurate if using standard actions, but it's for display
+                action_name = ImprovedTradingAction(action_id).name
+                action_distribution[action_name] = count
+            except ValueError:
+                action_distribution[f"ACTION_{action_id}"] = count
+
+        # Base dictionary
         result = {
             'config': self.config.__dict__,
-            'metrics': self.metrics.to_dict(),
+            'metrics': self.metrics.to_dict(), # Keep nested metrics for completeness
             'portfolio_values': self.portfolio_values.tolist(),
             'actions': self.actions,
-            'trades': self.trades,
-            'dates': [d.isoformat() for d in self.dates],
+            'trades': serializable_trades,
+            'dates': [d.isoformat() if hasattr(d, 'isoformat') else str(d) for d in self.dates],
+            'action_distribution': action_distribution
         }
+        
+        # Flatten metrics into top-level for compatibility with validation script
+        # This matches the structure in save_to_model_dir
+        metrics_dict = self.metrics.to_dict()
+        for k, v in metrics_dict.items():
+            result[k] = v
+            
         if self.paired_trades is not None:
             result['paired_trades'] = self.paired_trades
+            
         return result
 
     def save_to_model_dir(self, model_path: Path, agent_type: str):
@@ -566,7 +605,8 @@ class BacktestResult:
                 'final_portfolio_value': float(self.metrics.final_portfolio_value),
                 'portfolio_values': self.portfolio_values.tolist(),
                 'action_distribution': action_distribution,
-                'trades': serializable_trades
+                'trades': serializable_trades,
+                'dates': [d.isoformat() if hasattr(d, 'isoformat') else str(d) for d in self.dates]
             }
 
             # Add paired_trades if available (for P&L validation)
