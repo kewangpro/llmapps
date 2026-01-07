@@ -440,6 +440,12 @@ class BacktestConfig:
     use_enhanced_rewards: bool = Config.RL_USE_ENHANCED_REWARDS
     use_adaptive_sizing: bool = Config.RL_USE_ADAPTIVE_SIZING
     use_improved_actions: bool = Config.RL_USE_IMPROVED_ACTIONS
+    # New improvement flags
+    use_risk_manager: bool = True
+    use_regime_detector: bool = True
+    use_mtf_features: bool = True
+    use_kelly_sizing: bool = True
+
     include_trend_indicators: bool = False  # For LSTM models
     max_position_pct: float = Config.RL_MAX_POSITION_PCT
     reward_config: Optional[EnhancedRewardConfig] = field(default_factory=lambda: EnhancedRewardConfig())
@@ -613,6 +619,11 @@ class BacktestEngine:
             use_enhanced_rewards=self.config.use_enhanced_rewards,
             use_adaptive_sizing=self.config.use_adaptive_sizing,
             use_improved_actions=self.config.use_improved_actions,
+            # New improvements
+            use_risk_manager=self.config.use_risk_manager,
+            use_regime_detector=self.config.use_regime_detector,
+            use_mtf_features=self.config.use_mtf_features,
+            use_kelly_sizing=self.config.use_kelly_sizing,
             reward_config=self.config.reward_config,
             curriculum_manager=None,  # No curriculum in backtesting
             enable_diagnostics=False  # Disable diagnostics for performance

@@ -1094,8 +1094,31 @@ class EnhancedTradingEnv(SingleStockTradingEnv):
                         use_improved_actions=False
                     )
         else:
-            # Use parent class logic
-            return super()._execute_action(action, current_price)
+            # Not using adaptive sizing (fixed sizes)
+            if self.use_improved_actions:
+                # Handle improved actions manually (HOLD=0, BUY=1-3, SELL=4-5)
+                # 0: HOLD
+                if action == 0:
+                    shares_to_trade = 0
+                
+                # BUY actions
+                elif action in [1, 2, 3]:
+                    # Fixed percentages for baseline strategies
+                    if action == 1: pct = 0.1  # SMALL
+                    elif action == 2: pct = 0.3  # MEDIUM
+                    elif action == 3: pct = 0.5  # LARGE
+                    
+                    affordable_shares = int((self.cash * pct) / current_price)
+                    shares_to_trade = min(affordable_shares, self.max_position_size - self.position)
+                
+                # SELL actions
+                elif action == 4: # SELL_PARTIAL
+                    shares_to_trade = -max(1, self.position // 2) if self.position > 0 else 0
+                elif action == 5: # SELL_ALL
+                    shares_to_trade = -self.position if self.position > 0 else 0
+            else:
+                # Use parent class logic for standard actions (0=SELL, 1=HOLD)
+                return super()._execute_action(action, current_price)
 
         # Execute trade (same as parent)
         if shares_to_trade != 0:
