@@ -574,7 +574,16 @@ class RLTrainingPanel(param.Parameterized):
                             logger.error(f"Error loading {agent_type.upper()} agent: {e}", exc_info=True)
 
                 # Run baseline strategies using a default engine
-                default_config = BacktestConfig(symbol=symbol, start_date=start_date, end_date=end_date)
+                default_config = BacktestConfig(
+                    symbol=symbol,
+                    start_date=start_date,
+                    end_date=end_date,
+                    use_risk_manager=False,
+                    use_adaptive_sizing=False,
+                    use_regime_detector=False,
+                    use_mtf_features=False,
+                    use_kelly_sizing=False
+                )
                 baseline_engine = BacktestEngine(default_config)
 
                 # Update model status with all loaded models
