@@ -544,7 +544,13 @@ class RLTrainingPanel(param.Parameterized):
                                 start_date=start_date,
                                 end_date=end_date,
                                 use_improved_actions=training_config.get('use_improved_actions', True),
-                                include_trend_indicators=include_trend
+                                include_trend_indicators=include_trend,
+                                # Inherit improvements from training config (default to True if not specified)
+                                use_risk_manager=training_config.get('use_risk_manager', True),
+                                use_adaptive_sizing=training_config.get('use_adaptive_sizing', True),
+                                use_regime_detector=training_config.get('use_regime_detector', True),
+                                use_mtf_features=training_config.get('use_mtf_features', True),
+                                use_kelly_sizing=training_config.get('use_kelly_sizing', True)
                             )
 
                             # Create a new engine for this agent
@@ -563,6 +569,13 @@ class RLTrainingPanel(param.Parameterized):
 
                             # Run backtest
                             results[agent_name] = engine.run_agent_backtest(agent, deterministic=True)
+
+                            # Save result to disk for validation/persistence
+                            try:
+                                results[agent_name].save_to_model_dir(model_info['directory'], model_info['agent_type'])
+                                logger.info(f"Saved backtest results for {agent_name}")
+                            except Exception as e:
+                                logger.error(f"Failed to save results for {agent_name}: {e}")
 
                             # Store agent name and model directory for status display
                             model_dir = model_info['directory'].name
