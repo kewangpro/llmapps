@@ -333,12 +333,7 @@ python -m pytest tests/test_action_masking.py -v
 - RL components (ensemble voting, environment creation)
 - Technical analysis indicators (SMA, EMA, RSI, MACD)
 
-**Test Files:**
-- `test_config.py` - Configuration validation
-- `test_action_masking.py` - Action masking for standard and improved actions
-- `test_live_trading_models.py` - Portfolio and trading models
-- `test_rl_components.py` - RL environment and ensemble
-- `test_technical_analysis.py` - Technical indicators
+
 
 ## 🛠️ Developer Tools
 
