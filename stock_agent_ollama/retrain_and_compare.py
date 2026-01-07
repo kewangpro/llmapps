@@ -282,10 +282,16 @@ def run_comprehensive_backtest(symbol: str, algorithms: list = None, include_bas
     # Run baseline strategies
     if include_baselines:
         try:
+            # Disable improvements for baselines to ensure pure strategy execution
             default_config = BacktestConfig(
                 symbol=symbol,
                 start_date=start_date,
-                end_date=end_date
+                end_date=end_date,
+                use_risk_manager=False,
+                use_adaptive_sizing=False,
+                use_regime_detector=False,
+                use_mtf_features=False,
+                use_kelly_sizing=False
             )
             baseline_engine = BacktestEngine(default_config)
 
