@@ -1453,6 +1453,50 @@ The validation tool automatically:
 
 ---
 
+### Training Evaluation Tool
+
+**File**: `eval_training.py` (project root)
+
+#### Purpose
+
+Scans all trained RL models to analyze performance patterns, detect training pathologies (like action collapse), and provide high-level insights into the overall health of the agent ecosystem.
+
+#### Usage
+
+**Basic Usage**:
+```bash
+# Evaluate all models
+python eval_training.py
+
+# Filter by symbol
+python eval_training.py --symbol PLTR
+```
+
+**Advanced Options**:
+```bash
+# Filter by minimum trades (e.g., ignore inactive models)
+python eval_training.py --min-trades 10
+
+# Sort results by return (default is by date)
+python eval_training.py --sort return
+```
+
+#### Key Features
+
+- **Pathology Detection**:
+  - **Action Collapse**: Warns if >80% of actions are identical (e.g., stuck on HOLD).
+  - **Over-trading**: Warns if trades per day > 2.0.
+  - **Under-trading**: Identifies agents that rarely trade.
+- **Performance Grading**: Color-coded status (Green/Yellow/Red) based on returns and Sharpe ratio.
+- **Strategic Insights**: Aggregates data to find the best performing algorithms and symbols.
+- **Visual Report**: Generates a readable table with key metrics (Return, Sharpe, MaxDD, Win Rate) and detailed insights.
+
+#### Integration
+
+This tool complements `retrain_and_compare.py` (generation) and `validate_backtest.py` (validation) by providing the **evaluation and monitoring** layer of the RL pipeline.
+
+---
+
 ## Conclusion
 
 This RL trading system provides a complete framework for training, evaluating, and deploying RL agents for algorithmic trading. Key strengths include modular architecture, realistic simulation, comprehensive risk management, and advanced features for improved performance.
