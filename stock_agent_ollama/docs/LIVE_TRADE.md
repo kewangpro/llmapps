@@ -730,16 +730,17 @@ Transaction costs are displayed in three locations:
 
 ### Validation
 
-Transaction costs match backtesting exactly, ensuring validated results:
+Transaction costs match backtesting exactly, ensuring validated results. Use the validation tool to verify:
 
 ```bash
-# Backtest validation
+# Backtest validation (includes baselines and integrity checks)
 python validate_backtest.py --symbol AAPL
 
 # Check results
-✅ Transaction costs: $4,905.97 (4.9% of capital)
+✅ Transaction costs applied: 100% match
 ✅ Returns calculation: Correct
-✅ P&L matches cash profit: 100%
+✅ Market Data Integrity: Trade prices match history
+✅ Reproducibility: Deterministic behavior verified
 ```
 
 ---

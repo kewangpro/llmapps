@@ -566,16 +566,18 @@ python validate_backtest.py --symbol TEAM --algorithm ppo
 python validate_backtest.py --symbol TEAM --algorithm ppo --latest-only
 ```
 
-**Note**: By default, validates **ALL available models** (not just latest) to enable comprehensive validation across model versions.
+**Note**: By default, validates **ALL available models** (not just latest) to enable comprehensive validation across model versions. Baseline strategies (Buy & Hold, Momentum) are **automatically validated** for every run.
 
 **What it checks:**
 - Return calculation accuracy
-- Action distribution sums to 100%
+- Action distribution integrity (sums to 100%)
 - Win rate calculation correctness
-- Portfolio value consistency
-- Metrics reasonableness (Sharpe ratio <8.0, win rates based on sample size)
-- Transaction cost inclusion (0.05% per trade, slippage only)
-- Reproducibility hints
+- Portfolio value consistency (initial/final match)
+- Metrics reasonableness (Sharpe ratio thresholds, etc.)
+- Individual trade P&L validation (samples 5 trades)
+- Transaction cost inclusion verification
+- **Market Data Integrity** (verifies trade prices against historical market data)
+- **Reproducibility** (Automated double-run verification for RL agents)
 
 **Expected output:**
 ```
@@ -583,7 +585,12 @@ python validate_backtest.py --symbol TEAM --algorithm ppo --latest-only
 ✅ PASS Action distribution sums to 100%
 ✅ PASS Win rate calculation
 ✅ PASS Transaction costs are applied
-Overall: 8/8 checks passed (100.0%)
+✅ PASS Trade prices match market data (5/5 sampled)
+✅ PASS Reproducibility (100% match)
+
+Symbol     Model                                              Return       Passed     Status
+META       ppo_META_20260107_024443                           +10.24%      9/9        ✅ PASS
+META       Buy & Hold Baseline                                -5.14%       9/9        ✅ PASS
 ```
 
 ### "Module not found" Error

@@ -1330,7 +1330,7 @@ python validate_backtest.py --watchlist --algorithm ensemble
 
 #### Validation Checks
 
-The tool performs **8 comprehensive checks**:
+The tool performs **9 comprehensive checks**:
 
 1. **Return Calculation**: Verifies (final_value - initial_value) / initial_value matches reported return
 2. **Action Distribution**: Ensures action percentages sum to 100%
@@ -1341,16 +1341,17 @@ The tool performs **8 comprehensive checks**:
    - Win rate thresholds adjusted by sample size (<20 trades: 95%, ≥20 trades: 90%)
 6. **Individual Trade Validation**: Validates P&L calculations on paired round-trip trades (entry/exit price, commission)
 7. **Transaction Cost Inclusion**: Verifies trades include non-zero `cost` or `commission` fields (default 0.05% per trade)
-8. **Reproducibility Test**: Provides instructions for testing deterministic behavior
+8. **Market Data Integrity**: Verifies backtest trade prices match actual historical market data
+9. **Reproducibility Test**: Automated double-run verification for RL agents to detect non-deterministic behavior
 
 #### Example Output
 
 ```bash
-$ python validate_backtest.py --symbol RIVN
+$ python validate_backtest.py --symbol META
 
 ╔════════════════════════════════════════════════════════════════════╗
 ║                     BACKTEST VALIDATION REPORT                     ║
-║                             RIVN - PPO                             ║
+║                             META - PPO                             ║
 ╚════════════════════════════════════════════════════════════════════╝
 
 ======================================================================
@@ -1358,31 +1359,36 @@ $ python validate_backtest.py --symbol RIVN
 ======================================================================
 
   Initial Portfolio Value: $100,000.00
-  Final Portfolio Value:   $154,949.99
-  Calculated Return:       54.95%
-  Reported Return:         54.95%
+  Final Portfolio Value:   $110,243.74
+  Calculated Return:       10.24%
+  Reported Return:         10.24%
   Difference:              0.0000%
 ✅ PASS Return calculation
 
 [... additional checks ...]
 
 ======================================================================
-                  Check 7: Commission/Cost Inclusion
+                  Check 9: Reproducibility Test
 ======================================================================
 
-  Total Transaction Costs: $3,601.14
-  Average Cost: 3.601% of initial capital
-  (Includes transaction fees + slippage)
-✅ PASS Transaction costs are applied
+  Running automated verification for PPO...
+  (Executing second backtest pass to verify determinism)
+
+  Comparison:
+    Pass 1: +10.2437% return, 0 trades
+    Pass 2: +1.5934% return, 57 trades
+❌ FAIL Reproducibility
+      Return mismatch: +10.2437 vs +1.5934; Trade count mismatch: 0 vs 57
+⚠️  WARNING: Strategy is non-deterministic! Evaluation results may be unreliable.
 
 ======================================================================
                           VALIDATION SUMMARY
 ======================================================================
 
-  Checks Passed: 8/8
-  Success Rate:  100.0%
+  Checks Passed: 8/9
+  Success Rate:  88.9%
 
-✅ ALL CHECKS PASSED - Backtest appears valid!
+⚠️  MOSTLY PASSED - Review warnings above
 ```
 
 #### Batch Validation Output
@@ -1390,19 +1396,21 @@ $ python validate_backtest.py --symbol RIVN
 When validating multiple combinations (e.g., `--watchlist --algorithm all`), the tool provides an overall summary table:
 
 ```
-================================================================================
-                           OVERALL VALIDATION SUMMARY
-================================================================================
+============================================================================================================================================
+                                                         OVERALL VALIDATION SUMMARY                                                         
+============================================================================================================================================
 
-Symbol     Algorithm       Passed     Success Rate    Status
---------------------------------------------------------------------------------
-AAPL       PPO             8/8        100.0%          ✅ PASS
-GOOGL      PPO             8/8        100.0%          ✅ PASS
-MSFT       PPO             8/8        100.0%          ✅ PASS
-...
+Symbol     Model                                         Return     Passed   Status     Details/Warnings
+--------------------------------------------------------------------------------------------------------------------------------------------
+META       ppo_META_20260107_024443                      +10.24%    8/9      ⚠️  WARN Reproducibility
+META       recurrent_ppo_META_20260107_031932            -3.55%     8/9      ⚠️  WARN Reproducibility
+META       ensemble_META_20260107_024443                 -3.87%     8/9      ⚠️  WARN Reproducibility
+META       Buy & Hold Baseline                           -5.14%     9/9      ✅ PASS 
+META       Momentum Baseline                             -8.94%     9/9      ✅ PASS 
 
-Overall: 96/96 checks passed (100.0%)
-✅ ALL VALIDATIONS PASSED!
+Overall: 42/45 checks passed (93.3%)
+⚠️  3 validation(s) need attention
+============================================================================================================================================
 ```
 
 #### Transaction Cost Handling
