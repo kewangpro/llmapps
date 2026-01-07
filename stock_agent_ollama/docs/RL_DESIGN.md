@@ -116,7 +116,7 @@ tests/                          # Test suite (48 tests)
 ├── test_rl_components.py       # RL environment tests
 └── test_technical_analysis.py  # Indicator tests
 
-retrain_and_compare.py          # Training automation CLI (root directory)
+retrain_rl.py          # Training automation CLI (root directory)
 validate_backtest.py            # Backtest validation CLI (root directory)
 ```
 
@@ -189,7 +189,7 @@ validate_backtest.py            # Backtest validation CLI (root directory)
 
 **Strengths**:
 - Stable training with clipped objective
-- Strong risk-adjusted returns (0.51 Sharpe ratio on PLTR)
+- Exceptional risk-adjusted returns (2.59 Sharpe ratio on PLTR)
 - Strong baseline performance with balanced action distribution
 - No VecNormalize normalization for better convergence
 
@@ -209,7 +209,7 @@ validate_backtest.py            # Backtest validation CLI (root directory)
 **Strengths**:
 - LSTM memory for temporal patterns
 - Trend indicators (13 features vs 10 base)
-- Good performance for trending markets (0.23 Sharpe ratio on PLTR)
+- Good performance for trending markets (0.10 Sharpe ratio on PLTR)
 - Stable performance with momentum-focused rewards
 - No VecNormalize normalization preserves temporal learning
 
@@ -240,11 +240,11 @@ validate_backtest.py            # Backtest validation CLI (root directory)
 4. Confidence weighting: Uses action probabilities to determine final decision
 
 **Strengths**:
-- Robust risk-adjusted returns (0.31 Sharpe ratio on PLTR)
+- Robust risk-adjusted returns (0.94 Sharpe ratio on PLTR)
 - Leverages RecurrentPPO's LSTM memory as primary strategy (70% weight)
 - PPO provides opportunistic growth for tactical trades (30% weight)
 - Confidence-based decisions favor more certain predictions
-- Balanced action distribution with healthy win rate (53%)
+- Balanced action distribution with healthy win rate (48%)
 
 **Training**:
 - Trains both PPO and RecurrentPPO independently
@@ -1076,52 +1076,32 @@ env = EnhancedTradingEnv(
 
 ## Developer Tools
 
-### CLI Utility: retrain_and_compare.py
+### Training Automation Tool
 
-A command-line tool for automated training, backtesting, and comparison of all RL algorithms.
-
-**Location**: `retrain_and_compare.py` (project root)
+**File**: `retrain_rl.py` (project root)
 
 #### Purpose
 
-Automate the workflow of:
-1. Training all (or selected) RL algorithms on one or multiple symbols
-2. Running comprehensive backtests
-3. Comparing performance across algorithms and baseline strategies
-4. Detecting action collapse issues
+Automates the end-to-end training workflow for RL agents. It handles data fetching, environment setup, model training, and automatically triggers an initial validation backtest to generate performance artifacts.
 
 #### Usage
 
 **Basic Usage** (train all algorithms on a single stock):
 ```bash
 source .venv/bin/activate
-python retrain_and_compare.py --symbol AAPL
+python retrain_rl.py --symbol AAPL
 ```
 
 **Advanced Options**:
 ```bash
 # Train on multiple stocks
-python retrain_and_compare.py --symbol AMZN,AAPL,META --algorithms ensemble
+python retrain_rl.py --symbol AMZN,AAPL,META --algorithms ensemble
 
 # Train specific algorithms only
-python retrain_and_compare.py --symbol TSLA --algorithms ppo,recurrent_ppo
-
-# Train only PPO and Ensemble
-python retrain_and_compare.py --symbol NVDA --algorithms ppo,ensemble
+python retrain_rl.py --symbol TSLA --algorithms ppo,recurrent_ppo
 
 # Custom training duration
-python retrain_and_compare.py --symbol NVDA --timesteps 500000
-
-# Compare ALL existing models without retraining (comprehensive)
-python retrain_and_compare.py --symbol TEAM --skip-training
-# Shows all models: 4 PPO + 4 RecurrentPPO + 3 Ensemble
-
-# Compare only PPO models (all versions)
-python retrain_and_compare.py --symbol TEAM --algorithms ppo --skip-training
-# Shows all 4 PPO models with timestamps for evolution tracking
-
-# Exclude baseline strategies
-python retrain_and_compare.py --symbol MSFT --no-baselines
+python retrain_rl.py --symbol NVDA --timesteps 500000
 ```
 
 #### Command-Line Arguments
@@ -1129,157 +1109,25 @@ python retrain_and_compare.py --symbol MSFT --no-baselines
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
 | `--symbol` | string | **required** | Stock symbol(s) to train on - single or comma-separated (e.g., AAPL or AAPL,TSLA,NVDA) |
-| `--algorithms` | string | `all` | Comma-separated list: `ppo,recurrent_ppo,ensemble`<br>During training: Controls which algorithms to train<br>During `--skip-training`: Controls which algorithm types to backtest (backtests ALL models of selected types) |
+| `--algorithms` | string | `all` | Comma-separated list: `ppo,recurrent_ppo,ensemble`<br>Controls which algorithms to train |
 | `--timesteps` | int | `300000` | Training timesteps per algorithm |
-| `--skip-training` | flag | `False` | Skip training, backtest ALL existing models of selected algorithm types<br>Results show full model names with timestamps (e.g., `ppo_TEAM_20260106_071323`)<br>Enables comparison across model versions to track improvements over time |
-| `--no-baselines` | flag | `False` | Skip baseline strategies (Buy & Hold, Momentum) |
 
-#### What It Does
+#### Workflow
 
-**1. Training Phase** (unless `--skip-training`):
+**1. Training Phase**:
 - Trains each selected algorithm sequentially
 - Uses last 3 years of historical data (1095 days)
 - Saves models to `data/models/rl/{algorithm}_{symbol}_{timestamp}/`
 - Saves both `best_model.zip` (peak performance) and `final_model.zip`
 
-**2. Backtesting Phase**:
-- **Default**: Finds ALL models for each selected algorithm type (not just latest)
-- **With `--skip-training`**: Backtests all existing models to enable version comparison
-- Tests on last 9 months of data (280 days)
-- Loads exact training configuration from saved models
-- Compares against Buy & Hold and Momentum strategies
-- Results display full model names with timestamps for tracking improvements
+**2. Artifact Generation**:
+- Automatically invokes `validate_backtest.py` logic upon completion
+- Generates `backtest_results.json` immediately
+- Ensures models are ready for evaluation tools (`eval_training.py`) without manual steps
 
-**3. Results Display**:
-```
-📊 BACKTEST COMPARISON
-====================
-Strategy          Return    Sharpe  Max DD   Win Rate  HOLD  BUY_S  BUY_M  BUY_L  SELL_P  SELL_A  Trades
-PPO Agent         +15.23%   1.45    -8.2%    65%       25%   15%    20%    18%    12%     10%     48
-RecurrentPPO      +18.67%   1.78    -6.1%    72%       22%   18%    22%    16%    14%     8%      52
-Ensemble Agent    +19.85%   1.92    -5.8%    70%       24%   17%    21%    17%    13%     8%      50
-Buy & Hold        +12.50%   1.20    -10.0%   N/A       N/A   N/A    N/A    N/A    N/A     N/A     1
-Momentum          +10.15%   0.95    -11.2%   N/A       N/A   N/A    N/A    N/A    N/A     N/A     38
-```
-
-**4. Analysis**:
-- Identifies best performer by total return
-- Detects action collapse (>80% single action usage)
-- Provides actionable recommendations
-
-#### Example Output
-
-```bash
-$ python retrain_and_compare.py --symbol AAPL
-
-################################################################################
-#                                                                              #
-#                         RL MODEL RETRAINING                                  #
-#                                                                              #
-################################################################################
-
-Symbol: AAPL
-Timesteps: 300,000
-Algorithms: PPO, RecurrentPPO, Ensemble
-
-================================================================================
-🚀 TRAINING PPO on AAPL
-================================================================================
-
-Training progress: 100%|████████████████| 300000/300000
-
-✅ PPO Training Complete!
-   Model saved to: data/models/rl/ppo_AAPL_20250126_143022/
-
-[... training continues for each algorithm ...]
-
-================================================================================
-📊 COMPREHENSIVE BACKTEST: AAPL
-================================================================================
-
-   ✅ PPO: +15.23%
-   ✅ RecurrentPPO: +18.67%
-   ✅ Ensemble: +19.85%
-   ✅ Buy & Hold: +12.50%
-   ✅ Momentum: +10.15%
-
-[... results table ...]
-
-================================================================================
-🎯 ANALYSIS
-================================================================================
-
-🥇 Best Performer: Ensemble Agent
-   Return: +19.85%
-   Sharpe: 1.92
-
-📊 Action Distribution Analysis:
-   ✅ PPO Agent: Balanced actions (max 25%)
-   ✅ RecurrentPPO: Balanced actions (max 22%)
-   ✅ Ensemble Agent: Balanced actions (max 24%)
-
-================================================================================
-✨ Complete!
-```
-
-#### Use Cases
-
-**1. Algorithm Selection**:
-```bash
-# Compare all algorithms to choose best for a symbol
-python retrain_and_compare.py --symbol TEAM
-```
-
-**2. Multi-Stock Training**:
-```bash
-# Train ensemble on multiple stocks simultaneously
-python retrain_and_compare.py --symbol AMZN,AAPL,META --algorithms ensemble
-```
-
-**3. Periodic Retraining**:
-```bash
-# Retrain models monthly with latest data
-python retrain_and_compare.py --symbol AAPL --algorithms ppo,recurrent_ppo,ensemble
-```
-
-**4. Quick Performance Check**:
-```bash
-# Test existing models without retraining
-python retrain_and_compare.py --symbol NVDA --skip-training
-```
-
-**5. Algorithm Comparison**:
-```bash
-# Compare all 3 algorithms on a symbol
-python retrain_and_compare.py --symbol GOOGL
-```
-
-#### Integration with Web UI
-
-Models trained via this CLI tool are **automatically available** in the web interface:
-- Training page: Select algorithm → models appear in dropdown
-- Live Trading page: Algorithm selection → auto-finds latest model
-- Models page: View all trained models
-
-#### Notes
-
-- **Training Time**: ~15-35 min per algorithm (300k steps)
-- **Multi-Symbol Processing**: Trains each symbol sequentially when multiple provided
-- **Data Requirements**: Minimum 3 years historical data per symbol
-- **Disk Space**: ~50-100MB per trained model
-- **Parallel Training**: Not supported (trains sequentially to avoid resource conflicts)
-- **Logging**: All training logs saved to `data/logs/`
-
-#### Troubleshooting
-
-**"No model found for {algorithm}"**:
-- Solution: Train the algorithm first (remove `--skip-training`)
-
-**"Insufficient data for symbol"**:
-- Solution: Use well-established stocks with >3 years of history
-
-**Training crashes/OOM**:
-- Solution: Reduce `--timesteps` to 100000 or close other applications
+**3. Next Steps**:
+- After training, use `eval_training.py` to compare performance and detect pathologies.
+- Use `validate_backtest.py` for detailed mathematical checks.
 
 ---
 
@@ -1300,12 +1148,11 @@ source .venv/bin/activate
 # Validate ALL models for a symbol (all algorithms, all versions)
 python validate_backtest.py --symbol AAPL
 
+# Force a fresh backtest run before validation
+python validate_backtest.py --symbol AAPL --run
+
 # Validate all watchlist stocks (all algorithms, all models)
 python validate_backtest.py --watchlist
-
-# Validate ALL PPO models for a symbol (default: all versions)
-python validate_backtest.py --symbol TEAM --algorithm ppo
-# Validates all 4 PPO models with timestamps
 ```
 
 **Advanced Options**:
@@ -1313,8 +1160,8 @@ python validate_backtest.py --symbol TEAM --algorithm ppo
 # Validate only LATEST model (faster for quick checks)
 python validate_backtest.py --symbol TEAM --algorithm ppo --latest-only
 
-# Validate specific algorithm across watchlist
-python validate_backtest.py --watchlist --algorithm ensemble
+# Force run specific algorithm across watchlist
+python validate_backtest.py --watchlist --algorithm ensemble --run
 ```
 
 #### Command-Line Arguments
@@ -1325,6 +1172,7 @@ python validate_backtest.py --watchlist --algorithm ensemble
 | `--watchlist` | flag | N/A | N/A | Validate all symbols from default watchlist |
 | `--algorithm` | string | `all` | `ppo`, `recurrent_ppo`, `ensemble`, `all` | Algorithm(s) to validate |
 | `--latest-only` | flag | `False` | N/A | Validate only the most recent model (default: validates all models) |
+| `--run` | flag | `False` | N/A | Force execution of a new backtest before validation |
 
 **Note**: By default, the tool validates **ALL available models** for the selected algorithm(s), not just the latest. This enables comprehensive validation across model versions. Results show full model names with timestamps (e.g., `ppo_TEAM_20260106_071323`).
 
@@ -1477,6 +1325,9 @@ python eval_training.py --symbol PLTR
 # Filter by minimum trades (e.g., ignore inactive models)
 python eval_training.py --min-trades 10
 
+# Prune (archive) models with negative returns older than 24 hours
+python eval_training.py --prune --min-return 0 --age 24h
+
 # Sort results by return (default is by date)
 python eval_training.py --sort return
 ```
@@ -1487,13 +1338,14 @@ python eval_training.py --sort return
   - **Action Collapse**: Warns if >80% of actions are identical (e.g., stuck on HOLD).
   - **Over-trading**: Warns if trades per day > 2.0.
   - **Under-trading**: Identifies agents that rarely trade.
+- **Pruning System**: Automatically moves models matching specific criteria (e.g., negative returns and older than 24 hours) to a `data/models/rl/archive/` folder to reduce noise.
 - **Performance Grading**: Color-coded status (Green/Yellow/Red) based on returns and Sharpe ratio.
 - **Strategic Insights**: Aggregates data to find the best performing algorithms and symbols.
 - **Visual Report**: Generates a readable table with key metrics (Return, Sharpe, MaxDD, Win Rate) and detailed insights.
 
 #### Integration
 
-This tool complements `retrain_and_compare.py` (generation) and `validate_backtest.py` (validation) by providing the **evaluation and monitoring** layer of the RL pipeline.
+This tool complements `retrain_rl.py` (generation) and `validate_backtest.py` (validation) by providing the **evaluation and monitoring** layer of the RL pipeline.
 
 ---
 

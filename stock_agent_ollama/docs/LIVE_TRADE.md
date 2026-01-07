@@ -730,18 +730,25 @@ Transaction costs are displayed in three locations:
 
 ### Validation
 
-Transaction costs match backtesting exactly, ensuring validated results. Use the validation tool to verify:
+Transaction costs match backtesting exactly, ensuring validated results. Use the validation and evaluation tools to verify:
 
 ```bash
 # Backtest validation (includes baselines and integrity checks)
 python validate_backtest.py --symbol AAPL
 
-# Check results
+# Force a fresh backtest run before validation
+python validate_backtest.py --symbol AAPL --run
+
+# Performance evaluation and pathology detection
+python eval_training.py --symbol AAPL
+```
+
+**Check results:**
 ✅ Transaction costs applied: 100% match
 ✅ Returns calculation: Correct
 ✅ Market Data Integrity: Trade prices match history
 ✅ Reproducibility: Deterministic behavior verified
-```
+✅ Strategic Health: No action collapse or over-trading detected
 
 ---
 
@@ -1202,7 +1209,7 @@ config = RecurrentPPORewardConfig(
 **4. Validate with Backtesting First:**
 ```bash
 # Always backtest on the same timeframe before live trading
-python retrain_and_compare.py --symbol AAPL --algorithms ppo
+python retrain_rl.py --symbol AAPL --algorithms ppo
 # Verify win rate >40% and positive Sharpe ratio before going live
 ```
 

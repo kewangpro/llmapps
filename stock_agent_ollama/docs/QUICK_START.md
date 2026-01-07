@@ -555,6 +555,9 @@ After running backtests, you can validate the results for mathematical correctne
 # Validate ALL models for a symbol (default: all versions)
 python validate_backtest.py --symbol AAPL
 
+# Force a fresh backtest RUN followed by validation
+python validate_backtest.py --symbol AAPL --run
+
 # Validate all watchlist stocks (all algorithms, all models)
 python validate_backtest.py --watchlist
 
@@ -592,6 +595,27 @@ Symbol     Model                                              Return       Passe
 META       ppo_META_20260107_024443                           +10.24%      9/9        ✅ PASS
 META       Buy & Hold Baseline                                -5.14%       9/9        ✅ PASS
 ```
+
+### Training Evaluation & Insights
+
+To get a high-level overview of all trained models and detect training pathologies:
+
+```bash
+# Evaluate all models in the registry
+python eval_training.py
+
+# Filter results for a specific symbol
+python eval_training.py --symbol PLTR
+
+# Sort by return to find best performers
+python eval_training.py --sort return
+```
+
+**Key Insights Provided:**
+- **Overall Health**: Aggregated profitability and average returns across the ecosystem.
+- **Pathology Detection**: Automatic warnings for **Action Collapse** (agent stuck) or **Over-trading**.
+- **Strategy Comparison**: Identifies which algorithms (PPO vs RecurrentPPO) are winning.
+- **Color-coded Tables**: Visual cues for return quality and risk-adjusted performance.
 
 ### "Module not found" Error
 **Fix:**
