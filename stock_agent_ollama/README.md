@@ -342,103 +342,13 @@ python -m pytest tests/test_action_masking.py -v
 
 ## 🛠️ Developer Tools
 
-**Automated Training:**
-The `retrain_rl.py` CLI utility automates the training workflow. It trains models and automatically generates initial backtest results for evaluation.
+The project includes a suite of CLI tools for the full RL lifecycle:
 
-```bash
-# Train all algorithms on a single stock (efficiently via Ensemble)
-python retrain_rl.py --symbol AAPL
+*   **`retrain_rl.py`**: Automates model training and artifact generation.
+*   **`validate_backtest.py`**: Validates backtest integrity and reproducibility.
+*   **`eval_training.py`**: Evaluates model performance, compares versions, and detects pathologies.
 
-# Train specific algorithms on multiple stocks
-python retrain_rl.py --symbol AMZN,AAPL,META --algorithms ensemble
-
-# Train all algorithms on watchlist stocks
-python retrain_rl.py --watchlist
-
-# Train only Ensemble on watchlist
-python retrain_rl.py --watchlist --algorithms ensemble
-
-# Train only PPO and Ensemble
-python retrain_rl.py --symbol TSLA --algorithms ppo,ensemble
-```
-
-**Options:**
-- `--symbol`: Single stock or comma-separated list (e.g., `AAPL` or `AAPL,TSLA,NVDA`)
-- `--watchlist`: Train on all symbols from default watchlist (mutually exclusive with `--symbol`)
-- `--algorithms`: Comma-separated list of `ppo`, `recurrent_ppo`, `ensemble` (default: all)
-- `--timesteps`: Training steps (default: 300,000)
-
-The tool handles model training and automatically triggers validation to generate initial artifacts. Note that training the `ensemble` algorithm automatically trains and saves the individual `ppo` and `recurrent_ppo` models as part of the process.
-
-**Backtest Validation:**
-The `validate_backtest.py` tool provides comprehensive validation of backtest results and can force new backtests to be run:
-
-```bash
-# Validate ALL PPO models for a symbol (default behavior)
-python validate_backtest.py --symbol TEAM --algorithm ppo
-
-# Force RUN a new backtest and then validate (useful for re-evaluating logic)
-python validate_backtest.py --symbol RIVN --run
-
-# Validate all watchlist stocks
-python validate_backtest.py --watchlist
-
-# Validate only the LATEST model
-python validate_backtest.py --symbol TEAM --algorithm ppo --latest-only
-```
-
-**Validation Checks:**
-- Return calculation accuracy
-- Action distribution integrity (sums to 100%)
-- Win rate calculation correctness
-- Portfolio value consistency (initial/final match)
-- Metrics reasonableness (Sharpe ratio, drawdown thresholds)
-- Individual trade P&L validation
-- Transaction cost inclusion verification
-- Market Data Integrity
-- Reproducibility (Automated double-run verification)
-
-**Options:**
-- `--symbol`: Stock symbol to validate (e.g., RIVN, TSLA, AAPL)
-- `--watchlist`: Validate all symbols from default watchlist
-- `--algorithm`: `ppo`, `recurrent_ppo`, `ensemble`, or `all` (default: all)
-- `--latest-only`: Validate only the most recent model (default: validates all models)
-- `--run`: Force execution of a new backtest before validation (default: validates existing results)
-
-**Output Format:**
-Results show full model names with returns and pass rates:
-```
-Symbol     Model                                              Return       Passed     Status
-META       ppo_META_20260107_024443                           +10.24%      8/9        ⚠️  WARN
-META       Buy & Hold Baseline                                -5.14%       9/9        ✅ PASS
-```
-
-**Training Evaluation:**
-The `eval_training.py` tool scans all trained models and generates a comprehensive performance report with actionable insights:
-```bash
-# Evaluate all models
-python eval_training.py
-
-# Filter by symbol
-python eval_training.py --symbol PLTR
-
-# Filter by minimum trade count (to exclude inactive models)
-python eval_training.py --min-trades 10
-
-# Prune (archive) models with negative returns older than 24 hours
-python eval_training.py --prune --min-return 0 --age 24h
-
-# Sort by return (default: date)
-python eval_training.py --sort return
-```
-
-**Key Features:**
-- **Performance Summary**: Color-coded table with Returns, Sharpe Ratio, Max Drawdown, and Win Rate
-- **Pathology Detection**: Identifies "Action Collapse" (stuck in one action), Over-trading, and Under-trading
-- **Pruning System**: Automatically archives poor-performing or old models to `data/models/rl/archive/` to keep the workspace clean
-- **Actionable Insights**: Generates specific recommendations (e.g., "Increase entropy coefficient")
-- **Best/Worst Performers**: Highlights top strategies and struggling agents
-- **Visual Health Check**: Quick Green/Red status indicators for overall model health
+👉 **For detailed usage and command examples, see [QUICK_START.md](docs/QUICK_START.md#developer-tools).**
 
 ---
 
