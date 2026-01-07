@@ -253,18 +253,21 @@ class PPORewardConfig(EnhancedRewardConfig):
     - Prone to action collapse
     """
     # Stronger penalties to discourage collapse
-    risk_penalty_weight: float = 0.3
-    drawdown_penalty_weight: float = 0.5
+    risk_penalty_weight: float = 0.2
+    drawdown_penalty_weight: float = 0.3
 
-    # Stronger diversity bonus to prevent action collapse
-    diversity_bonus: float = 0.5
-    diversity_penalty: float = -0.5
+    # REDUCED diversity bonus to prevent forced overtrading
+    # High entropy coefficient (0.2) already handles exploration
+    diversity_bonus: float = 0.1
+    diversity_penalty: float = -0.1
 
     # Higher transaction costs to discourage overtrading
-    transaction_cost_rate: float = 0.002
+    transaction_cost_rate: float = 0.001
 
     # Stronger HOLD incentive to combat PPO's tendency to overtrade
-    base_hold_incentive: float = 0.05
+    base_hold_incentive: float = 0.1
+    hold_winning_position_bonus: float = 0.1
+    momentum_trend_bonus: float = 0.2
 
 
 @dataclass
@@ -279,8 +282,8 @@ class RecurrentPPORewardConfig(PPORewardConfig):
     drawdown_penalty_weight: float = 0.2
 
     # Higher incentives for holding winning positions
-    hold_winning_position_bonus: float = 0.2
-    momentum_trend_bonus: float = 0.3
+    hold_winning_position_bonus: float = 0.3
+    momentum_trend_bonus: float = 0.4
 
     # Penalize high-frequency trading
     excessive_trading_penalty: float = -0.2
@@ -289,7 +292,7 @@ class RecurrentPPORewardConfig(PPORewardConfig):
     profitable_trade_bonus: float = 0.05
 
     # Minimal transaction costs
-    transaction_cost_rate: float = 0.001
+    transaction_cost_rate: float = 0.0005
 
 
 class EnhancedRewardFunction:
