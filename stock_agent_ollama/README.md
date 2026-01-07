@@ -387,7 +387,7 @@ python retrain_and_compare.py --symbol NVDA --no-baselines
 The tool handles model training, backtesting, and comprehensive strategy comparison automatically. Note that training the `ensemble` algorithm automatically trains and saves the individual `ppo` and `recurrent_ppo` models as part of the process, making it the most efficient way to generate all three agents.
 
 **Backtest Validation:**
-The `validate_backtest.py` tool provides comprehensive validation of backtest results:
+The `validate_backtest.py` tool provides comprehensive validation of backtest results, including automated checks for baseline strategies (Buy & Hold, Momentum):
 ```bash
 # Validate ALL PPO models for a symbol (default behavior)
 python validate_backtest.py --symbol TEAM --algorithm ppo
@@ -395,7 +395,7 @@ python validate_backtest.py --symbol TEAM --algorithm ppo
 
 # Validate ALL models for a symbol (all algorithms)
 python validate_backtest.py --symbol RIVN
-# Validates all PPO + RecurrentPPO + Ensemble models
+# Validates all PPO + RecurrentPPO + Ensemble models + Baselines
 
 # Validate all watchlist stocks (all algorithms, all models)
 python validate_backtest.py --watchlist
@@ -417,7 +417,8 @@ python validate_backtest.py --watchlist --algorithm ensemble
 - Metrics reasonableness (Sharpe ratio, drawdown thresholds)
 - Individual trade P&L validation (samples 5 trades)
 - Transaction cost inclusion verification
-- Reproducibility testing guidance
+- Market Data Integrity (verifies trade prices against historical market data)
+- Reproducibility (Automated double-run verification)
 
 **Options:**
 - `--symbol`: Stock symbol to validate (e.g., RIVN, TSLA, AAPL)
@@ -426,11 +427,12 @@ python validate_backtest.py --watchlist --algorithm ensemble
 - `--latest-only`: Validate only the most recent model (default: validates all models)
 
 **Output Format:**
-Results show full model names with timestamps for clarity:
+Results show full model names with returns and pass rates:
 ```
-Symbol     Model                                              Passed     Success Rate    Status
-TEAM       ppo_TEAM_20260106_071323                          8/8        100.0%          ✅ PASS
-TEAM       ppo_TEAM_20251230_154251                          8/8        100.0%          ✅ PASS
+Symbol     Model                                              Return       Passed     Status
+META       ppo_META_20260107_024443                           +10.24%      8/9        ⚠️  WARN
+META       Buy & Hold Baseline                                -5.14%       9/9        ✅ PASS
+META       Momentum Baseline                                  -8.94%       9/9        ✅ PASS
 ```
 
 ---
