@@ -516,96 +516,88 @@ def validate_return_from_trades(data: Dict[str, Any]) -> bool:
         print_warning("Portfolio values not available - cannot validate return from trades")
         return True
 
-    # Try to get paired trades first (preferred format)
+    # Get all trades (raw actions) for cash flow analysis
+    trades = data.get('trades', [])
+    
+    # Get paired trades for P&L analysis
     paired_trades = data.get('paired_trades', [])
-
     if not paired_trades:
         # Fall back to regular trades if paired trades not available
         regular_trades = data.get('trades', [])
-
         # Check if regular trades have P&L information
         if regular_trades and 'pnl' in regular_trades[0]:
-            # Filter to only SELL actions (which realize P&L)
             paired_trades = [t for t in regular_trades if t.get('action', '').upper() in ['SELL', 'SELL_PARTIAL', 'SELL_ALL']]
-            if paired_trades:
-                print(f"  Using {len(paired_trades)} sell trades from regular trade log")
 
-        if not paired_trades:
-            print("  No paired trades or P&L data available")
-            print_warning("Cannot validate return reconciliation without trade P&L data")
-            print("  This check requires 'paired_trades' or trades with 'pnl' field")
-            return True  # Can't validate, but not a failure
+    if not trades:
+        print("  No trades available for reconciliation")
+        return True
 
-    print(f"  Analyzing {len(paired_trades)} completed trades")
+    print(f"  Analyzing {len(trades)} raw actions and {len(paired_trades)} completed trades")
 
-    # Sum all realized P&L from trades
-    total_realized_pnl = sum(trade.get('pnl', 0) for trade in paired_trades)
-
-    # Check if there are unrealized positions
-    # This would be indicated by final cash != final portfolio value
-    final_cash = data.get('final_cash_balance')
-    position_value = data.get('final_position_value', 0)
-
-    # Calculate expected final value
-    # Expected = Initial + Realized P&L from all trades + Unrealized P&L from open positions
-    if final_cash is not None and position_value is not None:
-        # We have detailed breakdown
-        expected_final = final_cash + position_value
-
-        # Also verify cash balance matches initial + realized PnL
-        expected_cash = initial + total_realized_pnl
-        cash_matches = abs(final_cash - expected_cash) < 1.0
-
-        print(f"\n  {BOLD}Detailed Breakdown:{RESET}")
+    # 1. Cash Flow Reconciliation
+    # Final Cash = Initial + Sell Proceeds - Buy Costs - Commissions
+    total_sell_proceeds = sum(t['price'] * t['shares'] for t in trades if 'SELL' in t['action'])
+    total_buy_costs = sum(t['price'] * t['shares'] for t in trades if 'BUY' in t['action'])
+    total_commissions = sum(t.get('commission', 0) for t in trades)
+    
+    net_cash_flow = total_sell_proceeds - total_buy_costs - total_commissions
+    expected_cash = initial + net_cash_flow
+    actual_cash = data.get('final_cash_balance')
+    
+    cash_matches = False
+    if actual_cash is not None:
+        cash_matches = abs(actual_cash - expected_cash) < 1.0
+        
+        print(f"\n  {BOLD}Cash Flow Reconciliation:{RESET}")
         print(f"    Initial Capital:        ${initial:,.2f}")
-        print(f"    Realized P&L (trades):  ${total_realized_pnl:+,.2f}")
-        print(f"    Expected Cash:          ${expected_cash:,.2f}")
-        print(f"    Actual Final Cash:      ${final_cash:,.2f}")
+        print(f"    Total Sell Proceeds:    +${total_sell_proceeds:,.2f}")
+        print(f"    Total Buy Costs:        -${total_buy_costs:,.2f}")
+        print(f"    Total Commissions:      -${total_commissions:,.2f}")
+        print(f"    Expected Final Cash:    ${expected_cash:,.2f}")
+        print(f"    Actual Final Cash:      ${actual_cash:,.2f}")
+        print_check("Cash balance matches net cash flow", cash_matches)
+
+    # 2. Portfolio Value Reconciliation
+    # Final Value = Final Cash + Position Value
+    final_matches = False
+    position_value = data.get('final_position_value', 0)
+    
+    if actual_cash is not None and position_value is not None:
+        expected_final = actual_cash + position_value
+        final_matches = abs(expected_final - final) < 1.0
+        
+        print(f"\n  {BOLD}Portfolio Value Reconciliation:{RESET}")
+        print(f"    Final Cash:             ${actual_cash:,.2f}")
         print(f"    Open Position Value:    ${position_value:,.2f}")
         print(f"    Expected Final Value:   ${expected_final:,.2f}")
         print(f"    Actual Final Value:     ${final:,.2f}")
-
-        # Allow $1 tolerance for rounding
-        final_matches = abs(expected_final - final) < 1.0
-
-        print(f"\n  {BOLD}Reconciliation:{RESET}")
-        print_check("Cash balance matches initial + realized P&L", cash_matches)
         print_check("Final value matches cash + position", final_matches)
 
-        return cash_matches and final_matches
-    else:
-        # Simple check: Does realized P&L explain the return?
-        # Note: This may not match perfectly if there's an open position
-        expected_final_simple = initial + total_realized_pnl
-        actual_return = final - initial
-
-        print(f"\n  {BOLD}Simple Reconciliation:{RESET}")
-        print(f"    Initial Capital:          ${initial:,.2f}")
-        print(f"    Realized P&L (all trades): ${total_realized_pnl:+,.2f}")
-        print(f"    Expected Change:          ${total_realized_pnl:+,.2f}")
-        print(f"    Actual Change:            ${actual_return:+,.2f}")
-        print(f"    Difference:               ${abs(actual_return - total_realized_pnl):,.2f}")
-
-        # Check if difference can be explained by unrealized position
-        difference = abs(actual_return - total_realized_pnl)
-
-        # If difference is small (< $10), consider it matching
-        if difference < 10.0:
-            print_check("Return matches realized P&L from trades", True)
-            return True
-        elif difference < initial * 0.01:  # Less than 1% of initial capital
-            print_check("Return approximately matches trades (small open position likely)", True)
-            print(f"  Note: ${difference:,.2f} difference likely from unrealized position")
-            return True
-        else:
-            print_check("Return matches realized P&L from trades", False)
-            print_warning(f"Large discrepancy (${difference:,.2f}) between trade P&L and actual return")
-            print_warning("Possible causes:")
-            print_warning("  - Large unrealized position (check final position value)")
-            print_warning("  - Missing trades in trade log")
-            print_warning("  - Incorrect P&L calculations")
-            print_warning("  - Cash balance tracking error")
-            return False
+    # 3. P&L Consistency (Information only if we have open positions)
+    total_realized_pnl = sum(trade.get('pnl', 0) for trade in paired_trades)
+    
+    # Estimate Unrealized P&L
+    # Unrealized = Position Value - Cost Basis of Open Position
+    # Cost Basis of Open = Total Buy Costs - (Cost Basis of Sold Shares)
+    # This is hard to get exactly without matching specific tax lots, 
+    # but we can check if it roughly explains the return.
+    
+    print(f"\n  {BOLD}P&L Analysis:{RESET}")
+    print(f"    Realized P&L:           ${total_realized_pnl:+,.2f}")
+    
+    if position_value > 0:
+         # Calculate approximate cost basis of open position
+         # Cash spent on open = Total Buy - Cost of Sold
+         # Actually simpler: Cash spent on open = (Initial + Realized P&L) - Final Cash
+         # (Assuming Initial + Realized P&L is what cash *would* be if no open positions)
+         implied_cost_basis = (initial + total_realized_pnl) - actual_cash
+         unrealized_pnl = position_value - implied_cost_basis
+         
+         print(f"    Unrealized P&L (est):   ${unrealized_pnl:+,.2f}")
+         print(f"    Total P&L (est):        ${(total_realized_pnl + unrealized_pnl):+,.2f}")
+         print(f"    Actual Total Return:    ${(final - initial):+,.2f}")
+    
+    return cash_matches and final_matches
 
 
 def validate_market_data(data: Dict[str, Any], symbol: str) -> bool:
