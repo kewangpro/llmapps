@@ -3,6 +3,8 @@
 Backtest Validation Script
 
 Validates that backtest results are mathematically correct and free from common bugs.
+Runs 10 comprehensive checks including return reconciliation from trades.
+
 Usage: python validate_backtest.py --symbol RIVN
        python validate_backtest.py --watchlist
        python validate_backtest.py --symbol RIVN --algorithm ppo
@@ -496,12 +498,122 @@ def validate_commission_inclusion(data: Dict[str, Any]) -> bool:
         return False
 
 
+def validate_return_from_trades(data: Dict[str, Any]) -> bool:
+    """
+    Validate that portfolio return can be reconstructed from trade P&Ls.
+
+    This is a critical check that ensures:
+    - All trades are properly accounted for
+    - No phantom gains/losses exist
+    - Final portfolio value = Initial + Sum(Trade P&Ls) + Unrealized P&L
+    """
+    print_header("Check 8: Return Reconciliation from Trades")
+
+    initial = data.get('initial_portfolio_value')
+    final = data.get('final_portfolio_value')
+
+    if initial is None or final is None:
+        print_warning("Portfolio values not available - cannot validate return from trades")
+        return True
+
+    # Try to get paired trades first (preferred format)
+    paired_trades = data.get('paired_trades', [])
+
+    if not paired_trades:
+        # Fall back to regular trades if paired trades not available
+        regular_trades = data.get('trades', [])
+
+        # Check if regular trades have P&L information
+        if regular_trades and 'pnl' in regular_trades[0]:
+            # Filter to only SELL actions (which realize P&L)
+            paired_trades = [t for t in regular_trades if t.get('action', '').upper() in ['SELL', 'SELL_PARTIAL', 'SELL_ALL']]
+            if paired_trades:
+                print(f"  Using {len(paired_trades)} sell trades from regular trade log")
+
+        if not paired_trades:
+            print("  No paired trades or P&L data available")
+            print_warning("Cannot validate return reconciliation without trade P&L data")
+            print("  This check requires 'paired_trades' or trades with 'pnl' field")
+            return True  # Can't validate, but not a failure
+
+    print(f"  Analyzing {len(paired_trades)} completed trades")
+
+    # Sum all realized P&L from trades
+    total_realized_pnl = sum(trade.get('pnl', 0) for trade in paired_trades)
+
+    # Check if there are unrealized positions
+    # This would be indicated by final cash != final portfolio value
+    final_cash = data.get('final_cash_balance')
+    position_value = data.get('final_position_value', 0)
+
+    # Calculate expected final value
+    # Expected = Initial + Realized P&L from all trades + Unrealized P&L from open positions
+    if final_cash is not None and position_value is not None:
+        # We have detailed breakdown
+        expected_final = final_cash + position_value
+
+        # Also verify cash balance matches initial + realized PnL
+        expected_cash = initial + total_realized_pnl
+        cash_matches = abs(final_cash - expected_cash) < 1.0
+
+        print(f"\n  {BOLD}Detailed Breakdown:{RESET}")
+        print(f"    Initial Capital:        ${initial:,.2f}")
+        print(f"    Realized P&L (trades):  ${total_realized_pnl:+,.2f}")
+        print(f"    Expected Cash:          ${expected_cash:,.2f}")
+        print(f"    Actual Final Cash:      ${final_cash:,.2f}")
+        print(f"    Open Position Value:    ${position_value:,.2f}")
+        print(f"    Expected Final Value:   ${expected_final:,.2f}")
+        print(f"    Actual Final Value:     ${final:,.2f}")
+
+        # Allow $1 tolerance for rounding
+        final_matches = abs(expected_final - final) < 1.0
+
+        print(f"\n  {BOLD}Reconciliation:{RESET}")
+        print_check("Cash balance matches initial + realized P&L", cash_matches)
+        print_check("Final value matches cash + position", final_matches)
+
+        return cash_matches and final_matches
+    else:
+        # Simple check: Does realized P&L explain the return?
+        # Note: This may not match perfectly if there's an open position
+        expected_final_simple = initial + total_realized_pnl
+        actual_return = final - initial
+
+        print(f"\n  {BOLD}Simple Reconciliation:{RESET}")
+        print(f"    Initial Capital:          ${initial:,.2f}")
+        print(f"    Realized P&L (all trades): ${total_realized_pnl:+,.2f}")
+        print(f"    Expected Change:          ${total_realized_pnl:+,.2f}")
+        print(f"    Actual Change:            ${actual_return:+,.2f}")
+        print(f"    Difference:               ${abs(actual_return - total_realized_pnl):,.2f}")
+
+        # Check if difference can be explained by unrealized position
+        difference = abs(actual_return - total_realized_pnl)
+
+        # If difference is small (< $10), consider it matching
+        if difference < 10.0:
+            print_check("Return matches realized P&L from trades", True)
+            return True
+        elif difference < initial * 0.01:  # Less than 1% of initial capital
+            print_check("Return approximately matches trades (small open position likely)", True)
+            print(f"  Note: ${difference:,.2f} difference likely from unrealized position")
+            return True
+        else:
+            print_check("Return matches realized P&L from trades", False)
+            print_warning(f"Large discrepancy (${difference:,.2f}) between trade P&L and actual return")
+            print_warning("Possible causes:")
+            print_warning("  - Large unrealized position (check final position value)")
+            print_warning("  - Missing trades in trade log")
+            print_warning("  - Incorrect P&L calculations")
+            print_warning("  - Cash balance tracking error")
+            return False
+
+
 def validate_market_data(data: Dict[str, Any], symbol: str) -> bool:
     """
     Validate that backtest prices match real market data.
     Also provides Market Return context.
     """
-    print_header("Check 8: Market Data Integrity & Baseline Context")
+    print_header("Check 9: Market Data Integrity & Baseline Context")
 
     from src.tools.stock_fetcher import StockFetcher
     import pandas as pd
@@ -607,7 +719,7 @@ def validate_market_data(data: Dict[str, Any], symbol: str) -> bool:
 
 def validate_reproducibility(symbol: str, algorithm: str, data: Dict[str, Any], model_dir: Path = None) -> bool:
     """Check if backtest results are deterministic by running a second pass"""
-    print_header("Check 9: Reproducibility Test")
+    print_header("Check 10: Reproducibility Test")
 
     if algorithm in ['buy_hold', 'momentum']:
         print("  Baseline strategies are deterministic by definition.")
@@ -732,6 +844,7 @@ def generate_validation_report(data: Dict[str, Any], model_name: str, symbol: st
         results['Metrics Reasonableness'] = validate_metrics_reasonableness(data)
         results['Trade P&L'] = validate_trade_pnl(data)
         results['Commission Inclusion'] = validate_commission_inclusion(data)
+        results['Return from Trades'] = validate_return_from_trades(data)
         results['Market Data Integrity'] = validate_market_data(data, symbol)
         results['Reproducibility'] = validate_reproducibility(symbol, algorithm, data, model_dir)
         
@@ -744,7 +857,7 @@ def generate_validation_report(data: Dict[str, Any], model_name: str, symbol: st
         print(f"{RED}Error during validation: {e}{RESET}")
         import traceback
         traceback.print_exc()
-        return 0, 9, ["Critical Error"]
+        return 0, 10, ["Critical Error"]
 
     # Summary
     print_header("VALIDATION SUMMARY")

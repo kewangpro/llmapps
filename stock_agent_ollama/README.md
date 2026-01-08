@@ -353,7 +353,12 @@ The project includes a suite of CLI tools for the full RL lifecycle:
 
 **`validate_backtest.py`** - Backtest validation and integrity checks
 - Validates backtest results across all trained models
-- Runs 8 comprehensive checks per model (return calculation, action distribution, win rate, portfolio consistency, metrics reasonableness, trade P&L, transaction costs, reproducibility)
+- Runs 10 comprehensive checks per model:
+  - Return calculation, action distribution, win rate
+  - Portfolio consistency, metrics reasonableness
+  - Individual trade P&L, transaction costs
+  - **Return reconciliation from trades** (new!)
+  - Market data integrity, reproducibility
 - Supports watchlist-wide validation or single symbol validation
 - Shows profitability rates and pass/fail summaries
 
