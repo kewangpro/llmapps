@@ -357,7 +357,7 @@ The project includes a suite of CLI tools for the full RL lifecycle:
   - Return calculation, action distribution, win rate
   - Portfolio consistency, metrics reasonableness
   - Individual trade P&L, transaction costs
-  - **Return reconciliation from trades** (new!)
+  - Return reconciliation from trades
   - Market data integrity, reproducibility
 - Supports watchlist-wide validation or single symbol validation
 - Shows profitability rates and pass/fail summaries
@@ -365,6 +365,7 @@ The project includes a suite of CLI tools for the full RL lifecycle:
 **`eval_training.py`** - Model performance analysis and insights
 - Scans and analyzes all trained RL models
 - Shows top 5 and bottom 5 performers with detailed metrics
+- Sort by return, Sharpe ratio, win rate, max drawdown, or age
 - Provides training insights (profitability rate, average returns, Sharpe ratios, algorithm comparisons)
 - Detects training pathologies (action collapse, overtrading, poor risk-adjusted returns)
 - Supports model pruning to archive underperforming models
