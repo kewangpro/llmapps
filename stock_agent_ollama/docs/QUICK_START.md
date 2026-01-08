@@ -571,16 +571,17 @@ python validate_backtest.py --symbol TEAM --algorithm ppo --latest-only
 
 **Note**: By default, validates **ALL available models** (not just latest) to enable comprehensive validation across model versions. Baseline strategies (Buy & Hold, Momentum) are **automatically validated** for every run.
 
-**What it checks:**
+**What it checks (10 comprehensive validations):**
 - Return calculation accuracy
 - Action distribution integrity (sums to 100%)
 - Win rate calculation correctness
 - Portfolio value consistency (initial/final match)
-- Metrics reasonableness (Sharpe ratio thresholds, etc.)
+- Metrics reasonableness (Sharpe ratio, win rate thresholds)
 - Individual trade P&L validation (samples 5 trades)
 - Transaction cost inclusion verification
-- **Market Data Integrity** (verifies trade prices against historical market data)
-- **Reproducibility** (Automated double-run verification for RL agents)
+- Return reconciliation from trades (cash flow analysis)
+- Market data integrity (verifies trade prices against historical data)
+- Reproducibility (automated double-run verification for RL agents)
 
 **Expected output:**
 ```
@@ -612,6 +613,15 @@ python eval_training.py --sort return
 
 # Sort by Sharpe ratio for risk-adjusted performance
 python eval_training.py --sort sharpe
+
+# Sort by win rate to find most consistent models
+python eval_training.py --sort winrate
+
+# Sort by max drawdown to find lowest-risk models
+python eval_training.py --sort maxdd
+
+# Sort by age to see most recently validated models
+python eval_training.py --sort age
 
 # Prune underperforming models (archive models with return < -5% and age > 1 hour)
 python eval_training.py --prune --min-return -5.0 --age 1h

@@ -1178,7 +1178,7 @@ python validate_backtest.py --watchlist --algorithm ensemble --run
 
 #### Validation Checks
 
-The tool performs **9 comprehensive checks**:
+The tool performs **10 comprehensive checks**:
 
 1. **Return Calculation**: Verifies (final_value - initial_value) / initial_value matches reported return
 2. **Action Distribution**: Ensures action percentages sum to 100%
@@ -1186,11 +1186,12 @@ The tool performs **9 comprehensive checks**:
 4. **Portfolio Value Consistency**: Checks first value = initial capital, last value = final value, no negative values
 5. **Metrics Reasonableness**:
    - Sharpe ratio < 8.0 (warns if > 6.0 as "excellent")
-   - Win rate thresholds adjusted by sample size (<20 trades: 95%, ≥20 trades: 90%)
+   - Win rate thresholds tiered by sample size (<20: 95%, 20-49: 93%, 50-99: 91%, 100+: 90%)
 6. **Individual Trade Validation**: Validates P&L calculations on paired round-trip trades (entry/exit price, commission)
 7. **Transaction Cost Inclusion**: Verifies trades include non-zero `cost` or `commission` fields (default 0.05% per trade)
-8. **Market Data Integrity**: Verifies backtest trade prices match actual historical market data
-9. **Reproducibility Test**: Automated double-run verification for RL agents to detect non-deterministic behavior
+8. **Return Reconciliation from Trades**: Validates portfolio value = cash + position value, and cash matches net trade flows
+9. **Market Data Integrity**: Verifies backtest trade prices match actual historical market data
+10. **Reproducibility Test**: Automated double-run verification for RL agents to detect non-deterministic behavior
 
 #### Example Output
 
@@ -1325,11 +1326,15 @@ python eval_training.py --symbol PLTR
 # Filter by minimum trades (e.g., ignore inactive models)
 python eval_training.py --min-trades 10
 
+# Sort results by different metrics
+python eval_training.py --sort return    # Sort by total return
+python eval_training.py --sort sharpe    # Sort by Sharpe ratio
+python eval_training.py --sort winrate   # Sort by win rate
+python eval_training.py --sort maxdd     # Sort by max drawdown (lowest risk first)
+python eval_training.py --sort age       # Sort by most recently validated (default)
+
 # Prune (archive) models with negative returns older than 24 hours
 python eval_training.py --prune --min-return 0 --age 24h
-
-# Sort results by return (default is by date)
-python eval_training.py --sort return
 ```
 
 #### Key Features
