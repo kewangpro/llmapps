@@ -701,9 +701,9 @@ class SingleStockTradingEnv(BaseTradingEnv):
         # if action_was_invalid:
         #     reward -= 0.01  # Penalty disabled - not needed, action masking is sufficient
 
-        # Record action
-        self.actions_taken.append(action)
-        self.prev_action = action
+        # Get observation and info before incrementing step
+        info = self._get_info()
+        info['trade_info'] = trade_info
 
         # Move to next step
         self.current_step += 1
@@ -712,10 +712,8 @@ class SingleStockTradingEnv(BaseTradingEnv):
         terminated = self.current_step >= self.max_steps
         truncated = False
 
-        # Get observation and info
+        # Get observation (for next step)
         observation = self._get_observation() if not terminated else np.zeros(self.observation_space.shape, dtype=np.float32)
-        info = self._get_info()
-        info['trade_info'] = trade_info
 
         # Add performance metrics if episode is done
         if terminated:
