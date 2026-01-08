@@ -149,29 +149,53 @@ def analyze_model(model_dir: Path) -> Dict[str, Any]:
     
     return metrics
 
-def prune_models(models: List[Dict[str, Any]], min_return: float, age_seconds: int):
+def prune_models(models: List[Dict[str, Any]], min_return: float, age_seconds: int, keep_best: bool = False):
     """Archive models matching criteria."""
+    mode_desc = "Keep Best per Symbol/Type" if keep_best else f"Return < {min_return}%"
     print(f"\n{Color.HEADER}{'='*80}")
-    print(f"🧹 PRUNING MODELS (Return < {min_return}%, Age > {age_seconds/3600:.1f}h)")
+    print(f"🧹 PRUNING MODELS ({mode_desc}, Age > {age_seconds/3600:.1f}h)")
     print(f"{Color.HEADER}{'='*80}{Color.END}")
     
     threshold_time = datetime.now().timestamp() - age_seconds
     to_prune = []
     
-    for m in models:
-        # We prune models that are losing money AND older than the threshold
-        if m['return'] < min_return and m['mtime'] < threshold_time:
-            to_prune.append(m)
+    if keep_best:
+        # Group models by symbol and agent type
+        grouped_models = defaultdict(lambda: defaultdict(list))
+        for m in models:
+            grouped_models[m['symbol']][m['agent_type']].append(m)
+
+        for symbol, agent_types in grouped_models.items():
+            for agent_type, model_list in agent_types.items():
+                # Sort by return (descending)
+                model_list.sort(key=lambda x: x['return'], reverse=True)
+                
+                # Best model is the first one
+                best_model = model_list[0]
+                print(f"  Keeping best {symbol} {agent_type}: {best_model['name']} (Ret: {best_model['return']:.2f}%)")
+                
+                # The rest are candidates for pruning
+                candidates = model_list[1:]
+                for m in candidates:
+                    if m['mtime'] < threshold_time:
+                        to_prune.append(m)
+                    else:
+                        print(f"    Skipping {m['name']} (not best, but too new: {m['age']})")
+    else:
+        for m in models:
+            # We prune models that are losing money AND older than the threshold
+            if m['return'] < min_return and m['mtime'] < threshold_time:
+                to_prune.append(m)
             
     if not to_prune:
-        print("No models matched the pruning criteria.")
+        print("\nNo models matched the pruning criteria.")
         return
         
     if not ARCHIVE_DIR.exists():
         ARCHIVE_DIR.mkdir(parents=True)
         print(f"Created archive directory: {ARCHIVE_DIR}")
         
-    print(f"Found {len(to_prune)} models to archive...\n")
+    print(f"\nFound {len(to_prune)} models to archive...\n")
     
     for m in to_prune:
         source_path = m['path']
@@ -390,7 +414,8 @@ def main():
     parser.add_argument("--min-trades", type=int, default=0, help="Filter models with fewer than N trades")
     parser.add_argument("--sort", type=str, choices=['return', 'sharpe', 'date'], default='date', help="Sort order")
     parser.add_argument("--prune", action="store_true", help="Move models matching criteria to archive")
-    parser.add_argument("--min-return", type=float, default=0.0, help="Prune models with return less than this value")
+    parser.add_argument("--keep-best", action="store_true", help="When pruning, keep the best model for each symbol/type pair")
+    parser.add_argument("--min-return", type=float, default=0.0, help="Prune models with return less than this value (ignored if --keep-best is used)")
     parser.add_argument("--age", type=str, default="24h", help="Prune models older than this (e.g. '24h', '7d')")
     args = parser.parse_args()
     
@@ -442,7 +467,7 @@ def main():
     # 4. Handle Pruning
     if args.prune:
         age_seconds = parse_age_to_seconds(args.age)
-        prune_models(analyzed_models, args.min_return, age_seconds)
+        prune_models(analyzed_models, args.min_return, age_seconds, keep_best=args.keep_best)
         # Exit after pruning - user can re-run to see updated state
         return
     
