@@ -647,7 +647,7 @@ python eval_training.py --prune --keep-best --age 24h
 
 ### Running Tests
 
-The project includes a comprehensive test suite with 48 automated tests:
+The project includes a comprehensive test suite with **135 automated tests** covering critical trading algorithms:
 
 ```bash
 # Run all tests
@@ -657,26 +657,36 @@ python -m pytest tests/ -v
 python -m pytest tests/ --cov=src --cov-report=term-missing
 
 # Run specific test file
-python -m pytest tests/test_action_masking.py -v
+python -m pytest tests/test_reward_functions.py -v
 
 # Generate HTML coverage report
 python -m pytest tests/ --cov=src --cov-report=html
 # View at: htmlcov/index.html
+
+# Run tests matching pattern
+python -m pytest tests/ -k "momentum" -v
 ```
 
-**Test Coverage:**
-- Configuration management (96% coverage)
-- Action masking logic
-- Live trading data models
-- RL components (ensemble, environments)
-- Technical analysis indicators
+**Test Coverage (19% overall, critical modules 94-100%):**
+- **Technical Analysis (99%)** - All indicators (RSI, MACD, Bollinger Bands, Stochastic, ATR, trends, signals)
+- **Reward Functions (94%)** - All reward strategies (Simple, RiskAdjusted, Customizable)
+- **Baseline Strategies (100%)** - Buy & Hold, Momentum with full edge case coverage
+- **Configuration (96%)** - Settings, environment variables, directory management
+- **Action Masking (100%)** - Invalid trade prevention validation
+- **Live Trading Models (100%)** - Portfolio, Position, Trade, Order data structures
+- **RL Components (90%)** - Ensemble voting, environment factory
 
 **Test Files:**
+- `tests/test_technical_analysis_extended.py` - Advanced indicators (23 tests)
+- `tests/test_reward_functions.py` - RL reward calculations (29 tests)
+- `tests/test_baseline_strategies.py` - Trading baselines (35 tests)
 - `tests/test_config.py` - Configuration validation (14 tests)
-- `tests/test_action_masking.py` - Action masking (10 tests)
 - `tests/test_live_trading_models.py` - Data models (14 tests)
+- `tests/test_action_masking.py` - Action masking (10 tests)
 - `tests/test_rl_components.py` - RL components (5 tests)
-- `tests/test_technical_analysis.py` - Technical indicators (5 tests)
+- `tests/test_technical_analysis.py` - Basic indicators (5 tests)
+
+**Detailed Testing Guide:** See [TESTING.md](TESTING.md) for comprehensive documentation
 
 ---
 
