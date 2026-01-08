@@ -62,7 +62,7 @@ def parse_age_to_seconds(age_str: str) -> int:
         return 0
 
 def get_model_age(path: Path) -> str:
-    """Get readable age of a model file."""
+    """Get readable age based on when backtest_results.json was last modified."""
     try:
         mtime = path.stat().st_mtime
         dt = datetime.fromtimestamp(mtime)
@@ -412,7 +412,7 @@ def main():
     parser = argparse.ArgumentParser(description="Analyze RL training results and provide insights.")
     parser.add_argument("--symbol", type=str, help="Filter by stock symbol")
     parser.add_argument("--min-trades", type=int, default=0, help="Filter models with fewer than N trades")
-    parser.add_argument("--sort", type=str, choices=['return', 'sharpe', 'date'], default='date', help="Sort order")
+    parser.add_argument("--sort", type=str, choices=['return', 'sharpe', 'winrate', 'maxdd', 'age'], default='age', help="Sort order")
     parser.add_argument("--prune", action="store_true", help="Move models matching criteria to archive")
     parser.add_argument("--keep-best", action="store_true", help="When pruning, keep the best model for each symbol/type pair")
     parser.add_argument("--min-return", type=float, default=0.0, help="Prune models with return less than this value (ignored if --keep-best is used)")
@@ -457,9 +457,15 @@ def main():
         analyzed_models.sort(key=lambda x: x['return'], reverse=True)
     elif args.sort == 'sharpe':
         analyzed_models.sort(key=lambda x: x['sharpe'], reverse=True)
-    else: # date
-        # Sort by mtime (newest first)
-        analyzed_models.sort(key=lambda x: x['path'].stat().st_mtime, reverse=True)
+    elif args.sort == 'winrate':
+        analyzed_models.sort(key=lambda x: x['win_rate'], reverse=True)
+    elif args.sort == 'maxdd':
+        # Sort by max drawdown (ascending - lowest drawdown first)
+        analyzed_models.sort(key=lambda x: abs(x['drawdown']))
+    else: # age
+        # Sort by mtime (newest backtest first)
+        # Use stored 'mtime' for consistency with displayed age
+        analyzed_models.sort(key=lambda x: x['mtime'], reverse=True)
 
     # 3. Print Detailed Table
     print_table(analyzed_models)
