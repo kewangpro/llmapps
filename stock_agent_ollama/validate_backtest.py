@@ -79,6 +79,9 @@ def find_all_models(symbol: str, algorithm: str) -> List[Path]:
 
     matching_dirs = sorted(models_dir.glob(pattern), reverse=True)
 
+    # Exclude archive directory
+    matching_dirs = [d for d in matching_dirs if d.name != 'archive']
+
     if not matching_dirs:
         # Don't exit here, return empty list so baselines can still run
         return []

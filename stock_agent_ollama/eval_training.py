@@ -11,7 +11,7 @@ from typing import Dict, List, Any, Optional
 
 # Constants
 MODELS_DIR = Path("data/models/rl")
-ARCHIVE_DIR = MODELS_DIR / "archive"
+ARCHIVE_DIR = Path("data/models/archive")  # Archive at models level, not rl level
 DEFAULT_WATCHLIST_PATH = Path("data/portfolios/default.json")
 
 # Thresholds for analysis
@@ -298,25 +298,11 @@ def print_summary_of_findings(models: List[Dict[str, Any]]):
 
     
 
-    # 2. Best Performers (Top 3 unique symbols)
+    # 2. Top Performers (Top 5 models)
 
-    print(f" * {Color.BOLD}Best Performers{Color.END}:")
+    print(f" * {Color.BOLD}Top Performers{Color.END}:")
 
-    seen_symbols = set()
-
-    best_performers = []
-
-    for m in sorted(models, key=lambda x: x['return'], reverse=True):
-
-        if m['symbol'] not in seen_symbols:
-
-            best_performers.append(m)
-
-            seen_symbols.add(m['symbol'])
-
-        if len(best_performers) >= 3:
-
-            break
+    best_performers = sorted(models, key=lambda x: x['return'], reverse=True)[:5]
 
             
 
@@ -332,83 +318,25 @@ def print_summary_of_findings(models: List[Dict[str, Any]]):
 
         print(f"     * {Color.CYAN}{m['symbol']}{Color.END} ({format_algo(m['agent_type'])}) [{m['name']}]: {ret_color}{m['return']:+.2f}% Return{Color.END}{baseline_text} (Sharpe {m['sharpe']:.2f})")
 
-        
+    # 3. Bottom Performers (show context, not just negative returns)
+    worst_performers = sorted(models, key=lambda x: x['return'])[:5]
 
-    # 3. Underperformers (specifically PLTR - one of each type if available)
+    if worst_performers:
+        print(f" * {Color.BOLD}Bottom Performers{Color.END}:")
 
-    pltr_models = [m for m in models if m['symbol'].upper() == 'PLTR']
-
-    
-
-    if pltr_models:
-
-        print(f" * {Color.BOLD}Underperformers (PLTR){Color.END}:")
-
-        # Group by type and pick one (the most representative/worst for that type)
-
-        by_type = defaultdict(list)
-
-        for m in pltr_models:
-
-            by_type[m['agent_type']].append(m)
-
-            
-
-        for agent_type in ['ppo', 'recurrent_ppo', 'ensemble']:
-
-            type_models = by_type.get(agent_type, [])
-
-            if not type_models: continue
-
-            
-
-            # Pick the worst one for ppo/recurrent_ppo, best for ensemble (to show mitigation)
-
-            if agent_type == 'ensemble':
-
-                m = max(type_models, key=lambda x: x['return'])
-
-            else:
-
-                m = min(type_models, key=lambda x: x['return'])
-
-                
-
-            suffix = ""
-
-            if agent_type == 'ppo' and m['return'] < 0:
-
-                suffix = f" This confirms the specific issue you raised. The model is over-trading ({m['trades']} trades) and failing to capture the trend."
-
-            elif agent_type == 'recurrent_ppo' and m['return'] < 5:
-
-                suffix = " Barely profitable, also suffering from high trade frequency."
-
-            elif agent_type == 'ensemble' and m['return'] > -5:
-
-                # Find the corresponding PPO model to compare if possible
-
-                ppo_perf = min([p['return'] for p in pltr_models if p['agent_type'] == 'ppo'], default=0)
-
-                if m['return'] > ppo_perf:
-
-                    suffix = " The ensemble logic (defaulting to HOLD on disagreement) successfully mitigated the losses from the individual agents."
-
-            
+        for m in worst_performers:
             ret_color = Color.GREEN if m['return'] > 0 else Color.RED
-            print(f"     * {Color.CYAN}{m['symbol']}{Color.END} ({format_algo(m['agent_type'])}) [{m['name']}]: {ret_color}{m['return']:+.2f}% Return{Color.END}.{suffix}")
 
-    else:
+            # Add market context if available
+            context = ""
+            if m['buy_hold_return'] != 0.0:
+                outperformance = m['return'] - m['buy_hold_return']
+                if outperformance > 0:
+                    context = f" (beats market by {Color.GREEN}+{outperformance:.2f}%{Color.END})"
+                else:
+                    context = f" (underperforms market by {Color.RED}{outperformance:.2f}%{Color.END})"
 
-        worst_performers = sorted(models, key=lambda x: x['return'])[:2]
-
-        if worst_performers:
-
-            print(f" * {Color.BOLD}Underperformers{Color.END}:")
-
-            for m in worst_performers:
-                ret_color = Color.GREEN if m['return'] > 0 else Color.RED
-                print(f"     * {Color.CYAN}{m['symbol']}{Color.END} ({format_algo(m['agent_type'])}) [{m['name']}]: {ret_color}{m['return']:+.2f}% Return{Color.END} (Sharpe {m['sharpe']:.2f})")
+            print(f"     * {Color.CYAN}{m['symbol']}{Color.END} ({format_algo(m['agent_type'])}) [{m['name']}]: {ret_color}{m['return']:+.2f}% Return{Color.END} (Sharpe {m['sharpe']:.2f}){context}")
 
 def print_table(models: List[Dict[str, Any]]):
     """Print formatted table of model results."""
@@ -474,8 +402,8 @@ def main():
     if not MODELS_DIR.exists():
         print(f"{Color.RED}Error: Models directory {MODELS_DIR} not found.{Color.END}")
         return
-        
-    model_dirs = [d for d in MODELS_DIR.iterdir() if d.is_dir() and (d / "backtest_results.json").exists()]
+
+    model_dirs = [d for d in MODELS_DIR.iterdir() if d.is_dir() and d.name != 'archive' and (d / "backtest_results.json").exists()]
     
     if not model_dirs:
         print(f"{Color.YELLOW}No trained models found in {MODELS_DIR}.{Color.END}")
@@ -515,10 +443,8 @@ def main():
     if args.prune:
         age_seconds = parse_age_to_seconds(args.age)
         prune_models(analyzed_models, args.min_return, age_seconds)
-        # Re-scan after pruning to update summary and insights
-        return main() # Recursion to show fresh state? No, maybe just exit.
-        # Actually, it's better to just finish or re-analyze. 
-        # For now, I'll just print summary and exit.
+        # Exit after pruning - user can re-run to see updated state
+        return
     
     # 5. Print Summary of Findings
     print_summary_of_findings(analyzed_models)

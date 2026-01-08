@@ -214,13 +214,17 @@ stock_agent_ollama/
 ├── data/
 │   ├── cache/            # Stock data cache
 │   ├── models/           # Trained models (LSTM, RL)
+│   │   ├── archive/      # Archived models
+│   │   ├── lstm/         # LSTM models
+│   │   └── rl/           # RL agent models
 │   ├── logs/             # Application logs
 │   └── live_sessions/    # Trading sessions
 ├── tests/                # Test suite (48 tests)
 ├── docs/                 # Documentation
-├── retrain_rl.py   # Training automation
-├── validate_backtest.py     # Backtest validation
-└── requirements.txt         # Dependencies
+├── retrain_rl.py         # Training automation
+├── validate_backtest.py  # Backtest validation
+├── eval_training.py      # Model evaluation and analysis
+└── requirements.txt      # Dependencies
 ```
 
 ---
@@ -339,9 +343,24 @@ python -m pytest tests/test_action_masking.py -v
 
 The project includes a suite of CLI tools for the full RL lifecycle:
 
-*   **`retrain_rl.py`**: Automates model training and artifact generation.
-*   **`validate_backtest.py`**: Validates backtest integrity and reproducibility.
-*   **`eval_training.py`**: Evaluates model performance, compares versions, and detects pathologies.
+**`retrain_rl.py`** - Training automation and comprehensive backtesting
+- Train RL agents (PPO, RecurrentPPO, Ensemble)
+- Run comprehensive backtests comparing all algorithms
+- Compare multiple model versions for tracking improvements
+
+**`validate_backtest.py`** - Backtest validation and integrity checks
+- Validates backtest results across all trained models
+- Runs 8 comprehensive checks per model (return calculation, action distribution, win rate, portfolio consistency, metrics reasonableness, trade P&L, transaction costs, reproducibility)
+- Supports watchlist-wide validation or single symbol validation
+- Shows profitability rates and pass/fail summaries
+
+**`eval_training.py`** - Model performance analysis and insights
+- Scans and analyzes all trained RL models
+- Shows top 5 and bottom 5 performers with detailed metrics
+- Provides training insights (profitability rate, average returns, Sharpe ratios, algorithm comparisons)
+- Detects training pathologies (action collapse, overtrading, poor risk-adjusted returns)
+- Supports model pruning to archive underperforming models
+- Filter by symbol, algorithm, or performance thresholds
 
 👉 **For detailed usage and command examples, see [QUICK_START.md](docs/QUICK_START.md#developer-tools).**
 
