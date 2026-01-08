@@ -462,6 +462,8 @@ class BacktestResult:
     dates: List[datetime]
     equity_curve: pd.DataFrame
     paired_trades: List[Dict] = None  # Round-trip trades for P&L validation
+    final_cash_balance: float = None  # Cash at end of backtest
+    final_position_value: float = None  # Value of open position at end
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary matching the schema of saved backtest_results.json."""
@@ -510,10 +512,16 @@ class BacktestResult:
         metrics_dict = self.metrics.to_dict()
         for k, v in metrics_dict.items():
             result[k] = v
-            
+
         if self.paired_trades is not None:
             result['paired_trades'] = self.paired_trades
-            
+
+        # Add cash and position breakdown for validation
+        if self.final_cash_balance is not None:
+            result['final_cash_balance'] = self.final_cash_balance
+        if self.final_position_value is not None:
+            result['final_position_value'] = self.final_position_value
+
         return result
 
     def save_to_model_dir(self, model_path: Path, agent_type: str):
@@ -612,6 +620,12 @@ class BacktestResult:
             # Add paired_trades if available (for P&L validation)
             if serializable_paired_trades:
                 backtest_data['paired_trades'] = serializable_paired_trades
+
+            # Add cash and position breakdown for validation
+            if self.final_cash_balance is not None:
+                backtest_data['final_cash_balance'] = float(self.final_cash_balance)
+            if self.final_position_value is not None:
+                backtest_data['final_position_value'] = float(self.final_position_value)
 
             # Save to model directory
             backtest_file = save_dir / "backtest_results.json"
@@ -760,24 +774,45 @@ class BacktestEngine:
                         entry_price = position_tracker['avg_entry_price']
                         exit_price = price
 
-                        # Calculate P&L: price difference minus sell commission
-                        # (buy commission already tracked separately)
-                        pnl = (exit_price - entry_price) * sell_shares - commission
+                        # Calculate proportional buy commission for this sell
+                        # Total buy commission paid is tracked per position
+                        if position_tracker['shares'] > 0:
+                            buy_commission_for_this_trade = (sell_shares / position_tracker['shares']) * position_tracker['total_commission_paid']
+                        else:
+                            buy_commission_for_this_trade = 0.0
+
+                        # Calculate P&L: price difference minus ALL commissions (buy + sell)
+                        pnl = (exit_price - entry_price) * sell_shares - commission - buy_commission_for_this_trade
 
                         paired_trades.append({
                             'entry_price': entry_price,
                             'exit_price': exit_price,
                             'shares': sell_shares,
-                            'commission': commission,  # Sell commission only
+                            'commission': commission + buy_commission_for_this_trade,  # Total commission (buy + sell)
                             'pnl': pnl
                         })
 
                         # Update position
                         position_tracker['shares'] -= sell_shares
-                        if position_tracker['shares'] == 0:
+                        # Reduce total cost basis proportionally
+                        position_tracker['total_cost'] -= sell_shares * entry_price
+                        # Reduce commission proportionally
+                        position_tracker['total_commission_paid'] -= buy_commission_for_this_trade
+
+                        # Recalculate average entry price for remaining shares
+                        if position_tracker['shares'] > 0:
+                            position_tracker['avg_entry_price'] = position_tracker['total_cost'] / position_tracker['shares']
+                        else:
                             position_tracker['total_cost'] = 0.0
                             position_tracker['avg_entry_price'] = 0.0
                             position_tracker['total_commission_paid'] = 0.0
+
+        # Extract final cash and position from last step
+        # info dict from last step contains final state
+        final_cash = info.get('cash', 0.0)
+        final_position_shares = info.get('position', 0.0)
+        final_price = info.get('price', 0.0)
+        final_position_value = final_position_shares * final_price
 
         # Calculate metrics
         portfolio_values_array = np.array(portfolio_values)
@@ -806,7 +841,9 @@ class BacktestEngine:
             trades=trades,
             dates=dates,
             equity_curve=equity_curve,
-            paired_trades=paired_trades if paired_trades else None
+            paired_trades=paired_trades if paired_trades else None,
+            final_cash_balance=final_cash,
+            final_position_value=final_position_value
         )
 
         return result
@@ -892,24 +929,44 @@ class BacktestEngine:
                         entry_price = position_tracker['avg_entry_price']
                         exit_price = price
 
-                        # Calculate P&L: price difference minus sell commission
-                        # (buy commission already tracked separately)
-                        pnl = (exit_price - entry_price) * sell_shares - commission
+                        # Calculate proportional buy commission for this sell
+                        # Total buy commission paid is tracked per position
+                        if position_tracker['shares'] > 0:
+                            buy_commission_for_this_trade = (sell_shares / position_tracker['shares']) * position_tracker['total_commission_paid']
+                        else:
+                            buy_commission_for_this_trade = 0.0
+
+                        # Calculate P&L: price difference minus ALL commissions (buy + sell)
+                        pnl = (exit_price - entry_price) * sell_shares - commission - buy_commission_for_this_trade
 
                         paired_trades.append({
                             'entry_price': entry_price,
                             'exit_price': exit_price,
                             'shares': sell_shares,
-                            'commission': commission,  # Sell commission only
+                            'commission': commission + buy_commission_for_this_trade,  # Total commission (buy + sell)
                             'pnl': pnl
                         })
 
                         # Update position
                         position_tracker['shares'] -= sell_shares
-                        if position_tracker['shares'] == 0:
+                        # Reduce total cost basis proportionally
+                        position_tracker['total_cost'] -= sell_shares * entry_price
+                        # Reduce commission proportionally
+                        position_tracker['total_commission_paid'] -= buy_commission_for_this_trade
+
+                        # Recalculate average entry price for remaining shares
+                        if position_tracker['shares'] > 0:
+                            position_tracker['avg_entry_price'] = position_tracker['total_cost'] / position_tracker['shares']
+                        else:
                             position_tracker['total_cost'] = 0.0
                             position_tracker['avg_entry_price'] = 0.0
                             position_tracker['total_commission_paid'] = 0.0
+
+        # Extract final cash and position from last step
+        final_cash = info.get('cash', 0.0)
+        final_position_shares = info.get('position', 0.0)
+        final_price = info.get('price', 0.0)
+        final_position_value = final_position_shares * final_price
 
         # Calculate metrics
         portfolio_values_array = np.array(portfolio_values)
@@ -938,7 +995,9 @@ class BacktestEngine:
             trades=trades,
             dates=dates,
             equity_curve=equity_curve,
-            paired_trades=paired_trades if paired_trades else None
+            paired_trades=paired_trades if paired_trades else None,
+            final_cash_balance=final_cash,
+            final_position_value=final_position_value
         )
 
         return result
