@@ -219,7 +219,7 @@ stock_agent_ollama/
 │   │   └── rl/           # RL agent models
 │   ├── logs/             # Application logs
 │   └── live_sessions/    # Trading sessions
-├── tests/                # Test suite (48 tests)
+├── tests/                # Test suite (135 tests, 19% coverage)
 ├── docs/                 # Documentation
 ├── retrain_rl.py         # Training automation
 ├── validate_backtest.py  # Backtest validation
@@ -238,6 +238,7 @@ stock_agent_ollama/
 ### Technical Documentation
 - **[RL_DESIGN.md](docs/RL_DESIGN.md)** - RL architecture, algorithms, and design decisions
 - **[LIVE_TRADE.md](docs/LIVE_TRADE.md)** - Live trading simulation with session persistence
+- **[TESTING.md](docs/TESTING.md)** - Comprehensive testing guide with 135 tests (19% coverage, critical modules 94-100%)
 
 ---
 
@@ -317,7 +318,7 @@ See [QUICK_START.md](docs/QUICK_START.md#troubleshooting) for more help
 #### 🧪 Testing
 
 **Comprehensive Test Suite:**
-The project includes 48 automated tests covering core functionality:
+The project includes 135 automated tests covering core functionality:
 
 ```bash
 # Run all tests
@@ -330,12 +331,14 @@ python -m pytest tests/ --cov=src --cov-report=term-missing
 python -m pytest tests/test_action_masking.py -v
 ```
 
-**Test Coverage:**
-- Configuration management (96% coverage)
-- Action masking logic (validates invalid trade prevention)
-- Live trading data models (Portfolio, Position, Trade, Order)
-- RL components (ensemble voting, environment creation)
-- Technical analysis indicators (SMA, EMA, RSI, MACD)
+**Test Coverage (19% overall, critical modules 94-100%):**
+- **Technical Analysis (99%)** - All indicators (RSI, MACD, Bollinger Bands, Stochastic, ATR, trend analysis, trading signals)
+- **Reward Functions (94%)** - All reward calculation strategies (Simple, RiskAdjusted, Customizable)
+- **Baseline Strategies (100%)** - Buy & Hold, Momentum strategies with full edge case coverage
+- **Configuration (96%)** - Settings, environment variables, directory management
+- **Action Masking (100%)** - Invalid trade prevention validation
+- **Live Trading Models (100%)** - Portfolio, Position, Trade, Order data structures
+- **RL Components (90%)** - Ensemble voting, environment factory, training configs
 
 
 
