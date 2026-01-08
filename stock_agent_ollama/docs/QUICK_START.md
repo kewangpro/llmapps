@@ -615,6 +615,9 @@ python eval_training.py --sort sharpe
 
 # Prune underperforming models (archive models with return < -5% and age > 1 hour)
 python eval_training.py --prune --min-return -5.0 --age 1h
+
+# Prune models but keep the best performing one per symbol/type (older than 24h)
+python eval_training.py --prune --keep-best --age 24h
 ```
 
 **Key Insights Provided:**
@@ -624,7 +627,7 @@ python eval_training.py --prune --min-return -5.0 --age 1h
 - **Pathology Detection**: Automatic warnings for Action Collapse (agent stuck) or Over-trading
 - **Algorithm Comparison**: Identifies which algorithms (PPO, RecurrentPPO, Ensemble) are performing best
 - **Color-coded Tables**: Visual cues for return quality and risk-adjusted performance
-- **Model Pruning**: Archive underperforming models to `data/models/archive/`
+- **Model Pruning**: Archive underperforming or redundant models to `data/models/archive/`
 
 ### "Module not found" Error
 **Fix:**
