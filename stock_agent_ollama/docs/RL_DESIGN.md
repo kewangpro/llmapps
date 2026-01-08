@@ -1338,7 +1338,7 @@ python eval_training.py --sort return
   - **Action Collapse**: Warns if >80% of actions are identical (e.g., stuck on HOLD).
   - **Over-trading**: Warns if trades per day > 2.0.
   - **Under-trading**: Identifies agents that rarely trade.
-- **Pruning System**: Automatically moves models matching specific criteria (e.g., negative returns and older than 24 hours) to a `data/models/rl/archive/` folder to reduce noise.
+- **Pruning System**: Automatically moves models matching specific criteria (e.g., negative returns and older than specified age) to a `data/models/archive/` folder to reduce noise.
 - **Performance Grading**: Color-coded status (Green/Yellow/Red) based on returns and Sharpe ratio.
 - **Strategic Insights**: Aggregates data to find the best performing algorithms and symbols.
 - **Visual Report**: Generates a readable table with key metrics (Return, Sharpe, MaxDD, Win Rate) and detailed insights.

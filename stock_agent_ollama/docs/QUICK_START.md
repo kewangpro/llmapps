@@ -609,13 +609,22 @@ python eval_training.py --symbol PLTR
 
 # Sort by return to find best performers
 python eval_training.py --sort return
+
+# Sort by Sharpe ratio for risk-adjusted performance
+python eval_training.py --sort sharpe
+
+# Prune underperforming models (archive models with return < -5% and age > 1 hour)
+python eval_training.py --prune --min-return -5.0 --age 1h
 ```
 
 **Key Insights Provided:**
-- **Overall Health**: Aggregated profitability and average returns across the ecosystem.
-- **Pathology Detection**: Automatic warnings for **Action Collapse** (agent stuck) or **Over-trading**.
-- **Strategy Comparison**: Identifies which algorithms (PPO vs RecurrentPPO) are winning.
-- **Color-coded Tables**: Visual cues for return quality and risk-adjusted performance.
+- **Overall Health**: Aggregated profitability rate and average returns across all models
+- **Top 5 Performers**: Best models by return with detailed metrics (Sharpe, Max Drawdown, Win Rate)
+- **Bottom 5 Performers**: Lowest performing models for comparison
+- **Pathology Detection**: Automatic warnings for Action Collapse (agent stuck) or Over-trading
+- **Algorithm Comparison**: Identifies which algorithms (PPO, RecurrentPPO, Ensemble) are performing best
+- **Color-coded Tables**: Visual cues for return quality and risk-adjusted performance
+- **Model Pruning**: Archive underperforming models to `data/models/archive/`
 
 ### "Module not found" Error
 **Fix:**
