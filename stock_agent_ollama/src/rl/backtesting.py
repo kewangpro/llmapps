@@ -588,6 +588,11 @@ class BacktestResult:
             if hasattr(end_date, 'isoformat'):
                 end_date = end_date.strftime('%Y-%m-%d')
 
+            # Serialize config using asdict for proper nested serialization
+            # This ensures all configuration flags are saved for reproducibility
+            from dataclasses import asdict
+            config_dict = asdict(self.config)
+
             backtest_data = {
                 'agent_type': agent_type,
                 'backtest_date': datetime.now().isoformat(),
@@ -595,6 +600,8 @@ class BacktestResult:
                     'start_date': start_date,
                     'end_date': end_date
                 },
+                # Full configuration for reproducibility (CRITICAL for reproducibility checks)
+                'config': config_dict,
                 # Performance metrics
                 'total_return_pct': self.metrics.total_return_pct,
                 'sharpe_ratio': self.metrics.sharpe_ratio,
@@ -603,6 +610,7 @@ class BacktestResult:
                 'max_drawdown': self.metrics.max_drawdown,
                 'win_rate': self.metrics.win_rate,
                 'total_trades': self.metrics.total_trades,
+                'total_executed': self.metrics.total_executed,
                 'winning_trades': self.metrics.winning_trades,
                 'losing_trades': self.metrics.losing_trades,
                 'avg_win': self.metrics.avg_win,
