@@ -115,10 +115,13 @@ class ModelsPage(param.Parameterized):
         lstm_models = self._get_lstm_models()
 
         if lstm_models:
-            headers = ["Model Name", "Symbol", "Trained", "Final Loss", "Val Loss", "Size", "Actions"]
+            headers = ["Model Name", "Symbol", "Trained", "Final Loss", "Val Loss", "Size", "Architecture"]
             rows = []
 
             for model in lstm_models:
+                # Format architecture string
+                arch_str = f"Seq: {model.get('sequence_length', 'N/A')}, Feat: {model.get('feature_count', 'N/A')}"
+                
                 rows.append([
                     model['name'],
                     model['symbol'],
@@ -126,7 +129,7 @@ class ModelsPage(param.Parameterized):
                     model['final_loss'],
                     model['val_loss'],
                     model['size'],
-                    f'<button style="background: {Colors.ACCENT_PURPLE}; color: white; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 0.75rem;">View</button>'
+                    arch_str
                 ])
 
             table_html = TableStyles.generate_table(headers, rows)
@@ -307,6 +310,8 @@ class ModelsPage(param.Parameterized):
                 # Try to load metadata for performance metrics
                 final_loss = 'N/A'
                 val_loss = 'N/A'
+                sequence_length = 'N/A'
+                feature_count = 'N/A'
                 trained_date = datetime.fromtimestamp(metadata_file.stat().st_mtime).strftime('%Y-%m-%d')
 
                 try:
@@ -316,6 +321,13 @@ class ModelsPage(param.Parameterized):
                         # Get training date if available
                         if 'training_date' in metadata:
                             trained_date = metadata['training_date'][:10]  # Get YYYY-MM-DD part
+                        
+                        # Get architecture details
+                        if 'sequence_length' in metadata:
+                            sequence_length = str(metadata['sequence_length'])
+                        
+                        if 'model_architecture' in metadata and 'feature_count' in metadata['model_architecture']:
+                            feature_count = str(metadata['model_architecture']['feature_count'])
 
                         # Extract performance metrics from training histories
                         if 'training_histories' in metadata and metadata['training_histories']:
@@ -347,7 +359,9 @@ class ModelsPage(param.Parameterized):
                     'trained_timestamp': metadata_file.stat().st_mtime,  # For sorting
                     'final_loss': final_loss,
                     'val_loss': val_loss,
-                    'size': f'{len(keras_files)} models'
+                    'size': f'{len(keras_files)} models',
+                    'sequence_length': sequence_length,
+                    'feature_count': feature_count
                 }
                 models.append(model_info)
 
