@@ -78,6 +78,7 @@ This RL trading system provides advanced reinforcement learning capabilities for
 - **Short-Selling Prevention**: Checks position before sell calculations
 - **Floating Point Tolerance**: 0.01% tolerance for precision
 - **Action Masking**: Prevents invalid trades automatically
+- **Data Freshness**: Fixed missing last data point in backtesting and charts by adjusting environment step limits and inclusive date ranges
 - **Data Model Restoration**: Fixed missing Portfolio, Position, Trade, Order classes
 
 ---
@@ -427,6 +428,12 @@ def load_env_config_from_model(model_dir):
 - Added 0.01% tolerance to position size checks
 - Prevents valid orders from being rejected due to floating point errors
 - Applied to all position limit comparisons
+
+**Data Freshness & Last Point Visibility**:
+- Fixed issue where backtesting and charts were missing the most recent 1-2 days of data
+- Updated `max_steps` calculation in `EnhancedTradingEnv` to include the final row of historical data
+- Synchronized date range logic between data fetching and visualization to ensure consistency
+- Backtesting now correctly processes the full range up to the current date
 
 **Symbol Input Flexibility**:
 - Removed restrictions on predefined ticker symbols

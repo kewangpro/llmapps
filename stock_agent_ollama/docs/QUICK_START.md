@@ -149,6 +149,7 @@ The platform features a professional light-theme interface with 6 main pages:
 - All models included automatically
 
 **Backtest Results:**
+- **Full Data Coverage**: Backtests and charts now include the most recent data point available up to the current day.
 - **Performance Table**: All RL agents vs Buy & Hold vs Momentum
   - Metrics: Total Return %, Sharpe Ratio, Max Drawdown, Win Rate
   - Action distribution across all 6 actions
@@ -247,8 +248,8 @@ The live trading session is **persistent**. You can stop the application and res
 - Lists all LSTM ensemble models (3 models per symbol)
 - Shows performance metrics: Final Loss, Validation Loss
 - Training date and model size
+- **Architecture**: Displays sequence length and feature count (e.g., "Seq: 60, Feat: 17")
 - Models sorted by training date (newest first)
-- Click "View" to see details (if enabled)
 
 **Tab 2: RL Agents**
 - Header: "RL Trading Agents / Reinforcement learning models"
