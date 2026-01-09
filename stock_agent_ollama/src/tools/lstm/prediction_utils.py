@@ -20,6 +20,12 @@ def _predict_single_model(model, X):
 
 def _inverse_transform_predictions(predictions: np.ndarray, scaler) -> np.ndarray:
     """Inverse transform predictions to original scale"""
+    # Special handling for CompositeScaler which handles 1D inputs directly
+    if scaler.__class__.__name__ == 'CompositeScaler':
+        inverse_transformed = scaler.inverse_transform(predictions)
+        return inverse_transformed[:, 0]
+
+    # Standard sklearn scaler behavior
     # Create dummy array for inverse transform
     dummy = np.zeros((len(predictions), scaler.n_features_in_))
     dummy[:, 0] = predictions

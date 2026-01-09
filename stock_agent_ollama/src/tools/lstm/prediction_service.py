@@ -198,16 +198,57 @@ class LSTMPredictionService:
             raise ValueError(f"Insufficient data for training: {len(X)} samples. Need at least 50.")
         
         # Data is already split in prepare_data methods, so we need to recreate the split
-        split_index = int(len(X) * (1 - validation_split))
-        X_train, X_val = X[:split_index], X[split_index:]
-        y_train, y_val = y[:split_index], y[split_index:]
+        # IMPLEMENTATION: Walk-Forward Validation (Expanding Window)
+        # Instead of a static split, we use an expanding window for each model in the ensemble
+        
+        total_samples = len(X)
+        
+        # Calculate validation window size per model
+        # We want to cover approx 'validation_split' of the data across the ensemble if possible,
+        # or distinct chunks. Let's make each validation fold approx 10-15% of data.
+        # But for 'validation_split' parameter consistency, let's use that as the *last* fold size.
+        fold_size = int(total_samples * validation_split)
+        
+        # Ensure minimum fold size
+        if fold_size < 20:
+            fold_size = 20
         
         models = []
         training_histories = []
+        val_predictions_list = []
+        val_targets_list = []
         
-        # Train ensemble
+        # Train ensemble with Walk-Forward Validation
         for i in range(self.ensemble_size):
-            logger.info(f"Training model {i+1}/{self.ensemble_size}")
+            # Calculate indices for Expanding Window
+            # Model 0: Train [0...T-3V], Val [T-3V...T-2V]
+            # Model 1: Train [0...T-2V], Val [T-2V...T-V]
+            # Model 2: Train [0...T-V],  Val [T-V...T]
+            
+            # Offset from the end of the dataset
+            # For the last model (i=ensemble_size-1), multiplier is 0 -> split at len(X)-fold_size
+            fold_offset = (self.ensemble_size - 1 - i) * fold_size
+            
+            # The split point (end of training data)
+            current_split_index = total_samples - fold_size - fold_offset
+            
+            # Safety check to ensure we have enough training data
+            if current_split_index < 50:
+                logger.warning(f"Walk-forward split index {current_split_index} too small. clamping to 50.")
+                current_split_index = 50
+                # Adjust fold offset if we clamped
+                
+            X_train = X[:current_split_index]
+            y_train = y[:current_split_index]
+            
+            # Validation set is the next 'fold_size' samples
+            # For the last model, this goes to the end of the data.
+            val_end = current_split_index + fold_size
+            X_val = X[current_split_index:val_end]
+            y_val = y[current_split_index:val_end]
+            
+            logger.info(f"Training model {i+1}/{self.ensemble_size} with Walk-Forward Split: "
+                       f"Train [{0}-{current_split_index}], Val [{current_split_index}-{val_end}]")
 
             model = create_lstm_model((X.shape[1], X.shape[2]))
 
@@ -250,21 +291,35 @@ class LSTMPredictionService:
             
             models.append(model)
             training_histories.append(history.history)
+            
+            # Collect validation results for this fold
+            fold_preds = self._predict_ensemble([model], X_val, scaler)
+            fold_actuals = _inverse_transform_predictions(y_val, scaler)
+            val_predictions_list.extend(fold_preds)
+            val_targets_list.extend(fold_actuals)
         
         # Save models and metadata
         save_ensemble(models, scaler, symbol, self.model_dir, self.sequence_length, training_histories)
         
-        # Calculate validation metrics
-        val_predictions = self._predict_ensemble(models, X_val, scaler) # Updated call
-        actual_prices = _inverse_transform_predictions(y_val, scaler)
+        # Calculate aggregated validation metrics across all walk-forward folds
+        all_val_preds = np.array(val_predictions_list)
+        all_val_actuals = np.array(val_targets_list)
         
-        mse = np.mean((actual_prices - val_predictions)**2)
-        mae = np.mean(np.abs(actual_prices - val_predictions))
+        mse = np.mean((all_val_actuals - all_val_preds)**2)
+        mae = np.mean(np.abs(all_val_actuals - all_val_preds))
         
         # Calculate directional accuracy
-        actual_directions = np.diff(actual_prices) > 0
-        pred_directions = np.diff(val_predictions) > 0
-        directional_accuracy = np.mean(actual_directions == pred_directions) * 100
+        actual_directions = np.diff(all_val_actuals) > 0
+        pred_directions = np.diff(all_val_preds) > 0
+        
+        # Handle case where diff might be shorter if folds are disjoint? 
+        # Actually diff reduces length by 1. We should calculate per-fold and average, 
+        # or concat and accept one missing point at boundaries.
+        # Let's calculate simple accuracy on the concatenated array (ignoring boundary effects for simplicity)
+        if len(actual_directions) > 0:
+            directional_accuracy = np.mean(actual_directions == pred_directions) * 100
+        else:
+            directional_accuracy = 0.0
         
         metrics = {
             'symbol': symbol,
@@ -272,12 +327,13 @@ class LSTMPredictionService:
             'mae': float(mae),
             'rmse': float(np.sqrt(mse)),
             'directional_accuracy': float(directional_accuracy),
-            'training_samples': len(X_train),
-            'validation_samples': len(X_val),
+            'training_samples': len(X) - fold_size, # Approx last training set size
+            'validation_samples': len(all_val_actuals),
             'ensemble_size': self.ensemble_size
         }
         
-        logger.info(f"Training completed for {symbol}. RMSE: {metrics['rmse']:.4f}, Directional Accuracy: {directional_accuracy:.1f}%")
+        logger.info(f"Walk-Forward Training completed for {symbol}. "
+                   f"Aggregated RMSE: {metrics['rmse']:.4f}, Accuracy: {directional_accuracy:.1f}%")
         
         return metrics
 
@@ -421,7 +477,7 @@ class LSTMPredictionService:
         prediction_dates = pd.date_range(
             start=start_date,
             periods=days,
-            freq='D'
+            freq='B'
         )
         
         report_progress("Finalizing results...", 90)
