@@ -379,8 +379,8 @@ class SingleStockTradingEnv(BaseTradingEnv):
         # Normalize price data for state representation
         self._normalize_data()
 
-        # Set episode length
-        self.max_steps = len(self.data) - self.lookback_window - 1
+        # Set episode length to include the last data point
+        self.max_steps = len(self.data) - self.lookback_window
 
     def _calculate_indicators(self):
         """Calculate technical indicators."""

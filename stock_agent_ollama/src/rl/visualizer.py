@@ -7,6 +7,7 @@ from plotly.subplots import make_subplots
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Optional
+from datetime import datetime, timedelta
 from .backtesting import BacktestResult
 
 
@@ -590,7 +591,13 @@ class RLVisualizer:
             fetcher = StockFetcher()
             # Convert dates to string format if they're datetime objects
             start_str = start_date.strftime('%Y-%m-%d') if hasattr(start_date, 'strftime') else str(start_date)
-            end_str = end_date.strftime('%Y-%m-%d') if hasattr(end_date, 'strftime') else str(end_date)
+            
+            # Add one day to end_date because yfinance end_date is exclusive
+            if hasattr(end_date, 'strftime'):
+                end_str = (end_date + timedelta(days=1)).strftime('%Y-%m-%d')
+            else:
+                end_str = str(end_date)
+                
             stock_data = fetcher.fetch_stock_data(symbol, start_date=start_str, end_date=end_str)
 
             if stock_data is None or stock_data.empty:
