@@ -31,7 +31,8 @@ class LSTMPredictor:
         validation_split: float = 0.2,
         epochs: int = None,
         batch_size: int = None,
-        progress_callback: Any = None
+        progress_callback: Any = None,
+        horizon: int = 1
     ) -> Dict[str, Any]:
         """Train ensemble of LSTM models"""
         return self.service.train_ensemble(
@@ -40,7 +41,8 @@ class LSTMPredictor:
             validation_split=validation_split,
             epochs=epochs,
             batch_size=batch_size,
-            progress_callback=progress_callback
+            progress_callback=progress_callback,
+            horizon=horizon
         )
 
     def predict(
@@ -49,7 +51,9 @@ class LSTMPredictor:
         data: pd.DataFrame,
         days: int = None,
         ensemble_size: int = None,
-        prediction_callback: Any = None
+        prediction_callback: Any = None,
+        sentiment_score: float = 0.0,
+        sentiment_reasoning: str = None
     ) -> Dict[str, Any]:
         """Generate predictions using trained ensemble with improved error handling
 
@@ -59,13 +63,17 @@ class LSTMPredictor:
             days: Number of days to predict
             ensemble_size: Number of models in ensemble
             prediction_callback: Optional callback for prediction progress updates
+            sentiment_score: News sentiment score (-1.0 to 1.0)
+            sentiment_reasoning: Explanation for the sentiment score
         """
         return self.service.predict(
             symbol=symbol,
             data=data,
             days=days,
             ensemble_size=ensemble_size,
-            prediction_callback=prediction_callback
+            prediction_callback=prediction_callback,
+            sentiment_score=sentiment_score,
+            sentiment_reasoning=sentiment_reasoning
         )
 
     def validate_improvements(self, data: pd.DataFrame, symbol: str = "TEST") -> Dict[str, Any]:

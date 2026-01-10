@@ -357,6 +357,42 @@ class StockFetcher:
         
         return data
     
+    def get_stock_news(self, symbol: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Fetch recent news for a stock symbol"""
+        try:
+            validated_symbol = self._validate_symbol(symbol)
+            ticker = yf.Ticker(validated_symbol)
+            news = ticker.news
+            
+            results = []
+            for item in news[:limit]:
+                # Handle nested content structure (new yfinance API)
+                content = item.get('content', item)
+                
+                title = content.get('title', '')
+                summary = content.get('summary', content.get('description', ''))
+                # Clean up HTML tags if present in summary
+                if summary and '<' in summary:
+                    summary = re.sub(r'<[^>]+>', '', summary)
+                
+                pub_date = content.get('pubDate', '')
+                link = content.get('canonicalUrl', {}).get('url') if isinstance(content.get('canonicalUrl'), dict) else content.get('link')
+                
+                if title:
+                    results.append({
+                        'title': title,
+                        'summary': summary,
+                        'published': pub_date,
+                        'link': link,
+                        'provider': content.get('provider', {}).get('displayName') if isinstance(content.get('provider'), dict) else 'Yahoo Finance'
+                    })
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch news for {symbol}: {e}")
+            return []
+    
     def get_available_symbols(self) -> List[str]:
         """Get list of popular stock symbols for suggestions"""
         return [
