@@ -45,11 +45,11 @@ def test_config_cache_ttl():
 
 def test_config_lstm_settings():
     """Test LSTM model settings."""
-    assert Config.LSTM_SEQUENCE_LENGTH == 60
+    assert Config.LSTM_SEQUENCE_LENGTH == 90
     assert Config.LSTM_ENSEMBLE_SIZE == 3
     assert Config.PREDICTION_DAYS == 30
-    assert Config.BATCH_SIZE == 32
-    assert Config.EPOCHS == 50
+    assert Config.BATCH_SIZE == 16
+    assert Config.EPOCHS == 150
 
     assert isinstance(Config.LSTM_SEQUENCE_LENGTH, int)
     assert isinstance(Config.BATCH_SIZE, int)
