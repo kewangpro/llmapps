@@ -27,6 +27,8 @@ A professional financial analysis platform combining **AI-powered analysis**, **
 - **Interactive Charts** with candlestick patterns and volume
 - **Technical Indicators** (RSI, MACD, Bollinger Bands, Moving Averages)
 - **30-Day LSTM Predictions** using ensemble neural networks (3 models)
+- **News Sentiment Integration** for sentiment-aware price forecasting
+- **Direct Horizon Models** for improved long-term accuracy
 - **AI-Powered Analysis** with natural language insights
 - **Trading Signals** (BUY/SELL/HOLD) with confidence scores
 
@@ -315,10 +317,8 @@ See [QUICK_START.md](docs/QUICK_START.md#troubleshooting) for more help
 - Compares vs baselines (Buy & Hold, Momentum)
 - Comprehensive metrics (Sharpe, Max Drawdown, Win Rate)
 
-#### 🧪 Testing
-
 **Comprehensive Test Suite:**
-The project includes 135 automated tests covering core functionality:
+The project includes 138 automated tests covering core functionality:
 
 ```bash
 # Run all tests
@@ -338,7 +338,18 @@ python -m pytest tests/test_action_masking.py -v
 - **Configuration (96%)** - Settings, environment variables, directory management
 - **Action Masking (100%)** - Invalid trade prevention validation
 - **Live Trading Models (100%)** - Portfolio, Position, Trade, Order data structures
-- **RL Components (90%)** - Ensemble voting, environment factory, training configs
+- **RL Components (90%)** - Ensemble voting, environment factory
+- **LSTM Components** - Prediction service, data pipeline, and sentiment integration validation
+
+**Test Files:**
+- `tests/test_lstm_components.py` - LSTM prediction and sentiment integration (3 tests)
+- `tests/test_reward_functions.py` - RL reward calculations (29 tests)
+- `tests/test_baseline_strategies.py` - Trading baselines (35 tests)
+- `tests/test_config.py` - Configuration validation (14 tests)
+- `tests/test_live_trading_models.py` - Data models (14 tests)
+- `tests/test_action_masking.py` - Action masking (10 tests)
+- `tests/test_rl_components.py` - RL components (5 tests)
+- `tests/test_technical_analysis.py` - All technical indicators (28 tests)
 
 
 
@@ -350,6 +361,13 @@ The project includes a suite of CLI tools for the full RL lifecycle:
 - Train RL agents (PPO, RecurrentPPO, Ensemble)
 - Run comprehensive backtests comparing all algorithms
 - Compare multiple model versions for tracking improvements
+
+**`retrain_and_predict.py`** - LSTM maintenance and validation
+- Retrains LSTM ensemble for a specific symbol
+- Generates fresh prediction for immediate verification
+- Validates prediction against current price (gap check)
+- Supports specific prediction horizons (e.g., h=30)
+- Supports batch processing for watchlist symbols
 
 **`validate_backtest.py`** - Backtest validation and integrity checks
 - Validates backtest results across all trained models
