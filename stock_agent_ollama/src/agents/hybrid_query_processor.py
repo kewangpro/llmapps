@@ -353,6 +353,131 @@ class HybridQueryProcessor(QueryProcessor):
             "Learn concepts: 'Explain technical analysis'"
         ]
     
+    async def _handle_predict_query(
+        self, 
+        entities: Dict[str, Any], 
+        force_retrain: bool = False, 
+        progress_callback: Any = None, 
+        training_complete_callback: Any = None, 
+        prediction_callback: Any = None
+    ) -> Dict[str, Any]:
+        """Handle stock prediction queries with sentiment integration"""
+        symbols = entities.get('symbols', [])
+        logger.debug(f"Prediction request (Hybrid) - entities: {entities}, force_retrain: {force_retrain}")
+
+        if not symbols:
+            return {
+                'type': 'error',
+                'message': 'Please specify a stock symbol to predict (e.g., AAPL, GOOGL, MSFT)'
+            }
+
+        symbol = symbols[0]
+        
+        # 1. Analyze News Sentiment
+        sentiment_score = 0.0
+        sentiment_reasoning = None
+        
+        if self.use_ollama:
+            try:
+                if prediction_callback:
+                    prediction_callback({'type': 'prediction_progress', 'symbol': symbol, 'step': 'Analyzing News Sentiment...', 'progress': 5})
+                
+                logger.info(f"Fetching news and analyzing sentiment for {symbol}")
+                news_items = self.stock_fetcher.get_stock_news(symbol)
+                
+                if news_items:
+                    sentiment_result = await self.ollama_enhancer.analyze_news_sentiment(symbol, news_items)
+                    if sentiment_result:
+                        sentiment_score = float(sentiment_result.get('score', 0.0))
+                        sentiment_reasoning = sentiment_result.get('reasoning')
+                        logger.info(f"Sentiment for {symbol}: {sentiment_score} - {sentiment_reasoning}")
+            except Exception as e:
+                logger.warning(f"Sentiment analysis failed for {symbol}: {e}")
+
+        try:
+            # Check if model needs training
+            needs_training = force_retrain or not self.lstm_predictor.is_model_trained(symbol)
+            training_metrics = None
+
+            if needs_training:
+                action = "Retraining" if force_retrain else "Training new"
+                logger.info(f"{action} model for {symbol}")
+                if prediction_callback:
+                    prediction_callback({'type': 'prediction_progress', 'symbol': symbol, 'step': f'{action} Model...', 'progress': 10})
+                
+                stock_data = self.stock_fetcher.fetch_stock_data(symbol, '2y')
+
+                if len(stock_data) < 120:
+                    return {
+                        'type': 'error',
+                        'message': f"Insufficient data to train prediction model for {symbol}. Need at least 120 days of data."
+                    }
+
+                try:
+                    training_metrics = self.lstm_predictor.train_ensemble(
+                        stock_data,
+                        symbol,
+                        progress_callback=progress_callback
+                    )
+                    logger.info(f"Model trained for {symbol} with RMSE: {training_metrics['rmse']:.4f}")
+
+                    if training_complete_callback:
+                        model_info = self.lstm_predictor.get_model_info(symbol)
+                        training_complete_callback({
+                            'symbol': symbol,
+                            'model_info': model_info,
+                            'training_metrics': training_metrics
+                        })
+
+                except Exception as e:
+                    return {
+                        'type': 'error',
+                        'message': f"Failed to train prediction model for {symbol}: {str(e)}"
+                    }
+
+            # Generate predictions
+            logger.debug(f"Fetching stock data for predictions: {symbol}")
+            stock_data = self.stock_fetcher.fetch_stock_data(symbol, '1y')
+            
+            logger.debug(f"Generating predictions for {symbol} with sentiment score: {sentiment_score}")
+            predictions = self.lstm_predictor.predict(
+                symbol, 
+                stock_data, 
+                prediction_callback=prediction_callback,
+                sentiment_score=sentiment_score,
+                sentiment_reasoning=sentiment_reasoning
+            )
+            
+            # Get current data for context
+            current_data = self.stock_fetcher.get_real_time_price(symbol)
+            model_info = self.lstm_predictor.get_model_info(symbol)
+
+            result = {
+                'type': 'prediction',
+                'symbol': symbol,
+                'predictions': predictions,
+                'current_data': current_data,
+                'chart_data': stock_data.tail(60),
+                'training_metrics': training_metrics,
+                'model_info': model_info,
+                'was_retrained': needs_training,
+                'sentiment_analysis': {
+                    'score': sentiment_score,
+                    'reasoning': sentiment_reasoning
+                } if sentiment_score != 0.0 else None,
+                'message': f"Generated {predictions.get('prediction_period_days', 30)}-day price prediction for {symbol}"
+            }
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Prediction failed for {symbol}: {e}")
+            return {
+                'type': 'error',
+                'message': f"Failed to generate predictions for {symbol}: {str(e)}"
+            }
+    
+
     async def get_ollama_health_status(self) -> Dict[str, Any]:
         """Check Ollama service health for diagnostics"""
         if not self.use_ollama:

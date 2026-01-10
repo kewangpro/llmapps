@@ -89,7 +89,21 @@ Provide an educational response that:
 4. Suggests follow-up learning opportunities
 5. Maintains educational focus
 
-Keep responses conversational but informative. Always include educational disclaimers."""
+Keep responses conversational but informative. Always include educational disclaimers.""",
+
+            'news_sentiment': """You are a financial analyst. Analyze the sentiment of these recent news headlines for {symbol}.
+
+News:
+{news_text}
+
+Determine the overall sentiment score from -1.0 (Very Negative) to 1.0 (Very Positive).
+Provide a brief reasoning (max 2 sentences).
+
+Respond with JSON only:
+{{
+    "score": 0.5,
+    "reasoning": "Positive earnings and new product launch drive optimism."
+}}"""
         }
     
     async def _ensure_session(self):
@@ -150,6 +164,40 @@ Keep responses conversational but informative. Always include educational discla
             logger.error(f"Unexpected error calling Ollama: {e}")
             return None
     
+    async def analyze_news_sentiment(self, symbol: str, news_items: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Analyze sentiment of news items"""
+        if not news_items:
+            return None
+            
+        # Format news for prompt
+        news_text = ""
+        for item in news_items[:5]: # Limit to top 5
+            news_text += f"- {item.get('title', '')}: {item.get('summary', '')[:100]}...\n"
+            
+        prompt = self.prompts['news_sentiment'].format(
+            symbol=symbol,
+            news_text=news_text
+        )
+        
+        response = await self._call_ollama(prompt, temperature=0.3)
+        if not response:
+            return None
+            
+        try:
+            # Extract JSON
+            json_text = response
+            if response.startswith('```json'):
+                start = response.find('{')
+                end = response.rfind('}') + 1
+                if start != -1 and end != 0:
+                    json_text = response[start:end]
+            
+            result = json.loads(json_text)
+            return result
+        except Exception as e:
+            logger.warning(f"Failed to parse news sentiment: {e}")
+            return None
+
     async def understand_query(self, query: str) -> Optional[Dict[str, Any]]:
         """Use Ollama to understand natural language queries"""
         prompt = self.prompts['query_understanding'].format(query=query)
