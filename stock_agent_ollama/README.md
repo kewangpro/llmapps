@@ -380,14 +380,18 @@ The project includes a suite of CLI tools for the full RL lifecycle:
 - Supports watchlist-wide validation or single symbol validation
 - Shows profitability rates and pass/fail summaries
 
-**`eval_training.py`** - Model performance analysis and insights
-- Scans and analyzes all trained RL models
-- Shows top 5 and bottom 5 performers with detailed metrics
-- Sort by return, Sharpe ratio, win rate, max drawdown, or age
-- Provides training insights (profitability rate, average returns, Sharpe ratios, algorithm comparisons)
-- Detects training pathologies (action collapse, overtrading, poor risk-adjusted returns)
-- Supports model pruning to archive underperforming models
-- Filter by symbol, algorithm, or performance thresholds
+**`eval_training.py`** - Comprehensive model performance analysis (RL + LSTM)
+- **Dual Model Analysis**: Evaluates both RL agents and LSTM prediction models
+- **RL Performance**: Shows top/bottom performers with detailed metrics (return, Sharpe, win rate, max drawdown)
+- **LSTM Evaluation**: Analyzes validation loss, MAE, overfitting ratios, and feature usage
+- **Combined Rankings**: Side-by-side comparison of RL and LSTM performance per symbol
+- **Smart Recommendations**: Identifies stocks ready for live trading based on combined metrics
+  - ✓ Ready for live trading: RL return >10%, Sharpe >1.0, LSTM val_loss <0.10
+  - Good for testing: Positive returns with reasonable LSTM accuracy
+  - ⚠ Needs retraining: Poor RL performance or high LSTM loss
+- **Training Insights**: Detects pathologies (action collapse, overtrading, overfitting)
+- **Model Pruning**: Archive underperforming RL models to keep directory clean
+- **Flexible Filtering**: By symbol, algorithm, performance thresholds, or model type (--rl-only, --lstm-only)
 
 👉 **For detailed usage and command examples, see [QUICK_START.md](docs/QUICK_START.md#developer-tools).**
 
