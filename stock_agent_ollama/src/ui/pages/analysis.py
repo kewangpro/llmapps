@@ -687,6 +687,7 @@ class StockAnalysisApp(param.Parameterized):
 
         pred_values = predictions.get('predictions', [])
         last_price = predictions.get('last_price', 0)
+        sentiment = predictions.get('sentiment_analysis')
 
         if pred_values:
             avg_pred = sum(pred_values) / len(pred_values)
@@ -699,6 +700,33 @@ class StockAnalysisApp(param.Parameterized):
             color = Colors.TEXT_MUTED
             symbol = '→'
 
+        sentiment_html = ""
+        if sentiment:
+            score = sentiment.get('score', 0)
+            reasoning = sentiment.get('reasoning', '')
+            
+            if score > 0.3:
+                sent_color = Colors.SUCCESS_GREEN
+                sent_text = "BULLISH"
+            elif score < -0.3:
+                sent_color = Colors.DANGER_RED
+                sent_text = "BEARISH"
+            else:
+                sent_color = Colors.TEXT_MUTED
+                sent_text = "NEUTRAL"
+                
+            sentiment_html = f"""
+            <div style='margin-top: 12px; padding-top: 12px; border-top: 1px solid {Colors.BORDER_SUBTLE};'>
+                <div style='font-size: 12px; color: {Colors.TEXT_SECONDARY}; margin-bottom: 4px;'>News Sentiment</div>
+                <div style='font-size: 14px; font-weight: 600; color: {sent_color};'>
+                    {sent_text} <span style='font-size: 12px; opacity: 0.8;'>({score:+.2f})</span>
+                </div>
+                <div style='font-size: 11px; color: {Colors.TEXT_SECONDARY}; margin-top: 4px; line-height: 1.4;'>
+                    {html.escape(reasoning)}
+                </div>
+            </div>
+            """
+
         html_content = f"""
         <div style='background: {Colors.BG_PRIMARY}; padding: 15px; border-radius: 8px; border: 1px solid {Colors.BORDER_SUBTLE}; margin-bottom: 10px; width: 100%;'>
             <div style='font-size: 13px; color: {Colors.TEXT_SECONDARY}; margin-bottom: 5px;'>30-Day Prediction</div>
@@ -709,6 +737,7 @@ class StockAnalysisApp(param.Parameterized):
             <div style='font-size: 12px; color: {Colors.TEXT_MUTED};'>
                 Current: ${last_price:.2f}
             </div>
+            {sentiment_html}
             <div style='font-size: 11px; color: {Colors.TEXT_MUTED}; margin-top: 8px; font-style: italic;'>
                 ⚠️ Not financial advice
             </div>

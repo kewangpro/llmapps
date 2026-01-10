@@ -115,7 +115,7 @@ class ModelsPage(param.Parameterized):
         lstm_models = self._get_lstm_models()
 
         if lstm_models:
-            headers = ["Model Name", "Symbol", "Trained", "Final Loss", "Val Loss", "Size", "Architecture"]
+            headers = ["Model Name", "Symbol", "Trained", "Epochs", "Final Loss", "Val Loss", "Architecture", "Sentiment"]
             rows = []
 
             for model in lstm_models:
@@ -126,10 +126,11 @@ class ModelsPage(param.Parameterized):
                     model['name'],
                     model['symbol'],
                     model['trained'],
+                    model.get('epochs', 'N/A'),
                     model['final_loss'],
                     model['val_loss'],
-                    model['size'],
-                    arch_str
+                    arch_str,
+                    "None" # Sentiment data is not currently used in training
                 ])
 
             table_html = TableStyles.generate_table(headers, rows)
@@ -312,7 +313,8 @@ class ModelsPage(param.Parameterized):
                 val_loss = 'N/A'
                 sequence_length = 'N/A'
                 feature_count = 'N/A'
-                trained_date = datetime.fromtimestamp(metadata_file.stat().st_mtime).strftime('%Y-%m-%d')
+                epochs = 'N/A'
+                trained_date = datetime.fromtimestamp(metadata_file.stat().st_mtime).strftime('%Y-%m-%d %H:%M')
 
                 try:
                     with open(metadata_file, 'r') as f:
@@ -320,7 +322,13 @@ class ModelsPage(param.Parameterized):
 
                         # Get training date if available
                         if 'training_date' in metadata:
-                            trained_date = metadata['training_date'][:10]  # Get YYYY-MM-DD part
+                            # Format as YYYY-MM-DD HH:MM
+                            try:
+                                dt = datetime.fromisoformat(metadata['training_date'])
+                                trained_date = dt.strftime('%Y-%m-%d %H:%M')
+                            except:
+                                # Fallback to string slicing if isoformat fails
+                                trained_date = metadata['training_date'][:16].replace('T', ' ')
                         
                         # Get architecture details
                         if 'sequence_length' in metadata:
@@ -331,6 +339,10 @@ class ModelsPage(param.Parameterized):
 
                         # Extract performance metrics from training histories
                         if 'training_histories' in metadata and metadata['training_histories']:
+                            # Get epochs from first model
+                            if metadata['training_histories'] and 'loss' in metadata['training_histories'][0]:
+                                epochs = len(metadata['training_histories'][0]['loss'])
+
                             # Calculate average final loss and val_loss across all models
                             final_losses = []
                             val_losses = []
@@ -357,6 +369,7 @@ class ModelsPage(param.Parameterized):
                     'symbol': symbol.upper(),
                     'trained': trained_date,
                     'trained_timestamp': metadata_file.stat().st_mtime,  # For sorting
+                    'epochs': epochs,
                     'final_loss': final_loss,
                     'val_loss': val_loss,
                     'size': f'{len(keras_files)} models',
@@ -474,7 +487,7 @@ class ModelsPage(param.Parameterized):
                             'directory': model_dir,
                             'symbol': symbol,
                             'algorithm': algorithm,
-                            'trained': datetime.fromtimestamp(model_dir.stat().st_mtime).strftime('%Y-%m-%d'),
+                            'trained': datetime.fromtimestamp(model_dir.stat().st_mtime).strftime('%Y-%m-%d %H:%M'),
                             'trained_timestamp': model_dir.stat().st_mtime,  # For sorting
                             'timesteps': timesteps,
                             'learning_rate': learning_rate,
