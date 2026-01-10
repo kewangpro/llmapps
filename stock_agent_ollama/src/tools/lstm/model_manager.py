@@ -15,9 +15,10 @@ from src.tools.lstm.prediction_utils import _predict_single_model
 
 logger = logging.getLogger(__name__)
 
-def get_model_info(symbol: str, model_dir: Path) -> Dict[str, Any]:
+def get_model_info(symbol: str, model_dir: Path, horizon: int = 1) -> Dict[str, Any]:
     """Get metadata for a trained model"""
-    metadata_path = model_dir / f"{symbol}_metadata.json"
+    suffix = f"_h{horizon}" if horizon > 1 else ""
+    metadata_path = model_dir / f"{symbol}{suffix}_metadata.json"
     if metadata_path.exists():
         with open(metadata_path, 'r') as f:
             try:
@@ -224,25 +225,27 @@ def _validate_loaded_models(models: list, symbol: str):
     if not all(isinstance(m, tf.keras.Model) for m in models):
         raise TypeError("Not all loaded objects are Keras models")
 
-def _cleanup_failed_save(symbol: str, model_dir: Path):
+def _cleanup_failed_save(symbol: str, model_dir: Path, horizon: int = 1):
     """Clean up partially saved model files on failure"""
+    suffix = f"_h{horizon}" if horizon > 1 else ""
     for i in range(5): # Check for up to 5 models
         for ext in ['.keras', '.h5', '_savedmodel']:
-            path = model_dir / f"{symbol}_model_{i}{ext}"
+            path = model_dir / f"{symbol}{suffix}_model_{i}{ext}"
             if ext == '_savedmodel' and path.is_dir():
                 shutil.rmtree(path, ignore_errors=True)
             elif path.is_file():
                 path.unlink()
 
-def _migrate_h5_to_keras(symbol: str, model_dir: Path, sequence_length: int):
+def _migrate_h5_to_keras(symbol: str, model_dir: Path, sequence_length: int, horizon: int = 1):
     """Migrate legacy .h5 models to the modern .keras format"""
+    suffix = f"_h{horizon}" if horizon > 1 else ""
     for i in range(5): # Check for up to 5 models
-        h5_path = model_dir / f"{symbol}_model_{i}.h5"
-        keras_path = model_dir / f"{symbol}_model_{i}.keras"
+        h5_path = model_dir / f"{symbol}{suffix}_model_{i}.h5"
+        keras_path = model_dir / f"{symbol}{suffix}_model_{i}.keras"
         
         if h5_path.exists() and not keras_path.exists():
             try:
-                logger.warning(f"Migrating legacy .h5 model {i} for {symbol} to .keras format")
+                logger.warning(f"Migrating legacy .h5 model {i} for {symbol} (Horizon {horizon}) to .keras format")
                 custom_objects = _get_comprehensive_custom_objects()
                 model = tf.keras.models.load_model(h5_path, custom_objects=custom_objects, compile=False)
                 _ensure_model_compiled(model, symbol, i, sequence_length)
@@ -253,16 +256,18 @@ def _migrate_h5_to_keras(symbol: str, model_dir: Path, sequence_length: int):
             except Exception as e:
                 logger.error(f"Failed to migrate .h5 model {i} for {symbol}: {e}")
 
-def save_ensemble(models: list, scaler, symbol: str, model_dir: Path, sequence_length: int, histories: list):
+def save_ensemble(models: list, scaler, symbol: str, model_dir: Path, sequence_length: int, histories: list, horizon: int = 1):
     """Save ensemble models and metadata using modern .keras format"""
     try:
         # Migrate any existing .h5 models to .keras format first
-        _migrate_h5_to_keras(symbol, model_dir, sequence_length)
+        _migrate_h5_to_keras(symbol, model_dir, sequence_length, horizon)
+        
+        suffix = f"_h{horizon}" if horizon > 1 else ""
         
         # Save models using the new .keras format (TensorFlow 2.20.0 compatible)
         saved_models = []
         for i, model in enumerate(models):
-            model_path = model_dir / f"{symbol}_model_{i}.keras"
+            model_path = model_dir / f"{symbol}{suffix}_model_{i}.keras"
             try:
                 # Ensure model is properly compiled before saving
                 _ensure_model_compiled(model, symbol, i, sequence_length)
@@ -293,7 +298,7 @@ def save_ensemble(models: list, scaler, symbol: str, model_dir: Path, sequence_l
                 logger.error(f"Failed to save model {i} for {symbol} in .keras format: {model_save_error}")
                 
                 # Fallback strategy 1: Try SavedModel format (properly handled for TF 2.20.0)
-                savedmodel_path = model_dir / f"{symbol}_model_{i}_savedmodel"
+                savedmodel_path = model_dir / f"{symbol}{suffix}_model_{i}_savedmodel"
                 try:
                     logger.info(f"Attempting SavedModel export fallback for model {i} for {symbol}")
                     # Use export for SavedModel format in TensorFlow 2.20.0+
@@ -318,7 +323,7 @@ def save_ensemble(models: list, scaler, symbol: str, model_dir: Path, sequence_l
                     logger.error(f"SavedModel fallback failed for model {i}: {savedmodel_error}")
                     
                     # Fallback strategy 2: Try legacy .h5 format (last resort)
-                    h5_path = model_dir / f"{symbol}_model_{i}.h5"
+                    h5_path = model_dir / f"{symbol}{suffix}_model_{i}.h5"
                     try:
                         logger.warning(f"Attempting legacy .h5 fallback for model {i} for {symbol}")
                         # For TensorFlow 2.20.0, avoid deprecated save_format parameter
@@ -362,6 +367,7 @@ def save_ensemble(models: list, scaler, symbol: str, model_dir: Path, sequence_l
         # Save metadata with enhanced format information including scaler parameters
         metadata = {
             'symbol': symbol,
+            'prediction_horizon': horizon,
             'ensemble_size': len(models),
             'models_saved': len(saved_models),
             'sequence_length': sequence_length,
@@ -389,24 +395,24 @@ def save_ensemble(models: list, scaler, symbol: str, model_dir: Path, sequence_l
             }
         }
         
-        metadata_path = model_dir / f"{symbol}_metadata.json"
+        metadata_path = model_dir / f"{symbol}{suffix}_metadata.json"
         try:
             with open(metadata_path, 'w') as f:
                 json.dump(metadata, f, indent=2, default=str)
-            logger.debug(f"Saved metadata for {symbol}")
+            logger.debug(f"Saved metadata for {symbol} (Horizon {horizon})")
         except Exception as metadata_error:
             logger.warning(f"Failed to save metadata for {symbol}: {metadata_error}")
             # Don't fail the entire save operation for metadata issues
             
-        logger.info(f"Successfully saved ensemble models for {symbol} ({len(saved_models)} models)")
+        logger.info(f"Successfully saved ensemble models for {symbol} (Horizon {horizon}) ({len(saved_models)} models)")
         
     except Exception as e:
         logger.error(f"Failed to save models for {symbol}: {e}")
         # Clean up any partially created files
-        _cleanup_failed_save(symbol, model_dir)
+        _cleanup_failed_save(symbol, model_dir, horizon)
         raise
 
-def _load_single_model(symbol: str, model_index: int, model_dir: Path, sequence_length: int) -> Optional[tf.keras.Model]:
+def _load_single_model(symbol: str, model_index: int, model_dir: Path, sequence_length: int, horizon: int = 1) -> Optional[tf.keras.Model]:
     """Load a single model with comprehensive fallback strategies"""
     model = None
     load_attempts = []
@@ -414,8 +420,10 @@ def _load_single_model(symbol: str, model_index: int, model_dir: Path, sequence_
     # Get comprehensive custom objects for loading legacy models
     custom_objects = _get_comprehensive_custom_objects()
     
+    suffix = f"_h{horizon}" if horizon > 1 else ""
+    
     # Strategy 1: Try to load .keras format first (preferred)
-    keras_path = model_dir / f"{symbol}_model_{model_index}.keras"
+    keras_path = model_dir / f"{symbol}{suffix}_model_{model_index}.keras"
     if keras_path.exists():
         try:
             logger.debug(f"Attempting to load .keras model {model_index} for {symbol}")
@@ -438,7 +446,7 @@ def _load_single_model(symbol: str, model_index: int, model_dir: Path, sequence_
             model = None
     
     # Strategy 2: Try to load .h5 format (legacy) with custom objects
-    h5_path = model_dir / f"{symbol}_model_{model_index}.h5"
+    h5_path = model_dir / f"{symbol}{suffix}_model_{model_index}.h5"
     if h5_path.exists():
         try:
             logger.debug(f"Attempting to load .h5 model {model_index} for {symbol}")
@@ -461,7 +469,7 @@ def _load_single_model(symbol: str, model_index: int, model_dir: Path, sequence_
             model = None
     
     # Strategy 3: Try to load SavedModel format (alternative fallback)
-    savedmodel_path = model_dir / f"{symbol}_model_{model_index}_savedmodel"
+    savedmodel_path = model_dir / f"{symbol}{suffix}_model_{model_index}_savedmodel"
     if savedmodel_path.exists():
         try:
             logger.debug(f"Attempting to load SavedModel {model_index} for {symbol}")
@@ -526,7 +534,7 @@ def _load_single_model(symbol: str, model_index: int, model_dir: Path, sequence_
     
     return None
 
-def load_ensemble(symbol: str, model_dir: Path, sequence_length: int, ensemble_size: int, data: pd.DataFrame = None) -> Tuple[list, Optional[Any]]:
+def load_ensemble(symbol: str, model_dir: Path, sequence_length: int, ensemble_size: int, data: pd.DataFrame = None, horizon: int = 1) -> Tuple[list, Optional[Any]]:
     """Load ensemble models and scaler with proper error handling and format support"""
     models = []
     scaler = None
@@ -549,7 +557,7 @@ def load_ensemble(symbol: str, model_dir: Path, sequence_length: int, ensemble_s
                     logger.warning(f"CompositeScaler for {symbol} is missing price range data after loading. Attempting to restore...")
                     
                     # First, try to restore from saved metadata
-                    metadata = get_model_info(symbol, model_dir)
+                    metadata = get_model_info(symbol, model_dir, horizon)
                     restored_from_metadata = False
                     
                     if metadata and 'scaler_info' in metadata:
@@ -590,24 +598,24 @@ def load_ensemble(symbol: str, model_dir: Path, sequence_length: int, ensemble_s
             return [], None
         
         # Try to migrate old .h5 models to .keras format if needed
-        _migrate_h5_to_keras(symbol, model_dir, sequence_length)
+        _migrate_h5_to_keras(symbol, model_dir, sequence_length, horizon)
         
         # Load models with fallback strategy
         for i in range(ensemble_size):
-            model = _load_single_model(symbol, i, model_dir, sequence_length)
+            model = _load_single_model(symbol, i, model_dir, sequence_length, horizon)
             if model is not None:
                 models.append(model)
             else:
-                logger.warning(f"Model {i} not found for {symbol}")
+                logger.warning(f"Model {i} not found for {symbol} (Horizon {horizon})")
         
         if len(models) == 0:
-            logger.warning(f"No models found for {symbol}")
+            logger.warning(f"No models found for {symbol} (Horizon {horizon})")
             return [], scaler  # Return scaler even if no models found (for testing)
         
         # Validate loaded models
         _validate_loaded_models(models, symbol)
         
-        logger.info(f"Successfully loaded {len(models)} models for {symbol}")
+        logger.info(f"Successfully loaded {len(models)} models for {symbol} (Horizon {horizon})")
         
     except Exception as e:
         logger.error(f"Failed to load models for {symbol}: {e}")
@@ -616,11 +624,11 @@ def load_ensemble(symbol: str, model_dir: Path, sequence_length: int, ensemble_s
     
     return models, scaler
 
-def _attempt_model_recovery(symbol: str, model_dir: Path, sequence_length: int) -> bool:
+def _attempt_model_recovery(symbol: str, model_dir: Path, sequence_length: int, horizon: int = 1) -> bool:
     """Attempt to recover models through migration and cleanup"""
     try:
         # Try migration first
-        _migrate_h5_to_keras(symbol, model_dir, sequence_length)
+        _migrate_h5_to_keras(symbol, model_dir, sequence_length, horizon)
         
         # Clean up any corrupted files
         # Import locally to avoid circular dependency
@@ -628,33 +636,33 @@ def _attempt_model_recovery(symbol: str, model_dir: Path, sequence_length: int) 
         diagnosis = diagnose_model_issues(symbol, model_dir)
         if 'corruption' in str(diagnosis['issues']).lower():
             logger.info(f"Cleaning up potentially corrupted files for {symbol}")
-            _cleanup_failed_save(symbol, model_dir)
+            _cleanup_failed_save(symbol, model_dir, horizon)
             
         return True
     except Exception as e:
         logger.warning(f"Model recovery attempt failed for {symbol}: {e}")
         return False
 
-def load_ensemble_with_fallback(symbol: str, model_dir: Path, sequence_length: int, ensemble_size: int, data: pd.DataFrame = None) -> Tuple[list, Optional[Any]]:
+def load_ensemble_with_fallback(symbol: str, model_dir: Path, sequence_length: int, ensemble_size: int, data: pd.DataFrame = None, horizon: int = 1) -> Tuple[list, Optional[Any]]:
     """Load ensemble with automatic fallback and recovery mechanisms"""
     try:
         # First attempt: normal loading
-        models, scaler = load_ensemble(symbol, model_dir, sequence_length, ensemble_size, data)
+        models, scaler = load_ensemble(symbol, model_dir, sequence_length, ensemble_size, data, horizon)
         if models and len(models) > 0:
             return models, scaler
             
-        logger.warning(f"Normal loading failed for {symbol}, attempting recovery...")
+        logger.warning(f"Normal loading failed for {symbol} (Horizon {horizon}), attempting recovery...")
         
         # Second attempt: try migration and reload
-        if _attempt_model_recovery(symbol, model_dir, sequence_length):
-            models, scaler = load_ensemble(symbol, model_dir, sequence_length, ensemble_size, data)
+        if _attempt_model_recovery(symbol, model_dir, sequence_length, horizon):
+            models, scaler = load_ensemble(symbol, model_dir, sequence_length, ensemble_size, data, horizon)
             if models and len(models) > 0:
                 logger.info(f"Successfully recovered {len(models)} models for {symbol}")
                 return models, scaler
         
         # Third attempt: force retrain if data is available
         if data is not None and len(data) > 100:  # Ensure sufficient data
-            logger.warning(f"Attempting to retrain models for {symbol} due to loading failures")
+            logger.warning(f"Attempting to retrain models for {symbol} (Horizon {horizon}) due to loading failures")
             # Import locally to avoid circular dependency
             from src.tools.lstm.prediction_service import LSTMPredictionService
             from src.config import Config
@@ -666,9 +674,10 @@ def load_ensemble_with_fallback(symbol: str, model_dir: Path, sequence_length: i
                     sequence_length=sequence_length,
                     ensemble_size=ensemble_size,
                     epochs=Config.EPOCHS,
-                    batch_size=Config.BATCH_SIZE
+                    batch_size=Config.BATCH_SIZE,
+                    horizon=horizon
                 )
-                models, scaler = load_ensemble(symbol, model_dir, sequence_length, ensemble_size, data)
+                models, scaler = load_ensemble(symbol, model_dir, sequence_length, ensemble_size, data, horizon)
                 if models and len(models) > 0:
                     logger.info(f"Successfully retrained and loaded {len(models)} models for {symbol}")
                     return models, scaler
@@ -680,9 +689,9 @@ def load_ensemble_with_fallback(symbol: str, model_dir: Path, sequence_length: i
     
     return [], None
 
-def determine_feature_compatibility(symbol: str, model_dir: Path) -> Dict[str, Any]:
+def determine_feature_compatibility(symbol: str, model_dir: Path, horizon: int = 1) -> Dict[str, Any]:
     """Determine if existing models use enhanced features for backward compatibility"""
-    metadata = get_model_info(symbol, model_dir)
+    metadata = get_model_info(symbol, model_dir, horizon)
     
     compatibility_info = {
         'uses_enhanced_features': False,

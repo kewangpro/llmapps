@@ -261,9 +261,9 @@ def _validate_feature_quality(data: pd.DataFrame, symbol: str) -> Dict[str, Any]
     
     return validation_results
 
-def prepare_enhanced_data_robust(data: pd.DataFrame, sequence_length: int, symbol: str = "UNKNOWN", validation_split: float = None, pre_fitted_scaler: Optional[object] = None) -> Tuple[np.ndarray, np.ndarray, object]:
+def prepare_enhanced_data_robust(data: pd.DataFrame, sequence_length: int, symbol: str = "UNKNOWN", validation_split: float = None, pre_fitted_scaler: Optional[object] = None, horizon: int = 1) -> Tuple[np.ndarray, np.ndarray, object]:
     """Prepare enhanced data with robust outlier handling and adaptive scaling"""
-    logger.debug(f"Preparing robust enhanced features for {symbol}") # Changed INFO to DEBUG
+    logger.debug(f"Preparing robust enhanced features for {symbol} (Horizon: {horizon})") # Changed INFO to DEBUG
     
     # Calculate robust features with outlier handling
     enhanced_data = _calculate_robust_features(data)
@@ -271,7 +271,7 @@ def prepare_enhanced_data_robust(data: pd.DataFrame, sequence_length: int, symbo
     # Remove NaN values (first rows will have NaN due to technical indicators)
     enhanced_data = enhanced_data.dropna()
     
-    if len(enhanced_data) < sequence_length + 10:
+    if len(enhanced_data) < sequence_length + horizon + 10:
         raise ValueError(f"Insufficient data after adding technical indicators: {len(enhanced_data)} samples")
     
     # Validate feature quality and log warnings
@@ -286,11 +286,12 @@ def prepare_enhanced_data_robust(data: pd.DataFrame, sequence_length: int, symbo
     
     # Create sequences
     X, y = [], []
-    for i in range(sequence_length, len(scaled_data)):
+    # Adjust loop range to account for horizon
+    for i in range(sequence_length, len(scaled_data) - horizon + 1):
         X.append(scaled_data[i-sequence_length:i])
-        y.append(scaled_data[i, 0])  # Predict only the close price (first feature)
+        y.append(scaled_data[i + horizon - 1, 0])  # Predict only the close price (first feature)
     
-    logger.info(f"Prepared {len(X)} sequences with {enhanced_data.shape[1]} robust features for {symbol}")
+    logger.info(f"Prepared {len(X)} sequences with {enhanced_data.shape[1]} robust features for {symbol} (Horizon: {horizon})")
     return np.array(X), np.array(y), composite_scaler
 
 def _apply_adaptive_scaling(data: pd.DataFrame, symbol: str, validation_split: float = None, composite_scaler: Optional[object] = None) -> np.ndarray:
@@ -320,7 +321,7 @@ def _apply_adaptive_scaling(data: pd.DataFrame, symbol: str, validation_split: f
     
     return scaled_data
 
-def prepare_enhanced_data(data: pd.DataFrame, sequence_length: int, validation_split: float = None, pre_fitted_scaler: Optional[object] = None) -> Tuple[np.ndarray, np.ndarray, object]:
+def prepare_enhanced_data(data: pd.DataFrame, sequence_length: int, validation_split: float = None, pre_fitted_scaler: Optional[object] = None, horizon: int = 1) -> Tuple[np.ndarray, np.ndarray, object]:
     """Prepare enhanced data with technical indicators for LSTM training (backward compatibility)"""
     # For backward compatibility, detect symbol from call stack if possible
     symbol = "UNKNOWN"
@@ -337,9 +338,9 @@ def prepare_enhanced_data(data: pd.DataFrame, sequence_length: int, validation_s
     
     # Always use robust method for all symbols to ensure multivariate forecasting
     logger.debug(f"Using robust enhanced features for {symbol}") # Changed INFO to DEBUG
-    return prepare_enhanced_data_robust(data, sequence_length, symbol, validation_split, pre_fitted_scaler)
+    return prepare_enhanced_data_robust(data, sequence_length, symbol, validation_split, pre_fitted_scaler, horizon)
 
-def _prepare_basic_data(data: pd.DataFrame, sequence_length: int, validation_split: float = None, pre_fitted_scaler: Optional[object] = None) -> Tuple[np.ndarray, np.ndarray, MinMaxScaler]:
+def _prepare_basic_data(data: pd.DataFrame, sequence_length: int, validation_split: float = None, pre_fitted_scaler: Optional[object] = None, horizon: int = 1) -> Tuple[np.ndarray, np.ndarray, MinMaxScaler]:
     """Prepare data for LSTM training with proper data leakage prevention"""
     # Use multiple features for better predictions
     features = ['Close', 'Volume', 'High', 'Low', 'Open']
@@ -385,8 +386,8 @@ def _prepare_basic_data(data: pd.DataFrame, sequence_length: int, validation_spl
     
     # Create sequences
     X, y = [], []
-    for i in range(sequence_length, len(scaled_data)):
+    for i in range(sequence_length, len(scaled_data) - horizon + 1):
         X.append(scaled_data[i-sequence_length:i])
-        y.append(scaled_data[i, 0])  # Predict only the close price (first feature)
+        y.append(scaled_data[i + horizon - 1, 0])  # Predict only the close price (first feature)
     
     return np.array(X), np.array(y), scaler

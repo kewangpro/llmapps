@@ -9,7 +9,7 @@ from pathlib import Path
 from src.config import Config
 from src.tools.lstm.model_architecture import create_lstm_model
 from src.tools.lstm.data_pipeline import _prepare_basic_data, prepare_enhanced_data, prepare_enhanced_data_robust
-from src.tools.lstm.model_manager import save_ensemble, load_ensemble_with_fallback, determine_feature_compatibility, get_model_info
+from src.tools.lstm.model_manager import save_ensemble, load_ensemble, load_ensemble_with_fallback, determine_feature_compatibility, get_model_info
 from src.tools.lstm.validation_utils import validate_improvements, check_scaling_health, diagnose_model_issues
 from src.tools.lstm.custom_scalers import CompositeScaler
 from src.tools.lstm.prediction_utils import _predict_single_model, _inverse_transform_predictions, _update_sequence_for_next_prediction, _generate_multi_step_predictions, _generate_ensemble_predictions # Removed _predict_ensemble
@@ -159,7 +159,8 @@ class LSTMPredictionService:
         validation_split: float = 0.2,
         epochs: int = None,
         batch_size: int = None,
-        progress_callback: Optional[Callable] = None
+        progress_callback: Optional[Callable] = None,
+        horizon: int = 1
     ) -> Dict[str, Any]:
         """Train ensemble of LSTM models
 
@@ -170,12 +171,13 @@ class LSTMPredictionService:
             epochs: Number of training epochs
             batch_size: Batch size for training
             progress_callback: Optional callback for progress updates
+            horizon: Prediction horizon (1 for next day, 30 for next month, etc.)
         """
 
         epochs = epochs or Config.EPOCHS
         batch_size = batch_size or Config.BATCH_SIZE
         
-        logger.info(f"Training LSTM ensemble for {symbol}")
+        logger.info(f"Training LSTM ensemble for {symbol} (Horizon: {horizon})")
         
         # Ensure data has proper datetime index before processing
         data = _ensure_datetime_index(data)
@@ -185,13 +187,13 @@ class LSTMPredictionService:
             # Try enhanced features first with symbol parameter
             if hasattr(prepare_enhanced_data_robust, '__call__') and symbol in ['MSFT', 'AMZN', 'GOOGL', 'META']:
                 logger.info(f"Using robust enhanced features for {symbol} (known outlier issues)")
-                X, y, scaler = prepare_enhanced_data_robust(data, self.sequence_length, symbol, validation_split)
+                X, y, scaler = prepare_enhanced_data_robust(data, self.sequence_length, symbol, validation_split, horizon=horizon)
             else:
-                X, y, scaler = prepare_enhanced_data(data, self.sequence_length, validation_split)
+                X, y, scaler = prepare_enhanced_data(data, self.sequence_length, validation_split, horizon=horizon)
             logger.info(f"Using enhanced features ({X.shape[2]} features) for training {symbol}")
         except Exception as e:
             logger.warning(f"Enhanced features failed for {symbol}: {e}. Falling back to basic features.")
-            X, y, scaler = _prepare_basic_data(data, self.sequence_length, validation_split) # Updated call
+            X, y, scaler = _prepare_basic_data(data, self.sequence_length, validation_split, horizon=horizon) # Updated call
             logger.info(f"Using basic features ({X.shape[2]} features) for training {symbol}")
         
         if len(X) < 50:  # Need minimum data for training
@@ -299,7 +301,7 @@ class LSTMPredictionService:
             val_targets_list.extend(fold_actuals)
         
         # Save models and metadata
-        save_ensemble(models, scaler, symbol, self.model_dir, self.sequence_length, training_histories)
+        save_ensemble(models, scaler, symbol, self.model_dir, self.sequence_length, training_histories, horizon)
         
         # Calculate aggregated validation metrics across all walk-forward folds
         all_val_preds = np.array(val_predictions_list)
@@ -332,7 +334,7 @@ class LSTMPredictionService:
             'ensemble_size': self.ensemble_size
         }
         
-        logger.info(f"Walk-Forward Training completed for {symbol}. "
+        logger.info(f"Walk-Forward Training completed for {symbol} (Horizon: {horizon}). "
                    f"Aggregated RMSE: {metrics['rmse']:.4f}, Accuracy: {directional_accuracy:.1f}%")
         
         return metrics
@@ -343,7 +345,9 @@ class LSTMPredictionService:
         data: pd.DataFrame,
         days: int = None,
         ensemble_size: int = None,
-        prediction_callback: Any = None
+        prediction_callback: Any = None,
+        sentiment_score: float = 0.0,
+        sentiment_reasoning: str = None
     ) -> Dict[str, Any]:
         """Generate predictions using trained ensemble with improved error handling
 
@@ -353,6 +357,8 @@ class LSTMPredictionService:
             days: Number of days to predict
             ensemble_size: Number of models in ensemble
             prediction_callback: Optional callback for prediction progress updates
+            sentiment_score: News sentiment score (-1.0 to 1.0)
+            sentiment_reasoning: Explanation for the sentiment score
         """
 
         days = days or Config.PREDICTION_DAYS
@@ -370,7 +376,7 @@ class LSTMPredictionService:
 
         try:
             report_progress("Loading models...", 10)
-            # Load models with error handling and automatic fallback
+            # Load standard (h=1) models with error handling and automatic fallback
             models, scaler = load_ensemble_with_fallback(symbol, self.model_dir, self.sequence_length, ensemble_size, data)
             if not models:
                 # Try to diagnose the issue
@@ -378,19 +384,11 @@ class LSTMPredictionService:
                 error_msg = f"No trained models found for {symbol}. Issues: {diagnosis['issues']}"
                 logger.error(error_msg)
                 raise ValueError(error_msg)
-            # Always update scaler's price_min and price_max from latest data
-            if scaler is not None and 'Close' in data.columns:
-                close_prices = data['Close'].dropna()
-                if len(close_prices) > 0:
-                    scaler.price_min = float(close_prices.min())
-                    scaler.price_max = float(close_prices.max())
-                    scaler.data_range = scaler.price_max - scaler.price_min
-                    scaler.data_scale = scaler.data_range / (scaler.feature_range[1] - scaler.feature_range[0]) if scaler.data_range > 0 else 0
-                    scaler.fitted = True
-                    logger.info(f"Scaler price_min/max updated from latest data: {scaler.price_min} - {scaler.price_max}")
+            # Do NOT update scaler's price_min and price_max from latest data.
+            if scaler is not None:
+                logger.info(f"Using training scaler: {scaler.price_min} - {scaler.price_max}")
         except Exception as load_error:
             logger.error(f"Failed to load models for {symbol}: {load_error}")
-            # Provide helpful error message with recovery suggestions
             raise ValueError(
                 f"Could not load models for {symbol}. "
                 f"Error: {str(load_error)}. "
@@ -402,50 +400,100 @@ class LSTMPredictionService:
         data = _ensure_datetime_index(data)
 
         report_progress("Preparing data...", 30)
-        # CRITICAL FIX: Use backward compatibility system to determine feature set
+        # Determine feature set for standard models
         compatibility_info = determine_feature_compatibility(symbol, self.model_dir)
         use_enhanced_features = compatibility_info['uses_enhanced_features']
 
         logger.info(f"Model for {symbol}: Enhanced features={use_enhanced_features}, "
                    f"Feature count={compatibility_info['feature_count']}")
 
-        # Prepare data with matching feature set for backward compatibility
+        # Prepare data for standard models
         try:
             if use_enhanced_features:
                 X, _, scaler_check = prepare_enhanced_data(data, self.sequence_length, pre_fitted_scaler=scaler)
-                logger.debug(f"Using enhanced features for prediction: {X.shape[2]} features")
             else:
-                X, _, scaler_check = _prepare_basic_data(data, self.sequence_length, pre_fitted_scaler=scaler) # Updated call
-                logger.debug(f"Using basic features for prediction: {X.shape[2]} features")
+                X, _, scaler_check = _prepare_basic_data(data, self.sequence_length, pre_fitted_scaler=scaler)
                 
-            # Validate feature count matches expected
-            expected_features = compatibility_info['feature_count']
-            if X.shape[2] != expected_features:
-                logger.warning(f"Feature count mismatch: expected {expected_features}, got {X.shape[2]}. "
-                              f"Falling back to basic features.")
+            if X.shape[2] != compatibility_info['feature_count']:
+                logger.warning(f"Feature count mismatch: expected {compatibility_info['feature_count']}, got {X.shape[2]}. Falling back.")
                 raise ValueError(f"Feature count mismatch")
                 
         except Exception as e:
             logger.warning(f"Feature preparation failed, falling back to basic features: {e}")
-            X, _, scaler_check = _prepare_basic_data(data, self.sequence_length) # Updated call
+            X, _, scaler_check = _prepare_basic_data(data, self.sequence_length)
             
-            # Update compatibility info for fallback
-            compatibility_info['uses_enhanced_features'] = False
-            compatibility_info['feature_count'] = X.shape[2]
-        
         if len(X) == 0:
             raise ValueError("Insufficient data for prediction")
 
-        # Use the last sequence for prediction
-        last_sequence = X[-1:, :, :]
-
         report_progress("Generating predictions...", 50)
-        # CRITICAL FIX: Improved multi-step prediction with consistent scaling
-        predictions = _generate_multi_step_predictions(models, scaler, X, days, self._predict_ensemble) # Pass self._predict_ensemble
+        # Generate recursive predictions (Standard approach)
+        predictions = _generate_multi_step_predictions(models, scaler, X, days, self._predict_ensemble)
+
+        # ---------------------------------------------------------
+        # Direct Horizon Blending
+        # ---------------------------------------------------------
+        if days > 1:
+            try:
+                # Check if a specific horizon model exists
+                direct_metadata = get_model_info(symbol, self.model_dir, horizon=days)
+                if direct_metadata:
+                    logger.info(f"Found direct horizon model for {symbol} (h={days})")
+                    report_progress(f"Refining with h={days} model...", 60)
+                    
+                    # Load direct models (no fallback to training, just load)
+                    direct_models, direct_scaler = load_ensemble(symbol, self.model_dir, self.sequence_length, ensemble_size, data, horizon=days)
+                    
+                    if direct_models:
+                        # Prepare data using direct scaler (use horizon=1 to get latest sequence)
+                        # We assume direct models use enhanced features if available
+                        if use_enhanced_features: # Assume same architecture preference
+                             X_direct, _, _ = prepare_enhanced_data(data, self.sequence_length, pre_fitted_scaler=direct_scaler, horizon=1)
+                        else:
+                             X_direct, _, _ = _prepare_basic_data(data, self.sequence_length, pre_fitted_scaler=direct_scaler, horizon=1)
+                        
+                        # Predict single step (the endpoint)
+                        last_seq_direct = tf.convert_to_tensor(X_direct[-1:, :, :], dtype=tf.float32)
+                        direct_endpoint_scaled = self._predict_ensemble(direct_models, last_seq_direct, direct_scaler)
+                        direct_endpoint = direct_endpoint_scaled[0]
+                        
+                        logger.info(f"Recursive endpoint: {predictions[-1]:.2f}, Direct endpoint: {direct_endpoint:.2f}")
+                        
+                        # Blend predictions
+                        # Adjust the recursive trajectory to end at the direct endpoint
+                        recursive_end = predictions[-1]
+                        correction_total = direct_endpoint - recursive_end
+                        
+                        # Apply linear correction over time (confidence in direct model increases as we approach horizon)
+                        for i in range(len(predictions)):
+                            # i=0 is day 1. i=days-1 is day days.
+                            weight = (i + 1) / days
+                            predictions[i] += correction_total * weight
+                            
+            except Exception as direct_error:
+                logger.warning(f"Failed to use direct horizon model: {direct_error}")
+        # ---------------------------------------------------------
+
+        # ---------------------------------------------------------
+        # Sentiment Adjustment
+        # ---------------------------------------------------------
+        if sentiment_score != 0.0:
+            report_progress("Applying sentiment adjustment...", 65)
+            logger.info(f"Applying sentiment adjustment: score={sentiment_score}")
+            
+            # Max impact at horizon (e.g., 5% for max sentiment)
+            MAX_SENTIMENT_IMPACT = 0.05
+            
+            # Linear scaling of impact over time
+            for i in range(len(predictions)):
+                # Impact grows over time as sentiment reflects trend
+                time_weight = (i + 1) / days
+                adjustment_factor = 1.0 + (sentiment_score * MAX_SENTIMENT_IMPACT * time_weight)
+                predictions[i] *= adjustment_factor
+        # ---------------------------------------------------------
 
         report_progress("Calculating confidence intervals...", 70)
         # Calculate confidence intervals with improved ensemble variance
-        ensemble_predictions = _generate_ensemble_predictions(models, scaler, X, days, self._predict_ensemble) # Pass self._predict_ensemble
+        ensemble_predictions = _generate_ensemble_predictions(models, scaler, X, days, self._predict_ensemble)
         pred_std = np.std(ensemble_predictions, axis=0)
         
         # Generate dates for predictions with proper datetime handling
@@ -490,7 +538,11 @@ class LSTMPredictionService:
             'confidence_lower': [p - 1.96 * s for p, s in zip(predictions, pred_std)],
             'last_price': float(data['Close'].iloc[-1]),
             'prediction_period_days': days,
-            'prediction_variance': pred_std.tolist()
+            'prediction_variance': pred_std.tolist(),
+            'sentiment_analysis': {
+                'score': sentiment_score,
+                'reasoning': sentiment_reasoning
+            } if sentiment_score != 0.0 else None
         }
 
         report_progress("Complete!", 100)

@@ -50,18 +50,19 @@ def _update_sequence_for_next_prediction(current_sequence: tf.Tensor, predicted_
         raise ValueError("CompositeScaler price_min or data_range not available for scaling predicted price. This indicates a problem with scaler loading/restoration.")
 
     # Prevent predicted price from dropping below 98% of last actual price
-    if len(all_predictions) > 0:
-        last_actual_price = _inverse_transform_predictions(
-            np.array([original_X[-1, -1, 0]]), scaler
-        )[0]
-        min_pred_price = last_actual_price * 0.98
-        predicted_price = max(predicted_price, min_pred_price)
+    # logic moved to _generate_multi_step_predictions for consistent application
 
     scaled_pred_price = (predicted_price - scaler.price_min) / scaler.data_range
     new_row[0] = scaled_pred_price
 
     # For enhanced features, estimate other technical indicators
     if new_row.shape[0] > 5:  # Enhanced features
+        # Recalculate last_actual_price for ratio calculation if needed
+        # (It was previously calculated in the removed block)
+        last_actual_price = _inverse_transform_predictions(
+            np.array([original_X[-1, -1, 0]]), scaler
+        )[0]
+        
         price_change_ratio = 1.0
         if len(all_predictions) > 0:
             epsilon = 1e-6
@@ -84,6 +85,11 @@ def _update_sequence_for_next_prediction(current_sequence: tf.Tensor, predicted_
             new_row[2] = np.clip(new_row[0] * high_ratio, new_row[0], 0.99)  # High based on ratio
             new_row[3] = np.clip(new_row[0] * low_ratio, 0.01, new_row[0])  # Low based on ratio
 
+        # Fix: Open price (index 4) for t+1 should be Close price of t (index 0)
+        # We use the previous step's close from the sequence (before roll)
+        if new_row.shape[0] > 4:
+            new_row[4] = seq_np[0, -1, 0]
+
         # Keep technical indicators stable (even slower decay and less influence from predicted close)
         for i in range(5, new_row.shape[0]):
             momentum = 0.995  # Keep 99.5% of previous value (much slower decay)
@@ -105,19 +111,39 @@ def _generate_multi_step_predictions(models: list, scaler, X: np.ndarray, days: 
     logger.info(f"Starting multi-step prediction for {days} days with {len(models)} models.")
     start_time = time.time() # Add time import
     
+    # Get last actual price for anchoring checks
+    # Assuming feature 0 is Close price
+    last_actual_close = _inverse_transform_predictions(
+        np.array([last_sequence[0, -1, 0]]), scaler
+    )[0]
+    
     for day in range(days):
         step_start_time = time.time()
         # Get ensemble prediction for current sequence
         day_prediction = _predict_ensemble_func(models, current_sequence, scaler) # Call through passed function
-        predictions.append(day_prediction[0])
         
-        logger.debug(f"  Day {day+1} prediction: {day_prediction[0]:.2f} (took {time.time() - step_start_time:.4f}s)")
+        # Clamp prediction to avoid massive gaps (e.g. max +/- 15% daily change)
+        raw_pred = day_prediction[0]
+        ref_price = last_actual_close if day == 0 else predictions[-1]
+        
+        max_change = 0.05 # 5% max daily change constraint
+        min_allowed = ref_price * (1 - max_change)
+        max_allowed = ref_price * (1 + max_change)
+        
+        clamped_pred = max(min_allowed, min(max_allowed, raw_pred))
+        
+        if clamped_pred != raw_pred:
+            logger.debug(f"  Day {day+1}: Clamped prediction from {raw_pred:.2f} to {clamped_pred:.2f} (Ref: {ref_price:.2f})")
+        
+        predictions.append(clamped_pred)
+        
+        logger.debug(f"  Day {day+1} prediction: {clamped_pred:.2f} (took {time.time() - step_start_time:.4f}s)")
         
         # CRITICAL FIX: Properly update sequence with consistent scaling
         if day < days - 1:  # Don't update sequence for the last prediction
             update_start_time = time.time()
             current_sequence = _update_sequence_for_next_prediction(
-                current_sequence, day_prediction[0], scaler, X, predictions
+                current_sequence, clamped_pred, scaler, X, predictions
             )
             logger.debug(f"  Day {day+1} sequence update took {time.time() - update_start_time:.4f}s")
     
