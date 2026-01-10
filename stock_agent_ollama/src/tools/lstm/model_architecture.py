@@ -10,23 +10,23 @@ def create_lstm_model(input_shape: Tuple[int, int]) -> tf.keras.Model:
     if feature_count > 10:  # Enhanced features
         lstm_units = [64, 64, 32]
         dense_units = 32
-        dropout_rate = 0.3
+        dropout_rate = 0.45  # Increased from 0.3 to reduce overfitting
     else:  # Basic features
         lstm_units = [50, 50, 50]
         dense_units = 25
-        dropout_rate = 0.2
+        dropout_rate = 0.35  # Increased from 0.2 to reduce overfitting
     
     inputs = tf.keras.layers.Input(shape=input_shape)
     
     # First LSTM layer with batch normalization
-    lstm1 = tf.keras.layers.LSTM(lstm_units[0], return_sequences=True, 
-                               recurrent_dropout=0.1)(inputs)
+    lstm1 = tf.keras.layers.LSTM(lstm_units[0], return_sequences=True,
+                               recurrent_dropout=0.25)(inputs)  # Increased from 0.1
     bn1 = tf.keras.layers.BatchNormalization()(lstm1)
     drop1 = tf.keras.layers.Dropout(dropout_rate)(bn1)
     
     # Second LSTM layer
     lstm2 = tf.keras.layers.LSTM(lstm_units[1], return_sequences=True,
-                               recurrent_dropout=0.1)(drop1)
+                               recurrent_dropout=0.25)(drop1)  # Increased from 0.1
     bn2 = tf.keras.layers.BatchNormalization()(lstm2)
     drop2 = tf.keras.layers.Dropout(dropout_rate)(bn2)
     
@@ -36,7 +36,7 @@ def create_lstm_model(input_shape: Tuple[int, int]) -> tf.keras.Model:
     
     # Third LSTM layer (now takes attention output)
     lstm3 = tf.keras.layers.LSTM(lstm_units[2], return_sequences=False,
-                               recurrent_dropout=0.1)(attention_dense) # Feed attention output here
+                               recurrent_dropout=0.25)(attention_dense)  # Increased from 0.1 # Feed attention output here
     bn3 = tf.keras.layers.BatchNormalization()(lstm3)
     drop3 = tf.keras.layers.Dropout(dropout_rate)(bn3)
     

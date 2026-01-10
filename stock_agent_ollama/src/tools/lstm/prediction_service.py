@@ -258,7 +258,7 @@ class LSTMPredictionService:
             callbacks = [
                 tf.keras.callbacks.EarlyStopping(
                     monitor='val_loss',
-                    patience=15,  # Increased patience for stability
+                    patience=8,  # Reduced from 15 to stop overfitting earlier
                     restore_best_weights=True,
                     min_delta=1e-4,  # Minimum improvement threshold
                     verbose=0
