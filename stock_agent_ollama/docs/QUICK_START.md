@@ -600,16 +600,16 @@ META       Buy & Hold Baseline                                -5.14%       9/9  
 
 ### Training Evaluation & Insights
 
-To get a high-level overview of all trained models and detect training pathologies:
+To get a comprehensive overview of all trained models (both RL and LSTM) and detect training pathologies:
 
 ```bash
-# Evaluate all models in the registry
+# Evaluate all models (RL + LSTM) with combined rankings
 python eval_training.py
 
-# Filter results for a specific symbol
-python eval_training.py --symbol PLTR
+# Filter results for a specific symbol (both RL and LSTM)
+python eval_training.py --symbol AAPL
 
-# Sort by return to find best performers
+# Sort RL models by return to find best performers
 python eval_training.py --sort return
 
 # Sort by Sharpe ratio for risk-adjusted performance
@@ -624,21 +624,56 @@ python eval_training.py --sort maxdd
 # Sort by age to see most recently validated models
 python eval_training.py --sort age
 
-# Prune underperforming models (archive models with return < -5% and age > 1 hour)
+# View only RL models (skip LSTM analysis)
+python eval_training.py --rl-only --sort return
+
+# View only LSTM models (skip RL analysis)
+python eval_training.py --lstm-only
+
+# Prune underperforming RL models (archive models with return < -5% and age > 1 hour)
 python eval_training.py --prune --min-return -5.0 --age 1h
 
-# Prune models but keep the best performing one per symbol/type (older than 24h)
+# Prune RL models but keep the best performing one per symbol/type (older than 24h)
 python eval_training.py --prune --keep-best --age 24h
 ```
 
 **Key Insights Provided:**
-- **Overall Health**: Aggregated profitability rate and average returns across all models
+
+**RL Model Analysis:**
+- **Overall Health**: Aggregated profitability rate and average returns across all RL agents
 - **Top 5 Performers**: Best models by return with detailed metrics (Sharpe, Max Drawdown, Win Rate)
 - **Bottom 5 Performers**: Lowest performing models for comparison
 - **Pathology Detection**: Automatic warnings for Action Collapse (agent stuck) or Over-trading
 - **Algorithm Comparison**: Identifies which algorithms (PPO, RecurrentPPO, Ensemble) are performing best
 - **Color-coded Tables**: Visual cues for return quality and risk-adjusted performance
 - **Model Pruning**: Archive underperforming or redundant models to `data/models/archive/`
+
+**LSTM Model Analysis:**
+- **Validation Performance**: Final loss, validation loss, MAE metrics for each ensemble
+- **Overfitting Detection**: Identifies models with val_loss/train_loss ratio > 1.5
+- **Feature Usage**: Shows which models use enhanced features (17) vs basic features (5)
+- **Ensemble Quality**: Analyzes all 3 models in each ensemble
+- **Color-coded Quality**: Green (excellent <0.05), Cyan (good <0.15), Yellow (acceptable <0.30), Red (poor >0.30)
+
+**Combined Rankings & Recommendations:**
+- **Side-by-Side Comparison**: RL and LSTM performance for each symbol in one table
+- **Smart Recommendations**:
+  - ✓ **Ready for live trading**: RL return >10%, Sharpe >1.0, LSTM val_loss <0.10
+  - **Good for testing**: Positive returns with reasonable LSTM accuracy
+  - ⚠ **Needs retraining**: Poor RL performance or high LSTM loss
+- **Top Trading Candidates**: Lists up to 5 stocks ready for live trading
+- **Attention Needed**: Identifies symbols with poor performance requiring retraining
+- **Coverage Statistics**: Shows symbols with both models, RL-only, or LSTM-only
+
+**Example Output:**
+```
+📊 COMBINED MODEL RANKINGS (RL + LSTM)
+
+Symbol   RL Models    Best Return   Sharpe   LSTM Status   Val Loss    Val MAE     Recommendation
+TSLA     3 models     +64.71%       5.51     Trained       0.0957      0.2428      ✓ Ready for live trading
+AAPL     3 models     +37.37%       4.65     Trained       0.0880      0.2082      ✓ Ready for live trading
+GOOGL    3 models     +58.32%       4.82     Trained       0.2225      0.3173      Monitor performance
+```
 
 ### "Module not found" Error
 **Fix:**
