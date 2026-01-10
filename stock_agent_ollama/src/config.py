@@ -26,11 +26,11 @@ class Config:
     HISTORICAL_DATA_TTL = 86400  # 1 day for historical data
     
     # LSTM model settings
-    LSTM_SEQUENCE_LENGTH = 60
+    LSTM_SEQUENCE_LENGTH = 90
     LSTM_ENSEMBLE_SIZE = 3
     PREDICTION_DAYS = 30
-    BATCH_SIZE = 32
-    EPOCHS = 50
+    BATCH_SIZE = 16
+    EPOCHS = 150
     
     # Ollama configuration
     OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
