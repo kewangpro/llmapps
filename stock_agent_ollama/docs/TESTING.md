@@ -4,7 +4,7 @@ Comprehensive testing documentation for the Stock Agent Pro platform.
 
 ## Overview
 
-The project includes **135 automated tests** covering critical trading algorithms, data models, and system components. While overall coverage is 19%, **core trading logic is 94-100% covered**.
+The project includes **138 automated tests** covering critical trading algorithms, data models, and system components. While overall coverage is 19%, **core trading logic is 94-100% covered**.
 
 ## Quick Start
 
@@ -19,7 +19,7 @@ python -m pytest tests/ -v
 python -m pytest tests/ --cov=src --cov-report=term-missing
 
 # Run specific test file
-python -m pytest tests/test_technical_analysis_extended.py -v
+python -m pytest tests/test_technical_analysis.py -v
 
 # Run tests matching pattern
 python -m pytest tests/ -k "reward" -v
@@ -38,13 +38,13 @@ tests/
 ├── test_baseline_strategies.py         # 35 tests - Buy & Hold, Momentum strategies
 ├── test_config.py                      # 14 tests - Configuration management
 ├── test_live_trading_models.py         # 14 tests - Portfolio, Position, Trade models
+├── test_lstm_components.py             # 3 tests - LSTM prediction & sentiment integration
 ├── test_reward_functions.py            # 29 tests - RL reward calculations
 ├── test_rl_components.py               # 5 tests - Ensemble, environment factory
-├── test_technical_analysis.py          # 5 tests - Basic indicators
-└── test_technical_analysis_extended.py # 23 tests - Advanced indicators
+└── test_technical_analysis.py          # 28 tests - All technical indicators (merged)
 ```
 
-**Total: 135 tests**
+**Total: 138 tests**
 
 ## Coverage by Module
 
@@ -59,6 +59,7 @@ tests/
 | **Configuration** | 96% | 14 | Settings, env vars, directory management |
 | **Reward Functions** | 94% | 29 | Simple, RiskAdjusted, Customizable rewards |
 | **Environment Factory** | 90% | 5 | Environment creation, validation |
+| **LSTM Components** | 100% | 3 | Prediction service, data pipeline, sentiment integration |
 
 ### 🟡 Partially Tested (20-50% coverage)
 
@@ -217,6 +218,18 @@ def test_momentum_strategy_positive_momentum_buy(increasing_prices):
 - ✅ Environment configuration
 - ✅ Ensemble voting logic
 - ✅ Environment factory
+
+### 8. LSTM Component Tests (3 tests)
+
+**File:** `test_lstm_components.py`
+
+**Coverage:** 100%
+
+#### What's Tested:
+- ✅ **Data Pipeline**: Variable horizon target generation
+- ✅ **Prediction Service**: Sentiment score adjustment logic
+- ✅ **Stock Fetcher**: News retrieval and parsing
+- ✅ Mocked integration of ensemble prediction
 
 ## Running Tests
 

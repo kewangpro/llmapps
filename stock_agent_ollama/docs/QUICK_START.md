@@ -462,10 +462,10 @@ For actual portfolio tracking with positions and P&L, use the **Live Trade** pag
 - **Bollinger Bands**: Volatility and price extremes
 - **Moving Averages**: Trend identification (20, 50, 200-day)
 
-### LSTM Predictions
-- Neural network trained on 2 years of historical data
-- Ensemble of 3 models for robustness
-- 30-day price forecasts with confidence intervals
+**LSTM Predictions:**
+- 3-model ensemble for robustness
+- 30-day price forecasts with sentiment-aware adjustments
+- Direct Horizon Models for improved long-term accuracy
 - Auto-training on first analysis
 
 ### Reinforcement Learning
