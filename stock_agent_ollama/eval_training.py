@@ -814,6 +814,7 @@ def main():
             if best_rl['return'] > 10 and best_rl['sharpe'] > 1.0 and lstm['final_val_loss'] < 0.10:
                 ready_for_live.append({
                     'symbol': symbol,
+                    'rl_algorithm': best_rl['agent_type'],
                     'rl_return': best_rl['return'],
                     'rl_sharpe': best_rl['sharpe'],
                     'lstm_val_loss': lstm['final_val_loss']
@@ -823,7 +824,9 @@ def main():
             ready_for_live.sort(key=lambda x: x['rl_return'], reverse=True)
             print(f"\n{Color.GREEN}✓ Top Candidates for Live Trading:{Color.END}")
             for item in ready_for_live[:5]:
-                print(f"  {Color.BOLD}{item['symbol']}{Color.END}: RL Return {item['rl_return']:+.2f}%, Sharpe {item['rl_sharpe']:.2f}, LSTM Val Loss {item['lstm_val_loss']:.4f}")
+                # Format algorithm name for display
+                algo_display = item['rl_algorithm'].replace('_', ' ').title()
+                print(f"  {Color.BOLD}{item['symbol']}{Color.END}: RL ({algo_display}) Return {item['rl_return']:+.2f}%, Sharpe {item['rl_sharpe']:.2f}, LSTM Val Loss {item['lstm_val_loss']:.4f}")
 
         # Identify symbols needing attention
         needs_work = []
