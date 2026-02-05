@@ -147,7 +147,6 @@ gpu-transformer-viz/
 │   │   ├── BubbleSortViz.tsx       # Bubble sort algorithm visualization
 │   │   ├── ClstmPpoViz.tsx         # CLSTM-PPO trading & architecture visualization
 │   │   ├── ConsistentHashViz.tsx   # Consistent hashing ring visualization
-│   │   ├── CostForecastViz.tsx     # Cost forecasting visualization
 │   │   └── GradientBoostViz.tsx    # Gradient boosting visualization
 │   ├── utils/
 │   │   └── customVizLoader.ts      # Dynamic component loader
