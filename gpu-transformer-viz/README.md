@@ -67,6 +67,9 @@ Create your own interactive visualizations using natural language:
 - "Visualize a bubble sort algorithm with color-coded comparisons"
 - "Show how a binary tree traversal works with step-by-step highlighting"
 - "Create an interactive stack data structure with push and pop operations"
+- "Visualize consistent hashing with a hash ring and key redistribution"
+- "Visualize a reinforcement learning algorithm with training progress and metrics"
+- "Show neural network architecture with interactive layer exploration"
 
 **Powered by:**
 - Ollama Gemma 3 for code generation
@@ -141,9 +144,11 @@ gpu-transformer-viz/
 │   ├── customized/                 # Custom AI-generated visualizations
 │   │   ├── .gitkeep
 │   │   ├── ExampleViz.tsx          # Example custom visualization
-│   │   ├── GradientBoostViz.tsx    # Gradient boosting visualization
-│   │   ├── BubbleSortViz.tsx       # Bubble sort visualization
-│   │   └── CostForecastViz.tsx     # Cost forecasting visualization
+│   │   ├── BubbleSortViz.tsx       # Bubble sort algorithm visualization
+│   │   ├── ClstmPpoViz.tsx         # CLSTM-PPO trading & architecture visualization
+│   │   ├── ConsistentHashViz.tsx   # Consistent hashing ring visualization
+│   │   ├── CostForecastViz.tsx     # Cost forecasting visualization
+│   │   └── GradientBoostViz.tsx    # Gradient boosting visualization
 │   ├── utils/
 │   │   └── customVizLoader.ts      # Dynamic component loader
 │   ├── App.tsx                     # Main app with navigation
@@ -152,11 +157,14 @@ gpu-transformer-viz/
 │   ├── AttentionVisualizer.tsx     # Transformer attention visualization
 │   ├── index.css                   # Tailwind CSS imports
 │   └── main.tsx                    # App entry point
+├── index.html                      # Vite entry point HTML
 ├── server.js                       # Express backend for Ollama AI
 ├── tailwind.config.js              # Tailwind CSS v4 configuration
 ├── postcss.config.js               # PostCSS with Tailwind plugin
 ├── vite.config.ts                  # Vite build configuration
 ├── tsconfig.json                   # TypeScript configuration
+├── tsconfig.app.json               # TypeScript app-specific configuration
+├── tsconfig.node.json              # TypeScript Node.js configuration
 ├── eslint.config.js                # ESLint configuration
 ├── CUSTOM_VIZ_GUIDE.md            # Detailed custom viz documentation
 ├── README.md                       # This file
@@ -217,7 +225,7 @@ Custom visualization files follow this naming pattern:
 - Keep names concise and descriptive
 - Add "Viz" suffix to indicate it's a visualization component
 
-Examples: `BubbleSortViz.tsx`, `CostForecastViz.tsx`, `GradientBoostViz.tsx`
+Examples: `BubbleSortViz.tsx`, `ConsistentHashViz.tsx`, `GradientBoostViz.tsx`
 
 ### Custom Visualization Format
 
@@ -267,11 +275,13 @@ export default function YourVisualization() {
 - Watch weighted value aggregation
 
 ### AI-Generated Visualizations
-- Algorithm visualizations (sorting, searching)
+- Algorithm visualizations (sorting, searching, dynamic programming)
 - Data structures (trees, graphs, stacks, queues)
+- Distributed systems (consistent hashing, load balancing)
 - Mathematical concepts (Fourier transforms, gradients)
 - Computer graphics (ray tracing, bezier curves)
-- Neural network architectures
+- Machine learning (neural networks, reinforcement learning, training visualization)
+- Financial models (trading algorithms, portfolio analysis)
 
 ## Technical Notes
 
