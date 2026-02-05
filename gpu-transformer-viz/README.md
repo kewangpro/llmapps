@@ -56,7 +56,7 @@ Complete walkthrough of scaled dot-product attention:
 Create your own interactive visualizations using natural language:
 
 **How it works:**
-1. Click the **"+ Custom"** button in the navigation
+1. Click the **"Custom"** button in the navigation
 2. Describe your visualization in plain English
 3. AI generates a complete React/TypeScript component
 4. Review the code and save it
@@ -143,12 +143,12 @@ gpu-transformer-viz/
 │   │   └── ErrorBoundary.tsx       # Error handling wrapper
 │   ├── customized/                 # Custom AI-generated visualizations
 │   │   ├── .gitkeep
-│   │   ├── ExampleViz.tsx          # Example custom visualization
-│   │   ├── BubbleSortViz.tsx       # Bubble sort algorithm visualization
 │   │   ├── ClstmPpoViz.tsx         # CLSTM-PPO trading & architecture visualization
 │   │   ├── ConsistentHashViz.tsx   # Consistent hashing ring visualization
+│   │   ├── DeepLearningViz.tsx     # Deep learning architecture visualization
 │   │   ├── GradientBoostViz.tsx    # Gradient boosting visualization
-│   │   └── RLMdpViz.tsx            # RL Markov Decision Process visualization
+│   │   ├── ReinforcementViz.tsx    # RL simulation visualization
+│   │   └── SimilarityViz.tsx       # Similarity search visualization
 │   ├── utils/
 │   │   └── customVizLoader.ts      # Dynamic component loader
 │   ├── App.tsx                     # Main app with navigation
@@ -202,7 +202,7 @@ npm run lint            # Run ESLint
    ```
 
 3. **Create a visualization**:
-   - Click **"+ Custom"** in the navigation
+   - Click **"Custom"** in the navigation
    - Enter your prompt (e.g., "visualize quicksort with color-coded partitions")
    - Click **"Generate Visualization"**
    - Review the generated code
@@ -225,7 +225,7 @@ Custom visualization files follow this naming pattern:
 - Keep names concise and descriptive
 - Add "Viz" suffix to indicate it's a visualization component
 
-Examples: `BubbleSortViz.tsx`, `ConsistentHashViz.tsx`, `GradientBoostViz.tsx`
+Examples: `ConsistentHashViz.tsx`, `GradientBoostViz.tsx`, `DeepLearningViz.tsx`
 
 ### Custom Visualization Format
 
