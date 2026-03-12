@@ -4,3 +4,4 @@ sentence-transformers
 streamlit
 langchain-community
 unstructured[local-inference]
+datasets

@@ -41,10 +41,28 @@ with st.sidebar:
         st.session_state["messages"] = [{"role": "assistant", "content": "How can I help you?"}]
 
     st.header("Sources")
-    source_files = get_file_names_from_ids()
+    try:
+        source_files = get_file_names_from_ids()
+    except Exception as e:
+        st.error(f"Error loading database: {e}")
+        source_files = []
+        
     source_files_str = json.dumps(source_files, indent=2)
     ##st.text_area("Files", source_files_str, height=300)
     st.code(source_files_str, language="json")
+
+    st.header("Re-ranker Model")
+    if os.path.exists("fine-tuned-ranker"):
+        st.success("Using custom fine-tuned model")
+    else:
+        st.info("Using default cross-encoder model")
+
+    st.header("Database Management")
+    if st.button("⚠️ Reset Vector Database"):
+        import shutil
+        if os.path.exists("./rag-chroma"):
+            shutil.rmtree("./rag-chroma")
+        st.rerun()
 
     uploaded_file = st.file_uploader("** Upload PDF files for QnA **", type=["pdf"], accept_multiple_files=False)
     upload = st.button("Upload")
