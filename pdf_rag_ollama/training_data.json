@@ -1,20 +1,691 @@
 [
   {
-    "query": "What is the capital of France?",
+    "query": "How does this PDF RAG application utilize Ollama and Streamlit?",
     "texts": [
-      "Paris is the capital and most populous city of France.",
-      "The capital of Germany is Berlin.",
-      "Lyon is a major city in France but not its capital."
+      "# \ud83e\udde0 PDF RAG with Ollama & Intelligent Re-ranking\n\n[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)\n[![Ollama](https://img.shields.io/badge/Powered%20by-Ollama-orange.svg)](https://ollama.ai/)\n[![Streamlit](https://img.shields.io/badge/UI-Streamlit-red.svg)](https://streamlit.io/)",
+      "---\n\n## \ud83c\udfd7\ufe0f Architecture",
+      "with st.sidebar:\n    st.set_page_config(page_title=\"QnA\")\n\n    if \"messages\" not in st.session_state or st.sidebar.button(\"Reset chat history\"):\n        st.session_state[\"messages\"] = [{\"role\": \"assistant\", \"content\": \"How can I help you?\"}]"
     ],
-    "labels": [1, 0, 0]
+    "labels": [
+      1,
+      0,
+      0
+    ]
   },
   {
-    "query": "How do I install dependencies for this project?",
+    "query": "How can I use PDFs and web content with a local LLM and ChromaDB?",
     "texts": [
-      "Use pip install -r requirements.txt to install dependencies.",
-      "The project is written in Python.",
-      "You might need to install brew libraries like libheif."
+      "A state-of-the-art **Retrieval-Augmented Generation (RAG)** application designed for private, local-first document intelligence. Chat with your PDFs and web content using powerful local LLMs, backed by ChromaDB vector storage and a fine-tunable Cross-Encoder re-ranker.\n\n---\n\n## \u2728 Key Features",
+      "import os\nimport tempfile\nimport streamlit as st\nimport json\n\nfrom streamlit.runtime.uploaded_file_manager import UploadedFile\nfrom langchain_community.document_loaders import UnstructuredPDFLoader, UnstructuredURLLoader\nfrom langchain_text_splitters import RecursiveCharacterTextSplitter\nfrom langchain_core.documents import Document",
+      "\"content\": f\"Context: {context}, Question: {prompt}\",\n            }\n        ]\n    )"
     ],
-    "labels": [1, 0, 1]
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "How does this PDF RAG application ensure data privacy and enhance retrieval?",
+    "texts": [
+      "| Feature | Description |\n| :--- | :--- |\n| **Local-First** | Complete privacy. No data leaves your machine, powered by Ollama. |\n| **Hybrid Processing** | Seamlessly ingest PDF documents and Web URLs. |\n| **Advanced Retrieval** | Two-stage retrieval: Vector search (ChromaDB) + Cross-Encoder re-ranking. |",
+      "Format your response as follows:\n1. Use clear, concise language.\n2. Organize your answer into paragraphs for readability.\n3. Use bullet points or numbered lists where appropriate to break down complex information.\n4. If relevant, include any headings or subheadings to structure your response.\n5. Ensure proper grammer, punctuation, and spelling throughout your answer.",
+      "---\n\n## \ud83d\ude80 Quick Start\n\n### 1. Prerequisites\n\n*   **Python**: 3.9 or higher.\n*   **Ollama**: Install from [ollama.ai](https://ollama.ai/).\n*   **System Libs (macOS)**:\n    ```bash\n    brew install libheif poppler tesseract-lang\n    ```\n\n### 2. Model Setup\n```bash\nollama pull gemma3:latest\nollama pull nomic-embed-text:latest\n```"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "How can I customize the retrieval process for my domain?",
+    "texts": [
+      "| **Fine-tuneable Ranker** | Custom training script to optimize retrieval for your specific domain. |\n| **Interactive UI** | Beautiful, responsive Streamlit interface with real-time response streaming. |",
+      "1.  **Prepare Training Data**: Edit `training_data.json` with domain-specific queries and document pairs.\n    > [!TIP]\n    > If you don't have enough data, you can use the `generate_training_data.py` script to create synthetic training pairs from your existing project files and documentation.\n2.  **Train the Model**:\n    ```bash\n    python3 train_ranker.py\n    ```",
+      "if upload and uploaded_file:\n        normalized_uploaded_file_name = uploaded_file.name.translate(\n            str.maketrans({\"-\": \"_\", \".\": \"_\", \" \": \"_\"})\n        )\n        all_splits = process_pdf(uploaded_file)\n        add_to_vector_collection(all_splits, normalized_uploaded_file_name)\n        st.write(f\"{uploaded_file.name} added to the vector store!\")"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "What is the architecture?",
+    "texts": [
+      "---\n\n## \ud83c\udfd7\ufe0f Architecture",
+      "loader = UnstructuredPDFLoader(temp_file.name)\n    docs = loader.load()\n    os.unlink(temp_file.name) # Delete the temp file\n    \n    return text_spliter.split_documents(docs)\n\ndef process_url(url: str) -> list[Document]:\n    loader = UnstructuredURLLoader(urls=[url])\n    docs = loader.load()\n    return text_spliter.split_documents(docs)",
+      "4. Ensure your answer is comprehensive, covering all relevant aspects found in the context.\n5. If the context doesn't contain sufficient information to fully answer the question, state it clearly in your response."
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "How does this application process PDF documents and web URLs?",
+    "texts": [
+      "```text\n       \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510          \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n       \u2502 PDF Documents \u2502          \u2502   Web URLs     \u2502\n       \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518          \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n               \u2502                           \u2502\n               \u25bc                           \u25bc\n       \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n       \u2502   Text Splitting & Embedding (Ollama)     \u2502",
+      "import os\nfrom sentence_transformers import CrossEncoder\n\ndef rerank_cross_encoders(prompt: str, documents: list[str]) -> tuple[str, list[int]]:\n    relevant_text = \"\"\n    relevant_text_ids = []",
+      "for rank in ranks:\n        id = rank[\"corpus_id\"]\n        relevant_text += documents[id]\n        relevant_text_ids.append(id)\n\n    return relevant_text, relevant_text_ids"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "How does Ollama and ChromaDB work together in a RAG application?",
+    "texts": [
+      "\u2502   Text Splitting & Embedding (Ollama)     \u2502\n       \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                             \u2502\n                             \u25bc\n       \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n       \u2502        Vector Search (ChromaDB)           \u2502\n       \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                             \u2502\n                             \u25bc",
+      "### 4. Run the App\n```bash\nstreamlit run app.py\n```\n\n---\n\n## \ud83c\udfaf Re-ranker Fine-tuning\n\nImprove retrieval accuracy by training the re-ranker on your own data.",
+      "with st.expander(\"See retrieved document ids\"):\n        st.write(results.get(\"ids\")[0])\n        st.write(\"Most relevant:\")\n        st.write(relevant_doc_ids)\n        st.write(\"Context:\")\n        st.write(context)"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "What re-ranking methods are supported?",
+    "texts": [
+      "\u2502\n                             \u25bc\n       \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n       \u2502      Intelligent Re-ranking (BERT)        \u2502\n       \u2502    (Custom or Default Cross-Encoder)      \u2502\n       \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                             \u2502\n                             \u25bc\n       \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510",
+      "2.  **Train the Model**:\n    ```bash\n    python3 train_ranker.py\n    ```\n3.  **Deploy**: The application automatically detects the `fine-tuned-ranker/` directory and prioritizes it over the default model.",
+      "with st.expander(\"See retrieved document ids\"):\n        st.write(results.get(\"ids\")[0])\n        st.write(\"Most relevant:\")\n        st.write(relevant_doc_ids)\n        st.write(\"Context:\")\n        st.write(context)"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "What model is being used in the LLM Generation (Ollama) system?",
+    "texts": [
+      "\u25bc\n       \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n       \u2502        LLM Generation (Ollama)            \u2502\n       \u2502           (gemma3:latest)                 \u2502\n       \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                             \u2502\n                             \u25bc\n                    \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n                    \u2502 Chat Response   \u2502",
+      "import os\nimport tempfile\nimport streamlit as st\nimport json\n\nfrom streamlit.runtime.uploaded_file_manager import UploadedFile\nfrom langchain_community.document_loaders import UnstructuredPDFLoader, UnstructuredURLLoader\nfrom langchain_text_splitters import RecursiveCharacterTextSplitter\nfrom langchain_core.documents import Document",
+      "def get_file_names_from_ids():\n    collection = get_vector_collection()\n\n    # Fetch all entries (default includes IDs)\n    results = collection.get()\n    # Extract IDs from result\n    all_ids = results[\"ids\"]\n\n    # Extract and deduplicate \"{file_name}_{idx}\"\n    file_names = set(id.rsplit(\"_\", 1)[0] for id in all_ids)\n\n    # Return the unique file_names\n    return sorted(file_names)"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "What is the chat response?",
+    "texts": [
+      "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n                    \u2502 Chat Response   \u2502\n                    \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```",
+      "st.header(\"Sources\")\n    try:\n        source_files = get_file_names_from_ids()\n    except Exception as e:\n        st.error(f\"Error loading database: {e}\")\n        source_files = []\n        \n    source_files_str = json.dumps(source_files, indent=2)\n    ##st.text_area(\"Files\", source_files_str, height=300)\n    st.code(source_files_str, language=\"json\")",
+      "import os\nimport tempfile\nimport streamlit as st\nimport json\n\nfrom streamlit.runtime.uploaded_file_manager import UploadedFile\nfrom langchain_community.document_loaders import UnstructuredPDFLoader, UnstructuredURLLoader\nfrom langchain_text_splitters import RecursiveCharacterTextSplitter\nfrom langchain_core.documents import Document"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "What are the prerequisites for running this application?",
+    "texts": [
+      "---\n\n## \ud83d\ude80 Quick Start\n\n### 1. Prerequisites\n\n*   **Python**: 3.9 or higher.\n*   **Ollama**: Install from [ollama.ai](https://ollama.ai/).\n*   **System Libs (macOS)**:\n    ```bash\n    brew install libheif poppler tesseract-lang\n    ```\n\n### 2. Model Setup\n```bash\nollama pull gemma3:latest\nollama pull nomic-embed-text:latest\n```",
+      "def get_file_names_from_ids():\n    collection = get_vector_collection()\n\n    # Fetch all entries (default includes IDs)\n    results = collection.get()\n    # Extract IDs from result\n    all_ids = results[\"ids\"]\n\n    # Extract and deduplicate \"{file_name}_{idx}\"\n    file_names = set(id.rsplit(\"_\", 1)[0] for id in all_ids)\n\n    # Return the unique file_names\n    return sorted(file_names)",
+      "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n                    \u2502 Chat Response   \u2502\n                    \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "How do I set up this PDF RAG application with Ollama?",
+    "texts": [
+      "### 2. Model Setup\n```bash\nollama pull gemma3:latest\nollama pull nomic-embed-text:latest\n```\n\n### 3. Installation\n```bash\n# Clone and enter directory\ngit clone <repository-url>\ncd pdf_rag_ollama\n\n# Setup Virtual Environment\npython -m venv .venv\nsource .venv/bin/activate\n\n# Install Dependencies\npip install -r requirements.txt\n```\n\n### 4. Run the App\n```bash\nstreamlit run app.py\n```\n\n---",
+      "To answer the question:\n1. Thoroughly analyze the context, identifying key information relevant to the question.\n2. Organize your thoughts and plan your response to ensure a logical flow of information.\n3. Formulate a detailed answer that directly addresses the question, using only the information provided in the context.",
+      "def get_file_names_from_ids():\n    collection = get_vector_collection()\n\n    # Fetch all entries (default includes IDs)\n    results = collection.get()\n    # Extract IDs from result\n    all_ids = results[\"ids\"]\n\n    # Extract and deduplicate \"{file_name}_{idx}\"\n    file_names = set(id.rsplit(\"_\", 1)[0] for id in all_ids)\n\n    # Return the unique file_names\n    return sorted(file_names)"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "How do I run the Streamlit app?",
+    "texts": [
+      "### 4. Run the App\n```bash\nstreamlit run app.py\n```\n\n---\n\n## \ud83c\udfaf Re-ranker Fine-tuning\n\nImprove retrieval accuracy by training the re-ranker on your own data.",
+      "for rank in ranks:\n        id = rank[\"corpus_id\"]\n        relevant_text += documents[id]\n        relevant_text_ids.append(id)\n\n    return relevant_text, relevant_text_ids",
+      "for idx, split in enumerate(all_splits):\n        documents.append(split.page_content)\n        metadatas.append(split.metadata)\n        ids.append(f\"{file_name}_{idx}\")\n\n    collection = get_vector_collection()\n    collection.upsert(\n        documents=documents,\n        metadatas=metadatas,\n        ids=ids,\n    )"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "How do I prepare training data for the PDF RAG application?",
+    "texts": [
+      "1.  **Prepare Training Data**: Edit `training_data.json` with domain-specific queries and document pairs.\n    > [!TIP]\n    > If you don't have enough data, you can use the `generate_training_data.py` script to create synthetic training pairs from your existing project files and documentation.\n2.  **Train the Model**:\n    ```bash\n    python3 train_ranker.py\n    ```",
+      "\u2502\n                             \u25bc\n       \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n       \u2502      Intelligent Re-ranking (BERT)        \u2502\n       \u2502    (Custom or Default Cross-Encoder)      \u2502\n       \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                             \u2502\n                             \u25bc\n       \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510",
+      "st.title(\"\ud83d\udcac PDF Understanding QnA\")\n\nfor msg in st.session_state.messages:\n    st.chat_message(msg[\"role\"]).write(msg[\"content\"])\n\nif prompt := st.chat_input(\"Your question?\"):\n    st.chat_message(\"user\").write(prompt)\n    st.session_state.messages.append({\"role\": \"user\", \"content\": prompt})"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "How does the application prioritize models for ranking?",
+    "texts": [
+      "2.  **Train the Model**:\n    ```bash\n    python3 train_ranker.py\n    ```\n3.  **Deploy**: The application automatically detects the `fine-tuned-ranker/` directory and prioritizes it over the default model.",
+      "Format your response as follows:\n1. Use clear, concise language.\n2. Organize your answer into paragraphs for readability.\n3. Use bullet points or numbered lists where appropriate to break down complex information.\n4. If relevant, include any headings or subheadings to structure your response.\n5. Ensure proper grammer, punctuation, and spelling throughout your answer.",
+      "st.header(\"Sources\")\n    try:\n        source_files = get_file_names_from_ids()\n    except Exception as e:\n        st.error(f\"Error loading database: {e}\")\n        source_files = []\n        \n    source_files_str = json.dumps(source_files, indent=2)\n    ##st.text_area(\"Files\", source_files_str, height=300)\n    st.code(source_files_str, language=\"json\")"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "What is the system designed to be?",
+    "texts": [
+      "---\n\n## \ud83d\udee0\ufe0f Configuration & Customization\n\nThe system is designed to be highly modular and robust:",
+      "---\n\n## \ud83d\udd27 Troubleshooting\n\n*   **Ollama Connection**: Ensure `ollama serve` is running.\n*   **Missing Dependencies**: Ensure you've run the `brew install` command above for PDF processing.\n*   **Memory Issues**: For smaller RAM, try lowering the `chunk_size` in `app.py` or using a smaller model like `phi4`.\n\n---\n\n## \ud83d\udcdc License\n\nThis project is open-source. See the license file for more details.",
+      "def process_pdf(uploaded_file: UploadedFile) -> list[Document]:\n    # Store uploaded file as a temp file\n    temp_file = tempfile.NamedTemporaryFile(\"wb\", suffix=\".pdf\", delete=False)\n    temp_file.write(uploaded_file.read())"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "How does ChromaDB handle file paths for data storage?",
+    "texts": [
+      "The system is designed to be highly modular and robust:\n\n- **Database Persistence**: ChromaDB uses absolute paths (managed in `vector.py`) to ensure reliable disk access across different environments and virtual environments.\n- **Python Compatibility**: The project is optimized for Python 3.9+, with specific version pins like `pi-heif<0.15.0` to maintain backward compatibility.",
+      "---\n\n## \ud83d\ude80 Quick Start\n\n### 1. Prerequisites\n\n*   **Python**: 3.9 or higher.\n*   **Ollama**: Install from [ollama.ai](https://ollama.ai/).\n*   **System Libs (macOS)**:\n    ```bash\n    brew install libheif poppler tesseract-lang\n    ```\n\n### 2. Model Setup\n```bash\nollama pull gemma3:latest\nollama pull nomic-embed-text:latest\n```",
+      "st.header(\"Database Management\")\n    if st.button(\"\u26a0\ufe0f Reset Vector Database\"):\n        import shutil\n        if os.path.exists(\"./rag-chroma\"):\n            shutil.rmtree(\"./rag-chroma\")\n        st.rerun()\n\n    uploaded_file = st.file_uploader(\"** Upload PDF files for QnA **\", type=[\"pdf\"], accept_multiple_files=False)\n    upload = st.button(\"Upload\")"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "How easily can I change parts of this system?",
+    "texts": [
+      "The system is designed to be highly modular. You can easily swap components:",
+      "\u25bc\n       \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n       \u2502        LLM Generation (Ollama)            \u2502\n       \u2502           (gemma3:latest)                 \u2502\n       \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                             \u2502\n                             \u25bc\n                    \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n                    \u2502 Chat Response   \u2502",
+      "st.write(f\"{uploaded_file.name} added to the vector store!\")\n        \n    if process and web_url:\n        normalized_url = web_url.translate(\n            str.maketrans({\"/\": \"_\", \".\": \"_\", \":\": \"_\"})\n        )\n        all_splits = process_url(web_url)\n        add_to_vector_collection(all_splits, normalized_url)\n        st.write(f\"{web_url} added to the vector store!\")"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "What model is used for embeddings and how large is the default chunk size?",
+    "texts": [
+      "| Component | File | Variable | Default |\n| :--- | :--- | :--- | :--- |\n| **LLM Model** | `llm.py` | `model` | `gemma3:latest` |\n| **Embeddings** | `vector.py` | `model_name` | `nomic-embed-text:latest` |\n| **Chunk Size** | `app.py` | `chunk_size` | `400` |\n| **Re-ranker** | `ranker.py` | `model_path` | `ms-marco-MiniLM-L-6-v2` |\n\n---\n\n## \ud83d\udcc2 Project Structure",
+      "| Feature | Description |\n| :--- | :--- |\n| **Local-First** | Complete privacy. No data leaves your machine, powered by Ollama. |\n| **Hybrid Processing** | Seamlessly ingest PDF documents and Web URLs. |\n| **Advanced Retrieval** | Two-stage retrieval: Vector search (ChromaDB) + Cross-Encoder re-ranking. |",
+      "st.header(\"Sources\")\n    try:\n        source_files = get_file_names_from_ids()\n    except Exception as e:\n        st.error(f\"Error loading database: {e}\")\n        source_files = []\n        \n    source_files_str = json.dumps(source_files, indent=2)\n    ##st.text_area(\"Files\", source_files_str, height=300)\n    st.code(source_files_str, language=\"json\")"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "How is the re-ranker model trained in this application?",
+    "texts": [
+      "---\n\n## \ud83d\udcc2 Project Structure\n\n*   `app.py`: Main Streamlit application and orchestration.\n*   `vector.py`: ChromaDB integration and embedding logic.\n*   `llm.py`: Ollama API client for response generation.\n*   `ranker.py`: Document re-ranking using Cross-Encoders.\n*   `train_ranker.py`: Utility for fine-tuning the re-ranker model.\n*   `training_data.json`: Template for fine-tuning datasets.\n\n---",
+      "Format your response as follows:\n1. Use clear, concise language.\n2. Organize your answer into paragraphs for readability.\n3. Use bullet points or numbered lists where appropriate to break down complex information.\n4. If relevant, include any headings or subheadings to structure your response.\n5. Ensure proper grammer, punctuation, and spelling throughout your answer.",
+      "with st.expander(\"See retrieved document ids\"):\n        st.write(results.get(\"ids\")[0])\n        st.write(\"Most relevant:\")\n        st.write(relevant_doc_ids)\n        st.write(\"Context:\")\n        st.write(context)"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "How do I troubleshoot issues with the Ollama connection or memory problems?",
+    "texts": [
+      "---\n\n## \ud83d\udd27 Troubleshooting\n\n*   **Ollama Connection**: Ensure `ollama serve` is running.\n*   **Missing Dependencies**: Ensure you've run the `brew install` command above for PDF processing.\n*   **Memory Issues**: For smaller RAM, try lowering the `chunk_size` in `app.py` or using a smaller model like `phi4`.\n\n---\n\n## \ud83d\udcdc License\n\nThis project is open-source. See the license file for more details.",
+      "| Feature | Description |\n| :--- | :--- |\n| **Local-First** | Complete privacy. No data leaves your machine, powered by Ollama. |\n| **Hybrid Processing** | Seamlessly ingest PDF documents and Web URLs. |\n| **Advanced Retrieval** | Two-stage retrieval: Vector search (ChromaDB) + Cross-Encoder re-ranking. |",
+      "with st.expander(\"See retrieved document ids\"):\n        st.write(results.get(\"ids\")[0])\n        st.write(\"Most relevant:\")\n        st.write(relevant_doc_ids)\n        st.write(\"Context:\")\n        st.write(context)"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "How can I load and process PDF and URL documents using Langchain for a RAG application?",
+    "texts": [
+      "import os\nimport tempfile\nimport streamlit as st\nimport json\n\nfrom streamlit.runtime.uploaded_file_manager import UploadedFile\nfrom langchain_community.document_loaders import UnstructuredPDFLoader, UnstructuredURLLoader\nfrom langchain_text_splitters import RecursiveCharacterTextSplitter\nfrom langchain_core.documents import Document",
+      "\u25bc\n       \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n       \u2502        LLM Generation (Ollama)            \u2502\n       \u2502           (gemma3:latest)                 \u2502\n       \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                             \u2502\n                             \u25bc\n                    \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n                    \u2502 Chat Response   \u2502",
+      "\u2502\n                             \u25bc\n       \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n       \u2502      Intelligent Re-ranking (BERT)        \u2502\n       \u2502    (Custom or Default Cross-Encoder)      \u2502\n       \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                             \u2502\n                             \u25bc\n       \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "How can I query a vector collection and rerank the results using cross-encoders?",
+    "texts": [
+      "from llm import call_llm\nfrom vector import add_to_vector_collection, query_collection, get_file_names_from_ids\nfrom ranker import rerank_cross_encoders\n\ntext_spliter = RecursiveCharacterTextSplitter(\n    chunk_size=400,\n    chunk_overlap=100,\n    separators=[\"\\n\\n\", \"\\n\", \".\", \"!\", \"?\", \" \", \"\"]\n)",
+      "---\n\n## \ud83d\udee0\ufe0f Configuration & Customization\n\nThe system is designed to be highly modular and robust:",
+      "---\n\n## \ud83d\ude80 Quick Start\n\n### 1. Prerequisites\n\n*   **Python**: 3.9 or higher.\n*   **Ollama**: Install from [ollama.ai](https://ollama.ai/).\n*   **System Libs (macOS)**:\n    ```bash\n    brew install libheif poppler tesseract-lang\n    ```\n\n### 2. Model Setup\n```bash\nollama pull gemma3:latest\nollama pull nomic-embed-text:latest\n```"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "What temporary file is created when a PDF is uploaded for processing?",
+    "texts": [
+      "def process_pdf(uploaded_file: UploadedFile) -> list[Document]:\n    # Store uploaded file as a temp file\n    temp_file = tempfile.NamedTemporaryFile(\"wb\", suffix=\".pdf\", delete=False)\n    temp_file.write(uploaded_file.read())",
+      "\u2502   Text Splitting & Embedding (Ollama)     \u2502\n       \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                             \u2502\n                             \u25bc\n       \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n       \u2502        Vector Search (ChromaDB)           \u2502\n       \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                             \u2502\n                             \u25bc",
+      "| Component | File | Variable | Default |\n| :--- | :--- | :--- | :--- |\n| **LLM Model** | `llm.py` | `model` | `gemma3:latest` |\n| **Embeddings** | `vector.py` | `model_name` | `nomic-embed-text:latest` |\n| **Chunk Size** | `app.py` | `chunk_size` | `400` |\n| **Re-ranker** | `ranker.py` | `model_path` | `ms-marco-MiniLM-L-6-v2` |\n\n---\n\n## \ud83d\udcc2 Project Structure"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "How can I split a PDF document into smaller pieces for a RAG application?",
+    "texts": [
+      "loader = UnstructuredPDFLoader(temp_file.name)\n    docs = loader.load()\n    os.unlink(temp_file.name) # Delete the temp file\n    \n    return text_spliter.split_documents(docs)\n\ndef process_url(url: str) -> list[Document]:\n    loader = UnstructuredURLLoader(urls=[url])\n    docs = loader.load()\n    return text_spliter.split_documents(docs)",
+      "---\n\n## \ud83d\ude80 Quick Start\n\n### 1. Prerequisites\n\n*   **Python**: 3.9 or higher.\n*   **Ollama**: Install from [ollama.ai](https://ollama.ai/).\n*   **System Libs (macOS)**:\n    ```bash\n    brew install libheif poppler tesseract-lang\n    ```\n\n### 2. Model Setup\n```bash\nollama pull gemma3:latest\nollama pull nomic-embed-text:latest\n```",
+      "# Check for locally trained model\n    model_path = \"fine-tuned-ranker\"\n    if os.path.exists(model_path):\n        print(f\"Loading custom model from {model_path}\")\n        encoder_model = CrossEncoder(model_path)\n    else:\n        print(\"Loading default cross-encoder model\")\n        encoder_model = CrossEncoder(\"cross-encoder/ms-marco-MiniLM-L-6-v2\")"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "How can I help you?",
+    "texts": [
+      "with st.sidebar:\n    st.set_page_config(page_title=\"QnA\")\n\n    if \"messages\" not in st.session_state or st.sidebar.button(\"Reset chat history\"):\n        st.session_state[\"messages\"] = [{\"role\": \"assistant\", \"content\": \"How can I help you?\"}]",
+      "\"content\": f\"Context: {context}, Question: {prompt}\",\n            }\n        ]\n    )",
+      "with st.spinner(\"Thinking\"):\n        stream_response = call_llm(context, prompt)\n\n    response = st.chat_message(\"assistant\").write_stream(stream_response)\n    st.session_state.messages.append({\"role\": \"assistant\", \"content\": response})"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "What files are being retrieved from the database?",
+    "texts": [
+      "st.header(\"Sources\")\n    try:\n        source_files = get_file_names_from_ids()\n    except Exception as e:\n        st.error(f\"Error loading database: {e}\")\n        source_files = []\n        \n    source_files_str = json.dumps(source_files, indent=2)\n    ##st.text_area(\"Files\", source_files_str, height=300)\n    st.code(source_files_str, language=\"json\")",
+      "Format your response as follows:\n1. Use clear, concise language.\n2. Organize your answer into paragraphs for readability.\n3. Use bullet points or numbered lists where appropriate to break down complex information.\n4. If relevant, include any headings or subheadings to structure your response.\n5. Ensure proper grammer, punctuation, and spelling throughout your answer.",
+      "### 4. Run the App\n```bash\nstreamlit run app.py\n```\n\n---\n\n## \ud83c\udfaf Re-ranker Fine-tuning\n\nImprove retrieval accuracy by training the re-ranker on your own data."
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "What model is currently being used for re-ranking?",
+    "texts": [
+      "st.header(\"Re-ranker Model\")\n    if os.path.exists(\"fine-tuned-ranker\"):\n        st.success(\"Using custom fine-tuned model\")\n    else:\n        st.info(\"Using default cross-encoder model\")",
+      "2.  **Train the Model**:\n    ```bash\n    python3 train_ranker.py\n    ```\n3.  **Deploy**: The application automatically detects the `fine-tuned-ranker/` directory and prioritizes it over the default model.",
+      "\"content\": f\"Context: {context}, Question: {prompt}\",\n            }\n        ]\n    )"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "How do I reset the vector database?",
+    "texts": [
+      "st.header(\"Database Management\")\n    if st.button(\"\u26a0\ufe0f Reset Vector Database\"):\n        import shutil\n        if os.path.exists(\"./rag-chroma\"):\n            shutil.rmtree(\"./rag-chroma\")\n        st.rerun()\n\n    uploaded_file = st.file_uploader(\"** Upload PDF files for QnA **\", type=[\"pdf\"], accept_multiple_files=False)\n    upload = st.button(\"Upload\")",
+      "Important: Base entire response solely on the infroamtion provided in the context. Do not include any external knowledge or assumptions unless you are explicitly asked.\n\"\"\"\n\nollama_client = Client(host=\"http://localhost:11434\")",
+      "st.write(f\"{uploaded_file.name} added to the vector store!\")\n        \n    if process and web_url:\n        normalized_url = web_url.translate(\n            str.maketrans({\"/\": \"_\", \".\": \"_\", \":\": \"_\"})\n        )\n        all_splits = process_url(web_url)\n        add_to_vector_collection(all_splits, normalized_url)\n        st.write(f\"{web_url} added to the vector store!\")"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "What is this document about?",
+    "texts": [
+      "web_url = st.text_input(\"** Web URL for QnA **\")\n    process = st.button(\"Process\")",
+      "| **Fine-tuneable Ranker** | Custom training script to optimize retrieval for your specific domain. |\n| **Interactive UI** | Beautiful, responsive Streamlit interface with real-time response streaming. |",
+      "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n                    \u2502 Chat Response   \u2502\n                    \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "How is the uploaded PDF added to the vector store?",
+    "texts": [
+      "if upload and uploaded_file:\n        normalized_uploaded_file_name = uploaded_file.name.translate(\n            str.maketrans({\"-\": \"_\", \".\": \"_\", \" \": \"_\"})\n        )\n        all_splits = process_pdf(uploaded_file)\n        add_to_vector_collection(all_splits, normalized_uploaded_file_name)\n        st.write(f\"{uploaded_file.name} added to the vector store!\")",
+      "| Component | File | Variable | Default |\n| :--- | :--- | :--- | :--- |\n| **LLM Model** | `llm.py` | `model` | `gemma3:latest` |\n| **Embeddings** | `vector.py` | `model_name` | `nomic-embed-text:latest` |\n| **Chunk Size** | `app.py` | `chunk_size` | `400` |\n| **Re-ranker** | `ranker.py` | `model_path` | `ms-marco-MiniLM-L-6-v2` |\n\n---\n\n## \ud83d\udcc2 Project Structure",
+      "\u2502   Text Splitting & Embedding (Ollama)     \u2502\n       \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                             \u2502\n                             \u25bc\n       \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n       \u2502        Vector Search (ChromaDB)           \u2502\n       \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                             \u2502\n                             \u25bc"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "Did the URL just added to the vector store get processed?",
+    "texts": [
+      "st.write(f\"{uploaded_file.name} added to the vector store!\")\n        \n    if process and web_url:\n        normalized_url = web_url.translate(\n            str.maketrans({\"/\": \"_\", \".\": \"_\", \":\": \"_\"})\n        )\n        all_splits = process_url(web_url)\n        add_to_vector_collection(all_splits, normalized_url)\n        st.write(f\"{web_url} added to the vector store!\")",
+      "\u2502   Text Splitting & Embedding (Ollama)     \u2502\n       \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                             \u2502\n                             \u25bc\n       \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n       \u2502        Vector Search (ChromaDB)           \u2502\n       \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                             \u2502\n                             \u25bc",
+      "with st.sidebar:\n    st.set_page_config(page_title=\"QnA\")\n\n    if \"messages\" not in st.session_state or st.sidebar.button(\"Reset chat history\"):\n        st.session_state[\"messages\"] = [{\"role\": \"assistant\", \"content\": \"How can I help you?\"}]"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "What is this PDF about?",
+    "texts": [
+      "st.title(\"\ud83d\udcac PDF Understanding QnA\")\n\nfor msg in st.session_state.messages:\n    st.chat_message(msg[\"role\"]).write(msg[\"content\"])\n\nif prompt := st.chat_input(\"Your question?\"):\n    st.chat_message(\"user\").write(prompt)\n    st.session_state.messages.append({\"role\": \"user\", \"content\": prompt})",
+      "if upload and uploaded_file:\n        normalized_uploaded_file_name = uploaded_file.name.translate(\n            str.maketrans({\"-\": \"_\", \".\": \"_\", \" \": \"_\"})\n        )\n        all_splits = process_pdf(uploaded_file)\n        add_to_vector_collection(all_splits, normalized_uploaded_file_name)\n        st.write(f\"{uploaded_file.name} added to the vector store!\")",
+      "The system is designed to be highly modular and robust:\n\n- **Database Persistence**: ChromaDB uses absolute paths (managed in `vector.py`) to ensure reliable disk access across different environments and virtual environments.\n- **Python Compatibility**: The project is optimized for Python 3.9+, with specific version pins like `pi-heif<0.15.0` to maintain backward compatibility."
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "What is the key information regarding this topic?",
+    "texts": [
+      "with st.spinner(\"Retriving\"):\n        results = query_collection(prompt)\n        documents = results.get(\"documents\")[0]\n        context, relevant_doc_ids = rerank_cross_encoders(prompt, documents)\n\n    with st.spinner(\"Thinking\"):\n        stream_response = call_llm(context, prompt)",
+      "import chromadb\nimport os\nfrom chromadb.utils.embedding_functions.ollama_embedding_function import OllamaEmbeddingFunction\nfrom langchain_core.documents import Document\n\ndef get_vector_collection() -> chromadb.Collection:\n    ollama_ef = OllamaEmbeddingFunction(\n        url=\"http://localhost:11434/api/embeddings\",\n        model_name=\"nomic-embed-text:latest\",\n    )",
+      "for idx, split in enumerate(all_splits):\n        documents.append(split.page_content)\n        metadatas.append(split.metadata)\n        ids.append(f\"{file_name}_{idx}\")\n\n    collection = get_vector_collection()\n    collection.upsert(\n        documents=documents,\n        metadatas=metadatas,\n        ids=ids,\n    )"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "What is the main purpose of this application?",
+    "texts": [
+      "with st.spinner(\"Thinking\"):\n        stream_response = call_llm(context, prompt)\n\n    response = st.chat_message(\"assistant\").write_stream(stream_response)\n    st.session_state.messages.append({\"role\": \"assistant\", \"content\": response})",
+      "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n                    \u2502 Chat Response   \u2502\n                    \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```",
+      "web_url = st.text_input(\"** Web URL for QnA **\")\n    process = st.button(\"Process\")"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "What is the context surrounding the most relevant documents?",
+    "texts": [
+      "with st.expander(\"See retrieved document ids\"):\n        st.write(results.get(\"ids\")[0])\n        st.write(\"Most relevant:\")\n        st.write(relevant_doc_ids)\n        st.write(\"Context:\")\n        st.write(context)",
+      "---\n\n## \ud83c\udfd7\ufe0f Architecture",
+      "```text\n       \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510          \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n       \u2502 PDF Documents \u2502          \u2502   Web URLs     \u2502\n       \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518          \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n               \u2502                           \u2502\n               \u25bc                           \u25bc\n       \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n       \u2502   Text Splitting & Embedding (Ollama)     \u2502"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "How do I set up the embedding function for ChromaDB using Ollama?",
+    "texts": [
+      "import chromadb\nimport os\nfrom chromadb.utils.embedding_functions.ollama_embedding_function import OllamaEmbeddingFunction\nfrom langchain_core.documents import Document\n\ndef get_vector_collection() -> chromadb.Collection:\n    ollama_ef = OllamaEmbeddingFunction(\n        url=\"http://localhost:11434/api/embeddings\",\n        model_name=\"nomic-embed-text:latest\",\n    )",
+      "import os\nfrom sentence_transformers import CrossEncoder\n\ndef rerank_cross_encoders(prompt: str, documents: list[str]) -> tuple[str, list[int]]:\n    relevant_text = \"\"\n    relevant_text_ids = []",
+      "def process_pdf(uploaded_file: UploadedFile) -> list[Document]:\n    # Store uploaded file as a temp file\n    temp_file = tempfile.NamedTemporaryFile(\"wb\", suffix=\".pdf\", delete=False)\n    temp_file.write(uploaded_file.read())"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "How can I create and use a collection named 'rag_app' for my RAG application using ChromaDB?",
+    "texts": [
+      "chroma_client = chromadb.PersistentClient(path=os.path.join(os.getcwd(), \"rag-chroma\"))\n\n    return chroma_client.get_or_create_collection(\n        name=\"rag_app\",\n        embedding_function=ollama_ef,\n        metadata={\"hnsw:space\": \"cosine\"},\n    )\n\ndef add_to_vector_collection(all_splits: list[Document], file_name: str):\n    documents, metadatas, ids = [], [], []",
+      "A state-of-the-art **Retrieval-Augmented Generation (RAG)** application designed for private, local-first document intelligence. Chat with your PDFs and web content using powerful local LLMs, backed by ChromaDB vector storage and a fine-tunable Cross-Encoder re-ranker.\n\n---\n\n## \u2728 Key Features",
+      "st.title(\"\ud83d\udcac PDF Understanding QnA\")\n\nfor msg in st.session_state.messages:\n    st.chat_message(msg[\"role\"]).write(msg[\"content\"])\n\nif prompt := st.chat_input(\"Your question?\"):\n    st.chat_message(\"user\").write(prompt)\n    st.session_state.messages.append({\"role\": \"user\", \"content\": prompt})"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "How are the documents and their metadata being added to the vector collection?",
+    "texts": [
+      "for idx, split in enumerate(all_splits):\n        documents.append(split.page_content)\n        metadatas.append(split.metadata)\n        ids.append(f\"{file_name}_{idx}\")\n\n    collection = get_vector_collection()\n    collection.upsert(\n        documents=documents,\n        metadatas=metadatas,\n        ids=ids,\n    )",
+      "Important: Base entire response solely on the infroamtion provided in the context. Do not include any external knowledge or assumptions unless you are explicitly asked.\n\"\"\"\n\nollama_client = Client(host=\"http://localhost:11434\")",
+      "1.  **Prepare Training Data**: Edit `training_data.json` with domain-specific queries and document pairs.\n    > [!TIP]\n    > If you don't have enough data, you can use the `generate_training_data.py` script to create synthetic training pairs from your existing project files and documentation.\n2.  **Train the Model**:\n    ```bash\n    python3 train_ranker.py\n    ```"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "Given a question, what are the top 10 most relevant documents from the vector collection?",
+    "texts": [
+      "def query_collection(prompt: str, n_results: int = 10):\n    collection = get_vector_collection()\n    results = collection.query(query_texts=[prompt], n_results=n_results)\n    return results\n\ndef get_file_names_from_ids():\n    collection = get_vector_collection()",
+      "with st.expander(\"See retrieved document ids\"):\n        st.write(results.get(\"ids\")[0])\n        st.write(\"Most relevant:\")\n        st.write(relevant_doc_ids)\n        st.write(\"Context:\")\n        st.write(context)",
+      "from llm import call_llm\nfrom vector import add_to_vector_collection, query_collection, get_file_names_from_ids\nfrom ranker import rerank_cross_encoders\n\ntext_spliter = RecursiveCharacterTextSplitter(\n    chunk_size=400,\n    chunk_overlap=100,\n    separators=[\"\\n\\n\", \"\\n\", \".\", \"!\", \"?\", \" \", \"\"]\n)"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "What are all the unique file names extracted from the IDs?",
+    "texts": [
+      "def get_file_names_from_ids():\n    collection = get_vector_collection()\n\n    # Fetch all entries (default includes IDs)\n    results = collection.get()\n    # Extract IDs from result\n    all_ids = results[\"ids\"]\n\n    # Extract and deduplicate \"{file_name}_{idx}\"\n    file_names = set(id.rsplit(\"_\", 1)[0] for id in all_ids)\n\n    # Return the unique file_names\n    return sorted(file_names)",
+      "st.title(\"\ud83d\udcac PDF Understanding QnA\")\n\nfor msg in st.session_state.messages:\n    st.chat_message(msg[\"role\"]).write(msg[\"content\"])\n\nif prompt := st.chat_input(\"Your question?\"):\n    st.chat_message(\"user\").write(prompt)\n    st.session_state.messages.append({\"role\": \"user\", \"content\": prompt})",
+      "\u25bc\n       \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n       \u2502        LLM Generation (Ollama)            \u2502\n       \u2502           (gemma3:latest)                 \u2502\n       \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                             \u2502\n                             \u25bc\n                    \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n                    \u2502 Chat Response   \u2502"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "Okay, I understand. \n\nTask: Generate a single, concise question that can be answered using the information in the context above. \nThe question should be natural and likely to be asked by a user of this PDF RAG application.\nReturn ONLY the question text. Do not include any preamble or explanation.",
+    "texts": [
+      "from ollama import Client\n\nsystem_prompt = \"\"\"\nYou are an AI assistant tasked with providing answers based solely on the given context. Your goal is to analyze information provided and formulate an answer.\n\ncontext will be passed as \"Context:\"\nuser question will be passed as \"Question:\"",
+      "---\n\n## \ud83c\udfd7\ufe0f Architecture",
+      "st.header(\"Re-ranker Model\")\n    if os.path.exists(\"fine-tuned-ranker\"):\n        st.success(\"Using custom fine-tuned model\")\n    else:\n        st.info(\"Using default cross-encoder model\")"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "What is the purpose of the context provided?",
+    "texts": [
+      "To answer the question:\n1. Thoroughly analyze the context, identifying key information relevant to the question.\n2. Organize your thoughts and plan your response to ensure a logical flow of information.\n3. Formulate a detailed answer that directly addresses the question, using only the information provided in the context.",
+      "```text\n       \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510          \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n       \u2502 PDF Documents \u2502          \u2502   Web URLs     \u2502\n       \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518          \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n               \u2502                           \u2502\n               \u25bc                           \u25bc\n       \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n       \u2502   Text Splitting & Embedding (Ollama)     \u2502",
+      "import os\nimport tempfile\nimport streamlit as st\nimport json\n\nfrom streamlit.runtime.uploaded_file_manager import UploadedFile\nfrom langchain_community.document_loaders import UnstructuredPDFLoader, UnstructuredURLLoader\nfrom langchain_text_splitters import RecursiveCharacterTextSplitter\nfrom langchain_core.documents import Document"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "Please provide the context. I need the text of the PDF to generate a question.",
+    "texts": [
+      "4. Ensure your answer is comprehensive, covering all relevant aspects found in the context.\n5. If the context doesn't contain sufficient information to fully answer the question, state it clearly in your response.",
+      "---\n\n## \ud83d\udee0\ufe0f Configuration & Customization\n\nThe system is designed to be highly modular and robust:",
+      "def get_file_names_from_ids():\n    collection = get_vector_collection()\n\n    # Fetch all entries (default includes IDs)\n    results = collection.get()\n    # Extract IDs from result\n    all_ids = results[\"ids\"]\n\n    # Extract and deduplicate \"{file_name}_{idx}\"\n    file_names = set(id.rsplit(\"_\", 1)[0] for id in all_ids)\n\n    # Return the unique file_names\n    return sorted(file_names)"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "Please provide the context (the PDF content) so I can generate the question. I need the text of the PDF to fulfill your request.",
+    "texts": [
+      "Format your response as follows:\n1. Use clear, concise language.\n2. Organize your answer into paragraphs for readability.\n3. Use bullet points or numbered lists where appropriate to break down complex information.\n4. If relevant, include any headings or subheadings to structure your response.\n5. Ensure proper grammer, punctuation, and spelling throughout your answer.",
+      "To answer the question:\n1. Thoroughly analyze the context, identifying key information relevant to the question.\n2. Organize your thoughts and plan your response to ensure a logical flow of information.\n3. Formulate a detailed answer that directly addresses the question, using only the information provided in the context.",
+      "The system is designed to be highly modular and robust:\n\n- **Database Persistence**: ChromaDB uses absolute paths (managed in `vector.py`) to ensure reliable disk access across different environments and virtual environments.\n- **Python Compatibility**: The project is optimized for Python 3.9+, with specific version pins like `pi-heif<0.15.0` to maintain backward compatibility."
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "How do I connect to the Ollama client?",
+    "texts": [
+      "Important: Base entire response solely on the infroamtion provided in the context. Do not include any external knowledge or assumptions unless you are explicitly asked.\n\"\"\"\n\nollama_client = Client(host=\"http://localhost:11434\")",
+      "st.title(\"\ud83d\udcac PDF Understanding QnA\")\n\nfor msg in st.session_state.messages:\n    st.chat_message(msg[\"role\"]).write(msg[\"content\"])\n\nif prompt := st.chat_input(\"Your question?\"):\n    st.chat_message(\"user\").write(prompt)\n    st.session_state.messages.append({\"role\": \"user\", \"content\": prompt})",
+      "def query_collection(prompt: str, n_results: int = 10):\n    collection = get_vector_collection()\n    results = collection.query(query_texts=[prompt], n_results=n_results)\n    return results\n\ndef get_file_names_from_ids():\n    collection = get_vector_collection()"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "Context: The company\u2019s mission is to empower individuals to achieve their financial goals through personalized investment advice and educational resources. We believe everyone deserves access to the tools and knowledge necessary to make informed decisions about their money. Our core values are integrity, innovation, and client success. We are committed to building long-term relationships based on trust and transparency. We continuously strive to improve our offerings and stay ahead of market trends to provide our clients with the best possible investment solutions. Our investment philosophy is rooted in a long-term perspective, focusing on sustainable growth and risk management. We offer a wide range of investment products, including stocks, bonds, mutual funds, and ETFs. We also provide financial planning services, such as retirement planning, education savings, and estate planning. \n\nQuestion: What are the company's core values?",
+    "texts": [
+      "def call_llm(context: str, prompt: str):\n    response = ollama_client.chat(\n        model=\"gemma3:latest\", #\"llama3.2:latest\",\n        stream=True,\n        messages=[\n            {\n                \"role\": \"system\",\n                \"content\": system_prompt,\n            },\n            {\n                \"role\": \"user\",\n                \"content\": f\"Context: {context}, Question: {prompt}\",",
+      "for rank in ranks:\n        id = rank[\"corpus_id\"]\n        relevant_text += documents[id]\n        relevant_text_ids.append(id)\n\n    return relevant_text, relevant_text_ids",
+      "| Component | File | Variable | Default |\n| :--- | :--- | :--- | :--- |\n| **LLM Model** | `llm.py` | `model` | `gemma3:latest` |\n| **Embeddings** | `vector.py` | `model_name` | `nomic-embed-text:latest` |\n| **Chunk Size** | `app.py` | `chunk_size` | `400` |\n| **Re-ranker** | `ranker.py` | `model_path` | `ms-marco-MiniLM-L-6-v2` |\n\n---\n\n## \ud83d\udcc2 Project Structure"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "Context: What is the purpose of the document?",
+    "texts": [
+      "\"content\": f\"Context: {context}, Question: {prompt}\",\n            }\n        ]\n    )",
+      "The system is designed to be highly modular and robust:\n\n- **Database Persistence**: ChromaDB uses absolute paths (managed in `vector.py`) to ensure reliable disk access across different environments and virtual environments.\n- **Python Compatibility**: The project is optimized for Python 3.9+, with specific version pins like `pi-heif<0.15.0` to maintain backward compatibility.",
+      "---\n\n## \ud83d\ude80 Quick Start\n\n### 1. Prerequisites\n\n*   **Python**: 3.9 or higher.\n*   **Ollama**: Install from [ollama.ai](https://ollama.ai/).\n*   **System Libs (macOS)**:\n    ```bash\n    brew install libheif poppler tesseract-lang\n    ```\n\n### 2. Model Setup\n```bash\nollama pull gemma3:latest\nollama pull nomic-embed-text:latest\n```"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "What is the content of each chunk?",
+    "texts": [
+      "for chunk in response:\n        if not chunk.done:\n            yield chunk.message.content\n        else:\n            break",
+      "def get_file_names_from_ids():\n    collection = get_vector_collection()\n\n    # Fetch all entries (default includes IDs)\n    results = collection.get()\n    # Extract IDs from result\n    all_ids = results[\"ids\"]\n\n    # Extract and deduplicate \"{file_name}_{idx}\"\n    file_names = set(id.rsplit(\"_\", 1)[0] for id in all_ids)\n\n    # Return the unique file_names\n    return sorted(file_names)",
+      "\"content\": f\"Context: {context}, Question: {prompt}\",\n            }\n        ]\n    )"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "How can I re-rank search results using a cross-encoder model?",
+    "texts": [
+      "import os\nfrom sentence_transformers import CrossEncoder\n\ndef rerank_cross_encoders(prompt: str, documents: list[str]) -> tuple[str, list[int]]:\n    relevant_text = \"\"\n    relevant_text_ids = []",
+      "import chromadb\nimport os\nfrom chromadb.utils.embedding_functions.ollama_embedding_function import OllamaEmbeddingFunction\nfrom langchain_core.documents import Document\n\ndef get_vector_collection() -> chromadb.Collection:\n    ollama_ef = OllamaEmbeddingFunction(\n        url=\"http://localhost:11434/api/embeddings\",\n        model_name=\"nomic-embed-text:latest\",\n    )",
+      "---\n\n## \ud83d\udd27 Troubleshooting\n\n*   **Ollama Connection**: Ensure `ollama serve` is running.\n*   **Missing Dependencies**: Ensure you've run the `brew install` command above for PDF processing.\n*   **Memory Issues**: For smaller RAM, try lowering the `chunk_size` in `app.py` or using a smaller model like `phi4`.\n\n---\n\n## \ud83d\udcdc License\n\nThis project is open-source. See the license file for more details."
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "What model is being loaded, and if it's a custom one, where is it located?",
+    "texts": [
+      "# Check for locally trained model\n    model_path = \"fine-tuned-ranker\"\n    if os.path.exists(model_path):\n        print(f\"Loading custom model from {model_path}\")\n        encoder_model = CrossEncoder(model_path)\n    else:\n        print(\"Loading default cross-encoder model\")\n        encoder_model = CrossEncoder(\"cross-encoder/ms-marco-MiniLM-L-6-v2\")",
+      "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n                    \u2502 Chat Response   \u2502\n                    \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```",
+      "```text\n       \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510          \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n       \u2502 PDF Documents \u2502          \u2502   Web URLs     \u2502\n       \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518          \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n               \u2502                           \u2502\n               \u25bc                           \u25bc\n       \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n       \u2502   Text Splitting & Embedding (Ollama)     \u2502"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "What are the top 3 documents related to the prompt?",
+    "texts": [
+      "encoder_model = CrossEncoder(\"cross-encoder/ms-marco-MiniLM-L-6-v2\")\n        \n    ranks = encoder_model.rank(prompt, documents, top_k=3)",
+      "# \ud83e\udde0 PDF RAG with Ollama & Intelligent Re-ranking\n\n[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)\n[![Ollama](https://img.shields.io/badge/Powered%20by-Ollama-orange.svg)](https://ollama.ai/)\n[![Streamlit](https://img.shields.io/badge/UI-Streamlit-red.svg)](https://streamlit.io/)",
+      "loader = UnstructuredPDFLoader(temp_file.name)\n    docs = loader.load()\n    os.unlink(temp_file.name) # Delete the temp file\n    \n    return text_spliter.split_documents(docs)\n\ndef process_url(url: str) -> list[Document]:\n    loader = UnstructuredURLLoader(urls=[url])\n    docs = loader.load()\n    return text_spliter.split_documents(docs)"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "query": "What text segments are relevant to this corpus ID?",
+    "texts": [
+      "for rank in ranks:\n        id = rank[\"corpus_id\"]\n        relevant_text += documents[id]\n        relevant_text_ids.append(id)\n\n    return relevant_text, relevant_text_ids",
+      "import chromadb\nimport os\nfrom chromadb.utils.embedding_functions.ollama_embedding_function import OllamaEmbeddingFunction\nfrom langchain_core.documents import Document\n\ndef get_vector_collection() -> chromadb.Collection:\n    ollama_ef = OllamaEmbeddingFunction(\n        url=\"http://localhost:11434/api/embeddings\",\n        model_name=\"nomic-embed-text:latest\",\n    )",
+      "for idx, split in enumerate(all_splits):\n        documents.append(split.page_content)\n        metadatas.append(split.metadata)\n        ids.append(f\"{file_name}_{idx}\")\n\n    collection = get_vector_collection()\n    collection.upsert(\n        documents=documents,\n        metadatas=metadatas,\n        ids=ids,\n    )"
+    ],
+    "labels": [
+      1,
+      0,
+      0
+    ]
   }
 ]

@@ -1,4 +1,5 @@
 import chromadb
+import os
 from chromadb.utils.embedding_functions.ollama_embedding_function import OllamaEmbeddingFunction
 from langchain_core.documents import Document
 
@@ -8,7 +9,7 @@ def get_vector_collection() -> chromadb.Collection:
         model_name="nomic-embed-text:latest",
     )
 
-    chroma_client = chromadb.PersistentClient(path="./rag-chroma")
+    chroma_client = chromadb.PersistentClient(path=os.path.join(os.getcwd(), "rag-chroma"))
 
     return chroma_client.get_or_create_collection(
         name="rag_app",

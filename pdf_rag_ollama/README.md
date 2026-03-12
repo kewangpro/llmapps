@@ -100,6 +100,8 @@ streamlit run app.py
 Improve retrieval accuracy by training the re-ranker on your own data.
 
 1.  **Prepare Training Data**: Edit `training_data.json` with domain-specific queries and document pairs.
+    > [!TIP]
+    > If you don't have enough data, you can use the `generate_training_data.py` script to create synthetic training pairs from your existing project files and documentation.
 2.  **Train the Model**:
     ```bash
     python3 train_ranker.py
@@ -109,6 +111,11 @@ Improve retrieval accuracy by training the re-ranker on your own data.
 ---
 
 ## 🛠️ Configuration & Customization
+
+The system is designed to be highly modular and robust:
+
+- **Database Persistence**: ChromaDB uses absolute paths (managed in `vector.py`) to ensure reliable disk access across different environments and virtual environments.
+- **Python Compatibility**: The project is optimized for Python 3.9+, with specific version pins like `pi-heif<0.15.0` to maintain backward compatibility.
 
 The system is designed to be highly modular. You can easily swap components:
 
