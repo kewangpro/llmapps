@@ -22,7 +22,7 @@ export async function loadCustomVisualizations() {
   try {
     // Fetch list of files from backend (includes newly created files)
     console.log('🔍 Fetching file list from backend...');
-    const response = await fetch('http://localhost:3001/api/list');
+    const response = await fetch('http://localhost:3005/api/list');
     if (!response.ok) {
       console.warn('Failed to fetch visualization list from backend');
       return visualizations;
