@@ -29,7 +29,7 @@ export default function CustomDialog({ open, onOpenChange, onVisualizationCreate
     setValidationErrors([]);
 
     try {
-      const response = await fetch('http://localhost:3001/api/generate', {
+      const response = await fetch('http://localhost:3005/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt }),
@@ -66,7 +66,7 @@ export default function CustomDialog({ open, onOpenChange, onVisualizationCreate
     setError('');
 
     try {
-      const response = await fetch('http://localhost:3001/api/save', {
+      const response = await fetch('http://localhost:3005/api/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
