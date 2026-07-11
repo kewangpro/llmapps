@@ -10,10 +10,10 @@ Early build-out. See [docs/IMPLEMENT.md](docs/IMPLEMENT.md) for the phased
 plan and current phase; see [docs/DESIGN.md](docs/DESIGN.md) for the
 architecture and the reasoning behind it.
 
-Currently: **Phase 0 complete (text-to-video)**, moving into **Phase 1 —
-inference service**. `Wan2.2-TI2V-5B` (GGUF Q4_K_M) generates coherent,
-on-prompt video on Apple Silicon at 640×384 — confirmed slow (~38 min for a
-2s clip) but working. Image-to-video is untested and deferred. See
+Currently: **Phase 0 complete (text-to-video and image-to-video)**, moving
+into **Phase 1 — inference service**. `Wan2.2-TI2V-5B` (GGUF Q4_K_M)
+generates coherent, on-prompt video on Apple Silicon at 640×384 — confirmed
+slow (~33–38 min for a 2s clip) but working. See
 [docs/IMPLEMENT.md](docs/IMPLEMENT.md) for details.
 
 ## Why this is harder than it sounds

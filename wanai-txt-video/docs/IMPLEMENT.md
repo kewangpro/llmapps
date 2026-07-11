@@ -6,7 +6,7 @@ the Wan2.2 model, with no cloud dependency. See [DESIGN.md](./DESIGN.md).
 
 ## Phases
 
-### Phase 0 — Feasibility spike (1–2 days) — ✅ complete (T2V), I2V deferred
+### Phase 0 — Feasibility spike (1–2 days) — ✅ complete (T2V + I2V)
 
 Results on reference machine (Apple M4, 24GB unified memory):
 - Text-to-video via ComfyUI + `ComfyUI-GGUF` + MPS works end-to-end, no
@@ -28,9 +28,12 @@ Results on reference machine (Apple M4, 24GB unified memory):
   wrong — an initial guess of `8.0` produced pure structured noise even at
   full step count; the working value came from the official Wan2.2 ComfyUI
   blueprints.)
-- **Image-to-video not yet tested** — deferred as low-risk (same model/VAE,
-  same GGUF/MPS path already validated for T2V) but still an open gap before
-  Phase 1 assumes I2V "just works."
+- **Image-to-video validated**: same 640×384/49-frame/20-step config, seeded
+  from a T2V output frame via `Wan22ImageToVideoLatent`'s `start_image`
+  input — completed in 33m06s (faster than the T2V run because model/CLIP/
+  VAE loaders were cached from the prior job in the same ComfyUI session).
+  Output preserved the seed image's composition with visible subtle motion,
+  no artifacts.
 
 Decision carried into Phase 1: **640×384 is the pinned default resolution**,
 not 1280×704. Higher resolution becomes an opt-in/settings-panel concern
@@ -97,14 +100,10 @@ not 1280×704. Higher resolution becomes an opt-in/settings-panel concern
    clip on 24GB unified memory based on Phase 0 scaling; needs a deliberate
    timed test (not a background assumption) before it's ever offered as a
    user-facing option.
-5. **Image-to-video untested**: same model/pipeline as the validated T2V
-   path, so risk is believed low, but Phase 1's `/generate` image input
-   should not be treated as proven until it's actually run once.
+5. ~~Image-to-video untested~~ — resolved: validated in Phase 0 at the same
+   pinned config as T2V.
 
 ## Next step
 
-Phase 0 (text-to-video) is done — proceed to Phase 1: build the FastAPI
-service around the now-validated ComfyUI workflow and pinned config. Run one
-image-to-video generation manually (closing the Phase 0 gap) before or
-alongside wiring the `/generate` image-input path, so Phase 1 isn't built
-against an unverified assumption.
+Phase 0 is done (T2V and I2V both validated) — proceed to Phase 1: build the
+FastAPI service around the now-validated ComfyUI workflow and pinned config.
