@@ -130,6 +130,12 @@ button[type="button"] {
   margin-top: 1.5rem;
 }
 
+.eta {
+  font-size: 0.85rem;
+  color: #666;
+  margin: 0.5rem 0;
+}
+
 .progress-bar {
   position: relative;
   height: 1.5rem;
@@ -188,7 +194,8 @@ button[type="button"] {
   }
 
   .subtitle,
-  .history-prompt {
+  .history-prompt,
+  .eta {
     color: #aaa;
   }
 

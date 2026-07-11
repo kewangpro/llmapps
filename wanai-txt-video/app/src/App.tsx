@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
-import { generate, getJob, videoUrl, type JobResponse } from "./api";
+import { cancelJob, formatDuration, generate, getJob, videoUrl, type JobResponse } from "./api";
 import { addHistoryEntry, loadHistory, type HistoryEntry } from "./history";
 
 // Defaults mirror backend/service/config.py — the only settings actually
@@ -38,7 +38,7 @@ function App() {
       try {
         const updated = await getJob(jobId);
         setJob(updated);
-        if (updated.status === "completed" || updated.status === "failed") {
+        if (updated.status === "completed" || updated.status === "failed" || updated.status === "cancelled") {
           if (pollRef.current !== null) window.clearInterval(pollRef.current);
           if (updated.status === "completed") {
             setHistory(
@@ -74,6 +74,17 @@ function App() {
       });
       setJob(created);
       startPolling(created.id);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function handleCancel() {
+    if (!job) return;
+    try {
+      const updated = await cancelJob(job.id);
+      setJob(updated);
+      if (pollRef.current !== null) window.clearInterval(pollRef.current);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : String(err));
     }
@@ -170,13 +181,26 @@ function App() {
             Job {job.id.slice(0, 8)} — {job.status}
           </p>
           {(job.status === "running" || job.status === "queued") && (
-            <div className="progress-bar">
-              <div className="progress-fill" style={{ width: `${progressPct}%` }} />
-              <span>
-                {job.progress_step}/{job.progress_total || "?"} steps
-              </span>
-            </div>
+            <>
+              <div className="progress-bar">
+                <div className="progress-fill" style={{ width: `${progressPct}%` }} />
+                <span>
+                  {job.progress_step}/{job.progress_total || "?"} steps
+                </span>
+              </div>
+              {typeof job.eta_seconds === "number" && (
+                <p className="eta">
+                  {typeof job.elapsed_seconds === "number" &&
+                    `${formatDuration(job.elapsed_seconds)} elapsed — `}
+                  ~{formatDuration(job.eta_seconds)} remaining
+                </p>
+              )}
+              <button type="button" onClick={handleCancel}>
+                Cancel
+              </button>
+            </>
           )}
+          {job.status === "cancelled" && <p className="error">Cancelled.</p>}
           {job.status === "failed" && <p className="error">{job.error}</p>}
           {job.status === "completed" && videoUrl(job) && (
             <video controls src={videoUrl(job)!} className="output-video" />

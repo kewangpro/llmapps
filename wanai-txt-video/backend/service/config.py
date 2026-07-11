@@ -33,3 +33,8 @@ DEFAULT_CFG = 5.0
 DEFAULT_SHIFT = 5.0
 DEFAULT_SAMPLER = "euler"
 DEFAULT_SCHEDULER = "simple"
+
+# Midpoint of the ~80-90s/it measured in Phase 0 at the default 640x384
+# config (see docs/IMPLEMENT.md) — used as the ETA before a job has enough
+# of its own progress to estimate from.
+FALLBACK_SECONDS_PER_STEP = 85.0

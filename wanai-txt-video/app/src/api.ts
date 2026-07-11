@@ -4,13 +4,15 @@
 
 const BASE_URL = "http://127.0.0.1:8000";
 
-export type JobStatus = "queued" | "running" | "completed" | "failed";
+export type JobStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 
 export interface JobResponse {
   id: string;
   status: JobStatus;
   progress_step: number;
   progress_total: number;
+  elapsed_seconds: number | null;
+  eta_seconds: number | null;
   error: string | null;
   video_url: string | null;
 }
@@ -44,6 +46,19 @@ export async function getJob(id: string): Promise<JobResponse> {
   const res = await fetch(`${BASE_URL}/jobs/${id}`);
   if (!res.ok) throw new Error(`job fetch failed: ${res.status} ${await res.text()}`);
   return res.json();
+}
+
+export async function cancelJob(id: string): Promise<JobResponse> {
+  const res = await fetch(`${BASE_URL}/jobs/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`cancel failed: ${res.status} ${await res.text()}`);
+  return res.json();
+}
+
+export function formatDuration(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 export function videoUrl(job: JobResponse): string | null {

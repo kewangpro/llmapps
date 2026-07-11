@@ -23,6 +23,7 @@ class JobStatus(str, Enum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 @dataclass
@@ -35,6 +36,7 @@ class Job:
     length: int
     steps: int
     created_at: float = field(default_factory=time.time)
+    started_at: Optional[float] = None
     status: JobStatus = JobStatus.QUEUED
     progress_step: int = 0
     progress_total: int = 0
@@ -47,6 +49,7 @@ class JobStore:
     def __init__(self, comfy: ComfyClient):
         self.comfy = comfy
         self._jobs: dict[str, Job] = {}
+        self._tasks: dict[str, asyncio.Task] = {}
 
     def get(self, job_id: str) -> Optional[Job]:
         return self._jobs.get(job_id)
@@ -75,7 +78,7 @@ class JobStore:
             steps=steps,
         )
         self._jobs[job_id] = job
-        asyncio.create_task(
+        self._tasks[job_id] = asyncio.create_task(
             self._run(
                 job,
                 cfg=cfg,
@@ -84,6 +87,30 @@ class JobStore:
             )
         )
         return job
+
+    async def cancel(self, job_id: str) -> bool:
+        """Cancel: clears ComfyUI's whole queue and interrupts whatever is
+        executing, then tears down the tracking task. This app only ever
+        drives one job at a time (no multi-job queue UI), so a global
+        clear+interrupt is simpler and more reliable than targeting a single
+        prompt_id, which silently no-ops if that prompt isn't the one
+        currently executing. Returns False if the job doesn't exist or has
+        already reached a terminal state."""
+        job = self._jobs.get(job_id)
+        if job is None or job.status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
+            return False
+
+        job.status = JobStatus.CANCELLED
+        try:
+            await self.comfy.clear_queue()
+            await self.comfy.interrupt_all()
+        except Exception:  # noqa: BLE001 - job is cancelled either way; ComfyUI cleanup is best-effort
+            pass
+
+        task = self._tasks.get(job_id)
+        if task is not None:
+            task.cancel()
+        return True
 
     async def _run(
         self,
@@ -109,6 +136,7 @@ class JobStore:
             )
             job.comfy_prompt_id = await self.comfy.submit(wf)
             job.status = JobStatus.RUNNING
+            job.started_at = time.time()
             job.progress_total = job.steps
 
             async for event in self.comfy.stream_progress(job.comfy_prompt_id):
@@ -131,5 +159,6 @@ class JobStore:
             job.status = JobStatus.COMPLETED
 
         except Exception as exc:  # noqa: BLE001 - surface any failure on the job record
-            job.status = JobStatus.FAILED
-            job.error = str(exc)
+            if job.status != JobStatus.CANCELLED:  # don't clobber a concurrent cancel()
+                job.status = JobStatus.FAILED
+                job.error = str(exc)

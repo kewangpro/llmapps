@@ -100,9 +100,21 @@ manual review (grid overlap from a missing `box-sizing: border-box`, and
 excess top spacing from an unset `body` margin).
 
 ### Phase 3 — UX for slow inference & hardening (3–5 days)
-- Cancel button.
-- Show time estimate in progress (live ETA alongside the progress bar,
-  from Phase 0's measured ~80-90s/it, scaled by steps/resolution).
+- ✅ Cancel button — `DELETE /jobs/{id}` clears ComfyUI's whole queue and
+  issues a global interrupt (`ComfyClient.clear_queue` +
+  `ComfyClient.interrupt_all`), rather than targeting a single prompt_id.
+  This app only ever drives one job at a time (no multi-job queue UI), so a
+  global stop is simpler and doesn't silently no-op like a targeted
+  interrupt does when the prompt isn't the one currently executing
+  (observed directly: ComfyUI logs `"Prompt X is not currently running,
+  skipping interrupt"` for a merely-queued job).
+- ✅ Show time estimate in progress — `JobResponse.eta_seconds` /
+  `elapsed_seconds`, self-correcting: once a job has made progress it uses
+  its own observed seconds/step rather than trusting the static ~85s/it
+  fallback for the whole run, since actual speed varies with system load.
+- ✅ Lifecycle hardening — closing the app now reliably stops ComfyUI too,
+  not just the FastAPI backend (see risk #6 below for what was broken and
+  how it's fixed).
 - Error handling for OOM (auto-suggest lower resolution).
 - First-run model download flow (fetch GGUF weights from Hugging Face, show
   download progress).
@@ -117,9 +129,10 @@ excess top spacing from an unset `body` margin).
 ## Open risks
 
 1. **Speed**: confirmed, not hypothetical — 38 min for a 2s clip at reduced
-   (640×384) resolution. Async/notify UX is required, not optional; Phase 3
-   should build the time estimate off this measured constant rather than the
-   borrowed community number.
+   (640×384) resolution. Async/notify UX is required, not optional; the
+   live ETA (Phase 3) is built off this measured constant, self-correcting
+   from each job's own observed rate rather than the borrowed community
+   number.
 2. **Quantization quality tradeoff**: resolved for 640×384 — Q4_K_M output is
    on-prompt and visually clean at that resolution. Not yet validated at
    higher resolutions.
@@ -131,15 +144,32 @@ excess top spacing from an unset `body` margin).
    user-facing option.
 5. ~~Image-to-video untested~~ — resolved: validated in Phase 0 at the same
    pinned config as T2V.
-6. **Backend sidecar orphaning on force-kill**: the Rust shell only cleans up
-   the FastAPI backend on a normal window close (`WindowEvent::Destroyed`);
-   force-killing or crashing the Tauri process leaves the Python backend
-   (and, transitively, any ComfyUI job it's running) orphaned. Observed
-   directly while testing Phase 2. Should be hardened (e.g. also handle
-   `RunEvent::Exit`) before Phase 4 packaging ships this to real users.
+6. ~~Backend sidecar orphaning on force-kill~~ — resolved in Phase 3.
+   Two separate bugs, both found by actually killing the running app rather
+   than by inspection:
+   - The Rust shell only cleaned up on a normal window close
+     (`WindowEvent::Destroyed`); an external `kill`/crash bypassed Tauri's
+     event loop entirely and orphaned both the backend and ComfyUI. Fixed
+     with a `signal-hook`-based SIGTERM/SIGINT handler plus a
+     `RunEvent::Exit` hook, alongside the existing window-close path — all
+     three converge on the same cleanup so whichever fires first wins.
+   - Even after adding that, ComfyUI still didn't stop: Rust's
+     `Child::kill()` always sends **SIGKILL**, which can't be caught, so
+     the Python backend's own shutdown code (`comfy_process.stop()`, called
+     from `main.py`'s `lifespan` handler, which is what actually stops
+     ComfyUI) never ran. Fixed by sending SIGTERM directly via `libc::kill`
+     first, polling for graceful exit, and only falling back to
+     `Child::kill()` (SIGKILL) if it doesn't exit within 10s.
+   - Separately, `comfy_process.py` previously only stopped a ComfyUI
+     instance it had itself spawned via `Popen` — if the app *adopted* an
+     already-running instance (the dev-convenience "reuse" path), it would
+     never stop it, since there was no PID to track. Fixed: on adopt, look
+     up the PID via `lsof -ti tcp:{port}` and track it the same as a
+     spawned process, so "close app" now unconditionally stops whatever
+     ComfyUI it's using, regardless of who started it.
 
 ## Next step
 
-Phases 0-2 are done — proceed to Phase 3: a cancel button, a disk-space
-check, and a time estimate shown both before starting and live during
-generation.
+Phases 0-2 are done; Phase 3's cancel/ETA/lifecycle-hardening items are
+done too. Remaining Phase 3 work: OOM error handling, first-run model
+download flow, and a settings panel — then Phase 4 packaging.

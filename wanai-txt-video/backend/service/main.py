@@ -6,6 +6,7 @@ Phase 1 for scope.
 """
 
 import logging
+import time
 from contextlib import asynccontextmanager
 from typing import Optional
 
@@ -59,16 +60,34 @@ class JobResponse(BaseModel):
     status: JobStatus
     progress_step: int
     progress_total: int
+    elapsed_seconds: Optional[float] = None
+    eta_seconds: Optional[float] = None
     error: Optional[str] = None
     video_url: Optional[str] = None
 
 
 def _job_response(job) -> JobResponse:
+    elapsed_seconds = None
+    eta_seconds = None
+    if job.status == JobStatus.RUNNING and job.started_at is not None:
+        elapsed_seconds = time.time() - job.started_at
+        remaining_steps = max(job.progress_total - job.progress_step, 0)
+        if job.progress_step > 0:
+            # Self-correcting: use this job's own observed rate once it has
+            # made progress, rather than trusting the static fallback for
+            # the whole run — actual speed varies with system load.
+            seconds_per_step = elapsed_seconds / job.progress_step
+        else:
+            seconds_per_step = config.FALLBACK_SECONDS_PER_STEP
+        eta_seconds = remaining_steps * seconds_per_step
+
     return JobResponse(
         id=job.id,
         status=job.status,
         progress_step=job.progress_step,
         progress_total=job.progress_total,
+        elapsed_seconds=elapsed_seconds,
+        eta_seconds=eta_seconds,
         error=job.error,
         video_url=f"/jobs/{job.id}/video" if job.status == JobStatus.COMPLETED else None,
     )
@@ -110,6 +129,17 @@ async def get_job(job_id: str):
     job = job_store.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="job not found")
+    return _job_response(job)
+
+
+@app.delete("/jobs/{job_id}", response_model=JobResponse)
+async def cancel_job(job_id: str):
+    job = job_store.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job not found")
+    cancelled = await job_store.cancel(job_id)
+    if not cancelled:
+        raise HTTPException(status_code=409, detail=f"job is {job.status.value}, cannot cancel")
     return _job_response(job)
 
 

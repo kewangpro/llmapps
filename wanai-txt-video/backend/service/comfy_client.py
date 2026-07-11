@@ -59,6 +59,18 @@ class ComfyClient:
                 raise RuntimeError(f"ComfyUI rejected workflow: {body['node_errors']}")
             return body["prompt_id"]
 
+    async def interrupt_all(self) -> None:
+        """Stops whatever prompt is currently executing (global interrupt, no prompt_id)."""
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(f"{self.base_url}/interrupt", json={}, timeout=10.0)
+            resp.raise_for_status()
+
+    async def clear_queue(self) -> None:
+        """Empties the pending queue (does not affect a prompt already executing)."""
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(f"{self.base_url}/queue", json={"clear": True}, timeout=10.0)
+            resp.raise_for_status()
+
     async def get_history(self, prompt_id: str) -> dict | None:
         async with httpx.AsyncClient() as client:
             resp = await client.get(f"{self.base_url}/history/{prompt_id}", timeout=10.0)
