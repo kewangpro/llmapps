@@ -1,196 +1,256 @@
-# Agent Labs
+# MCP Agent Ollama
 
-AI-powered chat interface with intelligent multi-agent orchestration and real-time tool execution.
-
-> 📸 **[View Screenshots & Demos](./docs/README.md#screenshots--demos)** | 📚 **[Full Documentation](./docs/)**
-
-## Key Features
-
-- **Multi-Agent Orchestration** - Intelligent task routing to specialized agents
-- **Real-Time Tool Execution** - 10+ powerful tools for file analysis, web search, data processing, visualization
-- **MCP Integration** - Connect to external Model Context Protocol servers for extended capabilities
-- **Visual Content Analysis** - AI-powered image analysis with actual visual understanding
-- **Interactive Results** - Charts, images, presentations displayed directly in chat
-- **File Upload Support** - Automatic content analysis and tool selection
-- **Multiple LLM Support** - Ollama, OpenAI, Google Gemini with vision capabilities
-- **Downloadable Outputs** - Generated files saved with timestamps for easy access
+A sophisticated Python implementation that bridges Ollama's AI capabilities with the Model Control Protocol (MCP), enabling natural language interaction with structured tools and web services.
 
 ## Architecture
 
-**Frontend**: Next.js with WebSocket communication and real-time streaming
-**Backend**: FastAPI with multi-agent orchestration system
-**LLM**: Flexible provider support (Ollama, OpenAI, Gemini)
-**MCP**: Model Context Protocol integration for external tool servers
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│                 │     │                 │     │                 │
+│  User Interface │────▶│  MCP Client     │────▶│  MCP Server     │
+│                 │     │                 │     │                 │
+└─────────────────┘     └────────┬────────┘     └────────┬────────┘
+                                 │                      │
+                                 │                      │
+                                 ▼                      ▼
+                        ┌─────────────────┐     ┌─────────────────┐
+                        │                 │     │                 │
+                        │  Ollama Client  │     │  Tool Handlers  │
+                        │                 │     │                 │
+                        └─────────────────┘     └─────────────────┘
+```
 
-**Flow**: User input → Orchestrator → Specialized agents → Tool execution → Real-time results
+## Core Components
 
-## Available Tools
+### 1. **MCP Client** (`mcp_client.py`)
+   - **Server Lifecycle Management**: Automated startup, monitoring, and cleanup of MCP server processes
+   - **HTTP Request Handling**: Robust communication with MCP server using curl-based requests
+   - **Configuration System**: JSON-based configuration with intelligent fallback defaults
+   - **Comprehensive Testing**: Built-in test suite (`MCPTester`) for endpoint validation and reliability
 
-### Built-in Tools
-#### General (5)
-- **File Search** - Intelligent file discovery and pattern matching
-- **Web Search** - Real-time web search and information retrieval
-- **System Info** - Comprehensive system monitoring and diagnostics
-- **Presentation** - PowerPoint generation with downloadable outputs
-- **Visualization** - Interactive chart generation from data files
+### 2. **MCP Server** (`mcp_server.py`)
+   - **Tool Implementation**: Three core tools (echo, get_time, search_web) with structured interfaces
+   - **RESTful API**: HTTP server providing `/initialize`, `/list_tools`, and `/call_tool` endpoints
+   - **Web Search Integration**: Real-time web search using DuckDuckGo Search API
+   - **Error Handling**: Robust error recovery and fallback mechanisms
 
-#### Analytics (5)
-- **Data Processing** - CSV/JSON conversion, text analysis, data transformation
-- **Cost Analysis** - Financial data analysis and spending pattern visualization
-- **Image Analysis** - Visual content analysis with metadata extraction
-- **Stock Analysis** - Financial market data and technical analysis
-- **Forecast** - LSTM neural network time series prediction and forecasting
+### 3. **Ollama Integration** (`mcp_ollama.py`)
+   - **AI-Tool Bridge**: Intelligent parsing of Ollama responses to detect tool usage requirements
+   - **System Prompt Engineering**: Sophisticated prompts that guide Ollama's tool selection decisions
+   - **Response Processing**: Smart JSON parsing with error recovery for malformed responses
+   - **Natural Language Generation**: Converts structured tool results into conversational responses
 
-### MCP Tools
-- **External Integration** - Connect to MCP servers for additional specialized tools
-- **Dynamic Discovery** - Automatically discover and integrate available MCP tools
-- **Flexible Configuration** - Configure multiple MCP servers via environment variables
+### 4. **Web Interface** (`app.py`)
+   - **Modern Chat UI**: Streamlit-based interface with custom styling and avatars
+   - **Real-time Interaction**: Asynchronous chat processing with live status updates
+   - **Session Management**: Persistent chat history and server connection monitoring
+   - **Professional Design**: Clean, responsive interface optimized for conversational AI
 
-*Each tool has specialized agents with automatic parameter extraction and interactive result display.*
+### 5. **Testing Suite** (`test_ollama.py`)
+   - **Ollama Connectivity**: Validates Ollama server availability and model access
+   - **Model Verification**: Confirms installed models and generation capabilities
+   - **Integration Testing**: End-to-end testing of the complete system workflow
 
+## Key Features
 
-## Quick Start
+- 🤖 **AI-Powered Tool Integration**: Seamless bridge between Ollama's language models and structured tool execution
+- 🔍 **Web Search Capabilities**: Real-time web search through DuckDuckGo integration
+- ⏰ **System Information Access**: Get current time and system details through natural language
+- 🧪 **Comprehensive Testing**: Extensive test suite ensuring reliability and performance
+- 🔄 **Asynchronous Architecture**: Non-blocking operations for responsive user experience
+- 📝 **Natural Language Processing**: Intelligent conversation flow with context awareness
+- 🌐 **Modern Web Interface**: Professional Streamlit-based chat interface with real-time updates
+- 💬 **Dual Interface Support**: Both command-line and web-based interaction modes
+- ⚙️ **Flexible Configuration**: JSON-based settings for easy customization and deployment
+- 🛡️ **Robust Error Handling**: Comprehensive error recovery and graceful fallback mechanisms
 
-### Docker (Recommended)
+## Installation
+
+1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd agent_labs_ollama
-docker-compose up --build
+cd mcp_agent_ollama
 ```
-**Access**: http://localhost:3000
 
-### Manual Setup
-1. **Clone and Install**:
-   ```bash
-   git clone <repository-url>
-   cd agent_labs_ollama
-   pip install -r requirements.txt
-   npm install
-   ```
-
-2. **Setup Ollama**:
-   ```bash
-   # Install Ollama locally
-   ollama serve
-   ollama pull gemma3:latest
-   ollama pull llama3.1:latest
-   ```
-
-3. **Run Application**:
-   ```bash
-   # Single command starts both frontend and backend
-   python main.py
-   ```
-   **Access**: http://localhost:3000
-
-**Environment Variables**: Create `.env` file with:
+2. Install dependencies:
 ```bash
-# LLM Configuration
-LLM_PROVIDER=ollama  # or openai, gemini
-LLM_MODEL=gemma3:latest
-
-# Optional API Keys
-OPENAI_API_KEY=your_openai_key
-GEMINI_API_KEY=your_gemini_key
-GOOGLE_SEARCH_API_KEY=your_google_search_key
-GOOGLE_SEARCH_ENGINE_ID=your_search_engine_id
-
-# MCP Server Configuration (optional)
-MCP_SERVERS=example_server
-MCP_EXAMPLE_SERVER_URL=http://localhost:8000
-MCP_EXAMPLE_SERVER_TOOLS=echo,get_time,search_web
-MCP_EXAMPLE_SERVER_DESCRIPTION=Basic MCP server for testing
+pip install -r requirements.txt
 ```
+
+3. Install Ollama:
+```bash
+# macOS
+brew install ollama
+
+# Linux
+curl -fsSL https://ollama.com/install.sh | sh
+```
+
+4. Start Ollama and pull a model:
+```bash
+# Start Ollama service
+ollama serve
+
+# In a new terminal, pull the Mistral model
+ollama pull mistral
+```
+
+## Configuration
+
+The project includes a `config.json` file with default settings:
+```json
+{
+  "mcpServers": {
+    "default": {
+      "command": ["python", "mcp_server.py"],
+      "url": "http://localhost:8000"
+    }
+  },
+  "ollama": {
+    "baseUrl": "http://localhost:11434",
+    "model": "mistral:latest"
+  }
+}
+```
+
+**Configuration Options:**
+- **mcpServers.default.command**: Command to start the MCP server
+- **mcpServers.default.url**: URL where the MCP server will run  
+- **ollama.baseUrl**: Ollama API endpoint (default: localhost:11434)
+- **ollama.model**: Ollama model to use (supports: mistral, llama3, codellama, etc.)
 
 ## Usage
 
-1. **Select tools** from sidebar based on your task
-2. **Upload files** or type questions
-3. **View results** with interactive charts, images, and downloadable content
-
-**Examples**: "Analyze this cost data", "Check system performance", "Create a chart from this CSV"
-
-## Deployment
-
-### Google Cloud Platform
-
-The application can be deployed to Google Cloud using Cloud Build and Cloud Run:
-
-#### Prerequisites
-- Google Cloud SDK installed and configured
-- Google Cloud project with billing enabled
-- Cloud Build and Cloud Run APIs enabled
-
-#### Deploy to Google Cloud
+### Web Interface (Recommended)
+Launch the modern web-based chat interface:
 ```bash
-# From project root directory
-~/google-cloud-sdk/bin/gcloud builds submit . --project=YOUR_PROJECT_ID
+streamlit run app.py
 ```
 
-#### Environment Setup for Production
+**Web Interface Features:**
+- 💬 **Interactive Chat**: Real-time conversation with the AI agent
+- 📊 **Server Status**: Live monitoring of MCP client connection status  
+- 🕒 **Chat History**: Persistent conversation history within sessions
+- 🗑️ **Clear Chat**: Reset conversation with a single click
+- 🎨 **Modern Design**: Professional, responsive interface with custom styling
+- 👤 **Avatar Support**: Visual distinction between user and assistant messages
+
+### Command Line Interface
+For terminal-based interaction:
 ```bash
-# Set environment variables in Cloud Run
-gcloud run services update agent-labs \
-  --set-env-vars="LLM_PROVIDER=ollama,LLM_MODEL=gemma3:latest" \
-  --project=YOUR_PROJECT_ID
+python mcp_ollama.py
 ```
 
-#### Monitoring
-- **Build Logs**: Google Cloud Console → Cloud Build → History
-- **Runtime Logs**: Google Cloud Console → Cloud Run → Service Logs
-- **Health Check**: `GET /health` endpoint for service status
+**CLI Capabilities:**
+- 🔍 **Natural Language Queries**: Ask questions and get AI-powered responses
+- 🌐 **Automatic Web Search**: The AI will search the web when needed for current information
+- ⏰ **System Information**: Get current time and system details
+- 🔄 **Tool Integration**: The AI automatically selects and uses appropriate tools
+- 🚪 **Clean Exit**: Type 'exit' or 'quit' to terminate the session
 
-### Docker Deployment
+## Testing
 
+### MCP System Testing
+Run the comprehensive MCP test suite:
 ```bash
-# Build and run with Docker
-docker build -t agent-labs .
-docker run -p 3000:3000 -p 8000:8000 agent-labs
+python mcp_client.py --test
 ```
 
-### Local Development with Production Configuration
+**Test Coverage:**
+- ✅ Server initialization and startup
+- ✅ Tool discovery and listing  
+- ✅ Tool execution (echo, get_time, search_web)
+- ✅ Error handling and recovery
+- ✅ HTTP endpoint validation
 
+### Ollama Integration Testing
+Test Ollama connectivity and functionality:
 ```bash
-# Use production environment variables
-cp .env.example .env
-# Edit .env with your configuration
-npm run dev
+python test_ollama.py
 ```
 
-## Development
+**Validation Checks:**
+- 🔌 Ollama server connectivity
+- 📋 Available model verification
+- 🤖 Text generation capabilities
 
-**Tech Stack**: Next.js + FastAPI + Ollama
-**Communication**: WebSocket for real-time interaction
-**Architecture**: Multi-agent pattern with specialized tool execution
+## Available Tools
 
-### API Endpoints
-- `GET /api/tools` - Available tools and agent information
-- `GET /api/models` - Available LLM models (Ollama, OpenAI, Gemini)
-- `GET /health` - Health check and system status
-- `WS /ws/{client_id}` - Real-time chat with multi-agent orchestration
-- `POST /api/llm/configure` - Configure LLM provider and model
+The MCP server provides three core tools accessible through natural language:
 
-### Current Features
+### 🔍 **Web Search** (`search_web`)
+- **Purpose**: Search the web for current information
+- **Usage**: "Search for the latest news about AI" or "Find information about Python async programming"
+- **Parameters**: Query string and optional result count (default: 5)
+- **Response**: Formatted search results with titles, descriptions, and URLs
 
-**Architecture**
-- ✅ **Multi-Agent System** - 11+ specialized agents with intelligent orchestration
-- ✅ **Real-Time Streaming** - WebSocket-based communication with character-level streaming
-- ✅ **Tool Integration** - 10+ powerful tools with automatic parameter extraction
-- ✅ **MCP Protocol Support** - Connect to external MCP servers for extended functionality
-- ✅ **File Management** - Timestamped outputs saved to dedicated outputs folder
+### ⏰ **Time Information** (`get_time`) 
+- **Purpose**: Get current system time and date information
+- **Usage**: "What time is it?" or "What's the current date?"
+- **Response**: Detailed time information including timezone, day of week, and formatted timestamps
 
-**Capabilities**
-- ✅ **Data Processing** - CSV/JSON conversion, text analysis, duplicate removal
-- ✅ **Visual Analysis** - AI-powered image understanding and metadata extraction
-- ✅ **Financial Analytics** - Cost analysis, stock market data visualization, and time series forecasting
-- ✅ **Content Generation** - PowerPoint presentations and interactive charts
-- ✅ **System Integration** - File search, web search, system monitoring
-- ✅ **External Tool Integration** - Dynamic discovery and execution of MCP server tools
+### 📝 **Echo Tool** (`echo`)
+- **Purpose**: Simple text echoing for testing and validation
+- **Usage**: "Echo this message" or "Repeat what I say"
+- **Response**: Returns the input text for testing purposes
 
-### Contributing
-1. Fork repository
-2. Create feature branch
-3. Submit pull request
+## Troubleshooting
+
+### OpenSSL Warning
+If you encounter this warning:
+```
+NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+
+```
+
+**Solutions:**
+1. **Downgrade urllib3** (recommended):
+   ```bash
+   pip install "urllib3<2.0.0"
+   ```
+
+2. **Install newer OpenSSL**:
+   ```bash
+   # macOS
+   brew install openssl@1.1
+   
+   # Ubuntu/Debian  
+   sudo apt-get install libssl-dev
+   ```
+
+### Common Issues
+- **Ollama Connection**: Ensure Ollama is running on `localhost:11434`
+- **Model Missing**: Install required model with `ollama pull mistral`
+- **Port Conflicts**: Check if port 8000 (MCP server) is available
+- **Python Version**: Requires Python 3.7+ for asyncio support
+
+## Project Structure
+
+```
+mcp_agent_ollama/
+├── mcp_client.py       # MCP client with server lifecycle management
+├── mcp_server.py       # HTTP server providing tool implementations  
+├── mcp_ollama.py       # Ollama integration and conversation flow
+├── app.py              # Streamlit web interface
+├── test_ollama.py      # Ollama connectivity testing
+├── config.json         # Configuration settings
+├── requirements.txt    # Python dependencies
+└── README.md          # Project documentation
+```
 
 ## License
+
 MIT License
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+**Development Guidelines:**
+- Follow Python PEP 8 style conventions
+- Add tests for new functionality
+- Update documentation for API changes
+- Ensure compatibility with Python 3.7+

@@ -1,0 +1,2 @@
+# This folder contains custom AI-generated visualizations
+# Each .tsx file should export metadata and a default component

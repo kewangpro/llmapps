@@ -1,0 +1,55 @@
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*.iml
+
+# Environments
+.env
+.env.*
+.venv
+venv/
+ENV/
+env/
+
+# Python / Pip / Poetry
+__pycache__/
+*.py[cod]
+*$py.class
+pip-log.txt
+poetry.lock
+requirements.txt.bak
+
+# Node / Frontend
+node_modules/
+.next/
+dist/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Flutter / Dart
+.dart_tool/
+.metadata
+pubspec.lock
+**/ios_debug.log
+**/build/
+
+# Runtime Database & Large Model Checkpoints
+graph_rag_ollama/enhanced_kg_storage/
+graph_rag_ollama/vector_db/
+pdf_rag_ollama/fine-tuned-ranker/
+pdf_rag_ollama/rag-chroma/
+
+# Presentation decks
+*.pptx

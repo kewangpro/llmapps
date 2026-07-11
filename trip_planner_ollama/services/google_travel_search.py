@@ -55,13 +55,25 @@ class GoogleTravelSearch:
     
     async def __aenter__(self):
         """Async context manager entry"""
-        self.session = aiohttp.ClientSession()
+        if self.session is None or self.session.closed:
+            self.session = aiohttp.ClientSession()
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit"""
-        if self.session:
-            await self.session.close()
+        """Async context manager exit - ensure session is always closed"""
+        await self._ensure_session_closed()
+    
+    async def _ensure_session_closed(self):
+        """Ensure aiohttp session is properly closed"""
+        if self.session and not self.session.closed:
+            try:
+                await self.session.close()
+                # Add small delay to allow connection cleanup
+                await asyncio.sleep(0.01)
+            except Exception as e:
+                logger.warning(f"Error closing aiohttp session: {e}")
+            finally:
+                self.session = None
     
     async def search_flights(
         self, 
@@ -201,32 +213,59 @@ class GoogleTravelSearch:
             # API not configured, use fallback
             return []
         
-        if not self.session:
-            self.session = aiohttp.ClientSession()
-        
-        url = "https://www.googleapis.com/customsearch/v1"
-        params = {
-            'key': self.api_key,
-            'cx': self.search_engine_id,
-            'q': query,
-            'num': 5
-        }
-        
-        logger.debug(f"🔍 Calling Google Search API for: '{query}'")
-        
-        async with self.session.get(url, params=params) as response:
-            if response.status == 200:
-                data = await response.json()
-                logger.info(f"✅ Google Search API returned {len(data.get('items', []))} results.")
-                return data.get('items', [])
+        try:
+            # Ensure session exists - if called outside context manager
+            if self.session is None or self.session.closed:
+                logger.debug("Creating temporary session for search request")
+                temporary_session = True
+                self.session = aiohttp.ClientSession()
             else:
-                logger.warning(f"Google Search API returned status {response.status}")
-                try:
-                    error_details = await response.json()
-                    logger.warning(f"Google Search API error details: {error_details}")
-                except Exception as e:
-                    logger.warning(f"Could not parse Google Search API error response: {e}")
-                return []
+                temporary_session = False
+            
+            url = "https://www.googleapis.com/customsearch/v1"
+            params = {
+                'key': self.api_key,
+                'cx': self.search_engine_id,
+                'q': query,
+                'num': 5
+            }
+            
+            logger.debug(f"🔍 Calling Google Search API for: '{query}'")
+            
+            timeout = aiohttp.ClientTimeout(total=30)  # 30 second timeout
+            try:
+                async with self.session.get(url, params=params, timeout=timeout) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        logger.info(f"✅ Google Search API returned {len(data.get('items', []))} results.")
+                        return data.get('items', [])
+                    else:
+                        logger.warning(f"Google Search API returned status {response.status}")
+                        try:
+                            error_details = await response.json()
+                            logger.warning(f"Google Search API error details: {error_details}")
+                        except Exception as e:
+                            logger.warning(f"Could not parse Google Search API error response: {e}")
+                        return []
+            finally:
+                # Clean up temporary session if created
+                if temporary_session and self.session and not self.session.closed:
+                    try:
+                        await self.session.close()
+                        await asyncio.sleep(0.01)  # Allow cleanup
+                        self.session = None
+                    except Exception as e:
+                        logger.warning(f"Error closing temporary session: {e}")
+                    
+        except asyncio.TimeoutError:
+            logger.warning(f"Google Search API timeout for query: {query}")
+            return []
+        except aiohttp.ClientError as e:
+            logger.warning(f"Google Search API client error: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"Google Search API unexpected error: {e}")
+            return []
     
     def _parse_flight_results(
         self, 
@@ -450,15 +489,16 @@ class GoogleTravelSearch:
         """Estimate flight price based on route"""
         
         # Simple price estimation based on likely distance/popularity
-        domestic_routes = ["New York", "Los Angeles", "Chicago", "Miami", "San Francisco", "Seattle", "Boston"]
-        international_popular = ["London", "Paris", "Tokyo", "Seoul", "Bangkok", "Singapore", "Dubai"]
+        # Note: These are example routes for price estimation only, not hardcoded destinations
+        domestic_routes_example = ["New York", "Los Angeles", "Chicago", "Miami", "San Francisco", "Seattle", "Boston"]
+        international_popular_example = ["London", "Paris", "Tokyo", "Seoul", "Bangkok", "Singapore", "Dubai"]
         
-        origin_domestic = origin in domestic_routes
-        dest_domestic = destination in domestic_routes
+        origin_domestic = origin in domestic_routes_example
+        dest_domestic = destination in domestic_routes_example
         
         if origin_domestic and dest_domestic:
             return random.randint(200, 600)  # Domestic US
-        elif origin in international_popular or destination in international_popular:
+        elif origin in international_popular_example or destination in international_popular_example:
             return random.randint(600, 1500)  # International popular
         else:
             return random.randint(400, 1200)  # Other routes
@@ -466,10 +506,10 @@ class GoogleTravelSearch:
     def _estimate_flight_duration(self, origin: str, destination: str) -> int:
         """Estimate flight duration in hours"""
         
-        # Simple duration estimation
-        domestic_routes = ["New York", "Los Angeles", "Chicago", "Miami", "San Francisco", "Seattle", "Boston"]
+        # Simple duration estimation based on example routes for estimation only
+        domestic_routes_example = ["New York", "Los Angeles", "Chicago", "Miami", "San Francisco", "Seattle", "Boston"]
         
-        if origin in domestic_routes and destination in domestic_routes:
+        if origin in domestic_routes_example and destination in domestic_routes_example:
             return random.randint(2, 6)  # Domestic flights
         else:
             return random.randint(8, 16)  # International flights
@@ -477,12 +517,13 @@ class GoogleTravelSearch:
     def _estimate_hotel_price(self, city: str) -> int:
         """Estimate hotel price based on city"""
         
-        expensive_cities = ["New York", "London", "Paris", "Tokyo", "Singapore", "Dubai", "San Francisco"]
-        moderate_cities = ["Seattle", "Boston", "Chicago", "Seoul", "Bangkok", "Barcelona"]
+        # Example cities for price estimation only - not hardcoded destinations
+        expensive_cities_example = ["New York", "London", "Paris", "Tokyo", "Singapore", "Dubai", "San Francisco"]
+        moderate_cities_example = ["Seattle", "Boston", "Chicago", "Seoul", "Bangkok", "Barcelona"]
         
-        if city in expensive_cities:
+        if city in expensive_cities_example:
             return random.randint(200, 400)
-        elif city in moderate_cities:
+        elif city in moderate_cities_example:
             return random.randint(100, 250)
         else:
             return random.randint(80, 180)
