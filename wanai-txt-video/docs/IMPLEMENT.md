@@ -101,10 +101,8 @@ excess top spacing from an unset `body` margin).
 
 ### Phase 3 — UX for slow inference & hardening (3–5 days)
 - Cancel button.
-- Disk-space check before starting a job.
-- Show time estimate in progress: upfront before starting, and as a live
-  ETA alongside the progress bar during generation (from Phase 0's measured
-  ~80-90s/it, scaled by steps/resolution).
+- Show time estimate in progress (live ETA alongside the progress bar,
+  from Phase 0's measured ~80-90s/it, scaled by steps/resolution).
 - Error handling for OOM (auto-suggest lower resolution).
 - First-run model download flow (fetch GGUF weights from Hugging Face, show
   download progress).
