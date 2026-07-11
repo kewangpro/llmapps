@@ -2,48 +2,7 @@
 
 Target platform: Apple Silicon Mac (MPS). Goal: a native desktop app that takes a
 user prompt (and optional input image) and generates a short video locally using
-the Wan2.2 model, with no cloud dependency.
-
-## Background / constraints
-
-- Model source: [Wan-AI on Hugging Face](https://huggingface.co/Wan-AI). The
-  Wan2.2 family includes `TI2V-5B` (text+image→video, 5B params) and larger
-  14B variants (`T2V-A14B`, `I2V-A14B`, `S2V-14B`, `Animate-14B`) that require
-  80GB+ VRAM — not viable on a Mac.
-- **Only `Wan2.2-TI2V-5B` is a candidate** for local Apple Silicon use.
-- The official [Wan-Video/Wan2.2](https://github.com/Wan-Video/Wan2.2) repo is
-  **CUDA-only**. FP8 checkpoints don't work on Metal (no `Float8_e4m3fn` kernel).
-- Workaround: run via **ComfyUI with GGUF-quantized weights (Q4/Q5)** on MPS,
-  using `--force-fp16 --mps-device`.
-- Real-world benchmark: M1 Max 64GB took ~82 minutes for a 2-second clip in
-  GGUF/fp8-fallback mode. **Generation on Mac is slow** — this shapes the UX:
-  treat it as an async background job with notification on completion, not an
-  interactive/live-preview tool.
-- Recommended system RAM: 32–64GB for comfortable model loading + T5 text
-  encoder offload. Model weights alone: ~8–12GB (5B, quantized).
-
-## Architecture
-
-```
-┌─────────────────────────────┐
-│  Tauri desktop app (Rust +   │  prompt/image input, job queue,
-│  web frontend: React/Svelte) │  progress %, video preview/player
-└───────────────┬───────────────┘
-                │ localhost HTTP/WS
-┌───────────────▼───────────────┐
-│  Python inference service      │  FastAPI/uvicorn, wraps ComfyUI
-│  (bundled venv, sidecar proc)  │  headless or diffusers pipeline
-└───────────────┬───────────────┘
-                │ MPS
-┌───────────────▼───────────────┐
-│  Wan2.2 TI2V-5B (GGUF Q4/Q5)   │  local weights on disk (~5–10GB)
-└─────────────────────────────────┘
-```
-
-- **Tauri over Electron**: smaller binary, real native shell, easy Rust
-  sidecar management for spawning/killing the Python process.
-- Python backend does the actual model work (mature ML ecosystem); Tauri
-  talks to it over localhost only — no need to reimplement inference in Rust.
+the Wan2.2 model, with no cloud dependency. See [DESIGN.md](./DESIGN.md).
 
 ## Phases
 
@@ -57,9 +16,8 @@ Results on reference machine (Apple M4, 24GB unified memory):
   not just "completes without crashing."
 - **Speed**: 640×384, 49 frames (~2s @ 24fps), 20 steps → **38m09s** total
   (27m26s sampling, ~82s/it). This is at *lower* resolution than the
-  community 82-min/2s benchmark on a 64GB M1 Max (DESIGN.md), so this
-  machine is not faster than that reference despite being newer silicon —
-  memory-bandwidth-bound, not compute-bound.
+  community 82-min/2s benchmark on a 64GB M1 Max, and this machine is not
+  faster than that reference despite newer silicon (see DESIGN.md for why).
 - **Memory holds on 24GB** at 640×384 — stayed within the compressor/free-RAM
   envelope throughout a real 20-step run, no OOM. Full official resolution
   (1280×704) is untested and, by rough scaling of the numbers above, likely

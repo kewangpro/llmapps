@@ -13,18 +13,46 @@ on Apple Silicon — no cloud API calls, no data leaving the machine.
 ## Constraints that shaped the design
 
 - **Apple Silicon, unified memory (24GB on the reference dev machine)** — no
-  discrete VRAM, no CUDA. This rules out Wan2.2's 14B variants outright (they
-  need 80GB+) and puts even the 5B variant (`Wan2.2-TI2V-5B`) under memory
-  pressure, since the model, T5 text encoder, and OS all share one pool.
+  discrete VRAM, no CUDA. This rules out Wan2.2's 14B variants
+  (`T2V-A14B`, `I2V-A14B`, `S2V-14B`, `Animate-14B`, all from
+  [Wan-AI on Hugging Face](https://huggingface.co/Wan-AI)) outright — they
+  need 80GB+ — leaving `Wan2.2-TI2V-5B` as the only local-Mac candidate, and
+  even that puts memory under pressure, since the model, T5 text encoder,
+  and OS all share one pool. Recommended system RAM is 32–64GB for
+  comfortable headroom (weights alone: ~8–12GB quantized); 24GB is workable
+  but tight (validated in Phase 0 — see IMPLEMENT.md).
 - **No official MPS/Metal support** in the upstream
   [Wan-Video/Wan2.2](https://github.com/Wan-Video/Wan2.2) repo — it assumes
   CUDA and FP8 checkpoints, and Metal has no `Float8_e4m3fn` kernel. The
   viable path is ComfyUI + GGUF-quantized weights (Q4/Q5) with
   `--force-fp16 --mps-device`.
 - **Generation is slow** (community benchmark: ~82 min for a 2-second clip on
-  a 64GB M1 Max). This is the single biggest constraint on UX: the app cannot
+  a 64GB M1 Max; confirmed by our own Phase 0 measurement — see
+  IMPLEMENT.md). This is the single biggest constraint on UX: the app cannot
   pretend generation is fast. Everything about the interaction model — async
   jobs, notifications, a queue instead of a spinner — follows from this.
+  Notably, a newer/smaller-memory Mac (M4, 24GB) wasn't faster than the
+  64GB M1 Max reference at a *lower* resolution — this workload is
+  memory-bandwidth-bound, not compute-bound, so raw chip generation doesn't
+  buy much without more unified memory bandwidth/capacity.
+
+## Runtime architecture
+
+```
+┌─────────────────────────────┐
+│  Tauri desktop app (Rust +   │  prompt/image input, job queue,
+│  web frontend: React/Svelte) │  progress %, video preview/player
+└───────────────┬───────────────┘
+                │ localhost HTTP/WS
+┌───────────────▼───────────────┐
+│  Python inference service      │  FastAPI/uvicorn, wraps ComfyUI
+│  (bundled venv, sidecar proc)  │  headless or diffusers pipeline
+└───────────────┬───────────────┘
+                │ MPS
+┌───────────────▼───────────────┐
+│  Wan2.2 TI2V-5B (GGUF Q4/Q5)   │  local weights on disk (~5–10GB)
+└─────────────────────────────────┘
+```
 
 ## Component breakdown
 
@@ -80,8 +108,10 @@ the backend over localhost HTTP/WS — no inference logic lives in Rust.
 
 It's the only known way to get `Wan2.2-TI2V-5B` running on Metal at all,
 since FP8 checkpoints aren't supported by MPS. This is a forced choice, not
-a preference — accepted quality loss vs the NVIDIA fp16/fp8 reference output
-needs to be validated in Phase 0 before committing further engineering time.
+a preference — accepted quality loss vs the NVIDIA fp16/fp8 reference output.
+Validated in Phase 0: Q4_K_M output is coherent and on-prompt at 640×384
+(see IMPLEMENT.md for the result), so the forced choice turned out not to
+cost much in practice at that resolution.
 
 ## Data flow (single generation request)
 
@@ -97,20 +127,16 @@ needs to be validated in Phase 0 before committing further engineering time.
    /jobs/{id}/video` and fires an OS notification (job may complete while
    the user is doing something else — expected, given generation times).
 
-## Key risks (see IMPLEMENT.md for the fuller list)
+## Key risks (see IMPLEMENT.md "Open risks" for the fuller, status-tracked list)
 
 - **Memory pressure at 24GB unified RAM** — below the community-recommended
-  32–64GB. Phase 0 validated real headroom at 640×384 (no OOM across a full
-  20-step run); full official resolution (1280×704) remains unvalidated and
-  is assumed tight-to-infeasible on 24GB until measured.
-- **Speed** dictates the whole interaction model — confirmed, not assumed:
-  38 min for a 2s clip at 640×384 on this machine, in the same range as the
-  82-min/2s community benchmark despite being at *lower* resolution on newer
-  silicon. The async/notify UX is load-bearing, not a hedge.
+  32–64GB. Validated as workable at the pinned 640×384 default; higher
+  resolutions are an open question, not a settled no.
+- **Speed** dictates the whole interaction model, confirmed by measurement,
+  not just the community benchmark — the async/notify UX is load-bearing,
+  not a hedge.
 - **Community-maintained GGUF/MPS support** is a single point of fragility
   outside our control.
-- **Resolution ceiling**: 640×384 is the pinned working default (see
-  IMPLEMENT.md Phase 0), well below Wan2.2's native 1280×704. This is a
-  scope decision, not just a performance note — the app's baseline quality
-  bar is set by what's proven to run in reasonable time, not by the model's
-  best-case output.
+- **Resolution ceiling**: 640×384 (not Wan2.2's native 1280×704) is a
+  deliberate scope decision — the app's baseline quality bar is set by what's
+  proven to run in reasonable time, not by the model's best-case output.
