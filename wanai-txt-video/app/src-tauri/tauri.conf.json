@@ -12,9 +12,10 @@
   "app": {
     "windows": [
       {
-        "title": "app",
+        "title": "wanai-txt-video",
         "width": 800,
-        "height": 600
+        "height": 900,
+        "minHeight": 700
       }
     ],
     "security": {
