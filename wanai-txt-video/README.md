@@ -10,11 +10,14 @@ Early build-out. See [docs/IMPLEMENT.md](docs/IMPLEMENT.md) for the phased
 plan and current phase; see [docs/DESIGN.md](docs/DESIGN.md) for the
 architecture and the reasoning behind it.
 
-Currently: **Phase 0 complete (text-to-video and image-to-video)**, moving
-into **Phase 1 — inference service**. `Wan2.2-TI2V-5B` (GGUF Q4_K_M)
+Currently: **Phases 0-2 complete** — feasibility validated, a FastAPI
+inference service wraps ComfyUI, and a Tauri + React desktop shell drives it
+end-to-end (`npm run tauri dev` in `app/`). `Wan2.2-TI2V-5B` (GGUF Q4_K_M)
 generates coherent, on-prompt video on Apple Silicon at 640×384 — confirmed
 slow (~33–38 min for a 2s clip) but working. See
-[docs/IMPLEMENT.md](docs/IMPLEMENT.md) for details.
+[docs/IMPLEMENT.md](docs/IMPLEMENT.md) for details, including a known gap
+(backend sidecar can be orphaned on a force-kill/crash rather than a normal
+quit).
 
 ## Why this is harder than it sounds
 
@@ -34,9 +37,9 @@ wanai-txt-video/
 │   ├── service/        # FastAPI app (job queue, HTTP API) — Phase 1
 │   ├── requirements.txt
 │   └── .venv/
-├── app/             # Tauri native desktop app — Phase 2+
-│   ├── src/            # frontend UI
-│   └── src-tauri/      # Rust shell, backend process management
+├── app/             # Tauri native desktop app
+│   ├── src/            # frontend UI (React + TypeScript)
+│   └── src-tauri/      # Rust shell — spawns/kills the backend service
 └── models/          # downloaded model weights (gitignored)
 ```
 
@@ -69,6 +72,19 @@ Then download the model weights into `models/` (see
 
 Requires Python 3.11+ (the macOS system Python is too old for ComfyUI's
 dependencies).
+
+## Setup (app)
+
+```bash
+cd app
+npm install
+npm run tauri dev
+```
+
+Requires Node.js/npm and a Rust toolchain (`rustup`) — Tauri compiles a
+native Rust shell. On first run, the app's Rust setup hook spawns
+`backend/service` automatically (see `src-tauri/src/lib.rs`); the backend
+setup above must already be done, including the ComfyUI weights.
 
 ## Requirements
 

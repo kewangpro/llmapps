@@ -68,12 +68,36 @@ node reports its output in the history response under the `images` key
 name would suggest — `comfy_client.output_video_path` now checks `images`
 first, falling back to `videos`/`gifs` defensively.
 
-### Phase 2 — Tauri shell + packaging (2–3 days)
-- Scaffold Tauri app; bundle a Python venv (or use `pyoxidizer`/`briefcase`
-  style packaging) as a sidecar binary launched on app start, killed on quit.
-- Basic UI: prompt textbox, optional image drop zone, resolution/frame-count
-  controls, "Generate" button, progress bar, video player for output,
-  history of past generations (store as files + a small SQLite/JSON index).
+### Phase 2 — Tauri shell + packaging (2–3 days) — ✅ complete (dev mode)
+
+`app/` (Tauri + React + TypeScript, scaffolded via `create-tauri-app`):
+- `src-tauri/src/lib.rs` spawns `backend/.venv/bin/python -m uvicorn
+  service.main:app` on launch and kills it when the window closes normally
+  (`WindowEvent::Destroyed`). This spawns the venv's python directly, not a
+  bundled Tauri sidecar binary — sufficient for development; packaging a
+  self-contained Python runtime for distribution is Phase 5 work, not done.
+  **Known gap**: if the Tauri process itself is force-killed/crashes rather
+  than quit normally, the backend child is orphaned (observed during
+  testing) — a normal window close cleans up fine, but this should be
+  hardened (e.g. handle `RunEvent::Exit` too) before Phase 5.
+- Frontend (`src/App.tsx`) talks directly to the backend service over
+  `http://127.0.0.1:8000` (no Rust-side proxying): prompt textarea, optional
+  drag-and-drop/file-picker image input, width/height/frames/steps controls
+  defaulting to the Phase 0-validated config, a Generate button, a
+  progress bar polling `GET /jobs/{id}` every 3s, and a video player for the
+  completed output.
+- History of past generations: a small JSON index in `localStorage`
+  (`src/history.ts`) — prompt, job id, video URL. Satisfies the "small
+  JSON index" part of the original plan; video files themselves already
+  live on disk via the backend's output directory, nothing extra needed
+  there.
+
+Validated by actually running `npm run tauri dev`: window builds and
+launches, the Rust setup hook spawns the FastAPI backend and it correctly
+detects/reuses an already-running ComfyUI instance rather than double
+spawning, and the frontend's CSS/layout was fixed live via Vite HMR during
+manual review (grid overlap from a missing `box-sizing: border-box`, and
+excess top spacing from an unset `body` margin).
 
 ### Phase 3 — UX for slow inference (1–2 days)
 - Background generation with OS notification on completion.
@@ -110,8 +134,15 @@ first, falling back to `videos`/`gifs` defensively.
    user-facing option.
 5. ~~Image-to-video untested~~ — resolved: validated in Phase 0 at the same
    pinned config as T2V.
+6. **Backend sidecar orphaning on force-kill**: the Rust shell only cleans up
+   the FastAPI backend on a normal window close (`WindowEvent::Destroyed`);
+   force-killing or crashing the Tauri process leaves the Python backend
+   (and, transitively, any ComfyUI job it's running) orphaned. Observed
+   directly while testing Phase 2. Should be hardened (e.g. also handle
+   `RunEvent::Exit`) before Phase 5 packaging ships this to real users.
 
 ## Next step
 
-Phases 0 and 1 are done — proceed to Phase 2: scaffold the Tauri shell and
-wire it to the now-working FastAPI service (`backend/service/`).
+Phases 0-2 are done — proceed to Phase 3: background generation with OS
+notification on completion, a job queue for multiple prompts, a cancel
+button, and a disk-space/time-estimate warning before starting a job.

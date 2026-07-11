@@ -46,9 +46,14 @@ backend/comfyui/
 # App (Tauri / Frontend) Development
 app/node_modules/
 app/dist/
-app/.next/
+app/dist-ssr/
+app/*.local
+app/.env
+app/.env.*
+app/npm-debug.log*
+app/yarn-debug.log*
+app/yarn-error.log*
+app/pnpm-debug.log*
 app/src-tauri/target/
-app/src-tauri/.cargo/
+app/src-tauri/gen/schemas/
 app/src-tauri/*.log
-app/.svelte-kit/
-app/build/
