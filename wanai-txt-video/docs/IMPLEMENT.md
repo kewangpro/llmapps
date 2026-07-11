@@ -39,26 +39,34 @@ Decision carried into Phase 1: **640×384 is the pinned default resolution**,
 not 1280×704. Higher resolution becomes an opt-in/settings-panel concern
 (Phase 4), not something the service defaults to.
 
-### Phase 1 — Inference service (2–4 days)
-- Wrap the working ComfyUI pipeline in a FastAPI service that drives
-  ComfyUI's own HTTP/WebSocket API (`/prompt`, `/history/{id}`, ws progress
-  events) rather than embedding inference logic directly:
-  - `POST /generate` (prompt, optional input image, resolution, frame count)
-    → job id. Defaults to the Phase 0-validated params (640×384, 49 frames,
-    20 steps, `shift=5.0`, `cfg=5.0`, `euler`/`simple`) when the caller
-    doesn't override them.
-  - `GET /jobs/{id}` for status/progress
-  - `GET /jobs/{id}/video` to fetch the result
-- Run generation in a background worker/thread so the API stays responsive;
-  stream progress via WebSocket or polling. ComfyUI already emits per-step
-  progress on its own websocket — relay it, don't reimplement it.
-- Pin the exact model file + quantization + sampling config (see Phase 0
-  results above) in a checked-in config file, not hardcoded across call
-  sites — this is what Phase 0 spent its time discovering and it should not
-  need rediscovering.
-- Reuse the ComfyUI-facing workflow-JSON approach validated manually in
-  Phase 0 as the service's internal workflow template, parameterized by the
-  `/generate` request fields.
+### Phase 1 — Inference service (2–4 days) — ✅ complete
+
+`backend/service/` (FastAPI, run via `uvicorn service.main:app`):
+- `POST /generate` (prompt, optional input image, resolution, frame count,
+  steps/cfg/shift overrides) → job id, defaulting to the Phase 0-validated
+  params (640×384, 49 frames, 20 steps, `shift=5.0`, `cfg=5.0`,
+  `euler`/`simple`) via `config.py`.
+- `GET /jobs/{id}` — status/progress, relayed live from ComfyUI's own
+  websocket (`comfy_client.stream_progress`), not reimplemented.
+- `GET /jobs/{id}/video` — streams the completed file.
+- Jobs run as background `asyncio` tasks (`jobs.py`) so `/generate` returns
+  immediately — required given 30-40+ minute generations.
+- `comfy_process.py` starts ComfyUI as a subprocess on service startup if
+  one isn't already reachable on the configured port, and only stops a
+  process it started itself (reuses an already-running dev instance
+  untouched).
+- `workflow.py` builds the same node graph validated manually in Phase 0
+  (`UnetLoaderGGUF` → `CLIPLoader` → `Wan22ImageToVideoLatent` →
+  `KSampler` → `VAEDecode` → `CreateVideo` → `SaveVideo`), parameterized by
+  the `/generate` request.
+
+Validated end-to-end with a real request through the running service (not
+just direct ComfyUI calls): job created, progress streamed 0→N, video served
+correctly. One bug found and fixed in the process: ComfyUI's `SaveVideo`
+node reports its output in the history response under the `images` key
+(with a sibling `animated: [true]` flag), not `videos`/`gifs` as the node
+name would suggest — `comfy_client.output_video_path` now checks `images`
+first, falling back to `videos`/`gifs` defensively.
 
 ### Phase 2 — Tauri shell + packaging (2–3 days)
 - Scaffold Tauri app; bundle a Python venv (or use `pyoxidizer`/`briefcase`
@@ -105,5 +113,5 @@ not 1280×704. Higher resolution becomes an opt-in/settings-panel concern
 
 ## Next step
 
-Phase 0 is done (T2V and I2V both validated) — proceed to Phase 1: build the
-FastAPI service around the now-validated ComfyUI workflow and pinned config.
+Phases 0 and 1 are done — proceed to Phase 2: scaffold the Tauri shell and
+wire it to the now-working FastAPI service (`backend/service/`).
