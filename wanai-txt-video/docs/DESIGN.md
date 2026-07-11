@@ -29,8 +29,11 @@ on Apple Silicon — no cloud API calls, no data leaving the machine.
 - **Generation is slow** (community benchmark: ~82 min for a 2-second clip on
   a 64GB M1 Max; confirmed by our own Phase 0 measurement — see
   IMPLEMENT.md). This is the single biggest constraint on UX: the app cannot
-  pretend generation is fast. Everything about the interaction model — async
-  jobs, notifications, a queue instead of a spinner — follows from this.
+  pretend generation is fast. Everything about the interaction model — an
+  async job with a cancel button and a live progress/ETA readout instead of
+  a blocking spinner — follows from this. (OS notifications and a
+  multi-job queue UI were both considered and deliberately dropped from
+  scope — the user is expected to check back on the window, not be paged.)
   Notably, a newer/smaller-memory Mac (M4, 24GB) wasn't faster than the
   64GB M1 Max reference at a *lower* resolution — this workload is
   memory-bandwidth-bound, not compute-bound, so raw chip generation doesn't
@@ -40,13 +43,14 @@ on Apple Silicon — no cloud API calls, no data leaving the machine.
 
 ```
 ┌─────────────────────────────┐
-│  Tauri desktop app (Rust +   │  prompt/image input, job queue,
-│  web frontend: React/Svelte) │  progress %, video preview/player
+│  Tauri desktop app (Rust +   │  prompt/image input, cancel button,
+│  React frontend)              │  progress % + live ETA, video player
 └───────────────┬───────────────┘
                 │ localhost HTTP/WS
 ┌───────────────▼───────────────┐
 │  Python inference service      │  FastAPI/uvicorn, wraps ComfyUI
-│  (bundled venv, sidecar proc)  │  headless or diffusers pipeline
+│  (venv python, spawned/owned   │  headless (no diffusers path — see
+│   by the Rust shell)           │  "Why ComfyUI" below)
 └───────────────┬───────────────┘
                 │ MPS
 ┌───────────────▼───────────────┐
@@ -65,7 +69,8 @@ wanai-txt-video/
 │   ├── requirements.txt
 │   └── .venv/
 ├── app/             # Tauri native desktop app
-│   ├── src/            # frontend UI (prompt input, job list, video player)
+│   ├── src/            # frontend UI (prompt input, progress/cancel, video
+│   │                       player, generation history)
 │   └── src-tauri/      # Rust shell; spawns/kills the backend as a sidecar
 └── models/          # downloaded GGUF weights (gitignored, multi-GB)
 ```
@@ -93,16 +98,20 @@ layer in between gives us:
   ComfyUI's own API, so ComfyUI internals (or even the engine itself) can
   change without touching the frontend.
 - A natural place for job queueing, progress normalization, and file
-  management (writing outputs to `models/` or an app data dir) that doesn't
-  belong in ComfyUI or in the Rust shell.
+  management that doesn't belong in ComfyUI or in the Rust shell. In
+  practice, output videos are served straight from ComfyUI's own
+  `output/video/` directory (`GET /jobs/{id}/video`) rather than copied
+  elsewhere — no separate app data dir turned out to be needed.
 
 ### Why Tauri over Electron
 
 Smaller binary, a real native shell, and straightforward sidecar process
-management (spawn the Python backend on launch, kill it on quit) without
-bundling a second copy of Chromium. The frontend is still plain
-web tech (React/Svelte) talking to the Rust shell over Tauri's IPC and to
-the backend over localhost HTTP/WS — no inference logic lives in Rust.
+management (spawn the Python backend on launch, kill it on quit — including
+on a force-kill or crash, not just a graceful window close, see
+docs/IMPLEMENT.md Phase 3) without bundling a second copy of Chromium. The
+frontend is plain web tech (React) talking to the backend directly over
+localhost HTTP/WS — no inference logic lives in Rust, and no IPC round-trip
+through the Rust shell either.
 
 ### Why GGUF Q4/Q5 quantization
 
@@ -117,15 +126,19 @@ cost much in practice at that resolution.
 
 1. User fills in prompt (+ optional image) in the Tauri UI → `POST
    /generate` to the local FastAPI service.
-2. FastAPI creates a job record, enqueues it, returns a job id immediately.
-3. Background worker drives ComfyUI's API to run the Wan2.2 GGUF workflow,
-   polling/streaming progress back into the job record.
-4. UI polls or subscribes via WebSocket to `GET /jobs/{id}` for progress;
-   shows a progress indicator, not a live preview (generation is too slow
-   for the latter to be meaningful).
-5. On completion, output video is written to disk; UI fetches it via `GET
-   /jobs/{id}/video` and fires an OS notification (job may complete while
-   the user is doing something else — expected, given generation times).
+2. FastAPI creates a job record, launches a background `asyncio` task, and
+   returns a job id immediately.
+3. That task drives ComfyUI's HTTP/WebSocket API to run the Wan2.2 GGUF
+   workflow, relaying per-step progress (and a self-correcting live ETA)
+   back into the job record.
+4. UI polls `GET /jobs/{id}` every 3s for progress — a progress bar plus
+   elapsed/ETA, not a live preview (generation is too slow for the latter
+   to be meaningful). A cancel button clears ComfyUI's queue and interrupts
+   the job at any point.
+5. On completion, UI fetches the output via `GET /jobs/{id}/video` and
+   shows it in a video player. No OS notification — considered and
+   deliberately dropped from scope (see docs/IMPLEMENT.md Phase 3); the
+   user is expected to check back on the window.
 
 ## Key risks (see IMPLEMENT.md "Open risks" for the fuller, status-tracked list)
 
@@ -133,8 +146,8 @@ cost much in practice at that resolution.
   32–64GB. Validated as workable at the pinned 640×384 default; higher
   resolutions are an open question, not a settled no.
 - **Speed** dictates the whole interaction model, confirmed by measurement,
-  not just the community benchmark — the async/notify UX is load-bearing,
-  not a hedge.
+  not just the community benchmark — the async, cancel-and-check-back UX is
+  load-bearing, not a hedge.
 - **Community-maintained GGUF/MPS support** is a single point of fragility
   outside our control.
 - **Resolution ceiling**: 640×384 (not Wan2.2's native 1280×704) is a

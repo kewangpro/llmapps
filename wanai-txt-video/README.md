@@ -10,14 +10,16 @@ Early build-out. See [docs/IMPLEMENT.md](docs/IMPLEMENT.md) for the phased
 plan and current phase; see [docs/DESIGN.md](docs/DESIGN.md) for the
 architecture and the reasoning behind it.
 
-Currently: **Phases 0-2 complete** — feasibility validated, a FastAPI
-inference service wraps ComfyUI, and a Tauri + React desktop shell drives it
-end-to-end (`npm run tauri dev` in `app/`). `Wan2.2-TI2V-5B` (GGUF Q4_K_M)
-generates coherent, on-prompt video on Apple Silicon at 640×384 — confirmed
-slow (~33–38 min for a 2s clip) but working. See
-[docs/IMPLEMENT.md](docs/IMPLEMENT.md) for details, including a known gap
-(backend sidecar can be orphaned on a force-kill/crash rather than a normal
-quit).
+Currently: **Phases 0-2 complete, Phase 3 in progress** — feasibility
+validated, a FastAPI inference service wraps ComfyUI, and a Tauri + React
+desktop shell drives it end-to-end (`npm run tauri dev` in `app/`), with a
+working cancel button, a live time estimate during generation, and reliable
+cleanup (closing the app — even via a force-kill — stops both the backend
+and ComfyUI, not just the window). `Wan2.2-TI2V-5B` (GGUF Q4_K_M) generates
+coherent, on-prompt video on Apple Silicon at 640×384 — confirmed slow
+(~33–38 min for a 2s clip) but working. See
+[docs/IMPLEMENT.md](docs/IMPLEMENT.md) for details and remaining work (OOM
+handling, first-run model download, a settings panel).
 
 ## Why this is harder than it sounds
 
@@ -34,7 +36,7 @@ wanai-txt-video/
 ├── docs/            # IMPLEMENT.md (plan), DESIGN.md (architecture)
 ├── backend/         # Python inference service
 │   ├── comfyui/       # vendored ComfyUI — the inference engine
-│   ├── service/        # FastAPI app (job queue, HTTP API) — Phase 1
+│   ├── service/        # FastAPI app (job queue, HTTP API)
 │   ├── requirements.txt
 │   └── .venv/
 ├── app/             # Tauri native desktop app
@@ -85,6 +87,11 @@ Requires Node.js/npm and a Rust toolchain (`rustup`) — Tauri compiles a
 native Rust shell. On first run, the app's Rust setup hook spawns
 `backend/service` automatically (see `src-tauri/src/lib.rs`); the backend
 setup above must already be done, including the ComfyUI weights.
+
+If `cargo`/`rustc` aren't found after installing `rustup` and you're on
+zsh (macOS default), the installer may only add them to `~/.profile`,
+which zsh doesn't source. Add `. "$HOME/.cargo/env"` to `~/.zshrc` and
+open a new terminal.
 
 ## Requirements
 

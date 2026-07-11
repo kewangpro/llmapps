@@ -52,9 +52,10 @@ not 1280×704. Higher resolution becomes an opt-in/settings-panel concern
 - Jobs run as background `asyncio` tasks (`jobs.py`) so `/generate` returns
   immediately — required given 30-40+ minute generations.
 - `comfy_process.py` starts ComfyUI as a subprocess on service startup if
-  one isn't already reachable on the configured port, and only stops a
-  process it started itself (reuses an already-running dev instance
-  untouched).
+  one isn't already reachable on the configured port (originally: only
+  stopped a process it spawned itself, leaving an adopted/reused instance
+  untouched — changed in Phase 3, see risk #6, so it now always stops
+  whatever ComfyUI it's using).
 - `workflow.py` builds the same node graph validated manually in Phase 0
   (`UnetLoaderGGUF` → `CLIPLoader` → `Wan22ImageToVideoLatent` →
   `KSampler` → `VAEDecode` → `CreateVideo` → `SaveVideo`), parameterized by
@@ -72,14 +73,12 @@ first, falling back to `videos`/`gifs` defensively.
 
 `app/` (Tauri + React + TypeScript, scaffolded via `create-tauri-app`):
 - `src-tauri/src/lib.rs` spawns `backend/.venv/bin/python -m uvicorn
-  service.main:app` on launch and kills it when the window closes normally
-  (`WindowEvent::Destroyed`). This spawns the venv's python directly, not a
+  service.main:app` on launch. This spawns the venv's python directly, not a
   bundled Tauri sidecar binary — sufficient for development; packaging a
   self-contained Python runtime for distribution is Phase 4 work, not done.
-  **Known gap**: if the Tauri process itself is force-killed/crashes rather
-  than quit normally, the backend child is orphaned (observed during
-  testing) — a normal window close cleans up fine, but this should be
-  hardened (e.g. handle `RunEvent::Exit` too) before Phase 4.
+  At the time Phase 2 shipped, cleanup only ran on a graceful window close
+  (`WindowEvent::Destroyed`), orphaning the backend on a force-kill/crash —
+  fixed in Phase 3 (see risk #6, resolved).
 - Frontend (`src/App.tsx`) talks directly to the backend service over
   `http://127.0.0.1:8000` (no Rust-side proxying): prompt textarea, optional
   drag-and-drop/file-picker image input, width/height/frames/steps controls
@@ -112,6 +111,12 @@ excess top spacing from an unset `body` margin).
   `elapsed_seconds`, self-correcting: once a job has made progress it uses
   its own observed seconds/step rather than trusting the static ~85s/it
   fallback for the whole run, since actual speed varies with system load.
+  **Known gap** (observed live, not yet fixed): the estimate is purely
+  step-based (KSampler progress), so once `progress_step == progress_total`
+  it shows `~0:00 remaining` even though the job isn't done — VAE decode
+  and video encode/save happen after sampling and aren't reflected in step
+  progress. Per Phase 0 timing this tail phase adds real time (e.g. the
+  640×384 test: ~27min sampling out of a ~38min total). See open risk #7.
 - ✅ Lifecycle hardening — closing the app now reliably stops ComfyUI too,
   not just the FastAPI backend (see risk #6 below for what was broken and
   how it's fixed).
@@ -167,9 +172,16 @@ excess top spacing from an unset `body` margin).
      up the PID via `lsof -ti tcp:{port}` and track it the same as a
      spawned process, so "close app" now unconditionally stops whatever
      ComfyUI it's using, regardless of who started it.
+7. **ETA doesn't account for the post-sampling tail**: the live estimate
+   (Phase 3) is step-based, so it reads `~0:00 remaining` once sampling
+   hits 100% even though VAE decode + video encode/save are still running
+   — observed live, not yet fixed. Needs either a distinct
+   "finishing up..." state once steps complete, or folding a measured
+   tail-phase constant into the ETA calculation.
 
 ## Next step
 
 Phases 0-2 are done; Phase 3's cancel/ETA/lifecycle-hardening items are
-done too. Remaining Phase 3 work: OOM error handling, first-run model
-download flow, and a settings panel — then Phase 4 packaging.
+done too. Remaining Phase 3 work: the ETA tail-phase gap (risk #7) above,
+OOM error handling, first-run model download flow, and a settings panel —
+then Phase 4 packaging.
