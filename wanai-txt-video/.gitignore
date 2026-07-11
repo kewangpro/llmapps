@@ -1,0 +1,54 @@
+# ==============================================================================
+# wanai-txt-video Project .gitignore
+# ==============================================================================
+
+# OS / System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*.iml
+.history/
+
+# Python Virtual Environments & Packages
+.venv/
+venv/
+ENV/
+env/
+dist/
+build/
+*.egg-info/
+__pycache__/
+*.py[cod]
+*$py.class
+pip-log.txt
+poetry.lock
+requirements.txt.bak
+
+# Large Model Checkpoints (Downloaded Weights)
+# The models directory is used to store heavy local weights (Wan2.2, T5, VAE)
+# that should never be committed to git.
+models/
+
+# Vendored ComfyUI (its own git repo, cloned via setup rather than committed —
+# see README.md for setup instructions)
+backend/comfyui/
+
+# App (Tauri / Frontend) Development
+app/node_modules/
+app/dist/
+app/.next/
+app/src-tauri/target/
+app/src-tauri/.cargo/
+app/src-tauri/*.log
+app/.svelte-kit/
+app/build/
