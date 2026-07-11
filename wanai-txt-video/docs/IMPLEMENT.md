@@ -37,7 +37,7 @@ Results on reference machine (Apple M4, 24GB unified memory):
 
 Decision carried into Phase 1: **640×384 is the pinned default resolution**,
 not 1280×704. Higher resolution becomes an opt-in/settings-panel concern
-(Phase 4), not something the service defaults to.
+(Phase 3), not something the service defaults to.
 
 ### Phase 1 — Inference service (2–4 days) — ✅ complete
 
@@ -75,11 +75,11 @@ first, falling back to `videos`/`gifs` defensively.
   service.main:app` on launch and kills it when the window closes normally
   (`WindowEvent::Destroyed`). This spawns the venv's python directly, not a
   bundled Tauri sidecar binary — sufficient for development; packaging a
-  self-contained Python runtime for distribution is Phase 5 work, not done.
+  self-contained Python runtime for distribution is Phase 4 work, not done.
   **Known gap**: if the Tauri process itself is force-killed/crashes rather
   than quit normally, the backend child is orphaned (observed during
   testing) — a normal window close cleans up fine, but this should be
-  hardened (e.g. handle `RunEvent::Exit` too) before Phase 5.
+  hardened (e.g. handle `RunEvent::Exit` too) before Phase 4.
 - Frontend (`src/App.tsx`) talks directly to the backend service over
   `http://127.0.0.1:8000` (no Rust-side proxying): prompt textarea, optional
   drag-and-drop/file-picker image input, width/height/frames/steps controls
@@ -99,20 +99,21 @@ spawning, and the frontend's CSS/layout was fixed live via Vite HMR during
 manual review (grid overlap from a missing `box-sizing: border-box`, and
 excess top spacing from an unset `body` margin).
 
-### Phase 3 — UX for slow inference (1–2 days)
-- Background generation with OS notification on completion.
-- Ability to queue multiple prompts.
+### Phase 3 — UX for slow inference & hardening (3–5 days)
 - Cancel button.
-- Disk-space / time-estimate warning before starting a job.
-
-### Phase 4 — Polish & hardening (2–3 days)
+- Disk-space check before starting a job.
+- Time estimate: show upfront before starting, and as a live ETA/elapsed
+  indicator alongside the progress bar during generation, not just a
+  one-time warning — derived from the measured per-step timing in Phase 0
+  (~80-90s/it at the default 640×384 config), scaled by steps and any
+  resolution/frame overrides.
 - Error handling for OOM (auto-suggest lower resolution).
 - First-run model download flow (fetch GGUF weights from Hugging Face, show
   download progress).
 - Settings panel (quantization level, resolution presets trading speed vs
   quality).
 
-### Phase 5 — Packaging & distribution
+### Phase 4 — Packaging & distribution
 - `tauri build` for a signed `.app`/`.dmg`.
 - Decide: bundle model weights (~5–10GB, large installer) vs download on
   first run (recommended).
@@ -139,10 +140,10 @@ excess top spacing from an unset `body` margin).
    force-killing or crashing the Tauri process leaves the Python backend
    (and, transitively, any ComfyUI job it's running) orphaned. Observed
    directly while testing Phase 2. Should be hardened (e.g. also handle
-   `RunEvent::Exit`) before Phase 5 packaging ships this to real users.
+   `RunEvent::Exit`) before Phase 4 packaging ships this to real users.
 
 ## Next step
 
-Phases 0-2 are done — proceed to Phase 3: background generation with OS
-notification on completion, a job queue for multiple prompts, a cancel
-button, and a disk-space/time-estimate warning before starting a job.
+Phases 0-2 are done — proceed to Phase 3: a cancel button, a disk-space
+check, and a time estimate shown both before starting and live during
+generation.
