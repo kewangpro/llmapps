@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -33,6 +34,24 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="wanai-txt-video inference service", lifespan=lifespan)
+
+# The Tauri webview (http://localhost:1420 in dev, tauri://localhost /
+# http://tauri.localhost once packaged) is a different origin than this
+# service (http://127.0.0.1:8000), so the browser's CORS preflight needs
+# explicit allowance — without this, every fetch from the app fails with a
+# generic "Load failed" in WebKit. Everything here is localhost-only (no
+# cloud calls, per docs/DESIGN.md), so a fixed local-origin allowlist is
+# fine; no wildcard needed.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:1420",
+        "tauri://localhost",
+        "http://tauri.localhost",
+    ],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class JobResponse(BaseModel):
