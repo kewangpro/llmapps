@@ -85,11 +85,11 @@ first, falling back to `videos`/`gifs` defensively.
   defaulting to the Phase 0-validated config, a Generate button, a
   progress bar polling `GET /jobs/{id}` every 3s, and a video player for the
   completed output.
-- History of past generations: a small JSON index in `localStorage`
-  (`src/history.ts`) — prompt, job id, video URL. Satisfies the "small
-  JSON index" part of the original plan; video files themselves already
-  live on disk via the backend's output directory, nothing extra needed
-  there.
+- ~~History of past generations~~: originally built as a small JSON index
+  in `localStorage` (`src/history.ts`) — prompt, job id, video URL. Removed
+  entirely in Phase 3 per explicit product decision (not a bug); video
+  files themselves remain on disk via the backend's output directory
+  regardless.
 
 Validated by actually running `npm run tauri dev`: window builds and
 launches, the Rust setup hook spawns the FastAPI backend and it correctly
@@ -111,12 +111,9 @@ excess top spacing from an unset `body` margin).
   `elapsed_seconds`, self-correcting: once a job has made progress it uses
   its own observed seconds/step rather than trusting the static ~85s/it
   fallback for the whole run, since actual speed varies with system load.
-  **Known gap** (observed live, not yet fixed): the estimate is purely
-  step-based (KSampler progress), so once `progress_step == progress_total`
-  it shows `~0:00 remaining` even though the job isn't done — VAE decode
-  and video encode/save happen after sampling and aren't reflected in step
-  progress. Per Phase 0 timing this tail phase adds real time (e.g. the
-  640×384 test: ~27min sampling out of a ~38min total). See open risk #7.
+  `JobResponse.phase` (`"sampling"` | `"finishing"`) distinguishes the
+  step-tracked KSampler phase from the untimed VAE-decode/video-encode
+  tail that follows it — see risk #7, resolved.
 - ✅ Lifecycle hardening — closing the app now reliably stops ComfyUI too,
   not just the FastAPI backend (see risk #6 below for what was broken and
   how it's fixed).
@@ -172,16 +169,17 @@ excess top spacing from an unset `body` margin).
      up the PID via `lsof -ti tcp:{port}` and track it the same as a
      spawned process, so "close app" now unconditionally stops whatever
      ComfyUI it's using, regardless of who started it.
-7. **ETA doesn't account for the post-sampling tail**: the live estimate
-   (Phase 3) is step-based, so it reads `~0:00 remaining` once sampling
-   hits 100% even though VAE decode + video encode/save are still running
-   — observed live, not yet fixed. Needs either a distinct
-   "finishing up..." state once steps complete, or folding a measured
-   tail-phase constant into the ETA calculation.
+7. ~~ETA doesn't account for the post-sampling tail~~ — resolved. The live
+   estimate is step-based, so it used to read `~0:00 remaining` once
+   sampling hit 100% even though VAE decode + video encode/save were still
+   running. Fixed by deriving a `phase` (`"sampling"` vs `"finishing"`)
+   purely from existing progress data — no new websocket plumbing needed —
+   and showing a "finishing up..." message instead of a bogus ETA once
+   `progress_step >= progress_total` but the job hasn't completed.
 
 ## Next step
 
 Phases 0-2 are done; Phase 3's cancel/ETA/lifecycle-hardening items are
-done too. Remaining Phase 3 work: the ETA tail-phase gap (risk #7) above,
-OOM error handling, first-run model download flow, and a settings panel —
-then Phase 4 packaging.
+done too, including the ETA tail-phase fix (risk #7). Remaining Phase 3
+work: OOM error handling, first-run model download flow, and a settings
+panel — then Phase 4 packaging.

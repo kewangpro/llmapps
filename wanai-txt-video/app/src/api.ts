@@ -6,11 +6,14 @@ const BASE_URL = "http://127.0.0.1:8000";
 
 export type JobStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 
+export type JobPhase = "sampling" | "finishing";
+
 export interface JobResponse {
   id: string;
   status: JobStatus;
   progress_step: number;
   progress_total: number;
+  phase: JobPhase | null;
   elapsed_seconds: number | null;
   eta_seconds: number | null;
   error: string | null;

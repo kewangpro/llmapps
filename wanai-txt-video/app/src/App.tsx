@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import { cancelJob, formatDuration, generate, getJob, videoUrl, type JobResponse } from "./api";
-import { addHistoryEntry, loadHistory, type HistoryEntry } from "./history";
 
 // Defaults mirror backend/service/config.py — the only settings actually
 // validated for speed/memory/quality on the reference hardware (see
@@ -21,7 +20,6 @@ function App() {
 
   const [job, setJob] = useState<JobResponse | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory());
   const [isDragging, setIsDragging] = useState(false);
 
   const pollRef = useRef<number | null>(null);
@@ -40,17 +38,6 @@ function App() {
         setJob(updated);
         if (updated.status === "completed" || updated.status === "failed" || updated.status === "cancelled") {
           if (pollRef.current !== null) window.clearInterval(pollRef.current);
-          if (updated.status === "completed") {
-            setHistory(
-              addHistoryEntry({
-                jobId: updated.id,
-                prompt,
-                createdAt: Date.now(),
-                status: "completed",
-                videoUrl: videoUrl(updated),
-              }),
-            );
-          }
         }
       } catch (err) {
         if (pollRef.current !== null) window.clearInterval(pollRef.current);
@@ -188,12 +175,20 @@ function App() {
                   {job.progress_step}/{job.progress_total || "?"} steps
                 </span>
               </div>
-              {typeof job.eta_seconds === "number" && (
+              {job.phase === "finishing" ? (
                 <p className="eta">
                   {typeof job.elapsed_seconds === "number" &&
                     `${formatDuration(job.elapsed_seconds)} elapsed — `}
-                  ~{formatDuration(job.eta_seconds)} remaining
+                  finishing up (encoding video)...
                 </p>
+              ) : (
+                typeof job.eta_seconds === "number" && (
+                  <p className="eta">
+                    {typeof job.elapsed_seconds === "number" &&
+                      `${formatDuration(job.elapsed_seconds)} elapsed — `}
+                    ~{formatDuration(job.eta_seconds)} remaining
+                  </p>
+                )
               )}
               <button type="button" onClick={handleCancel}>
                 Cancel
@@ -205,22 +200,6 @@ function App() {
           {job.status === "completed" && videoUrl(job) && (
             <video controls src={videoUrl(job)!} className="output-video" />
           )}
-        </section>
-      )}
-
-      {history.length > 0 && (
-        <section className="history">
-          <h2>History</h2>
-          <ul>
-            {history.map((entry) => (
-              <li key={entry.jobId}>
-                <span className="history-prompt">{entry.prompt}</span>
-                {entry.videoUrl && (
-                  <video controls src={entry.videoUrl} className="history-video" />
-                )}
-              </li>
-            ))}
-          </ul>
         </section>
       )}
     </main>

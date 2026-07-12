@@ -60,6 +60,7 @@ class JobResponse(BaseModel):
     status: JobStatus
     progress_step: int
     progress_total: int
+    phase: Optional[str] = None
     elapsed_seconds: Optional[float] = None
     eta_seconds: Optional[float] = None
     error: Optional[str] = None
@@ -67,25 +68,36 @@ class JobResponse(BaseModel):
 
 
 def _job_response(job) -> JobResponse:
+    phase = None
     elapsed_seconds = None
     eta_seconds = None
     if job.status == JobStatus.RUNNING and job.started_at is not None:
         elapsed_seconds = time.time() - job.started_at
-        remaining_steps = max(job.progress_total - job.progress_step, 0)
-        if job.progress_step > 0:
-            # Self-correcting: use this job's own observed rate once it has
-            # made progress, rather than trusting the static fallback for
-            # the whole run — actual speed varies with system load.
-            seconds_per_step = elapsed_seconds / job.progress_step
+
+        if job.progress_total > 0 and job.progress_step >= job.progress_total:
+            # Sampling (KSampler) is done, but VAE decode + video encode/save
+            # still run afterward and aren't reflected in step progress — no
+            # step-based ETA is meaningful here. See docs/IMPLEMENT.md risk #7.
+            phase = "finishing"
         else:
-            seconds_per_step = config.FALLBACK_SECONDS_PER_STEP
-        eta_seconds = remaining_steps * seconds_per_step
+            phase = "sampling"
+            remaining_steps = max(job.progress_total - job.progress_step, 0)
+            if job.progress_step > 0:
+                # Self-correcting: use this job's own observed rate once it
+                # has made progress, rather than trusting the static
+                # fallback for the whole run — actual speed varies with
+                # system load.
+                seconds_per_step = elapsed_seconds / job.progress_step
+            else:
+                seconds_per_step = config.FALLBACK_SECONDS_PER_STEP
+            eta_seconds = remaining_steps * seconds_per_step
 
     return JobResponse(
         id=job.id,
         status=job.status,
         progress_step=job.progress_step,
         progress_total=job.progress_total,
+        phase=phase,
         elapsed_seconds=elapsed_seconds,
         eta_seconds=eta_seconds,
         error=job.error,

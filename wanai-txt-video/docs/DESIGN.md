@@ -70,7 +70,7 @@ wanai-txt-video/
 │   └── .venv/
 ├── app/             # Tauri native desktop app
 │   ├── src/            # frontend UI (prompt input, progress/cancel, video
-│   │                       player, generation history)
+│   │                       player)
 │   └── src-tauri/      # Rust shell; spawns/kills the backend as a sidecar
 └── models/          # downloaded GGUF weights (gitignored, multi-GB)
 ```
